@@ -56,7 +56,7 @@ def _query_tenant_events(
     """
     db = get_db_safe()
     try:
-        where = ["e.tenant_id = :tenant_id"]
+        where = []
         params: dict = {"tenant_id": tenant_id}
         if lot_code:
             where.append("e.traceability_lot_code = :lot_code")
@@ -70,6 +70,10 @@ def _query_tenant_events(
 
         rows = db.execute(
             text(f"""
+                WITH tenant_kdes AS (
+                    SELECT k.* FROM fsma.cte_kdes k
+                    WHERE k.tenant_id = :tenant_id
+                )
                 SELECT
                     e.event_type,
                     e.traceability_lot_code,
@@ -92,15 +96,16 @@ def _query_tenant_events(
                     k_carrier.kde_value AS carrier,
                     k_temp.kde_value AS temperature_c
                 FROM fsma.cte_events e
-                LEFT JOIN fsma.cte_kdes k_from ON k_from.cte_event_id = e.id AND k_from.kde_key = 'ship_from_location'
-                LEFT JOIN fsma.cte_kdes k_epcis ON k_epcis.cte_event_id = e.id AND k_epcis.tenant_id = e.tenant_id AND k_epcis.kde_key = 'epcis_document_json'
-                LEFT JOIN fsma.cte_kdes k_gtin ON k_gtin.cte_event_id = e.id AND k_gtin.tenant_id = e.tenant_id AND k_gtin.kde_key = 'gtin'
-                LEFT JOIN fsma.cte_kdes k_from_gln ON k_from_gln.cte_event_id = e.id AND k_from_gln.kde_key = 'ship_from_gln'
-                LEFT JOIN fsma.cte_kdes k_to ON k_to.cte_event_id = e.id AND k_to.kde_key = 'ship_to_location'
-                LEFT JOIN fsma.cte_kdes k_to_gln ON k_to_gln.cte_event_id = e.id AND k_to_gln.kde_key = 'ship_to_gln'
-                LEFT JOIN fsma.cte_kdes k_carrier ON k_carrier.cte_event_id = e.id AND k_carrier.kde_key = 'carrier_name'
-                LEFT JOIN fsma.cte_kdes k_temp ON k_temp.cte_event_id = e.id AND k_temp.kde_key = 'temperature_celsius'
-                WHERE {" AND ".join(where)}
+                LEFT JOIN tenant_kdes k_from ON k_from.cte_event_id = e.id AND k_from.kde_key = 'ship_from_location'
+                LEFT JOIN tenant_kdes k_epcis ON k_epcis.cte_event_id = e.id AND k_epcis.tenant_id = e.tenant_id AND k_epcis.kde_key = 'epcis_document_json'
+                LEFT JOIN tenant_kdes k_gtin ON k_gtin.cte_event_id = e.id AND k_gtin.tenant_id = e.tenant_id AND k_gtin.kde_key = 'gtin'
+                LEFT JOIN tenant_kdes k_from_gln ON k_from_gln.cte_event_id = e.id AND k_from_gln.kde_key = 'ship_from_gln'
+                LEFT JOIN tenant_kdes k_to ON k_to.cte_event_id = e.id AND k_to.kde_key = 'ship_to_location'
+                LEFT JOIN tenant_kdes k_to_gln ON k_to_gln.cte_event_id = e.id AND k_to_gln.kde_key = 'ship_to_gln'
+                LEFT JOIN tenant_kdes k_carrier ON k_carrier.cte_event_id = e.id AND k_carrier.kde_key = 'carrier_name'
+                LEFT JOIN tenant_kdes k_temp ON k_temp.cte_event_id = e.id AND k_temp.kde_key = 'temperature_celsius'
+                WHERE e.tenant_id = :tenant_id
+                {"AND " + " AND ".join(where) if where else ""}
                 ORDER BY e.event_timestamp DESC
                 LIMIT :row_limit
             """),
@@ -147,22 +152,72 @@ _CTE_TO_BIZSTEP = {
 }
 
 _CBV_BIZSTEPS = {
-    "accepting", "arriving", "assembling", "collecting", "commissioning",
-    "consigning", "creating_class_instance", "cycle_counting", "decommissioning",
-    "departing", "destroying", "disassembling", "dispensing", "encoding",
-    "entering_exiting", "holding", "inspecting", "installing", "killing",
-    "loading", "other", "packing", "picking", "receiving", "removing",
-    "repackaging", "repairing", "replacing", "reserving", "retail_selling",
-    "sampling", "sensor_reporting", "shipping", "staging_outbound",
-    "stock_taking", "stocking", "storing", "transporting", "unloading",
-    "unpacking", "void_shipping",
+    "accepting",
+    "arriving",
+    "assembling",
+    "collecting",
+    "commissioning",
+    "consigning",
+    "creating_class_instance",
+    "cycle_counting",
+    "decommissioning",
+    "departing",
+    "destroying",
+    "disassembling",
+    "dispensing",
+    "encoding",
+    "entering_exiting",
+    "holding",
+    "inspecting",
+    "installing",
+    "killing",
+    "loading",
+    "other",
+    "packing",
+    "picking",
+    "receiving",
+    "removing",
+    "repackaging",
+    "repairing",
+    "replacing",
+    "reserving",
+    "retail_selling",
+    "sampling",
+    "sensor_reporting",
+    "shipping",
+    "staging_outbound",
+    "stock_taking",
+    "stocking",
+    "storing",
+    "transporting",
+    "unloading",
+    "unpacking",
+    "void_shipping",
 }
 _CBV_DISPOSITIONS = {
-    "active", "available", "container_closed", "damaged", "destroyed",
-    "dispensed", "disposed", "encoded", "expired", "in_progress", "in_transit",
-    "inactive", "no_pedigree_match", "non_sellable_other",
-    "partially_dispensed", "recalled", "reserved", "retail_sold", "returned",
-    "sellable_accessible", "sellable_not_accessible", "stolen", "unknown",
+    "active",
+    "available",
+    "container_closed",
+    "damaged",
+    "destroyed",
+    "dispensed",
+    "disposed",
+    "encoded",
+    "expired",
+    "in_progress",
+    "in_transit",
+    "inactive",
+    "no_pedigree_match",
+    "non_sellable_other",
+    "partially_dispensed",
+    "recalled",
+    "reserved",
+    "retail_sold",
+    "returned",
+    "sellable_accessible",
+    "sellable_not_accessible",
+    "stolen",
+    "unknown",
 }
 
 
@@ -369,9 +424,17 @@ async def export_epcis(
                 **{
                     key: f"regengine:{key}"
                     for key in (
-                        "tenantId", "exportFormat", "generatedAt", "eventsCount",
-                        "skippedEventsCount", "dataSource", "integrityVerified",
-                        "chainHashVerified", "valid", "errors", "checkedAt",
+                        "tenantId",
+                        "exportFormat",
+                        "generatedAt",
+                        "eventsCount",
+                        "skippedEventsCount",
+                        "dataSource",
+                        "integrityVerified",
+                        "chainHashVerified",
+                        "valid",
+                        "errors",
+                        "checkedAt",
                     )
                 },
             },

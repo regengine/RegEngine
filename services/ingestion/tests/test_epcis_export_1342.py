@@ -99,6 +99,35 @@ def _event_row(**overrides: Any) -> _MappingRow:
 
 
 class TestQueryTenantEvents:
+    @pytest.mark.parametrize("use_lot", [False, True])
+    @pytest.mark.parametrize("use_from", [False, True])
+    @pytest.mark.parametrize("use_to", [False, True])
+    def test_optional_filters_preserve_tenant_scope(
+        self, monkeypatch: pytest.MonkeyPatch, use_lot: bool, use_from: bool, use_to: bool
+    ) -> None:
+        session = _FakeSession(execute_queue=[[]])
+        monkeypatch.setattr(epcis_export, "get_db_safe", lambda: session)
+        tenant_id = str(uuid4())
+        lot_code = uuid4().hex if use_lot else None
+        date_from = datetime.now(timezone.utc).isoformat() if use_from else None
+        date_to = datetime.now(timezone.utc).isoformat() if use_to else None
+
+        assert _query_tenant_events(tenant_id, lot_code, date_from, date_to) == []
+
+        sql, params = session.calls[0][1]
+        expected_where = "WHERE e.tenant_id = :tenant_id"
+        expected_params = {"tenant_id": tenant_id, "row_limit": epcis_export._MAX_EXPORT_EVENTS + 1}
+        for name, value, predicate in (
+            ("lot_code", lot_code, "e.traceability_lot_code = :lot_code"),
+            ("date_from", date_from, "e.event_timestamp >= :date_from"),
+            ("date_to", date_to, "e.event_timestamp < :date_to"),
+        ):
+            if value is not None:
+                expected_where += f" AND {predicate}"
+                expected_params[name] = value
+        assert f"{expected_where} ORDER BY" in " ".join(sql.split())
+        assert params == expected_params
+
     def test_no_rows_returns_empty_list(self, monkeypatch: pytest.MonkeyPatch) -> None:
         session = _FakeSession(execute_queue=[[]])
         monkeypatch.setattr(epcis_export, "get_db_safe", lambda: session)
