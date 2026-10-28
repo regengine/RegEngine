@@ -5,14 +5,15 @@ across NLP, Review, and Graph services, preventing schema drift.
 """
 
 import re
-import warnings
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional
 from urllib.parse import unquote
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+from .fsma_validation import validate_tlc
 
 # Example constants to avoid duplication in schema examples
 EX_SUBJECT = "food facilities on the FTL"
@@ -373,7 +374,7 @@ class FSMAEvent(BaseModel):
     model before being emitted to Kafka.
 
     Required KDEs (rejection triggers):
-      - ``tlc``        – GTIN-14 + lot, LGTIN class URN, or GS1 Digital Link
+      - ``tlc``        – at least 3 characters after stripping whitespace
       - ``event_time`` – ISO 8601 timestamp (required)
     """
 
@@ -407,6 +408,8 @@ class FSMAEvent(BaseModel):
     reference_document_number: Optional[str] = Field(None, description="Source document reference number")
     tenant_id: Optional[str] = Field(None, description="Tenant identifier for multi-tenancy")
 
+    warnings: List[str] = Field(default_factory=list)
+
     # Legacy fields retained for backward compatibility with document extraction
     date: Optional[str] = Field(None, description="Event date in YYYY-MM-DD format")
     cte_type: Optional[CTEType] = Field(None, description="Legacy CTE type (use event_type instead)")
@@ -422,27 +425,23 @@ class FSMAEvent(BaseModel):
     @field_validator("tlc")
     @classmethod
     def validate_tlc_format(cls, v: str) -> str:
-        """Warn on strict/production-pattern misses; never reject for pattern.
+        """Strip surrounding whitespace; reject blank or short TLCs.
 
-        Only blank TLCs and TLCs shorter than 3 characters after stripping
-        whitespace hard-fail. Preserve accepted values exactly as supplied.
+        Production-pattern advisories are collected on each model instance.
         """
-        if not v.strip():
+        cleaned = v.strip()
+        if not cleaned:
             raise ValueError("TLC must not be blank")
-        if len(v.strip()) < 3:
+        if len(cleaned) < 3:
             raise ValueError("TLC must be at least 3 characters")
-        if _TLC_PRODUCTION_RE.fullmatch(v):
-            return v
-        for pattern in (_TLC_LGTIN_RE, _TLC_DIGITAL_LINK_RE):
-            matched = pattern.fullmatch(v)
-            if matched is not None and _decoded_ai10_lot_within_limit(matched.group("lot")):
-                return v
-        warnings.warn(
-            "Warning: TLC does not match production pattern; this is not a validation failure",
-            UserWarning,
-            stacklevel=2,
-        )
-        return v
+        return cleaned
+
+    @model_validator(mode="after")
+    def collect_tlc_warnings(self) -> "FSMAEvent":
+        for warning in validate_tlc(self.tlc, strict=True).warnings:
+            if warning not in self.warnings:
+                self.warnings.append(warning)
+        return self
 
     @field_validator("event_time")
     @classmethod
