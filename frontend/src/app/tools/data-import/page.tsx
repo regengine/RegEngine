@@ -9,14 +9,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { filterExperimentalToolLinks } from "@/lib/experimental-features";
 
 export const metadata: Metadata = {
-    title: "FSMA 204 Data Import Hub | Upload CSV, XLSX & JSON Traceability Data | RegEngine",
-    description: "Import FSMA 204 traceability data via CSV or XLSX upload (including Sensitech TempTale temperature logs), or the JSON events API. Supports all Critical Tracking Event (CTE) types with schema checks and field auto-mapping.",
+    title: "FSMA 204 Data Import Hub | Upload CSV & JSON Traceability Data | RegEngine",
+    description: "Import FSMA 204 traceability data via CSV upload (including Sensitech TempTale temperature logs), or the JSON events API. Supports all Critical Tracking Event (CTE) types with schema checks and field auto-mapping.",
     alternates: {
         canonical: "https://regengine.co/tools/data-import",
     },
     openGraph: {
         title: "FSMA 204 Data Import Hub | RegEngine",
-        description: "Import traceability data via CSV, XLSX, or the JSON events API with FSMA 204 schema checks. Free tool.",
+        description: "Import traceability data via CSV or the JSON events API with FSMA 204 schema checks. Free tool.",
         type: "website",
         url: "https://regengine.co/tools/data-import",
     },
@@ -28,7 +28,7 @@ const jsonLd = {
     "name": "RegEngine Data Import Hub",
     "operatingSystem": "All",
     "applicationCategory": "BusinessApplication",
-    "description": "Import traceability data via CSV, XLSX, or the JSON events API for FSMA 204 compliance.",
+    "description": "Import traceability data via CSV or the JSON events API for FSMA 204 compliance.",
 };
 
 function DataImportFallback() {
