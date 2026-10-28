@@ -174,9 +174,7 @@ async def test_login_verify_with_fake_challenge_fails_closed():
 
     fake = wr._fake_authentication_options()
     client_data = (
-        base64.urlsafe_b64encode(json.dumps({"challenge": fake["challenge"]}).encode())
-        .rstrip(b"=")
-        .decode("ascii")
+        base64.urlsafe_b64encode(json.dumps({"challenge": fake["challenge"]}).encode()).rstrip(b"=").decode("ascii")
     )
     payload = wr.WebAuthnCredentialPayload(
         credential={
@@ -214,9 +212,7 @@ def test_scoped_context_arms_disarms_then_binds_user(monkeypatch):
     context = session_auth.ActiveSessionContext(user=user, session=SimpleNamespace(id=1))
     monkeypatch.setattr(session_auth, "arm_global_admin_context", lambda db: calls.append("arm"))
     monkeypatch.setattr(session_auth, "disarm_global_admin_context", lambda db: calls.append("disarm"))
-    monkeypatch.setattr(
-        session_auth, "bind_authenticated_user_context", lambda db, uid: calls.append(f"bind:{uid}")
-    )
+    monkeypatch.setattr(session_auth, "bind_authenticated_user_context", lambda db, uid: calls.append(f"bind:{uid}"))
     monkeypatch.setattr(
         session_auth, "get_current_active_session_context", lambda **kwargs: calls.append("lookup") or context
     )
@@ -235,15 +231,11 @@ def test_scoped_context_disarms_without_binding_on_auth_failure(monkeypatch):
 
     monkeypatch.setattr(session_auth, "arm_global_admin_context", lambda db: calls.append("arm"))
     monkeypatch.setattr(session_auth, "disarm_global_admin_context", lambda db: calls.append("disarm"))
-    monkeypatch.setattr(
-        session_auth, "bind_authenticated_user_context", lambda db, uid: calls.append("bind")
-    )
+    monkeypatch.setattr(session_auth, "bind_authenticated_user_context", lambda db, uid: calls.append("bind"))
     monkeypatch.setattr(session_auth, "get_current_active_session_context", _fail)
 
     with pytest.raises(HTTPException) as exc_info:
-        session_auth.get_scoped_active_session_context(
-            request=_request(), db=MagicMock(), crypto_service=MagicMock()
-        )
+        session_auth.get_scoped_active_session_context(request=_request(), db=MagicMock(), crypto_service=MagicMock())
 
     assert exc_info.value.status_code == 401
     assert calls == ["arm", "lookup", "disarm"]
@@ -376,26 +368,19 @@ class _NonceCrypto:
         return "fresh-nonce"
 
 
-def test_existing_browser_nonce_is_reused():
+def test_browser_nonce_helper_always_mints_fresh():
+    """Never echo the client cookie into Set-Cookie (CodeQL py/cookie-injection)."""
     crypto = _NonceCrypto()
 
     well_formed = "x" * 43  # token_urlsafe(32) shape
-    assert cr._browser_nonce_for_request(_request(cookie=well_formed), crypto) == well_formed
-    assert crypto.minted == 0
-
-
-def test_missing_browser_nonce_mints_a_fresh_one():
-    crypto = _NonceCrypto()
+    assert cr._browser_nonce_for_request(_request(cookie=well_formed), crypto) == "fresh-nonce"
+    assert crypto.minted == 1
 
     assert cr._browser_nonce_for_request(_request(), crypto) == "fresh-nonce"
-    assert crypto.minted == 1
-
-
-def test_overlong_browser_nonce_is_replaced():
-    crypto = _NonceCrypto()
+    assert crypto.minted == 2
 
     assert cr._browser_nonce_for_request(_request(cookie="n" * 257), crypto) == "fresh-nonce"
-    assert crypto.minted == 1
+    assert crypto.minted == 3
 
 
 # ---------------------------------------------------------------------------

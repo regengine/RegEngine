@@ -70,7 +70,7 @@ class FakeCrypto:
         self.hash_otp_calls = []
         self.verify_result = verify_result
         self.verify_calls = []
-        self.opaque_tokens = list(opaque_tokens or ["browser-nonce"])
+        self.opaque_tokens = list(opaque_tokens or ["bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"])
 
     def fingerprint_email(self, email: str) -> str:
         return f"fingerprint:{email}"
@@ -145,19 +145,11 @@ def _is_security_guc(statement) -> bool:
 
 
 def _data_execute_statements(db):
-    return [
-        statement
-        for statement in db.execute_statements
-        if not _is_security_guc(statement)
-    ]
+    return [statement for statement in db.execute_statements if not _is_security_guc(statement)]
 
 
 def _data_execute_calls(db):
-    return [
-        call
-        for call in db.execute.call_args_list
-        if not _is_security_guc(call.args[0])
-    ]
+    return [call for call in db.execute.call_args_list if not _is_security_guc(call.args[0])]
 
 
 class FakeTransaction:
@@ -267,7 +259,7 @@ def _challenge(
     status: str = "pending",
     failed_attempts: int = 0,
     expires_delta_seconds: int = 60,
-    browser_binding_hash: str = "browser-hash:browser-nonce",
+    browser_binding_hash: str = "browser-hash:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
     email_fingerprint: str = "email-fp",
 ) -> AuthChallengeModel:
     return AuthChallengeModel(
@@ -295,9 +287,7 @@ def _mock_db_for_identity(identity=_DEFAULT_IDENTITY):
     db = MagicMock()
     identity_result = MagicMock()
     identity_result.first.return_value = _identity() if identity is _DEFAULT_IDENTITY else identity
-    db.execute.side_effect = lambda statement: (
-        MagicMock() if _is_security_guc(statement) else identity_result
-    )
+    db.execute.side_effect = lambda statement: MagicMock() if _is_security_guc(statement) else identity_result
     return db
 
 
@@ -331,7 +321,7 @@ async def test_create_auth_challenge_persists_digest_sets_cookie_and_queues_plai
     assert challenge.purpose == "sign_in"
     assert challenge.email_fingerprint == "fingerprint:user@example.com"
     assert challenge.code_digest == "hmac-digest"
-    assert challenge.browser_binding_hash == "browser-hash:browser-nonce"
+    assert challenge.browser_binding_hash == "browser-hash:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
     assert challenge.status == "pending"
     assert challenge.failed_attempts == 0
     assert challenge.expires_at > datetime.now(timezone.utc)
@@ -348,7 +338,7 @@ async def test_create_auth_challenge_persists_digest_sets_cookie_and_queues_plai
     assert rate_limit.calls == [
         {
             "email_fingerprint": "fingerprint:user@example.com",
-            "browser_binding_hash": "browser-hash:browser-nonce",
+            "browser_binding_hash": "browser-hash:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
             "ip_address": "203.0.113.50",
         }
     ]
@@ -359,7 +349,7 @@ async def test_create_auth_challenge_persists_digest_sets_cookie_and_queues_plai
     assert task.args == ("user@example.com", "012345", fixed_id)
 
     set_cookie = response.headers["set-cookie"]
-    assert f"{cr.AUTH_BROWSER_NONCE_COOKIE}=browser-nonce" in set_cookie
+    assert f"{cr.AUTH_BROWSER_NONCE_COOKIE}=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" in set_cookie
     assert "HttpOnly" in set_cookie
     assert "Secure" in set_cookie
     assert "SameSite=lax" in set_cookie
@@ -396,7 +386,9 @@ async def test_verified_sso_only_identity_gets_generic_contract_without_email(mo
     assert len(crypto.hash_otp_calls) == 1
     assert len(rate_limit.calls) == 1
     assert background_tasks.tasks == []
-    assert f"{cr.AUTH_BROWSER_NONCE_COOKIE}=browser-nonce" in response.headers["set-cookie"]
+    assert (
+        f"{cr.AUTH_BROWSER_NONCE_COOKIE}=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" in response.headers["set-cookie"]
+    )
 
 
 @pytest.mark.asyncio
@@ -428,7 +420,9 @@ async def test_unverified_sso_only_domain_uses_normal_otp_flow(monkeypatch):
     assert crypto.hash_otp_calls[0]["challenge_id"] == fixed_id
     assert rate_limit.calls[0]["email_fingerprint"] == "fingerprint:user@unverified.example"
     assert len(background_tasks.tasks) == 1
-    assert f"{cr.AUTH_BROWSER_NONCE_COOKIE}=browser-nonce" in response.headers["set-cookie"]
+    assert (
+        f"{cr.AUTH_BROWSER_NONCE_COOKIE}=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" in response.headers["set-cookie"]
+    )
 
 
 @pytest.mark.asyncio
@@ -460,11 +454,14 @@ async def test_standard_domain_still_uses_normal_otp_flow(monkeypatch):
     assert crypto.hash_otp_calls[0]["challenge_id"] == fixed_id
     assert rate_limit.calls[0]["email_fingerprint"] == "fingerprint:user@standard.example"
     assert len(background_tasks.tasks) == 1
-    assert f"{cr.AUTH_BROWSER_NONCE_COOKIE}=browser-nonce" in response.headers["set-cookie"]
+    assert (
+        f"{cr.AUTH_BROWSER_NONCE_COOKIE}=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" in response.headers["set-cookie"]
+    )
 
 
 @pytest.mark.asyncio
-async def test_existing_browser_nonce_is_reused_for_binding_and_cookie():
+async def test_create_challenge_always_mints_fresh_browser_nonce_cookie():
+    """Set-Cookie must never reflect the client cookie (CodeQL py/cookie-injection)."""
     db = _mock_db_for_identity()
     response = Response()
     crypto = FakeCrypto()
@@ -480,9 +477,12 @@ async def test_existing_browser_nonce_is_reused_for_binding_and_cookie():
         crypto_service=crypto,
     )
 
-    assert crypto.generated_nonces == 0
-    assert rate_limit.calls[0]["browser_binding_hash"] == f"browser-hash:{EXISTING_NONCE}"
-    assert f"{cr.AUTH_BROWSER_NONCE_COOKIE}={EXISTING_NONCE}" in response.headers["set-cookie"]
+    assert crypto.generated_nonces == 1
+    assert rate_limit.calls[0]["browser_binding_hash"] == "browser-hash:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    assert (
+        f"{cr.AUTH_BROWSER_NONCE_COOKIE}=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" in response.headers["set-cookie"]
+    )
+    assert EXISTING_NONCE not in response.headers["set-cookie"]
 
 
 # Same shape as secrets.token_urlsafe(32): 43 URL-safe characters.
@@ -517,7 +517,9 @@ async def test_malformed_browser_nonce_is_replaced_not_reflected(cookie):
     )
 
     assert crypto.generated_nonces == 1
-    assert f"{cr.AUTH_BROWSER_NONCE_COOKIE}=browser-nonce" in response.headers["set-cookie"]
+    assert (
+        f"{cr.AUTH_BROWSER_NONCE_COOKIE}=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" in response.headers["set-cookie"]
+    )
 
 
 @pytest.mark.asyncio
@@ -605,6 +607,7 @@ async def test_known_and_unknown_email_get_same_response_but_only_known_identity
 @pytest.mark.asyncio
 async def test_identity_lookup_failure_returns_503_without_generating_otp():
     db = MagicMock()
+
     def _execute(statement):
         if _is_security_guc(statement):
             return MagicMock()
@@ -655,7 +658,7 @@ async def test_verify_auth_challenge_consumes_challenge_creates_session_and_sets
     result = await cr.verify_auth_challenge(
         challenge_id=challenge.id,
         payload=ChallengeVerifyRequest(code="012345"),
-        request=_make_request(cookie="browser-nonce"),
+        request=_make_request(cookie="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"),
         response=response,
         db=db,
         crypto_service=crypto,
@@ -710,7 +713,7 @@ def test_verify_concurrent_double_submit_creates_one_session_under_row_lock():
                 cr.verify_auth_challenge(
                     challenge_id=store.challenge.id,
                     payload=ChallengeVerifyRequest(code="012345"),
-                    request=_make_request(cookie="browser-nonce"),
+                    request=_make_request(cookie="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"),
                     response=response,
                     db=db,
                     crypto_service=FakeCrypto(opaque_tokens=["session-token"]),
@@ -758,7 +761,7 @@ async def test_verify_wrong_code_increments_attempts_locks_at_five_and_commits()
         await cr.verify_auth_challenge(
             challenge_id=challenge.id,
             payload=ChallengeVerifyRequest(code="999999"),
-            request=_make_request(cookie="browser-nonce"),
+            request=_make_request(cookie="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"),
             response=response,
             db=db,
             crypto_service=FakeCrypto(verify_result=False),
@@ -781,7 +784,7 @@ async def test_verify_wrong_code_below_threshold_keeps_pending_and_commits():
         await cr.verify_auth_challenge(
             challenge_id=challenge.id,
             payload=ChallengeVerifyRequest(code="999999"),
-            request=_make_request(cookie="browser-nonce"),
+            request=_make_request(cookie="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"),
             response=Response(),
             db=db,
             crypto_service=FakeCrypto(verify_result=False),
@@ -802,7 +805,7 @@ async def test_verify_browser_binding_mismatch_does_not_increment_attempts():
         await cr.verify_auth_challenge(
             challenge_id=challenge.id,
             payload=ChallengeVerifyRequest(code="012345"),
-            request=_make_request(cookie="wrong-browser-nonce"),
+            request=_make_request(cookie="wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww"),
             response=Response(),
             db=db,
             crypto_service=FakeCrypto(),
@@ -825,11 +828,16 @@ def test_browser_binding_uses_constant_time_comparison(monkeypatch):
     monkeypatch.setattr(cr.hmac, "compare_digest", fake_compare_digest)
 
     assert cr._browser_binding_matches(
-        request=_make_request(cookie="browser-nonce"),
+        request=_make_request(cookie="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"),
         challenge=_challenge(),
         crypto_service=FakeCrypto(),
     )
-    assert calls == [("browser-hash:browser-nonce", "browser-hash:browser-nonce")]
+    assert calls == [
+        (
+            "browser-hash:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "browser-hash:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        )
+    ]
 
 
 @pytest.mark.asyncio
@@ -849,7 +857,7 @@ async def test_verify_rejects_non_pending_expired_or_exhausted_challenges(challe
         await cr.verify_auth_challenge(
             challenge_id=challenge.id,
             payload=ChallengeVerifyRequest(code="012345"),
-            request=_make_request(cookie="browser-nonce"),
+            request=_make_request(cookie="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"),
             response=Response(),
             db=db,
             crypto_service=FakeCrypto(),
@@ -874,7 +882,7 @@ async def test_verify_consumes_valid_code_but_returns_401_when_identity_not_vali
         await cr.verify_auth_challenge(
             challenge_id=challenge.id,
             payload=ChallengeVerifyRequest(code="012345"),
-            request=_make_request(cookie="browser-nonce"),
+            request=_make_request(cookie="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"),
             response=Response(),
             db=db,
             crypto_service=FakeCrypto(),
@@ -1039,7 +1047,7 @@ def test_route_returns_202_with_generic_body_and_secure_cookie(monkeypatch):
     body = response.json()
     assert body["detail"] == cr.AUTH_CHALLENGE_DETAIL
     assert uuid.UUID(body["challenge_id"])
-    assert response.cookies.get(cr.AUTH_BROWSER_NONCE_COOKIE) == "browser-nonce"
+    assert response.cookies.get(cr.AUTH_BROWSER_NONCE_COOKIE) == "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
     set_cookie = response.headers["set-cookie"]
     assert "HttpOnly" in set_cookie
     assert "Secure" in set_cookie
@@ -1065,7 +1073,7 @@ def test_route_sso_only_identity_returns_same_202_contract_and_cookie():
     assert uuid.UUID(response.json()["challenge_id"])
     db.add.assert_called_once()
     db.commit.assert_called_once()
-    assert response.cookies.get(cr.AUTH_BROWSER_NONCE_COOKIE) == "browser-nonce"
+    assert response.cookies.get(cr.AUTH_BROWSER_NONCE_COOKIE) == "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
     assert response.headers["cache-control"] == "no-store"
     assert response.headers["pragma"] == "no-cache"
 
@@ -1086,7 +1094,7 @@ def test_verify_route_returns_200_and_host_session_cookie(monkeypatch):
     app.dependency_overrides[cr.get_auth_crypto_service] = lambda: crypto
 
     client = TestClient(app)
-    client.cookies.set(cr.AUTH_BROWSER_NONCE_COOKIE, "browser-nonce", path="/auth")
+    client.cookies.set(cr.AUTH_BROWSER_NONCE_COOKIE, "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", path="/auth")
     response = client.post(f"/auth/challenges/{challenge.id}/verify", json={"code": "012345"})
 
     assert response.status_code == 200
