@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { ShieldAlert, FileText, Mail } from 'lucide-react';
 import { SUPPORT_CHANNELS } from '@/lib/customer-readiness';
+import { NOT_SET } from '@/lib/empty-values';
 import { PageContainer } from '@/components/layout/page-container';
 import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -27,13 +28,13 @@ export default function SupportSettingsPage() {
                         <Card key={channel.tier}>
                             <CardHeader>
                                 <div className="min-w-0">
-                                    <CardTitle>{channel.tier}</CardTitle>
-                                    <CardDescription>{channel.responseWindow}</CardDescription>
+                                    <CardTitle>{channel.tier || NOT_SET}</CardTitle>
+                                    <CardDescription>{channel.responseWindow || NOT_SET}</CardDescription>
                                 </div>
                             </CardHeader>
                             <CardContent className="space-y-2 text-ui text-re-text-secondary">
-                                <p>{channel.escalation}</p>
-                                <p>{channel.notes}</p>
+                                <p>{channel.escalation || NOT_SET}</p>
+                                <p>{channel.notes || NOT_SET}</p>
                             </CardContent>
                         </Card>
                     ))}
