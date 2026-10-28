@@ -98,18 +98,32 @@ def _query_tenant_events(
                     k_to.kde_value AS ship_to,
                     k_to_gln.kde_value AS ship_to_gln,
                     k_carrier.kde_value AS carrier,
-                    k_temp.kde_value AS temperature_c
+                    k_temp.kde_value AS temperature_c,
+                    k_ref.kde_value AS reference_document,
+                    k_tlc_src.kde_value AS tlc_source_reference,
+                    k_prev.kde_value AS immediate_previous_source,
+                    k_field.kde_value AS field_id,
+                    k_harvester.kde_value AS harvester_name,
+                    k_harvester_biz.kde_value AS harvester_business_name,
+                    k_harvester_phone.kde_value AS harvester_business_phone
                 FROM fsma.cte_events e
-                LEFT JOIN tenant_kdes k_from ON k_from.cte_event_id = e.id AND k_from.kde_key = 'ship_from_location'
+                LEFT JOIN tenant_kdes k_from ON k_from.cte_event_id = e.id AND k_from.tenant_id = e.tenant_id AND k_from.kde_key = 'ship_from_location'
                 LEFT JOIN tenant_kdes k_epcis ON k_epcis.cte_event_id = e.id AND k_epcis.tenant_id = e.tenant_id AND k_epcis.kde_key = 'epcis_document_json'
                 LEFT JOIN tenant_kdes k_gtin ON k_gtin.cte_event_id = e.id AND k_gtin.tenant_id = e.tenant_id AND k_gtin.kde_key = 'gtin'
                 LEFT JOIN tenant_kdes k_product ON k_product.cte_event_id = e.id AND k_product.tenant_id = e.tenant_id AND k_product.kde_key = 'product_id'
                 LEFT JOIN tenant_kdes k_epc_class ON k_epc_class.cte_event_id = e.id AND k_epc_class.tenant_id = e.tenant_id AND k_epc_class.kde_key = 'epc_class'
-                LEFT JOIN tenant_kdes k_from_gln ON k_from_gln.cte_event_id = e.id AND k_from_gln.kde_key = 'ship_from_gln'
-                LEFT JOIN tenant_kdes k_to ON k_to.cte_event_id = e.id AND k_to.kde_key = 'ship_to_location'
-                LEFT JOIN tenant_kdes k_to_gln ON k_to_gln.cte_event_id = e.id AND k_to_gln.kde_key = 'ship_to_gln'
-                LEFT JOIN tenant_kdes k_carrier ON k_carrier.cte_event_id = e.id AND k_carrier.kde_key = 'carrier_name'
-                LEFT JOIN tenant_kdes k_temp ON k_temp.cte_event_id = e.id AND k_temp.kde_key = 'temperature_celsius'
+                LEFT JOIN tenant_kdes k_from_gln ON k_from_gln.cte_event_id = e.id AND k_from_gln.tenant_id = e.tenant_id AND k_from_gln.kde_key = 'ship_from_gln'
+                LEFT JOIN tenant_kdes k_to ON k_to.cte_event_id = e.id AND k_to.tenant_id = e.tenant_id AND k_to.kde_key = 'ship_to_location'
+                LEFT JOIN tenant_kdes k_to_gln ON k_to_gln.cte_event_id = e.id AND k_to_gln.tenant_id = e.tenant_id AND k_to_gln.kde_key = 'ship_to_gln'
+                LEFT JOIN tenant_kdes k_carrier ON k_carrier.cte_event_id = e.id AND k_carrier.tenant_id = e.tenant_id AND k_carrier.kde_key = 'carrier_name'
+                LEFT JOIN tenant_kdes k_temp ON k_temp.cte_event_id = e.id AND k_temp.tenant_id = e.tenant_id AND k_temp.kde_key = 'temperature_celsius'
+                LEFT JOIN tenant_kdes k_ref ON k_ref.cte_event_id = e.id AND k_ref.tenant_id = e.tenant_id AND k_ref.kde_key = 'reference_document'
+                LEFT JOIN tenant_kdes k_tlc_src ON k_tlc_src.cte_event_id = e.id AND k_tlc_src.tenant_id = e.tenant_id AND k_tlc_src.kde_key = 'tlc_source_reference'
+                LEFT JOIN tenant_kdes k_prev ON k_prev.cte_event_id = e.id AND k_prev.tenant_id = e.tenant_id AND k_prev.kde_key = 'immediate_previous_source'
+                LEFT JOIN tenant_kdes k_field ON k_field.cte_event_id = e.id AND k_field.tenant_id = e.tenant_id AND k_field.kde_key = 'field_id'
+                LEFT JOIN tenant_kdes k_harvester ON k_harvester.cte_event_id = e.id AND k_harvester.tenant_id = e.tenant_id AND k_harvester.kde_key = 'harvester_name'
+                LEFT JOIN tenant_kdes k_harvester_biz ON k_harvester_biz.cte_event_id = e.id AND k_harvester_biz.tenant_id = e.tenant_id AND k_harvester_biz.kde_key = 'harvester_business_name'
+                LEFT JOIN tenant_kdes k_harvester_phone ON k_harvester_phone.cte_event_id = e.id AND k_harvester_phone.tenant_id = e.tenant_id AND k_harvester_phone.kde_key = 'harvester_business_phone'
                 WHERE e.tenant_id = :tenant_id
                 {"AND " + " AND ".join(where) if where else ""}
                 ORDER BY e.event_timestamp DESC
