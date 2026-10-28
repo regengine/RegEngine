@@ -9,6 +9,7 @@ import { Field } from '@/components/ui/field';
 import { Input, fieldControlClasses } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { getConversionAttribution, trackContactFormSubmit } from '@/lib/conversion-events';
+import { identifyUser, ph } from '@/lib/posthog-provider';
 
 function contactErrorCode(status: number): 'validation' | 'rate_limited' | 'unavailable' | 'server' {
   if (status === 400 || status === 422) return 'validation';
@@ -79,6 +80,10 @@ export function ContactRequestForm({
         return;
       }
       trackContactFormSubmit('success');
+      if (source === 'signup') {
+        identifyUser(form.email);
+        ph.signup({ source: 'signup' });
+      }
       setStatus('success');
       setForm({ name: '', email: '', company: '', message: '', website: '' });
     } catch {
