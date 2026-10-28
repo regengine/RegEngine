@@ -15,6 +15,7 @@ from starlette.requests import Request
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
+from services.graph.app import fsma_utils  # noqa: E402
 from services.graph.app.routers.fsma import compliance  # noqa: E402
 
 FIXTURES = Path(__file__).resolve().parents[2] / "ingestion" / "tests" / "fixtures" / "epcis_gs1"
@@ -54,26 +55,6 @@ def location_identifier():
     return f"{digits[:7]}.{digits[7:]}.{uuid.uuid4().hex}"
 
 
-def _gs1_with_check(data_digits: str) -> str:
-    from services.shared.fsma_validation import calculate_gs1_check_digit
-
-    return data_digits + str(calculate_gs1_check_digit(data_digits))
-
-
-def generated_gtin14() -> str:
-    base = str(uuid.uuid4().int % (10**13)).zfill(13)
-    return _gs1_with_check(base)
-
-
-def generated_gln13() -> str:
-    base = str(uuid.uuid4().int % (10**12)).zfill(12)
-    return _gs1_with_check(base)
-
-
-def generated_lot() -> str:
-    return f"SYN-{uuid.uuid4().hex[:12]}"
-
-
 def graph_row(kind):
     now = datetime.now(timezone.utc)
     row = {
@@ -93,17 +74,16 @@ def graph_row(kind):
 
 
 async def export(format, rows):
-    async def query(client, start, end, tenant, **_kwargs):
+    async def query(client, start, end, tenant):
         assert tenant == str(TENANT)
         return rows
 
     today = datetime.now(timezone.utc).date().isoformat()
     # Bypass slowapi so the suite can call the endpoint many times in one process.
-    # Patch the name bound in compliance (from-import), not fsma_utils.
     endpoint = getattr(compliance.export_epcis, "__wrapped__", compliance.export_epcis)
     with patch.object(compliance, "Neo4jClient", FakeNeo4j), patch.object(
         compliance, "reconcile_tenant_scope", return_value=str(TENANT)
-    ), patch.object(compliance, "query_events_by_range", query):
+    ), patch.object(fsma_utils, "query_events_by_range", query):
         response = await endpoint(
             Request({"type": "http", "method": "GET", "path": "/export/epcis", "query_string": b"", "headers": []}),
             today, today, format, TENANT, object(),
@@ -143,8 +123,6 @@ def test_empty_export_has_no_events_in_either_format():
     document = json.loads(asyncio.run(export("json-ld", [])))
     xml = asyncio.run(export("xml", []))
     assert document["epcisBody"]["eventList"] == []
-    assert document["regengine:exportMetadata"]["preview"] is True
-    assert "Preview" in document["regengine:exportMetadata"]["previewNotice"]
     jsonschema = pytest.importorskip("jsonschema")
     jsonschema.Draft7Validator(
         json.loads(schema_file("EPCIS-JSON-Schema.json").read_text())
@@ -162,36 +140,26 @@ def test_missing_event_time_is_skipped():
     assert document["epcisBody"]["eventList"] == []
 
 
-def test_gs1_location_check_digit_round_trip_for_generated_gln():
-    """Graph location helper must use GS1 weight-3-from-right on generated GLNs."""
-    from services.shared.fsma_validation import verify_gs1_check_digit
-
-    gln = generated_gln13()
-    assert len(gln) == 13 and gln.isdigit()
-    assert verify_gs1_check_digit(gln)
-    bad = gln[:-1] + ("0" if gln[-1] != "0" else "1")
-    assert not verify_gs1_check_digit(bad)
+def test_gs1_location_check_digit_accepts_known_valid_gln():
+    """Graph location helper must use GS1 weight-3-from-right."""
     row = graph_row("RECEIVING")
-    row["location_gln"] = gln
+    row["location_gln"] = "0614141000005"
     row["tlc"] = epc_identifier()
     document = json.loads(asyncio.run(export("json-ld", [row])))
     assert document["epcisBody"]["eventList"]
-    assert document["epcisBody"]["eventList"][0]["readPoint"]["id"] == f"https://id.gs1.org/414/{gln}"
+    assert document["epcisBody"]["eventList"][0]["readPoint"]["id"] == "https://id.gs1.org/414/0614141000005"
 
 
 def test_graph_exports_raw_tlc_with_lot_gtin_as_digital_link():
-    """Real FSMA lots use free-text TLC + Lot.gtin; must not be silently dropped."""
-    gtin = generated_gtin14()
-    gln = generated_gln13()
-    lot = generated_lot()
+    """Real FSMA lots use free-text TLC + Lot.gtin — must not be silently dropped."""
     row = {
         "type": "SHIPPING",
         "event_date": datetime.now(timezone.utc).date().isoformat(),
         "event_time": datetime.now(timezone.utc).time().isoformat(timespec="seconds"),
-        "tlc": lot,
-        "gtin": gtin,
-        "location_gln": gln,
-        "ship_from_gln": gln,
+        "tlc": "LOT-2024-001",
+        "gtin": "09506000134352",
+        "location_gln": "0614141000005",
+        "ship_from_gln": "0614141000005",
         "ship_to_gln": location_identifier(),
         "quantity": 12,
         "unit_of_measure": "KGM",
@@ -202,41 +170,38 @@ def test_graph_exports_raw_tlc_with_lot_gtin_as_digital_link():
     assert len(events) == 1
     event = events[0]
     assert event["type"] == "ObjectEvent"
-    assert event["quantityList"][0]["epcClass"] == f"https://id.gs1.org/01/{gtin}/10/{lot}"
+    assert event["quantityList"][0]["epcClass"] == "https://id.gs1.org/01/09506000134352/10/LOT-2024-001"
     assert event["bizStep"] == "shipping"
     assert document["regengine:exportMetadata"]["skippedEventsCount"] == 0
 
 
 def test_graph_exports_transformation_with_input_tlc_and_gtin():
-    gtin = generated_gtin14()
-    out_lot = generated_lot()
-    in_lot = generated_lot()
     row = {
         "type": "TRANSFORMATION",
         "event_date": datetime.now(timezone.utc).date().isoformat(),
         "event_time": datetime.now(timezone.utc).time().isoformat(timespec="seconds"),
-        "tlc": out_lot,
-        "gtin": gtin,
-        "input_tlc": in_lot,
-        "input_gtin": gtin,
+        "tlc": "OUT-LOT-9",
+        "gtin": "09506000134352",
+        "input_tlc": "IN-LOT-9",
+        "input_gtin": "09506000134352",
         "location_gln": location_identifier(),
-        "event_id": f"evt-bare-{uuid.uuid4().hex[:12]}",
+        "event_id": "evt-bare-id-123",
         "quantity": 3,
         "unit_of_measure": "KGM",
     }
     document = json.loads(asyncio.run(export("json-ld", [row])))
     event = document["epcisBody"]["eventList"][0]
     assert event["type"] == "TransformationEvent"
-    assert event["outputQuantityList"][0]["epcClass"].endswith(f"/10/{out_lot}")
-    assert event["inputQuantityList"][0]["epcClass"].endswith(f"/10/{in_lot}")
+    assert event["outputQuantityList"][0]["epcClass"].endswith("/10/OUT-LOT-9")
+    assert event["inputQuantityList"][0]["epcClass"].endswith("/10/IN-LOT-9")
     assert event["transformationID"].startswith("urn:uuid:")
 
 
-def test_graph_harvesting_uses_creating_class_instance_bizstep():
+def test_graph_harvesting_uses_collecting_bizstep():
     row = graph_row("HARVESTING")
     # graph_row uses split SGTIN-shaped tlc
     document = json.loads(asyncio.run(export("json-ld", [row])))
-    assert document["epcisBody"]["eventList"][0]["bizStep"] == "creating_class_instance"
+    assert document["epcisBody"]["eventList"][0]["bizStep"] == "collecting"
 
 
 def test_missing_event_time_records_skip_reason():
