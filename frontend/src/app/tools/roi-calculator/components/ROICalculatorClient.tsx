@@ -90,7 +90,8 @@ export function ROICalculatorClient() {
                         <p className="text-small leading-relaxed text-re-text-tertiary">
                             Estimates use simple multipliers applied to your reported hours, record volume, and revenue.
                             We don&apos;t have verified customer ROI data yet, and the Founding rate reflects that.
-                            Current public FDA posture points to July 20, 2028 as the earliest enforcement date; no public fine schedule exists, so the
+                            FDA has said it will not enforce the Food Traceability Rule before July 20, 2028, following a Congressional directive.
+                            No public fine schedule exists, so the
                             risk-concentration tile is illustrative only. Actual results depend on your contracts,
                             existing systems, staffing, and data hygiene.
                         </p>

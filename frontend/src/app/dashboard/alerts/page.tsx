@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
+import { ErrorState } from '@/components/ui/error-state';
 import { StatTile } from '@/components/ui/stat-tile';
 import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
@@ -34,6 +35,7 @@ import {
 
 import { useAuth } from '@/lib/auth-context';
 import { useTenant } from '@/lib/tenant-context';
+import { getErrorRequestId } from '@/lib/api-error';
 import { fetchAlerts, acknowledgeAlert } from '@/lib/api-hooks';
 
 /* ── Types matching AlertsResponse from backend ── */
@@ -119,7 +121,7 @@ function AlertsDashboardPageContent() {
 
     const [filter, setFilter] = useState<SeverityFilter>('all');
 
-    const { data: alertsData, isLoading: loading, error: alertsError, refetch: loadAlerts, isSuccess } = useQuery({
+    const { data: alertsData, isLoading: loading, error: alertsError, refetch: loadAlerts, isFetching, isSuccess } = useQuery({
         queryKey: ['alerts', tenantId],
         queryFn: async () => {
             const data = (await fetchAlerts(tenantId)) as AlertsResponse;
@@ -201,22 +203,12 @@ function AlertsDashboardPageContent() {
 
                 {/* Error */}
                 {fetchFailed && (
-                    <Callout
-                        tone="danger"
-                        role="alert"
-                        action={
-                            <Button variant="secondary" size="sm" onClick={() => loadAlerts()} disabled={loading}>
-                                <RefreshCw
-                                    className={cn('h-4 w-4', loading && 'animate-spin motion-reduce:animate-none')}
-                                    strokeWidth={1.75}
-                                    aria-hidden="true"
-                                />
-                                Retry
-                            </Button>
-                        }
-                    >
-                        Couldn&apos;t load alerts. Check your connection and retry.
-                    </Callout>
+                    <ErrorState
+                        message="We could not load your alerts."
+                        onRetry={() => loadAlerts()}
+                        retrying={isFetching}
+                        requestId={getErrorRequestId(alertsError)}
+                    />
                 )}
 
                 {isLoggedIn && !loading && alerts.length > 0 && (

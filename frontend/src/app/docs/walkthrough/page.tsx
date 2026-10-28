@@ -73,7 +73,7 @@ export default function WalkthroughPage() {
         {/* Step 1 */}
         <Step n={1} title="Post the Receiving event">
           <p className="mb-3 text-body text-re-text-secondary">
-            Post a Receiving CTE for a lot that arrived at your facility — the starting anchor for
+            Post a Receiving CTE for a lot that arrived at your facility. It is the starting anchor for
             the chain. Fill the skeleton&apos;s <code className={CODE}>{'<traceability_lot_code>'}</code>,{' '}
             <code className={CODE}>immediate_previous_source</code>, and the other fields with your own values.
           </p>

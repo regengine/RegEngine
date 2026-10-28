@@ -472,7 +472,7 @@ async def test_existing_browser_nonce_is_reused_for_binding_and_cookie():
 
     await cr.create_auth_challenge(
         payload=ChallengeCreateRequest(email="user@example.com"),
-        request=_make_request(cookie="existing-browser-nonce"),
+        request=_make_request(cookie=EXISTING_NONCE),
         response=response,
         background_tasks=BackgroundTasks(),
         db=db,
@@ -481,8 +481,43 @@ async def test_existing_browser_nonce_is_reused_for_binding_and_cookie():
     )
 
     assert crypto.generated_nonces == 0
-    assert rate_limit.calls[0]["browser_binding_hash"] == "browser-hash:existing-browser-nonce"
-    assert f"{cr.AUTH_BROWSER_NONCE_COOKIE}=existing-browser-nonce" in response.headers["set-cookie"]
+    assert rate_limit.calls[0]["browser_binding_hash"] == f"browser-hash:{EXISTING_NONCE}"
+    assert f"{cr.AUTH_BROWSER_NONCE_COOKIE}={EXISTING_NONCE}" in response.headers["set-cookie"]
+
+
+# Same shape as secrets.token_urlsafe(32): 43 URL-safe characters.
+EXISTING_NONCE = "e" * 43
+
+
+@pytest.mark.parametrize(
+    "cookie",
+    [
+        "e" * 42,
+        "e" * 44,
+        "e" * 42 + "=",
+        "e" * 42 + ";",
+        "e" * 42 + " ",
+        "e" * 42 + ".",
+    ],
+)
+@pytest.mark.asyncio
+async def test_malformed_browser_nonce_is_replaced_not_reflected(cookie):
+    db = _mock_db_for_identity()
+    response = Response()
+    crypto = FakeCrypto()
+
+    await cr.create_auth_challenge(
+        payload=ChallengeCreateRequest(email="user@example.com"),
+        request=_make_request(cookie=cookie),
+        response=response,
+        background_tasks=BackgroundTasks(),
+        db=db,
+        rate_limit_service=FakeRateLimit(),
+        crypto_service=crypto,
+    )
+
+    assert crypto.generated_nonces == 1
+    assert f"{cr.AUTH_BROWSER_NONCE_COOKIE}=browser-nonce" in response.headers["set-cookie"]
 
 
 @pytest.mark.asyncio
