@@ -163,7 +163,7 @@ for (const surface of SURFACES) {
         expect(pageErrors, `${surface.route}: page errors`).toEqual([]);
         await maskKeyValues(page);
         await expect(page).toHaveScreenshot(
-            `signed-in__${surface.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+            `signed-in__${surface.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.png`,
             { mask: screenshotMasks(page) },
         );
         await attachRequests(testInfo.title, bad);

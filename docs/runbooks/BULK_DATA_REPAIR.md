@@ -316,7 +316,7 @@ INSERT INTO fsma.traceability_events (
     provenance_metadata || jsonb_build_object(
         'amendment_reason', 'Missing ship_date KDE — bulk data repair',
         'amendment_timestamp', NOW()::text,
-        'amendment_operator', 'christopher@regengine.com'
+        'amendment_operator', 'christopher@regengine.co'
     ),
     confidence_score,
     'active',                        -- new event is active

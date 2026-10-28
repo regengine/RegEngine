@@ -240,7 +240,7 @@ Before running in production mode:
 
 - **Documentation**: See this README and inline code comments
 - **Issues**: File issues in main RegEngine repository
-- **Security**: For security concerns, email security@regengine.ai
+- **Security**: For security concerns, email security@regengine.co
 
 ---
 

@@ -50,6 +50,8 @@ export default defineConfig({
     outputDir: 'test-results-visual',
     // Designer-matching names: <route-stem>-<project>.png, so regenerated
     // baselines map 1:1 to the designer's reference PNGs for review.
+    // Note: Playwright 1.64+ requires toHaveScreenshot() names to have a .png
+    // or .webp extension; {arg} excludes that extension and {ext} adds it.
     snapshotPathTemplate: '{testDir}/__screenshots__/{arg}-{projectName}{ext}',
     use: {
         baseURL: process.env.VISUAL_BASE_URL || 'https://regengine.co',
