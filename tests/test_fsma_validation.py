@@ -234,33 +234,49 @@ class TestTLCValidation:
         assert result.is_valid
         assert result.normalized_value == "lot-abc-123"
 
-    def test_tlc_too_short(self):
+    @pytest.mark.parametrize("strict", [False, True])
+    def test_tlc_too_short(self, strict):
         """Test TLC below minimum length."""
-        result = validate_tlc("AB")
+        result = validate_tlc("A" * 2, strict=strict)
         assert not result.is_valid
         assert any("at least 3" in err.message for err in result.errors)
 
     def test_tlc_strict_mode_valid(self):
         """Test TLC validation in strict mode with valid GTIN-14 prefix."""
-        result = validate_tlc("00012345678901-LotA", strict=True)
-        assert result.is_valid
+        result = validate_tlc("0" * 14 + "A", strict=True)
+        assert result.is_valid is True
+        assert result.errors == []
+        assert not any("production pattern" in w for w in result.warnings)
 
     def test_tlc_strict_mode_invalid(self):
-        """Test TLC in strict mode rejects non-GTIN-14 prefix."""
-        result = validate_tlc("L-2024-01-15-A", strict=True)
-        assert not result.is_valid
-        assert any("production pattern" in err.message for err in result.errors)
+        """A production-pattern miss is a warning, not a failure."""
+        result = validate_tlc("A" * 3, strict=True)
+        assert result.is_valid is True
+        assert result.errors == []
+        assert any("production pattern" in w and "Warning" in w for w in result.warnings)
+
+    @pytest.mark.parametrize("tlc,pattern_warning", [("A" * 3, True), ("0" * 14 + "A", False)])
+    def test_tlc_strict_pattern_shapes(self, tlc, pattern_warning):
+        """Structural padding represents format only, not a company prefix."""
+        result = validate_tlc(tlc, strict=True)
+        assert result.is_valid is True
+        assert result.errors == []
+        assert any("production pattern" in w for w in result.warnings) is pattern_warning
 
     def test_tlc_strict_mode_dots_valid(self):
         """Test TLC strict mode accepts dots in lot suffix."""
-        result = validate_tlc("00012345678901-ABC.DEF", strict=True)
+        result = validate_tlc("0" * 14 + "A" * 3 + "." + "B" * 3, strict=True)
         assert result.is_valid
 
-    def test_tlc_unusual_chars_warning(self):
-        """Test TLC with unusual characters produces warning in permissive mode."""
-        result = validate_tlc("LOT: ABC123")  # colon + space
+    @pytest.mark.parametrize("strict", [False, True])
+    def test_tlc_unusual_chars_warning(self, strict):
+        """Both modes warn on unusual characters without adding errors."""
+        result = validate_tlc("A" * 3 + ": " + "B", strict=strict)  # colon + space
         assert result.is_valid
+        assert result.errors == []
         assert any("unusual characters" in w for w in result.warnings)
+        if strict:
+            assert any("production pattern" in w for w in result.warnings)
 
     def test_tlc_very_long_warning(self):
         """Test very long TLC produces warning."""
