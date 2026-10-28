@@ -97,14 +97,16 @@ TEST_TENANT_ID = "11111111-1111-1111-1111-111111111111"
 DEFAULT_KEY_FILE = Path.home() / ".regengine" / "test-api-key"
 
 
-def _prepare_key_file_path(path: Path) -> Path:
+def _prepare_key_file_path(path: Path, *, allow_replace: bool = False) -> Path:
     """Resolve and validate the key-file destination before minting a key.
 
-    Expands ``~``, resolves to an absolute path, creates a missing parent as
-    ``0700``, and if an existing parent is group/world accessible but owned by
-    this user, tightens it to ``0700``. Refuses a symlink at the final path so
-    a later write failure cannot leave an orphaned database row. Call this
-    before ``create_key``.
+    Expands ``~``, resolves to an absolute path, and creates a missing parent
+    as ``0700``. Refuses an existing parent that is group/world accessible
+    (never changes permissions on an arbitrary directory such as ``/tmp``).
+    Refuses a symlink at the final path, and refuses an existing destination
+    unless ``allow_replace`` is set, so a later write failure cannot leave an
+    orphaned database row and a second run cannot silently destroy a prior
+    raw key. Call this before ``create_key``.
     """
     path = path.expanduser()
     if not path.is_absolute():
@@ -119,15 +121,22 @@ def _prepare_key_file_path(path: Path) -> Path:
         st = parent.stat()
         parent_mode = stat.S_IMODE(st.st_mode)
         if parent_mode & 0o077:
-            if st.st_uid != os.getuid():
-                raise SystemExit(
-                    f"Refusing to write key file: parent {parent} is group/world "
-                    f"accessible (mode {oct(parent_mode)}) and not owned by you."
-                )
-            os.chmod(parent, 0o700)
+            raise SystemExit(
+                f"Refusing to write key file: parent {parent} is group/world "
+                f"accessible (mode {oct(parent_mode)}). Choose a private key "
+                f"directory owned by you with mode 0700 (for example "
+                f"~/.regengine/), instead of a shared directory."
+            )
     else:
         parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         os.chmod(parent, 0o700)
+
+    if path.exists() and not allow_replace:
+        raise SystemExit(
+            f"Refusing to overwrite existing key file {path}. Pass "
+            f"--replace-key-file to replace it explicitly (the previous raw "
+            f"key in that file will be destroyed)."
+        )
     return path
 
 
@@ -292,6 +301,12 @@ def _parse_args() -> argparse.Namespace:
         help=f"Where to write the raw key (mode 0600). Default {DEFAULT_KEY_FILE}",
     )
     parser.add_argument(
+        "--replace-key-file",
+        action="store_true",
+        help="Allow overwriting an existing --key-file. Without this flag the "
+        "script refuses to destroy a prior raw key at that path.",
+    )
+    parser.add_argument(
         "--allow-production",
         action="store_true",
         help="Override the production guard. Almost never what you want.",
@@ -422,7 +437,9 @@ async def _main() -> None:
     # Destination is prepared before create_key so a refused path cannot
     # leave an orphaned DB row. Absolute path is fixed before the raw key
     # exists so the console summary is never CodeQL-tainted (alert 81).
-    key_path = _prepare_key_file_path(args.key_file)
+    key_path = _prepare_key_file_path(
+        args.key_file, allow_replace=args.replace_key_file
+    )
 
     store = DatabaseAPIKeyStore(database_url=database_url)
     try:
@@ -442,7 +459,9 @@ async def _main() -> None:
         )
         try:
             _write_key_file(key.raw_key, key_path)
-        except Exception as write_exc:
+        except BaseException as write_exc:
+            # SystemExit (symlink refusal, etc.) must also revoke: it is not
+            # a subclass of Exception.
             await store.revoke_key(
                 key.key_id,
                 revoked_by="scripts/create_test_api_key.py",

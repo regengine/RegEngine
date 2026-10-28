@@ -76,14 +76,31 @@ def test_key_file_rejects_symlink_target(keygen, tmp_path):
     assert real.read_text() == "placeholder"
 
 
-def test_key_file_chmods_group_accessible_owned_parent(keygen, tmp_path):
+def test_key_file_rejects_group_accessible_parent(keygen, tmp_path):
     parent = tmp_path / "shared"
     parent.mkdir(mode=0o755)
     parent.chmod(0o755)
-    path = keygen._prepare_key_file_path(parent / "key")
-    keygen._write_key_file(_raw_key(), path)
-    assert stat.S_IMODE(parent.stat().st_mode) == 0o700
-    assert path.exists()
+    with pytest.raises(SystemExit, match="group/world accessible"):
+        keygen._prepare_key_file_path(parent / "key")
+    assert not (parent / "key").exists()
+    assert stat.S_IMODE(parent.stat().st_mode) == 0o755
+
+
+def test_key_file_rejects_existing_destination_without_replace(keygen, tmp_path):
+    path = keygen._prepare_key_file_path(tmp_path / "key")
+    path.write_text("prior-raw-key\n")
+    with pytest.raises(SystemExit, match="overwrite existing key file"):
+        keygen._prepare_key_file_path(tmp_path / "key")
+    assert path.read_text() == "prior-raw-key\n"
+
+
+def test_key_file_allows_replace_when_requested(keygen, tmp_path):
+    path = keygen._prepare_key_file_path(tmp_path / "key")
+    path.write_text("prior-raw-key\n")
+    path = keygen._prepare_key_file_path(tmp_path / "key", allow_replace=True)
+    raw = _raw_key()
+    keygen._write_key_file(raw, path)
+    assert path.read_text().strip() == raw
 
 
 def test_summary_never_contains_raw_key(keygen, tmp_path):
