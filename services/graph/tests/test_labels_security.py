@@ -49,9 +49,17 @@ class TestLotNumberIssuanceGuard:
         with pytest.raises(ValidationError, match="must not contain '%'"):
             self._info(lot)
 
-    def test_rejects_empty_lot(self):
+    @pytest.mark.parametrize("lot", ["", "   ", "\t"])
+    def test_rejects_empty_or_whitespace_only_lot(self, lot):
         with pytest.raises(ValidationError, match="must not be empty"):
-            self._info("")
+            self._info(lot)
+
+    @pytest.mark.parametrize("lot", ["A~JAB", "A^XA", "LOT\x01"])
+    def test_rejects_zpl_control_prefix_and_control_bytes(self, lot):
+        # RE-SEC-004: the quoted lot sits inside ^FDMM,...^FS and quote()
+        # leaves "~" unescaped, so "~JA" would reach the printer as a command.
+        with pytest.raises(ValidationError, match="not permitted in label input"):
+            self._info(lot)
 
     @pytest.mark.parametrize("lot", [".", ".."])
     def test_rejects_dot_segments_the_browser_would_normalize_away(self, lot):
@@ -62,7 +70,7 @@ class TestLotNumberIssuanceGuard:
     def test_accepts_lots_that_scan_back_unchanged(self, lot):
         assert self._info(lot).lot_number == lot
 
-    @pytest.mark.parametrize("lot", ["100%2F", "", ".."])
+    @pytest.mark.parametrize("lot", ["100%2F", "", "..", "A~JAB"])
     def test_batch_init_returns_422_naming_lot_number(self, lot):
         """At the API boundary the guard is a 422 that names lot_number, never a 500."""
         from fastapi import FastAPI

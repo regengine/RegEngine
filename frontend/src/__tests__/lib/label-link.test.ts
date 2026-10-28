@@ -17,6 +17,8 @@ describe('parseLabelLink', () => {
 
     it('decodes the raw segment the page component receives', () => {
         // What labels.py printed for lot "LOT-2024/001", as Next hands it to page.tsx.
+        // The "%"-bearing lots below exercise decode-once behaviour for hand-typed
+        // URLs; labels.py refuses to print a lot containing "%".
         expect(parseLabelLink({ gtin: VALID_GTIN, lot: 'LOT-2024%2F001', serial: SERIAL })?.lot).toBe('LOT-2024/001');
         expect(parseLabelLink({ gtin: VALID_GTIN, lot: 'A%25B', serial: SERIAL })?.lot).toBe('A%B');
         expect(parseLabelLink({ gtin: VALID_GTIN, lot: 'A%20B', serial: SERIAL })?.lot).toBe('A B');
