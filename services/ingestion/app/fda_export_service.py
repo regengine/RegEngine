@@ -18,6 +18,7 @@ from typing import Any, Optional
 from uuid import uuid4
 
 from shared.fda_export import safe_filename_token as _shared_safe_filename_token
+from shared.fsma_validation import gln_for_export
 from shared.merkle_tree import MerkleTree
 from shared.rules.verdict import classify_event_verdict
 
@@ -213,19 +214,19 @@ def _event_to_fda_row(event: dict, *, include_pii: bool = False) -> dict:
         "Event Type (CTE)": sanitize_cell(event.get("event_type", "")),
         "Event Date": sanitize_cell(event_date),
         "Event Time": sanitize_cell(event_time),
-        "Location GLN": sanitize_cell(event.get("location_gln", "") or ""),
+        "Location GLN": gln_for_export(event.get("location_gln")),
         "Location Name": _redact_location_value(
             sanitize_cell(event.get("location_name", "") or ""),
             "Location Name",
             include_pii,
         ),
-        "Ship From GLN": sanitize_cell(kdes.get("ship_from_gln", "") or ""),
+        "Ship From GLN": gln_for_export(kdes.get("ship_from_gln")),
         "Ship From Name": _redact_location_value(
             sanitize_cell(kdes.get("ship_from_location", "") or ""),
             "Ship From Name",
             include_pii,
         ),
-        "Ship To GLN": sanitize_cell(kdes.get("ship_to_gln", "") or ""),
+        "Ship To GLN": gln_for_export(kdes.get("ship_to_gln")),
         "Ship To Name": _redact_location_value(
             sanitize_cell(kdes.get("ship_to_location", kdes.get("receiving_location", "")) or ""),
             "Ship To Name",
@@ -236,7 +237,7 @@ def _event_to_fda_row(event: dict, *, include_pii: bool = False) -> dict:
             "Immediate Previous Source",
             include_pii,
         ),
-        "TLC Source GLN": sanitize_cell(kdes.get("tlc_source_gln", "") or ""),
+        "TLC Source GLN": gln_for_export(kdes.get("tlc_source_gln")),
         "TLC Source FDA Registration": sanitize_cell(kdes.get("tlc_source_fda_reg", "") or ""),
         "Source Document": sanitize_cell(event.get("source", "")),
         "Record Hash (SHA-256)": sanitize_cell(event.get("sha256_hash", "")),

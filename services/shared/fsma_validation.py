@@ -109,6 +109,14 @@ def _validate_gs1_check(clean: str, field_name: str, id_type: IdentifierType) ->
 # ---------------------------------------------------------------------------
 
 
+def gln_for_export(value: object) -> str:
+    """Emit only verbatim ASCII GLNs with a valid GS1 check digit."""
+    if isinstance(value, str) and len(value) == 13 and value.isascii() and value.isdigit():
+        if verify_gs1_check_digit(value):
+            return value
+    return ""
+
+
 def is_location_description_complete(
     *,
     name: Optional[str] = None,

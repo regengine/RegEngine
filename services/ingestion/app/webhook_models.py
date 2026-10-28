@@ -269,6 +269,11 @@ class IngestEvent(BaseModel):
     def require_location(self) -> "IngestEvent":
         """Require one complete location description or GLN per 21 CFR 1.1310."""
 
+        # A-2170: explicitly flagged incomplete EDI locations are accepted.
+        if self.kdes.get("location_incomplete") is True:
+            _gln_logger.warning("location_incomplete accepted=true")
+            return self
+
         def first_nonblank(*values: Any) -> Optional[str]:
             return next((value for value in values if isinstance(value, str) and value.strip()), None)
 

@@ -19,7 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from shared.database import get_db_safe
-from shared.fsma_validation import normalize_gtin, verify_gs1_check_digit
+from shared.fsma_validation import gln_for_export as _gln_csv_cell, normalize_gtin, verify_gs1_check_digit
 from shared.tenant_context import TenantContext
 from sqlalchemy import text
 
@@ -525,10 +525,7 @@ async def export_epcis(
                 _skip(r, "missing_timestamp")
                 continue
             event_kind = r.get("epcis_event_type")
-            is_transformation = (
-                r.get("event_type") == "transformation"
-                or event_kind == "TransformationEvent"
-            )
+            is_transformation = r.get("event_type") == "transformation" or event_kind == "TransformationEvent"
             if event_kind not in (None, "ObjectEvent", "TransformationEvent"):
                 _skip(r, "unsupported_epcis_event_type")
                 continue
@@ -725,9 +722,9 @@ async def export_fda(
                         date_str,
                         time_str,
                         sanitize_cell(str(r["ship_from"] or r["location_name"] or "")).replace(",", ";"),
-                        str(r["ship_from_gln"] or r["location_gln"] or ""),
+                        (_gln_csv_cell(r["ship_from_gln"]) or _gln_csv_cell(r["location_gln"])),
                         sanitize_cell(str(r["ship_to"] or "")).replace(",", ";"),
-                        str(r["ship_to_gln"] or ""),
+                        _gln_csv_cell(r["ship_to_gln"]),
                         sanitize_cell(str(r["carrier"] or "")).replace(",", ";"),
                         str(r["temperature_c"] or ""),
                         str(r["sha256_hash"] or ""),
