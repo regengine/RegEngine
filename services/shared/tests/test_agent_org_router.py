@@ -20,10 +20,10 @@ from unittest.mock import AsyncMock
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
-from services.ingestion.app.authz import IngestionPrincipal, get_ingestion_principal
 from shared.agent_org import router as agent_org_router_mod
 from shared.agent_org.onboarding import OnboardingResult
+
+from services.ingestion.app.authz import IngestionPrincipal, get_ingestion_principal
 
 router = agent_org_router_mod.router
 _get_db_session = agent_org_router_mod._get_db_session
@@ -79,9 +79,9 @@ def test_onboard_calls_onboarding_with_resolved_tenant_and_returns_result(monkey
         inboxes_created=3,
         keys_created=3,
         inbox_addresses=[
-            "outreach-pod-1-agent-1@agents.acme.regengine.dev",
-            "outreach-pod-1-agent-2@agents.acme.regengine.dev",
-            "outreach-pod-1-agent-3@agents.acme.regengine.dev",
+            "outreach-pod-1-agent-1@agents.acme.regengine.co",
+            "outreach-pod-1-agent-2@agents.acme.regengine.co",
+            "outreach-pod-1-agent-3@agents.acme.regengine.co",
         ],
         key_ids=["key-1", "key-2", "key-3"],
     )

@@ -5,7 +5,7 @@
  * with per-category breakdown and per-script detail.
  */
 
-const { execSync } = require('child_process');
+const { execFileSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
@@ -27,9 +27,16 @@ for (const s of SCRIPTS) {
   let exitCode = 0;
 
   try {
-    output = execSync(`node ${scriptPath} 2>&1`, { encoding: 'utf8', timeout: 30000 });
+    // argv form (no shell) — code-scanning js/shell-command-injection-from-environment #70
+    output = execFileSync(process.execPath, [scriptPath], {
+      encoding: 'utf8',
+      timeout: 30000,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
   } catch (e) {
-    output = e.stdout || e.message;
+    const stdout = e.stdout || '';
+    const stderr = e.stderr || '';
+    output = `${stdout}${stderr}` || e.message;
     exitCode = e.status || 1;
   }
 

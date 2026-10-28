@@ -26,7 +26,7 @@ export const metadata: Metadata = {
     "RegEngine preflights supplier traceability feeds, creates fix queues, gates production evidence, and helps assemble FSMA 204 export packages from checked tenant data.",
   openGraph: {
     title: "Product | RegEngine",
-    description: "Supplier data readiness plus an FSMA 204 evidence engine with explicit commit gates.",
+    description: "Supplier feed preflight plus an FSMA 204 evidence engine with explicit commit gates.",
     url: "https://regengine.co/product",
     type: "website",
   },
@@ -39,8 +39,8 @@ const inflowEffects = [
     icon: Workflow,
   },
   {
-    title: "Score",
-    detail: "Readiness exposes whether the feed can support traceability, recall, and export workflows.",
+    title: "Check",
+    detail: "A coverage and completeness checklist flags whether the feed can support traceability, recall, and export workflows. It is not a readiness score.",
     icon: ScanLine,
   },
   {
@@ -68,7 +68,7 @@ const engineResults = [
   },
   {
     title: "Export-ready package",
-    detail: "Compliance score, recall posture, and FDA/retailer exports use checked records only.",
+    detail: "Coverage and completeness checklist results, recall posture, and FDA/retailer exports use checked records only.",
     icon: FileOutput,
   },
 ];
@@ -81,7 +81,7 @@ const controls = [
 ];
 
 const outcomes = [
-  { icon: ShieldCheck, title: "Readiness is explicit", body: "Scores, fix counts, sources, and export eligibility stay visible." },
+  { icon: ShieldCheck, title: "Gaps stay visible", body: "Coverage and completeness checklist results, fix counts, sources, and export eligibility stay visible." },
   { icon: Lock, title: "Evidence is gated", body: "Production evidence is designed to require identity, provenance, persistence, and clean mode state. Rule enforcement is currently advisory in production and being promoted to blocking." },
   { icon: FileOutput, title: "Exports are explainable", body: "Export packages come from checked records, not a black-box promise. Regulatory acceptance and retention obligations remain with the operator." },
 ];
@@ -125,7 +125,7 @@ function InflowImpactDiagram() {
               Inflow Workbench output
             </div>
             <p className="mt-3 text-ui text-re-text-secondary">
-              One preflight run containing normalized event candidates, readiness score, fix queue, and commit gate state.
+              One preflight run containing normalized event candidates, a coverage and completeness checklist, fix queue, and commit gate state.
             </p>
           </Card>
         </div>

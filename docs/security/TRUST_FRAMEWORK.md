@@ -220,7 +220,7 @@ This model is intended to let a compliance auditor:
 Security incidents are detected via multiple channels:
 
 - **Detection Channels**: Security findings surface through CI failures/artifacts, application monitoring where configured, VDP/manual reports, and incident routing defined in the current incident-response plan.
-- **Manual Reports**: Employees and users can report suspected security issues to security@regengine.ai.
+- **Manual Reports**: Employees and users can report suspected security issues to security@regengine.co.
 
 ### Triage
 

@@ -7,10 +7,12 @@ import { FreeToolPageShell } from '@/components/layout/FreeToolPageShell';
 import { EmailGate } from '@/components/tools/EmailGate';
 import { parseGS1, isFSMACompatible } from '@/lib/gs1-parser';
 import { trackToolRunCompleted, trackToolRunStarted } from '@/lib/conversion-events';
+import { usePostHog } from '@/lib/posthog-provider';
 import type { GS1ParsedData } from '@/lib/gs1-parser';
 import styles from './scan.module.css';
 
 export default function ScanPage() {
+  const posthog = usePostHog();
   const [parsed, setParsed] = useState<GS1ParsedData | null>(null);
   const [rawBarcode, setRawBarcode] = useState<string>('');
   const [manualInput, setManualInput] = useState<string>('');
@@ -32,6 +34,7 @@ export default function ScanPage() {
     if (fromCamera && lastCameraBarcode.current === barcode) return;
 
     if (!fromCamera || !cameraRunPending.current) trackToolRunStarted('scan');
+    if (!fromCamera || !cameraRunPending.current) posthog?.capture('tool_started', { tool_id: 'scan' });
     if (fromCamera) {
       cameraRunPending.current = false;
       lastCameraBarcode.current = barcode;
@@ -59,6 +62,7 @@ export default function ScanPage() {
     if (!scannerRef.current) return;
 
     trackToolRunStarted('scan');
+    posthog?.capture('tool_started', { tool_id: 'scan' });
     cameraRunPending.current = true;
     lastCameraBarcode.current = null;
     try {

@@ -29,7 +29,7 @@ import { cn } from '@/lib/utils';
 
 const PROOF_VERIFY_ENDPOINT = '/api/ingestion/api/v1/proof/verify';
 
-const TERMINAL_OUTPUT = `$ python verify_chain.py audit-bundle.zip
+const TERMINAL_OUTPUT = `$ python verify_chain.py your-bundle.zip
 manifest: ok
 files: N / N sha256 matches
 merkle: root recomputed and matched
@@ -42,7 +42,7 @@ from pathlib import Path
 import subprocess
 import sys
 
-bundle = Path("audit-bundle.zip")
+bundle = Path("your-bundle.zip")
 result = subprocess.run(
     [sys.executable, "verify_chain.py", str(bundle)],
     check=False,
@@ -69,7 +69,7 @@ const INSTALL_STEPS = [
     },
     {
         title: 'Verify the bundle',
-        code: 'python verify_chain.py audit-bundle.zip',
+        code: 'python verify_chain.py your-bundle.zip',
         desc: 'Works entirely offline. No RegEngine account required.',
     },
 ];

@@ -1,22 +1,72 @@
 """Local-only QA proxy. Each redirect hop is checked before the browser sees it."""
+
+import json
+import threading
 from http.client import HTTPConnection
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-import json
-import re
-import threading
 from urllib.parse import urljoin, urlsplit, urlunsplit
 
 UPSTREAM = "http://127.0.0.1:3114"
 PUBLIC = "http://127.0.0.1:3115"
 CSP = "default-src 'self' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data: blob:; font-src 'self' data:; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'"
-DROP_HEADERS = {"content-length", "transfer-encoding", "connection", "content-encoding", "content-security-policy", "x-dns-prefetch-control", "link", "refresh"}
+DROP_HEADERS = {
+    "content-length",
+    "transfer-encoding",
+    "connection",
+    "content-encoding",
+    "content-security-policy",
+    "x-dns-prefetch-control",
+    "link",
+    "refresh",
+}
 
 
 def rewrite_location(location, request_path):
     target = urlsplit(urljoin(UPSTREAM + request_path, location))
-    if (target.scheme, target.hostname, target.port) != ("http", "127.0.0.1", 3114) or target.username or target.password:
+    if (
+        (target.scheme, target.hostname, target.port) != ("http", "127.0.0.1", 3114)
+        or target.username
+        or target.password
+    ):
         raise ValueError("QA off-origin redirect blocked")
     return PUBLIC + urlunsplit(("", "", target.path, target.query, target.fragment))
+
+
+def _sanitize_http_header(value: str) -> str:
+    """Strip CR/LF so upstream header values cannot split the response.
+
+    Code-scanning py/http-response-splitting alerts 59 and 60.
+    """
+    return value.replace("\r", "").replace("\n", "")
+
+
+def _strip_preconnect_links(html: str) -> str:
+    """Remove <link rel=preconnect|dns-prefetch> tags without backtracking.
+
+    A single left-to-right scan avoids the polynomial ReDoS shape of
+    ``<link\b[^>]*rel=...[^>]*>`` (code-scanning alert 7).
+    """
+    lower = html.lower()
+    out = []
+    i = 0
+    n = len(html)
+    while i < n:
+        start = lower.find("<link", i)
+        if start < 0:
+            out.append(html[i:])
+            break
+        out.append(html[i:start])
+        end = lower.find(">", start)
+        if end < 0:
+            out.append(html[start:])
+            break
+        tag = lower[start : end + 1]
+        if "rel=" in tag and ("preconnect" in tag or "dns-prefetch" in tag):
+            i = end + 1
+            continue
+        out.append(html[start : end + 1])
+        i = end + 1
+    return "".join(out)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -27,7 +77,10 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(status)
         for key, value in headers:
             if key.lower() not in DROP_HEADERS:
-                self.send_header(key, value)
+                self.send_header(
+                    _sanitize_http_header(key),
+                    _sanitize_http_header(value),
+                )
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Content-Security-Policy", CSP)
         self.send_header("X-DNS-Prefetch-Control", "off")
@@ -46,8 +99,11 @@ class Handler(BaseHTTPRequestHandler):
         if length > 30000000:
             return self.send(413, b"QA payload limit", [])
         body = self.rfile.read(length) if length else None
-        headers = {key: value for key, value in self.headers.items()
-                   if key.lower() not in {"host", "connection", "transfer-encoding", "content-length", "accept-encoding"}}
+        headers = {
+            key: value
+            for key, value in self.headers.items()
+            if key.lower() not in {"host", "connection", "transfer-encoding", "content-length", "accept-encoding"}
+        }
         headers["Accept-Encoding"] = "identity"
         connection = HTTPConnection("127.0.0.1", 3114, timeout=40)
         try:
@@ -67,7 +123,7 @@ class Handler(BaseHTTPRequestHandler):
             data = response.read()
             if "text/html" in response.getheader("Content-Type", ""):
                 html = data.decode("utf-8")
-                html = re.sub(r"<link\b[^>]*rel=[\"'](?:preconnect|dns-prefetch)[\"'][^>]*>", "", html, flags=re.I)
+                html = _strip_preconnect_links(html)
                 data = html.encode("utf-8")
             self.send(response.status, data, outgoing)
         except (OSError, ValueError) as error:
