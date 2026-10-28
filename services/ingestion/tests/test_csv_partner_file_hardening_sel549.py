@@ -821,6 +821,44 @@ def test_misspelled_header_suggests_closest_match():
     assert "did you mean" in blob
     assert "quantty" in blob
 
+
+def test_did_you_mean_does_not_false_match_unrelated_headers():
+    """Hermes: quality→quantity / code→lot_code must not get did-you-mean hints.
+
+    Structural mutations of the scoped fixture only — swap required headers for
+    unrelated lookalikes that scored high under the old 0.6 cutoff.
+    """
+    header, rows = _fixture_rows()
+    assert "quantity" in header
+    assert "traceability_lot_code" in header
+
+    # quality vs quantity (ratio 0.80 at old cutoff)
+    q_header = [("quality" if h == "quantity" else h) for h in header]
+    q_rows = []
+    for row in rows[:1]:
+        mutated = dict(row)
+        mutated["quality"] = mutated.pop("quantity")
+        q_rows.append(mutated)
+    events, errors, _w, log = _parse(_to_csv(q_header, q_rows))
+    assert events == []
+    assert any(e.reason == "missing_required_columns" for e in log)
+    blob = " ".join(errors).lower()
+    assert "did you mean" not in blob
+
+    # code vs lot_code alias family (ratio 0.67 vs lot_code at old cutoff).
+    # Fixture header is traceability_lot_code; rename to bare "code".
+    c_header = [("code" if h == "traceability_lot_code" else h) for h in header]
+    c_rows = []
+    for row in rows[:1]:
+        mutated = dict(row)
+        mutated["code"] = mutated.pop("traceability_lot_code")
+        c_rows.append(mutated)
+    events, errors, _w, log = _parse(_to_csv(c_header, c_rows))
+    assert events == []
+    assert any(e.reason == "missing_required_columns" for e in log)
+    blob = " ".join(errors).lower()
+    assert "did you mean" not in blob
+
 def test_completely_blank_physical_line_is_skipped_not_silently_dropped():
     """DictReader omits `\\n`-only lines; disposition log must still count them.
 

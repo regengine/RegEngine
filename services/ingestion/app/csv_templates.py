@@ -857,14 +857,43 @@ def _unrecognized_partner_columns(
     return unknown
 
 
+def _bounded_edit_distance(a: str, b: str, limit: int = 2) -> int:
+    """Levenshtein distance, capped — returns limit+1 once known to exceed ``limit``."""
+    if a == b:
+        return 0
+    if abs(len(a) - len(b)) > limit:
+        return limit + 1
+    # Classic DP; early exit when every cell in a row exceeds limit.
+    prev = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        cur = [i]
+        row_min = i
+        for j, cb in enumerate(b, 1):
+            ins = cur[-1] + 1
+            delete = prev[j] + 1
+            sub = prev[j - 1] + (0 if ca == cb else 1)
+            val = min(ins, delete, sub)
+            cur.append(val)
+            if val < row_min:
+                row_min = val
+        if row_min > limit:
+            return limit + 1
+        prev = cur
+    return prev[-1]
+
+
 def _format_missing_columns_error(
     missing: Sequence[str],
     header: Optional[Sequence[Optional[str]]],
 ) -> str:
     """Clear, actionable error naming each missing required column and aliases.
 
-    When a present header is a near miss for a required field (difflib), append
-    a closest-match suggestion so misspellings are actionable.
+    When a present header is a near miss for a required field, append a
+    closest-match suggestion so misspellings are actionable.
+
+    Near-miss gate (Hermes SEL-549): SequenceMatcher ratio >= 0.85 AND
+    edit distance <= 2. The prior 0.6 cutoff false-matched unrelated present
+    headers (quality→quantity, code→lot_code, uom_code→lot_code).
     """
     alias_by_canonical = {canonical: aliases for canonical, aliases in _REQUIRED_PARTNER_FIELD_GROUPS}
     alias_by_canonical["cte_type"] = tuple(_CTE_TYPE_COLUMNS)
@@ -880,7 +909,9 @@ def _format_missing_columns_error(
             for present in present_names:
                 for alias in aliases:
                     ratio = difflib.SequenceMatcher(None, present, alias).ratio()
-                    if ratio < 0.6:
+                    if ratio < 0.85:
+                        continue
+                    if _bounded_edit_distance(present, alias, limit=2) > 2:
                         continue
                     if best is None or ratio > best[0]:
                         best = (ratio, present, alias)
