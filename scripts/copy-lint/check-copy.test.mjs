@@ -34,6 +34,11 @@ test('a double-quoted planned capability is rejected', () => {
   assert.throws(() => parseCapabilities(invalid), /Unparseable planned capability registry/);
 });
 
+test('an empty off registry is rejected', () => {
+  const invalid = registrySource({ ...capabilities, off: [] });
+  assert.throws(() => parseCapabilities(invalid), /Empty off capability registry/);
+});
+
 test('VD dash and preview rules remain, with stricter empty values', () => {
   assert.deepEqual(rules(`<p>${liveName} — ${liveName}</p>`), ['em-dash']);
   assert.deepEqual(rules(`<p>${liveName} – ${liveName}</p>`), ['en-dash']);
