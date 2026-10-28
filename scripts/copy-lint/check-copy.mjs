@@ -150,7 +150,9 @@ export function check(seg, srcLine, cfg, capabilities, copyLine = '') {
   if (copy) {
     const nonLive = [...capabilities.preview, ...capabilities.planned, ...capabilities.off];
     const capability = nonLive.find(name => word(name).test(copy) || (name.startsWith('EPCIS ') && word('EPCIS').test(copy)));
-    if (capability && (/\b(?:Live|Implemented|GA|Available)\b/.test(copyLine || copy) || (/\bstatus\s*:\s*['"]available['"]/.test(srcLine) && /\bavailable\b/.test(copyLine || copy)))) add('live-claim', capability);
+    // A negated GA ("not GA", "not yet GA") is a Preview disclaimer, not a live claim.
+    const claimText = (copyLine || copy).replace(/\bnot\s+(?:yet\s+)?GA\b/g, '');
+    if (capability && (/\b(?:Live|Implemented|GA|Available)\b/.test(claimText) || (/\bstatus\s*:\s*['"]available['"]/.test(srcLine) && /\bavailable\b/.test(copyLine || copy)))) add('live-claim', capability);
     if (copy.trim() === 'Pilot' && /\b(?:badge|status)\b/i.test(srcLine)) add('pilot-status', copy);
     if (/(?:^|[^A-Za-z0-9_/-])(?:sample|demo|simulated|synthetic)(?![A-Za-z0-9_/-])/i.test(copy)) add('sample-demo', copy);
     if (word('sandbox').test(copy)) add('sandbox', copy);

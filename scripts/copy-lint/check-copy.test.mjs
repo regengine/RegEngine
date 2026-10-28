@@ -198,3 +198,10 @@ test('gateCompare accepts equal counts', () => {
 test('gateCompare accepts a drop with a matching baseline update', () => {
   assert.deepEqual(gateCompare(oneFinding, noFindings, noFindings), { ok: true, errors: [] });
 });
+
+test('live-claim skips a negated GA Preview disclaimer but still flags real live claims', () => {
+  const trustLine = "detail: 'Capability is usable for evaluation in supported workspaces, but is not GA. GS1 EPCIS 2.0 export and ingest stay Preview until separately promoted.',";
+  assert.equal(rules(trustLine, 'frontend/src/app/trust/page.tsx').includes('live-claim'), false);
+  assert.equal(rules(`<p>${capabilities.preview[1]} is GA</p>`).includes('live-claim'), true);
+  assert.equal(rules(`<p>${capabilities.preview[1]} is not GA but is Live</p>`).includes('live-claim'), true);
+});

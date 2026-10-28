@@ -48,12 +48,6 @@
   "frontend/src/app/docs/changelog/page.tsx": {
     "sample-demo": 1
   },
-  "frontend/src/app/docs/quickstart/page.tsx": {
-    "sample-demo": 1
-  },
-  "frontend/src/app/docs/walkthrough/page.tsx": {
-    "sample-demo": 1
-  },
   "frontend/src/app/exceptions/page.tsx": {
     "dash-placeholder": 3,
     "empty-render": 2
@@ -138,9 +132,6 @@
   },
   "frontend/src/lib/mock-tenants.ts": {
     "sample-demo": 1
-  },
-  "frontend/src/lib/roi-calculator-data.ts": {
-    "hyphen-dash": 4
   },
   "frontend/src/lib/trust-subprocessors.ts": {
     "sample-demo": 1
