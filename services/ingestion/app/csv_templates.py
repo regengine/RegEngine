@@ -860,11 +860,64 @@ def _append_row_log(
     )
 
 
+def _ingest_reject_reason(errors: Sequence[str]) -> str:
+    """Map ingest_events rejection text to a stable disposition reason code."""
+    joined = " ".join(errors).lower()
+    if "duplicate event" in joined:
+        return "duplicate"
+    if joined.startswith("rule_violation") or "rule_violation" in joined:
+        return "rule_violation"
+    if errors:
+        return "ingest_rejected"
+    return "ingest_rejected"
+
+
+def finalize_row_dispositions_from_ingest(
+    row_log: Optional[list[CsvRowDispositionEntry]],
+    event_source_rows: Sequence[int],
+    event_results: Sequence[object],
+) -> None:
+    """Append the final per-row disposition after ``ingest_events`` returns.
+
+    Parse-time logging never claims a successfully built event was ingested.
+    Each source row listed in ``event_source_rows`` (parallel to the parsed
+    events / the first ``len(event_source_rows)`` ingest results) gets exactly
+    one exclusive outcome here: accepted, or rejected (including duplicates).
+    """
+    if row_log is None:
+        return
+    # ingest_csv may append synthetic EventResults for parse_errors after
+    # ingest_events; only the results that correspond to parsed events finalize.
+    for row_number, result in zip(event_source_rows, event_results):
+        status = getattr(result, "status", None)
+        errors = list(getattr(result, "errors", None) or [])
+        if status == "accepted":
+            _append_row_log(
+                row_log,
+                row_number=row_number,
+                disposition="accepted",
+                reason="ingested",
+                detail="Row ingested",
+            )
+            continue
+        reason = _ingest_reject_reason(errors)
+        detail = errors[0] if errors else "Row rejected during ingest"
+        # Never echo partner cell values; EventResult errors are codes/messages.
+        _append_row_log(
+            row_log,
+            row_number=row_number,
+            disposition="rejected",
+            reason=reason,
+            detail=detail,
+        )
+
+
 def parse_csv_rows(
     text: str,
     fallback_cte: Optional[str] = None,
     header_mapping: Optional[Mapping[str, str]] = None,
     row_log: Optional[list[CsvRowDispositionEntry]] = None,
+    event_source_rows: Optional[list[int]] = None,
 ) -> tuple[list[IngestEvent], list[str], list[str]]:
     """Parse CSV text into ``IngestEvent`` objects.
 
@@ -884,7 +937,14 @@ def parse_csv_rows(
 
     ``row_log``, when provided, receives a ``CsvRowDispositionEntry`` for every
     input row and for file-level header decisions (SEL-549). Cell values are
-    never written into the log.
+    never written into the log. Successfully parsed rows are not logged as
+    accepted here: callers that ingest must call
+    ``finalize_row_dispositions_from_ingest`` after ``ingest_events`` so the
+    log records only the final outcome (accepted, rejected, duplicate).
+
+    ``event_source_rows``, when provided, is filled with the CSV line number
+    of each returned event (same order as ``events``), so the ingest path can
+    finalize dispositions without inventing row associations.
 
     Returns ``(events, parse_errors, kde_warnings)``.
     """
@@ -988,6 +1048,35 @@ def parse_csv_rows(
                 field=name,
                 detail=f"Required column {name!r} is absent from the partner file header",
             )
+        # Every physical data row still needs an exclusive outcome so
+        # accepted + rejected + skipped equals rows sent (SEL-549).
+        for row_num, record in enumerate(records, start=2):
+            if not _is_data_record(record):
+                values = [str(v or "").strip() for k, v in record.items() if k is not None]
+                if values and values[0].startswith("#"):
+                    _append_row_log(
+                        row_log,
+                        row_number=row_num,
+                        disposition="skipped",
+                        reason="comment_row",
+                        detail="Comment row (first value starts with #) was not ingested",
+                    )
+                else:
+                    _append_row_log(
+                        row_log,
+                        row_number=row_num,
+                        disposition="skipped",
+                        reason="blank_row",
+                        detail="Blank data row was not ingested",
+                    )
+                continue
+            _append_row_log(
+                row_log,
+                row_number=row_num,
+                disposition="rejected",
+                reason="missing_required_columns",
+                detail=detail,
+            )
         return ([], [detail], [])
 
     unrecognized = _unrecognized_partner_columns(header, header_mapping)
@@ -1009,18 +1098,23 @@ def parse_csv_rows(
     for row_num, row in enumerate(records, start=2):
         # _file_cte_type_for_jev reads exactly the rows before this cut-off.
         if row_num - 1 > MAX_CSV_ROWS:
+            # First over-limit row is rejected once. Further unread rows are
+            # each skipped under their own row numbers so counts balance and
+            # this row is never both skipped and rejected (SEL-549).
             if skipped_overflow:
                 overflow_detail = (
                     f"Row {row_num}: {skipped_overflow} more row(s) after this one were skipped and not ingested"
                 )
                 parse_errors.append(overflow_detail)
-                _append_row_log(
-                    row_log,
-                    row_number=row_num,
-                    disposition="skipped",
-                    reason="row_limit_overflow",
-                    detail=overflow_detail,
-                )
+                for offset in range(1, skipped_overflow + 1):
+                    overflow_row = row_num + offset
+                    _append_row_log(
+                        row_log,
+                        row_number=overflow_row,
+                        disposition="skipped",
+                        reason="row_limit_overflow",
+                        detail=(f"Row {overflow_row}: skipped after CSV row limit of {MAX_CSV_ROWS}"),
+                    )
             limit_detail = f"Row {row_num}: CSV exceeds maximum row limit of {MAX_CSV_ROWS}"
             parse_errors.append(limit_detail)
             _append_row_log(
@@ -1296,13 +1390,11 @@ def parse_csv_rows(
                     reason="missing_kdes",
                     detail=f"Accepted with missing KDEs: {', '.join(missing_kdes)}",
                 )
-            _append_row_log(
-                row_log,
-                row_number=row_num,
-                disposition="accepted",
-                reason="ingested",
-                detail=f"Row ingested as {row_cte}",
-            )
+            # Do not log accepted/ingested here. Dedup, KDE checks and
+            # persistence decide the final disposition in ingest_events;
+            # finalize_row_dispositions_from_ingest records it once.
+            if event_source_rows is not None:
+                event_source_rows.append(row_num)
         except Exception as e:
             # Log the detail server-side; return a generic per-row message so
             # raw exception text (library internals) isn't echoed to callers.
@@ -1819,8 +1911,13 @@ async def ingest_csv(
             sorted(header_mapping.applied_mapping.items()),
         )
     row_log: list[CsvRowDispositionEntry] = []
+    event_source_rows: list[int] = []
     events, parse_errors, kde_warnings = parse_csv_rows(
-        text, fallback_cte, header_mapping=header_mapping.applied_mapping, row_log=row_log
+        text,
+        fallback_cte,
+        header_mapping=header_mapping.applied_mapping,
+        row_log=row_log,
+        event_source_rows=event_source_rows,
     )
     kde_warnings.extend(xlsx_warnings)
     missing_columns = [e.field for e in row_log if e.reason == "missing_column" and e.field]
@@ -1876,6 +1973,8 @@ async def ingest_csv(
         principal=principal,
         source_file=receipt,
     )
+    # Final dispositions only: parse never claimed these rows were ingested.
+    finalize_row_dispositions_from_ingest(row_log, event_source_rows, response.events)
 
     artifacts_recorded = 0
     if header_mapping.ok and header_mapping.suggestions:

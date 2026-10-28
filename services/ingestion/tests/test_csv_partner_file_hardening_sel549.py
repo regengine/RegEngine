@@ -1,137 +1,26 @@
 """SEL-549: an unseen partner CSV fails clearly and never loses a row silently.
 
-Uses only synthetic data: the repo fixture ``tests/fixtures/01_harvesting.csv``
-and small inline CSVs built here (C.Lee's scoped exception to real-data-only).
+Uses only synthetic data from the repo fixture
+``tests/fixtures/01_harvesting.csv`` (C.Lee's scoped exception to
+real-data-only). No lot codes, product names, or IDs are invented in tests.
 """
 
 from __future__ import annotations
 
+import csv as _csv
+import io as _io
 from pathlib import Path
+from types import SimpleNamespace
 
+import pytest
 from app import csv_templates as ct
 
 FIXTURE = Path(__file__).parent / "fixtures" / "01_harvesting.csv"
 
-HEADER = "traceability_lot_code,product_description,quantity,unit_of_measure,harvest_date,location_name"
-
-
-def _parse(text: str, cte: str | None = "harvesting", mapping=None):
-    log: list = []
-    events, errors, warnings = ct.parse_csv_rows(text, cte, header_mapping=mapping, row_log=log)
-    return events, errors, warnings, log
-
-
-def _data_rows(log):
-    return {e.row_number for e in log if e.row_number >= 2 and e.disposition in {"accepted", "rejected", "skipped"}}
-
-
-def test_fixture_rows_are_all_accepted_and_logged():
-    text = FIXTURE.read_text()
-    events, errors, _warnings, log = _parse(text)
-    data_lines = len([line for line in text.splitlines()[1:] if line.strip()])
-    assert errors == []
-    assert len(events) == data_lines
-    accepted = [e for e in log if e.disposition == "accepted"]
-    assert [e.row_number for e in accepted] == list(range(2, 2 + data_lines))
-
-
-def test_missing_required_columns_named_in_one_clear_error():
-    text = "traceability_lot_code,product_description,harvest_date\nLOT-SYN-1,Synthetic Kale,2026-03-12\n"
-    events, errors, _warnings, log = _parse(text)
-    assert events == []
-    assert len(errors) == 1
-    assert "Missing required columns" in errors[0]
-    assert "quantity (accepted column names: quantity, qty)" in errors[0]
-    assert "unit_of_measure" in errors[0]
-    missing = {e.field for e in log if e.reason == "missing_column"}
-    assert missing == {"quantity", "unit_of_measure"}
-
-
-def test_missing_cte_type_rejects_each_row_and_logs_it():
-    text = f"{HEADER}\nLOT-SYN-1,Synthetic Kale,10,lbs,2026-03-12,Synthetic Farm\n"
-    _e, errors, _w, log = _parse(text, cte=None)
-    assert errors and "No CTE type" in errors[0]
-    assert [e.reason for e in log if e.disposition == "rejected"] == ["missing_cte_type"]
-    events, errors, _w, log = _parse(text, cte="harvesting")
-    assert errors == [] and len(events) == 1
-    assert any(e.reason == "cte_type_from_upload" for e in log)
-
-
-def test_every_row_accounted_for_none_silent():
-    rows = [
-        "LOT-SYN-1,Synthetic Kale,10,lbs,2026-03-12,Synthetic Farm",  # 2 accepted
-        "# synthetic comment row,,,,,",  # 3 skipped comment
-        ",,,,,",  # 4 skipped blank
-        "LOT-SYN-2,Synthetic Kale,abc,lbs,2026-03-12,Synthetic Farm",  # 5 bad quantity
-        "LOT-SYN-3,Synthetic Kale,10,,2026-03-12,Synthetic Farm",  # 6 missing unit
-        "LOT-SYN-4,Synthetic Kale,10,lbs,not-a-date,Synthetic Farm",  # 7 bad date
-        "LOT-SYN-5,Synthetic Kale,10,lbs,2026-03-12,Synthetic Farm,EXTRA",  # 8 extra field
-    ]
-    text = HEADER + "\n" + "\n".join(rows) + "\n"
-    events, errors, _w, log = _parse(text)
-    assert len(events) == 1
-    assert _data_rows(log) == set(range(2, 2 + len(rows)))
-    by_row = {e.row_number: e for e in log if e.disposition in {"accepted", "rejected", "skipped"}}
-    assert by_row[2].disposition == "accepted"
-    assert by_row[3].reason == "comment_row"
-    assert by_row[4].reason == "blank_row"
-    assert by_row[5].reason == "bad_quantity"
-    assert by_row[6].reason == "missing_unit_of_measure"
-    assert by_row[7].reason == "bad_date"
-    assert by_row[8].reason == "extra_fields"
-    rejected = [e for e in log if e.disposition == "rejected"]
-    assert len(rejected) == len(errors) == 4
-
-
-def test_unrecognized_columns_flagged_and_kept():
-    text = f"{HEADER},partner_bin\nLOT-SYN-1,Synthetic Kale,10,lbs,2026-03-12,Synthetic Farm,BIN-7\n"
-    events, errors, _w, log = _parse(text)
-    assert errors == [] and len(events) == 1
-    assert events[0].kdes.get("partner_bin") == "BIN-7"
-    flagged = [e for e in log if e.reason == "unrecognized_column"]
-    assert [e.field for e in flagged] == ["partner_bin"]
-
-
-def test_header_mapping_guess_logged_without_cell_value():
-    header = "traceability_lot_code,product_description,amount,unit_of_measure,harvest_date,location_name"
-    text = f"{header}\nLOT-SYN-1,Synthetic Kale,10,lbs,2026-03-12,Synthetic Farm\n"
-    events, errors, _w, log = _parse(text, mapping={"amount": "quantity"})
-    assert errors == [] and len(events) == 1
-    guesses = [e for e in log if e.reason == "header_guess_applied"]
-    assert len(guesses) == 1
-    assert guesses[0].field == "amount" and guesses[0].guessed_as == "quantity"
-    assert "10" not in (guesses[0].detail or "")
-
-
-def test_log_detail_never_echoes_guessed_cell_values():
-    text = f"{HEADER}\nLOT-SYN-1,Synthetic Kale,10,lbs,2026-03-12,Synthetic Farm\n"
-    _e, _err, _w, log = _parse(text)
-    for entry in log:
-        if entry.disposition == "flagged":
-            assert "LOT-SYN-1" not in (entry.detail or "")
-
-
-def test_header_only_file_is_not_a_missing_column_error():
-    _e, errors, _w, _log = _parse("partner_col_a,partner_col_b\n")
-    assert errors == []
-
-
-# ---------------------------------------------------------------------------
-# Red Team acceptance bar: every unrecognised field, event type or format is
-# flagged in the disposition log AND the error/warning output, and
-# rows in == accepted + rejected + skipped (nothing silently dropped).
-# Inputs are derived from the synthetic fixture 01_harvesting.csv.
-# ---------------------------------------------------------------------------
-
-import csv as _csv
-import io as _io
-
-import pytest
-
 
 def _fixture_rows() -> tuple[list[str], list[dict]]:
     reader = _csv.DictReader(_io.StringIO(FIXTURE.read_text()))
-    return list(reader.fieldnames or []), list(reader)
+    return list(reader.fieldnames or []), [dict(row) for row in reader]
 
 
 def _to_csv(header: list[str], rows: list[dict]) -> str:
@@ -143,18 +32,237 @@ def _to_csv(header: list[str], rows: list[dict]) -> str:
     return out.getvalue()
 
 
+def _parse(text: str, cte: str | None = "harvesting", mapping=None):
+    """Parse and finalize successful rows as accepted (parse-only path).
+
+    Production ingest_csv calls finalize_row_dispositions_from_ingest after
+    ingest_events instead; tests that only exercise the parser still need
+    every row to land in exactly one exclusive bucket.
+    """
+    log: list = []
+    source_rows: list[int] = []
+    events, errors, warnings = ct.parse_csv_rows(
+        text, cte, header_mapping=mapping, row_log=log, event_source_rows=source_rows
+    )
+    fake_results = [SimpleNamespace(status="accepted", errors=[]) for _ in source_rows]
+    ct.finalize_row_dispositions_from_ingest(log, source_rows, fake_results)
+    return events, errors, warnings, log
+
+
+def _data_rows(log):
+    return {e.row_number for e in log if e.row_number >= 2 and e.disposition in {"accepted", "rejected", "skipped"}}
+
+
 def _assert_counts_balance(text: str, events, log) -> None:
+    """Every physical input row lands in exactly one exclusive bucket."""
+    rows_in = len([line for line in text.splitlines()[1:] if line is not None])
+    # Include blank lines that csv still presents as records: count non-header lines.
     rows_in = len(text.splitlines()) - 1
-    outcome = {e.row_number: e.disposition for e in log if e.row_number >= 2 and e.disposition != "flagged"}
-    assert len(outcome) == rows_in, "every input row needs exactly one outcome"
-    assert sum(1 for d in outcome.values() if d == "accepted") == len(events)
+    outcomes = [
+        e.disposition for e in log if e.row_number >= 2 and e.disposition in {"accepted", "rejected", "skipped"}
+    ]
+    row_numbers = sorted(
+        e.row_number for e in log if e.row_number >= 2 and e.disposition in {"accepted", "rejected", "skipped"}
+    )
+    assert row_numbers == list(range(2, 2 + rows_in)), (
+        f"expected exclusive outcomes for rows 2..{1 + rows_in}, got {row_numbers}"
+    )
+    assert len(outcomes) == rows_in, "every input row needs exactly one exclusive outcome"
+    assert outcomes.count("accepted") == len(events)
+    assert outcomes.count("accepted") + outcomes.count("rejected") + outcomes.count("skipped") == rows_in
+
+
+def test_fixture_rows_are_all_accepted_and_logged():
+    text = FIXTURE.read_text()
+    events, errors, _warnings, log = _parse(text)
+    data_lines = len([line for line in text.splitlines()[1:] if line.strip()])
+    assert errors == []
+    assert len(events) == data_lines
+    accepted = [e for e in log if e.disposition == "accepted"]
+    assert [e.row_number for e in accepted] == list(range(2, 2 + data_lines))
+    _assert_counts_balance(text, events, log)
+
+
+def test_missing_required_columns_named_in_one_clear_error():
+    header, rows = _fixture_rows()
+    kept = [h for h in header if h not in {"quantity", "unit_of_measure"}]
+    text = _to_csv(kept, rows[:1])
+    events, errors, _warnings, log = _parse(text)
+    assert events == []
+    assert len(errors) == 1
+    assert "Missing required columns" in errors[0]
+    assert "quantity (accepted column names: quantity, qty)" in errors[0]
+    assert "unit_of_measure" in errors[0]
+    missing = {e.field for e in log if e.reason == "missing_column"}
+    assert missing == {"quantity", "unit_of_measure"}
+    _assert_counts_balance(text, events, log)
+
+
+def test_missing_cte_type_rejects_each_row_and_logs_it():
+    header, rows = _fixture_rows()
+    text = _to_csv(header, rows[:1])
+    _e, errors, _w, log = _parse(text, cte=None)
+    assert errors and "No CTE type" in errors[0]
+    assert [e.reason for e in log if e.disposition == "rejected"] == ["missing_cte_type"]
+    events, errors, _w, log = _parse(text, cte="harvesting")
+    assert errors == [] and len(events) == 1
+    assert any(e.reason == "cte_type_from_upload" for e in log)
+    _assert_counts_balance(text, events, log)
+
+
+def test_every_row_accounted_for_none_silent():
+    header, rows = _fixture_rows()
+    base = dict(rows[0])
+    bad_qty = dict(base)
+    bad_qty["quantity"] = "abc"
+    missing_unit = dict(base)
+    missing_unit["unit_of_measure"] = ""
+    bad_date = dict(base)
+    bad_date["harvest_date"] = "not-a-date"
+    good = dict(base)
+    # Build CSV manually so comment / blank / extra-field rows are present.
+    out = _io.StringIO()
+    writer = _csv.DictWriter(out, fieldnames=header, lineterminator="\n", extrasaction="ignore")
+    writer.writeheader()
+    writer.writerow(good)  # 2 accepted
+    text = out.getvalue().rstrip("\n")
+    text += "\n# synthetic comment row\n"  # 3 skipped comment
+    text += "," * (len(header) - 1) + "\n"  # 4 blank
+    # bad quantity / missing unit / bad date from fixture cells only
+    for mutated in (bad_qty, missing_unit, bad_date):
+        buf = _io.StringIO()
+        w = _csv.DictWriter(buf, fieldnames=header, lineterminator="\n", extrasaction="ignore")
+        w.writerow(mutated)
+        text += buf.getvalue()
+    # extra field beyond header
+    extra_line = ",".join(good.get(h, "") for h in header) + ",EXTRA\n"
+    text += extra_line  # 8 extra fields
+
+    events, errors, _w, log = _parse(text)
+    assert len(events) == 1
+    assert _data_rows(log) == set(range(2, 9))
+    by_row = {e.row_number: e for e in log if e.disposition in {"accepted", "rejected", "skipped"}}
+    assert by_row[2].disposition == "accepted"
+    assert by_row[3].reason == "comment_row"
+    assert by_row[4].reason == "blank_row"
+    assert by_row[5].reason == "bad_quantity"
+    assert by_row[6].reason == "missing_unit_of_measure"
+    assert by_row[7].reason == "bad_date"
+    assert by_row[8].reason == "extra_fields"
+    rejected = [e for e in log if e.disposition == "rejected"]
+    assert len(rejected) == len(errors) == 4
+    _assert_counts_balance(text, events, log)
+
+
+def test_unrecognized_columns_flagged_and_kept():
+    header, rows = _fixture_rows()
+    # Unknown column keeps a real fixture cell value (field_id), never dropped.
+    fixture_value = rows[0]["field_id"]
+    for row in rows:
+        row["partner_bin"] = row["field_id"]
+    text = _to_csv([*header, "partner_bin"], rows[:1])
+    events, errors, _w, log = _parse(text)
+    assert errors == [] and len(events) == 1
+    assert events[0].kdes.get("partner_bin") == fixture_value
+    flagged = [e for e in log if e.reason == "unrecognized_column"]
+    assert [e.field for e in flagged] == ["partner_bin"]
+    _assert_counts_balance(text, events, log)
+
+
+def test_header_mapping_guess_logged_without_cell_value():
+    header, rows = _fixture_rows()
+    # Rename quantity -> amount; mapping restores it. Values stay from fixture.
+    renamed = ["amount" if h == "quantity" else h for h in header]
+    mapped_rows = [{("amount" if k == "quantity" else k): v for k, v in row.items()} for row in rows[:1]]
+    text = _to_csv(renamed, mapped_rows)
+    events, errors, _w, log = _parse(text, mapping={"amount": "quantity"})
+    assert errors == [] and len(events) == 1
+    guesses = [e for e in log if e.reason == "header_guess_applied"]
+    assert len(guesses) == 1
+    assert guesses[0].field == "amount" and guesses[0].guessed_as == "quantity"
+    qty = rows[0]["quantity"]
+    assert qty not in (guesses[0].detail or "")
+    _assert_counts_balance(text, events, log)
+
+
+def test_log_detail_never_echoes_guessed_cell_values():
+    header, rows = _fixture_rows()
+    text = _to_csv(header, rows[:1])
+    _e, _err, _w, log = _parse(text)
+    lot = rows[0]["traceability_lot_code"]
+    for entry in log:
+        if entry.disposition == "flagged":
+            assert lot not in (entry.detail or "")
+
+
+def test_header_only_file_is_not_a_missing_column_error():
+    _e, errors, _w, _log = _parse("partner_col_a,partner_col_b\n")
+    assert errors == []
+
+
+def test_row_limit_first_overflow_not_double_counted(monkeypatch):
+    """First row past the limit is rejected once; further rows are skipped only."""
+    monkeypatch.setattr(ct, "MAX_CSV_ROWS", 2)
+    header, rows = _fixture_rows()
+    # Three fixture rows: 2 accepted-capacity, 1 rejected, and invent no values —
+    # duplicate the third fixture row to create a 4th physical row for skipped.
+    four = [dict(rows[0]), dict(rows[1]), dict(rows[2]), dict(rows[2])]
+    text = _to_csv(header, four)
+    events, errors, _w, log = _parse(text)
+    assert len(events) == 2
+    by_row = {
+        e.row_number: e for e in log if e.row_number >= 2 and e.disposition in {"accepted", "rejected", "skipped"}
+    }
+    assert by_row[2].disposition == "accepted"
+    assert by_row[3].disposition == "accepted"
+    assert by_row[4].disposition == "rejected"
+    assert by_row[4].reason == "row_limit_exceeded"
+    assert by_row[5].disposition == "skipped"
+    assert by_row[5].reason == "row_limit_overflow"
+    # Same row must not be both skipped and rejected.
+    exclusive = [e for e in log if e.row_number == 4 and e.disposition in {"accepted", "rejected", "skipped"}]
+    assert len(exclusive) == 1
+    assert any("1 more row(s)" in err for err in errors)
+    assert errors[-1].endswith("CSV exceeds maximum row limit of 2")
+    _assert_counts_balance(text, events, log)
+
+
+def test_finalize_uses_ingest_result_not_parse_claim():
+    """A parsed row rejected by ingest (duplicate) is logged rejected, not accepted."""
+    header, rows = _fixture_rows()
+    text = _to_csv(header, rows[:1])
+    log: list = []
+    source_rows: list[int] = []
+    events, errors, _w = ct.parse_csv_rows(text, "harvesting", row_log=log, event_source_rows=source_rows)
+    assert errors == [] and len(events) == 1 and source_rows == [2]
+    # No exclusive outcome yet — parse must not claim ingested.
+    assert not any(e.disposition == "accepted" for e in log)
+    assert not any(e.reason == "ingested" for e in log)
+    ct.finalize_row_dispositions_from_ingest(
+        log,
+        source_rows,
+        [SimpleNamespace(status="rejected", errors=["Duplicate event in batch"])],
+    )
+    exclusive = [e for e in log if e.row_number == 2 and e.disposition != "flagged"]
+    assert len(exclusive) == 1
+    assert exclusive[0].disposition == "rejected"
+    assert exclusive[0].reason == "duplicate"
+
+
+# ---------------------------------------------------------------------------
+# Red Team acceptance bar: every unrecognised field, event type or format is
+# flagged in the disposition log AND the error/warning output, and
+# rows in == accepted + rejected + skipped (nothing silently dropped).
+# Inputs are derived from the synthetic fixture 01_harvesting.csv.
+# ---------------------------------------------------------------------------
 
 
 @pytest.fixture
 def unknown_column_csv() -> str:
     header, rows = _fixture_rows()
-    for i, row in enumerate(rows):
-        row["partner_pallet_code"] = f"PAL-SYN-{i}"
+    for row in rows:
+        # Reuse an existing fixture cell; do not invent pallet IDs.
+        row["partner_pallet_code"] = row["field_id"]
     return _to_csv([*header, "partner_pallet_code"], rows)
 
 
@@ -202,6 +310,9 @@ def test_acceptance_unknown_column_is_flagged(unknown_column_csv):
     assert any(e.reason == "unrecognized_column" and e.field == "partner_pallet_code" for e in log)
     assert any("partner_pallet_code" in w for w in warnings)
     assert errors == []
+    # Unknown column values are kept on the event, never silently dropped.
+    header, rows = _fixture_rows()
+    assert events[0].kdes.get("partner_pallet_code") == rows[0]["field_id"]
     _assert_counts_balance(unknown_column_csv, events, log)
 
 
@@ -231,6 +342,10 @@ def test_acceptance_missing_required_columns_flagged(missing_columns_csv):
     assert events == []
     assert {e.field for e in log if e.reason == "missing_column"} == {"quantity", "unit_of_measure"}
     assert len(errors) == 1 and "quantity" in errors[0] and "unit_of_measure" in errors[0]
+    # Per-row outcomes, not file-level only.
+    data_rejects = [e for e in log if e.row_number >= 2 and e.reason == "missing_required_columns"]
+    assert len(data_rejects) == len(missing_columns_csv.splitlines()) - 1
+    _assert_counts_balance(missing_columns_csv, events, log)
 
 
 def test_acceptance_garbled_and_empty_rows_flagged(garbled_and_empty_rows_csv):
