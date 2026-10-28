@@ -15,7 +15,6 @@ from starlette.requests import Request
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from services.graph.app import fsma_utils  # noqa: E402
 from services.graph.app.routers.fsma import compliance  # noqa: E402
 
 FIXTURES = Path(__file__).resolve().parents[2] / "ingestion" / "tests" / "fixtures" / "epcis_gs1"
@@ -74,8 +73,11 @@ def graph_row(kind):
 
 
 async def export(format, rows):
-    async def query(client, start, end, tenant):
+    async def query(client, start, end, tenant, *, tlc, limit, export_cap):
         assert tenant == str(TENANT)
+        assert tlc is None
+        assert limit == compliance.EXPORT_EVENT_CAP + 1
+        assert export_cap is True
         return rows
 
     today = datetime.now(timezone.utc).date().isoformat()
@@ -83,7 +85,7 @@ async def export(format, rows):
     endpoint = getattr(compliance.export_epcis, "__wrapped__", compliance.export_epcis)
     with patch.object(compliance, "Neo4jClient", FakeNeo4j), patch.object(
         compliance, "reconcile_tenant_scope", return_value=str(TENANT)
-    ), patch.object(fsma_utils, "query_events_by_range", query):
+    ), patch.object(compliance, "query_events_by_range", query):
         response = await endpoint(
             Request({"type": "http", "method": "GET", "path": "/export/epcis", "query_string": b"", "headers": []}),
             today, today, format, TENANT, object(),
