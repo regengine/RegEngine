@@ -161,7 +161,7 @@ Each has a recommended default so one reply can close all six. Jev (TypeSafe, je
 
 ## Appendix A. Proposed Linear structure
 
-Nothing below has been created or moved. It is applied in one pass only after the founder approves the epic list and the mapping in Appendix B.
+Approved by Christopher and applied in Linear in one pass on 2026-10-27 (evening PT). Created: initiative I-1 First paying customer; projects P-SEL-5 Ingest and preflight, P-SEL-6 Supplier remediation, P-SEL-7 Evidence and export, P-SEL-8 Public site and lead capture, P-SEL-9 Production stability; feature parents SEL-570 to SEL-584 (F1 to F15 in order). All 62 issues in Appendix B were re-parented; SEL-472 and SEL-459 moved to project Other; SEL-361 moved into P-SEL-9 and left open; SEL-421 closed as Done, SEL-452 set to In Review, SEL-458 reworded. The initiative target date stays unset until Q1 is answered.
 
 - Initiative: **First paying customer**. Target date: the Q1 pilot date. Done when the lagging metrics in section 8 are met.
 - Projects as epics (five), features as parent issues, stories as sub-issues. Existing SEL-361 becomes the Production stability project; its goal text moves to the project description.
@@ -180,6 +180,8 @@ Status drift to fix during the move: SEL-421 is Backlog but shipped in PRs 3492 
 ## Appendix B. Mapping of the 62 issues under SEL-361
 
 Project P-SEL-2 also holds six closed issues with no parent (SEL-269, 270, 271, 317, 322, 350); they stay where they are. Closed items move with their feature so the project history stays whole.
+
+Found during the apply pass: 23 further children of SEL-361 sit outside project P-SEL-2, were not part of this mapping, and were left untouched. 19 are approval-queue items in project Waiting on C.Lee (for example SEL-474, SEL-249, SEL-251); they should stay there, with SEL-361 removed as their parent on Christopher's word. Four are engineering items with no project and a natural home: SEL-236 supplier portal to tenant_suppliers link (E2, F5); SEL-323 Vercel contact webhook and Sentry DSN missing (E5, F14); SEL-315 Vercel env drift and stale previews (E5, F13); SEL-15 FSMA 204 compliance sweep of 2026-04-21 (E3, or close as superseded by this PRD).
 
 | Issue | State | Epic | Feature |
 | --- | --- | --- | --- |
@@ -213,11 +215,11 @@ Project P-SEL-2 also holds six closed issues with no parent (SEL-269, 270, 271, 
 | SEL-455 | Backlog | E1 | F4 |
 | SEL-457 | Backlog | E1 | F4 |
 | SEL-415 | Done | E2 | F5 |
-| SEL-421 | Backlog (shipped) | E2 | F5 |
+| SEL-421 | Done (closed in the apply pass) | E2 | F5 |
 | SEL-446 | Backlog | E2 | F6 |
 | SEL-412 | In Review | E3 | F7 |
 | SEL-463 | Backlog | E3 | F8 |
-| SEL-452 | In Progress (merged) | E4 | F9 |
+| SEL-452 | In Review (set in the apply pass) | E4 | F9 |
 | SEL-451 | Duplicate | E4 | F9 |
 | SEL-406 | In Review | E4 | F9 |
 | SEL-407 | In Review | E4 | F9 |
