@@ -461,6 +461,68 @@ class TestPilotWebhook:
         assert mapping["pilot_fee_cents"] == "200000"
         assert mapping["pilot_variant"] == "standard"
 
+    @pytest.mark.asyncio
+    async def test_late_pilot_event_does_not_rewind_watermark(
+        self, monkeypatch: pytest.MonkeyPatch, fake_redis: _FakeRedis
+    ) -> None:
+        fake_redis.values["billing:session:cs_pilot_late_old"] = "tenant-pilot-late-old"
+        fake_redis.hashes["billing:tenant:tenant-pilot-late-old"] = {
+            "tenant_id": "tenant-pilot-late-old",
+            "subscription_id": "sub_live_old",
+            "customer_id": "cus_pilot_late_old",
+            "plan_id": "list",
+            "billing_period": "monthly",
+            "status": "active",
+            "last_event_created": "1000",
+        }
+
+        await webhooks_mod._handle_checkout_completed(
+            {
+                "id": "cs_pilot_late_old",
+                "customer": "cus_pilot_late_old",
+                "subscription": None,
+                "mode": "payment",
+                "payment_status": "paid",
+                "amount_total": 200_000,
+                "metadata": {"plan_id": "pilot", "pilot_variant": "standard"},
+            },
+            event_created=500,
+        )
+
+        mapping = fake_redis.hashes["billing:tenant:tenant-pilot-late-old"]
+        assert mapping["last_event_created"] == "1000"
+        assert mapping["status"] == "active"
+
+    @pytest.mark.asyncio
+    async def test_price_mapped_pilot_derives_convert_variant(
+        self, monkeypatch: pytest.MonkeyPatch, fake_redis: _FakeRedis
+    ) -> None:
+        """No metadata variant: the reverse-mapped Price is Stripe-side truth."""
+        monkeypatch.setenv("STRIPE_PRICE_PILOT_CONVERT_30", "price_pilot_convert")
+        fake_redis.values["billing:session:cs_price_pilot"] = "tenant-price-pilot"
+
+        await webhooks_mod._handle_checkout_completed(
+            {
+                "id": "cs_price_pilot",
+                "customer": "cus_price_pilot",
+                "subscription": None,
+                "mode": "payment",
+                "payment_status": "paid",
+                # 100% promo: no collected cents, but the pilot still exists.
+                "amount_total": 0,
+                "created": 1_700_000_000,
+                "line_items": {"data": [{"price": {"id": "price_pilot_convert"}}]},
+                "metadata": {},
+            },
+            event_created=700,
+        )
+
+        mapping = fake_redis.hashes["billing:tenant:tenant-price-pilot"]
+        assert mapping["pilot_variant"] == "convert_30"
+        assert mapping["pilot_fee_cents"] == "150000"
+        assert mapping["pilot_amount_paid_cents"] == "0"
+        assert "pilot_convert_window_end" in mapping
+
 
 # ── 4. A-2159 credit ───────────────────────────────────────────────────────
 

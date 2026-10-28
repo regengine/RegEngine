@@ -65,6 +65,25 @@ def _session_price_ids_are_pilot(session: dict[str, Any]) -> bool:
     )
 
 
+def _pilot_variant_for_price_ids(price_ids: list[str]) -> str:
+    """Derive ``standard``/``convert_30`` from a reverse-mapped pilot Price.
+
+    The price is Stripe-side truth; metadata can be absent (e.g. a pilot
+    detected from expanded line items) or stale. Returns ``standard`` when
+    no configured pilot Price matches.
+    """
+    convert_price = os.getenv(_plans_mod.PILOT_PRICE_ENV_CONVERT_30)
+    standard_price = os.getenv(_plans_mod.PILOT_PRICE_ENV_STANDARD)
+    for price_id in price_ids:
+        if not price_id:
+            continue
+        if convert_price and price_id == convert_price:
+            return "convert_30"
+        if standard_price and price_id == standard_price:
+            return "standard"
+    return "standard"
+
+
 def _iso_timestamp_is_past(value: str, *, now: Optional[datetime] = None) -> bool:
     """True when an ISO-8601 timestamp is at/before ``now`` (UTC).
 
@@ -265,6 +284,7 @@ def _handle_pilot_checkout_completed(
     tenant_id: str,
     metadata: dict[str, Any],
     event_created: Optional[int],
+    price_ids: Optional[list[str]] = None,
 ) -> None:
     """Persist a one-time pilot payment onto the tenant mapping (A-2155).
 
@@ -272,15 +292,20 @@ def _handle_pilot_checkout_completed(
     expected, the mapping is marked ``billing_period=one_time`` and, once
     the payment settles, ``status=pilot_active`` for the 90-day pilot term.
     """
-    variant = str(metadata.get("pilot_variant") or "standard").strip().lower()
-    if variant not in {"standard", "convert_30"}:
-        logger.warning(
-            "stripe_pilot_unknown_variant",
-            tenant_id=tenant_id,
-            session_id=session.get("id"),
-            pilot_variant=str(metadata.get("pilot_variant")),
-        )
-        variant = "standard"
+    declared_variant = str(metadata.get("pilot_variant") or "").strip().lower()
+    if declared_variant in {"standard", "convert_30"}:
+        variant = declared_variant
+    else:
+        if declared_variant:
+            logger.warning(
+                "stripe_pilot_unknown_variant",
+                tenant_id=tenant_id,
+                session_id=session.get("id"),
+                pilot_variant=str(metadata.get("pilot_variant")),
+            )
+        # Metadata was absent/invalid: fall back to the reverse-mapped Price
+        # (Stripe-side truth) so convert_30 still gets its window and fee.
+        variant = _pilot_variant_for_price_ids(price_ids or _extract_session_price_ids(session))
 
     settled = str(session.get("payment_status") or "") in _SETTLED_PAYMENT_STATUSES
     status = "pilot_active" if settled else "incomplete"
@@ -349,7 +374,14 @@ def _handle_pilot_checkout_completed(
         )
 
     if event_created is not None:
-        mapping["last_event_created"] = str(int(event_created))
+        # Never rewind the #1196 reorder watermark: a late/duplicate pilot
+        # event must not let an older subscription event overwrite the live
+        # entitlement state later.
+        try:
+            previous_watermark = int(existing_mapping.get("last_event_created") or 0)
+        except (TypeError, ValueError):
+            previous_watermark = 0
+        mapping["last_event_created"] = str(max(int(event_created), previous_watermark))
 
     # A pilot purchase must not downgrade a tenant that already has a live
     # subscription (e.g. a late/duplicate pilot event after conversion).
@@ -557,6 +589,7 @@ async def _handle_checkout_completed(
                 tenant_id=tenant_id,
                 metadata=metadata,
                 event_created=event_created,
+                price_ids=price_ids,
             )
             return
 
