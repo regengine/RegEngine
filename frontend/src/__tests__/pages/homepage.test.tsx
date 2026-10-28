@@ -9,7 +9,7 @@ describe("HomePage", () => {
 
     expect(
       screen.getByRole("heading", {
-        name: "The Food Traceability Rule lets the FDA ask for a sortable spreadsheet within 24 hours. Supplier data does not arrive that way.",
+        name: "In an outbreak or recall, the Food Traceability Rule lets the FDA ask for a sortable spreadsheet due within 24 hours. Supplier data does not arrive that way.",
         level: 1,
       }),
     ).toBeInTheDocument();
@@ -22,6 +22,8 @@ describe("HomePage", () => {
     render(<HomePage />);
 
     expect(screen.getByRole("link", { name: /^see the fields your records need$/i })).toHaveAttribute("href", "/tools/kde-checker");
+    expect(screen.getByRole("link", { name: /open the checklist/i })).toHaveAttribute("href", "/tools/kde-checker");
+    expect(screen.getByText(/no account, no api key/i)).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /check a supplier file/i })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /open the verifier/i })).toHaveAttribute("href", "/verify");
   });
@@ -29,12 +31,16 @@ describe("HomePage", () => {
   it("lists ingest paths from the capabilities registry instead of a workspace mock", () => {
     render(<HomePage />);
 
+    expect(capabilities.live.length).toBeGreaterThan(0);
+    expect(capabilities.preview.length).toBeGreaterThan(0);
     for (const name of capabilities.live) {
       expect(screen.getByText(name)).toBeInTheDocument();
     }
     for (const name of capabilities.preview) {
       expect(screen.getByText(name)).toBeInTheDocument();
     }
+    // one "Preview" badge per preview capability, plus the Preview heading
+    expect(screen.getAllByText("Preview")).toHaveLength(capabilities.preview.length + 1);
     expect(screen.queryByText("No data yet")).not.toBeInTheDocument();
   });
 

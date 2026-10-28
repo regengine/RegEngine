@@ -42,13 +42,13 @@ const problem = [
   {
     title: "The request",
     detail:
-      "Under 21 CFR 1.1455(c)(3)(ii), FDA can ask for an electronic sortable spreadsheet of traceability records during an outbreak or recall. It is due within 24 hours unless FDA agrees to more time.",
+      "Under 21 CFR 1.1455(c)(3)(ii), FDA can ask for an electronic sortable spreadsheet of traceability records during an outbreak, a recall, or another threat to public health. It is due within 24 hours unless FDA agrees to more time.",
     icon: FileSpreadsheet,
   },
   {
     title: "The records",
     detail:
-      "Lot codes, dates, quantities, and locations for every shipping, receiving, and transformation event. Most of it comes from suppliers, in whatever shape they keep it.",
+      "Lot codes, dates, quantities, and locations for every Critical Tracking Event: harvesting, cooling, initial packing, first land-based receiving, shipping, receiving, and transformation. Most of it comes from suppliers, in whatever shape they keep it.",
     icon: Boxes,
   },
   {
@@ -101,9 +101,9 @@ const destinations = [
 function IngestPathsCard() {
   return (
     <Card padding="spacious" className="flex flex-col gap-5">
-      <p className="font-mono text-label uppercase text-re-text-muted">Ingest paths today</p>
+      <h2 className="font-mono text-label uppercase text-re-text-muted">Ingest paths today</h2>
       <div>
-        <h2 className="text-heading text-re-text-primary">Live</h2>
+        <h3 className="text-heading text-re-text-primary">Live</h3>
         <ul className="mt-3 grid gap-2">
           {capabilities.live.map((name) => (
             <li key={name} className="flex items-center gap-2 text-ui text-re-text-secondary">
@@ -114,7 +114,7 @@ function IngestPathsCard() {
         </ul>
       </div>
       <div>
-        <h2 className="text-heading text-re-text-primary">Preview</h2>
+        <h3 className="text-heading text-re-text-primary">Preview</h3>
         <ul className="mt-3 grid gap-2">
           {capabilities.preview.map((name) => (
             <li key={name} className="flex items-center justify-between gap-3 text-ui text-re-text-secondary">
@@ -142,10 +142,10 @@ export default function HomePage() {
             FSMA 204 · 21 CFR Part 1 Subpart S
           </p>
           <h1 className="max-w-[760px] font-display text-display text-re-text-primary">
-            The Food Traceability Rule lets the FDA ask for a sortable spreadsheet within 24 hours. Supplier data does not arrive that way.
+            In an outbreak or recall, the Food Traceability Rule lets the FDA ask for a sortable spreadsheet due within 24 hours. Supplier data does not arrive that way.
           </h1>
           <p className="mt-6 max-w-[68ch] text-body text-re-text-secondary">
-            RegEngine checks supplier records for CTE and KDE gaps before they become evidence, routes each gap to an owner, and keeps accepted records in an append-only ledger you can export when a request comes in.
+            RegEngine checks supplier records for CTE and KDE gaps before they become evidence, routes each gap to an owner, and keeps accepted records in an append-only ledger you can export to support your response to a request.
           </p>
           <p className="mt-3 max-w-[68ch] text-body text-re-text-secondary">
             Send records by CSV upload or the JSON events API. EPCIS 2.0 is in Preview.
@@ -272,7 +272,7 @@ export default function HomePage() {
         </div>
         <Callout tone="neutral" className="mt-8 max-w-[80ch]">
           <p>
-            RegEngine is not FDA endorsement, not a certification, not a readiness score, not a claim that any workspace meets the 24-hour request, not a recall clock product, not live customer metrics, and not legal advice.
+            RegEngine does not imply FDA endorsement or certification, is not a readiness score, does not claim that any workspace meets the 24-hour request, is not a recall clock product, shows no live customer metrics, and is not legal advice.
           </p>
         </Callout>
       </Section>
