@@ -37,7 +37,7 @@ function DataImportFallback() {
             <Container width="tool">
                 <div className="mx-auto max-w-2xl text-center">
                     <h1 className="text-title text-re-text-primary">Data Import Hub</h1>
-                    <p className="mx-auto mt-3 max-w-[70ch] text-ui text-re-text-secondary">Import your traceability data into RegEngine via CSV upload, XLSX spreadsheets (including IoT temperature logs), or the JSON events API. Supports all FSMA 204 Critical Tracking Event (CTE) types with automatic validation and auto-cleaning of common formatting issues.</p>
+                    <p className="mx-auto mt-3 max-w-[70ch] text-ui text-re-text-secondary">Import your traceability data into RegEngine via CSV upload or the JSON events API. Supports all FSMA 204 Critical Tracking Event (CTE) types with automatic validation and auto-cleaning of common formatting issues.</p>
                 </div>
                 <div className="mt-8 space-y-4">
                     <Skeleton className="h-10 w-1/3 rounded-md" />
