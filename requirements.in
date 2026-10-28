@@ -71,7 +71,7 @@ xlrd>=2.0.2
 PyJWT>=2.15.1
 pyotp>=2.10.0
 argon2-cffi>=25.1.0
-authlib>=1.8.0
+authlib>=1.9.1
 # Transitive of Authlib. Floored for CVE-2026-48990
 # (RFC7797 b64=false JWS payload-size bypass).
 joserfc>=1.7.5
@@ -109,6 +109,7 @@ tenacity>=9.2.1
 slowapi>=0.1.10
 feedparser>=6.0.14
 email-validator>=2.3.0
+dnspython>=2.9.0
 # Pinned to >=2.7.0 for CVE-2026-44431 (cross-origin header leak via low-level
 # ProxyManager API) and CVE-2026-44432 (Brotli decompression bomb via partial
 # reads / drain_conn). Transitive of botocore/docker/requests/sentry-sdk/
