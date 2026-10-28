@@ -28,10 +28,6 @@ function decodeSegment(value: string): string {
     }
 }
 
-/** GS1 AI 10 and 21 allow 20 characters; labels.py does not cap the lot, so
- *  the bound is loose and only rejects junk that no label could carry. */
-export const LABEL_FIELD_MAX_LENGTH = 64;
-
 export interface LabelLink {
     gtin: string;
     lot: string;
@@ -52,8 +48,9 @@ export function parseLabelLink(
     // labels.py validates the GTIN as exactly 14 digits but not its check
     // digit, so a bad check digit is reported, not rejected.
     if (!/^\d{14}$/.test(gtin)) return null;
-    if (!lot || lot.length > LABEL_FIELD_MAX_LENGTH) return null;
-    if (!serial || serial.length > LABEL_FIELD_MAX_LENGTH) return null;
+    // labels.py caps neither the lot nor the serial, so neither is capped
+    // here: a cap would 404 a label that has already been printed.
+    if (!lot || !serial) return null;
 
     return { gtin, lot, serial, gtinCheckDigitValid: isValidGTINCheckDigit(gtin) };
 }

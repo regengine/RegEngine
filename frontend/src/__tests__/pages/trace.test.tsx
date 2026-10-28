@@ -129,6 +129,21 @@ describe('TracePage', () => {
         expect(screen.getByRole('button', { name: 'Trace' })).toBeEnabled();
     });
 
+    it('follows a changed ?tlc= on client navigation without clearing a typed lot', () => {
+        mockUseAuth.mockReturnValue({ hasTenantSession: true });
+        mockSearchParams.query = 'tlc=LOT-A';
+        const { rerender } = render(<TracePage />);
+        expect(screen.getByPlaceholderText(/enter tlc/i)).toHaveValue('LOT-A');
+
+        mockSearchParams.query = 'tlc=LOT-B';
+        rerender(<TracePage />);
+        expect(screen.getByPlaceholderText(/enter tlc/i)).toHaveValue('LOT-B');
+
+        mockSearchParams.query = '';
+        rerender(<TracePage />);
+        expect(screen.getByPlaceholderText(/enter tlc/i)).toHaveValue('LOT-B');
+    });
+
     it('keeps trace actions disabled when no tenant session is available', async () => {
         mockUseAuth.mockReturnValue({
             hasTenantSession: false,

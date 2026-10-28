@@ -53,8 +53,18 @@ export default function TracePage() {
   // A scanned label QR (/01/{gtin}/10/{lot}/21/{serial}) lands here with
   // ?tlc= so the lot is already in the box.
   const searchParams = useSearchParams();
+  const tlcParam = searchParams.get('tlc') ?? '';
 
-  const [tlcInput, setTlcInput] = useState(searchParams.get('tlc') ?? '');
+  const [tlcInput, setTlcInput] = useState(tlcParam);
+  // Client navigation can change ?tlc= while this page stays mounted:
+  // follow it, but never clear what the user typed. Adjusted during render
+  // (react.dev "storing information from previous renders"), not in an
+  // effect, so there is no extra commit.
+  const [seenTlcParam, setSeenTlcParam] = useState(tlcParam);
+  if (tlcParam && tlcParam !== seenTlcParam) {
+    setSeenTlcParam(tlcParam);
+    setTlcInput(tlcParam);
+  }
   const [isLoading, setIsLoading] = useState(false);
   const [traceResult, setTraceResult] = useState<TraceResult | null>(null);
   const [error, setError] = useState<string | null>(null);

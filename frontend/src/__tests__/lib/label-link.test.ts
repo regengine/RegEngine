@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LABEL_FIELD_MAX_LENGTH, parseLabelLink, traceHrefForLot } from '@/lib/label-link';
+import { parseLabelLink, traceHrefForLot } from '@/lib/label-link';
 
 // GTIN-14 with a correct check digit (mod-10, weights 3/1 from the right).
 const VALID_GTIN = '00012345678905';
@@ -52,13 +52,13 @@ describe('parseLabelLink', () => {
         expect(parseLabelLink({ lot: 'L1', serial: SERIAL })).toBeNull();
     });
 
-    it('rejects an empty or oversized lot or serial', () => {
-        const tooLong = 'x'.repeat(LABEL_FIELD_MAX_LENGTH + 1);
+    it('rejects an empty lot or serial but no length the label service can print', () => {
         expect(parseLabelLink({ gtin: VALID_GTIN, lot: '', serial: SERIAL })).toBeNull();
-        expect(parseLabelLink({ gtin: VALID_GTIN, lot: tooLong, serial: SERIAL })).toBeNull();
         expect(parseLabelLink({ gtin: VALID_GTIN, lot: 'L1', serial: '' })).toBeNull();
-        expect(parseLabelLink({ gtin: VALID_GTIN, lot: 'L1', serial: tooLong })).toBeNull();
-        expect(parseLabelLink({ gtin: VALID_GTIN, lot: 'x'.repeat(LABEL_FIELD_MAX_LENGTH), serial: SERIAL })).not.toBeNull();
+        // labels.py caps neither field; a printed label must never 404 here.
+        const long = 'x'.repeat(200);
+        expect(parseLabelLink({ gtin: VALID_GTIN, lot: long, serial: SERIAL })?.lot).toBe(long);
+        expect(parseLabelLink({ gtin: VALID_GTIN, lot: 'L1', serial: long })?.serial).toBe(long);
     });
 });
 
