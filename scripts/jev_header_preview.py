@@ -115,10 +115,8 @@ from shared.jev import JevDecider, JevSettings  # noqa: E402
 from shared.jev.cte_classification import CteClassificationResult  # noqa: E402
 from shared.jev.header_mapping import MALFORMED_HEADER, HeaderMappingResult, unrecognized_headers  # noqa: E402
 from shared.jev.settings import (  # noqa: E402
-    API_KEY_ENV,
     APPLY_FILE_CTE_TYPE_ENV,
     APPLY_HEADER_MAPPINGS_ENV,
-    ENABLED_ENV,
     HEADER_SAMPLE_VALUES_ENV,
     MAX_HEADER_SAMPLE_VALUES,
     MAX_RETRIES_ENV,
@@ -134,7 +132,7 @@ PROG = "jev_header_preview"
 KEY_PROMPT = "TypeSafe API key (hidden when typed at a terminal): "
 
 _UNAVAILABLE_HINTS = {
-    "auth": f"The vendor rejected the key (401/403): check {API_KEY_ENV}.",
+    "auth": "The vendor rejected the key (401/403): check TYPESAFE_API_KEY.",
     "rate_limited": f"Rate limited (429) after retries: wait and re-run, or raise {MAX_RETRIES_ENV}.",
     "timeout": f"Timed out: re-run, or raise {TIMEOUT_ENV} (seconds per attempt).",
     "connection": "Could not reach the API: check network, proxy and TYPESAFE_BASE_URL.",
@@ -206,7 +204,7 @@ def _parser() -> _Parser:
     parser.add_argument(
         "--prompt-key",
         action="store_true",
-        help=f"read the API key from a hidden prompt for this run instead of {API_KEY_ENV}",
+        help="read the API key from a hidden prompt for this run instead of TYPESAFE_API_KEY",
     )
     parser.add_argument(
         "--cte-type",
@@ -292,11 +290,12 @@ def _hint(status: str, settings: JevSettings, prompted: bool, malformed: str | N
             "check it for an unterminated quote or a line break inside a header."
         )
     if status == "disabled":
+        # Constant-only hints: never interpolate API_KEY_ENV (CodeQL clear-text-logging).
         if not settings.api_key:
             if prompted:
                 return "No key was entered at the prompt."
-            return f"{API_KEY_ENV} is not set: export it in this shell, or re-run with --prompt-key."
-        return f"{ENABLED_ENV} switches Jev off: unset it or set it to 1."
+            return "TYPESAFE_API_KEY is not set: export it in this shell, or re-run with --prompt-key."
+        return "REGENGINE_JEV_ENABLED switches Jev off: unset it or set it to 1."
     if status.startswith("unavailable:"):
         return _UNAVAILABLE_HINTS.get(status.split(":", 1)[1], "See the jev.unavailable line above.")
     if status in ("ok", "no_unrecognized_headers", "per_row_cte_column"):
