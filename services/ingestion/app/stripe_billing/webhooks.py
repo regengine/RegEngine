@@ -208,12 +208,19 @@ def _apply_pilot_credit_if_eligible(tenant_id: str, customer_id: str, mapping: d
         )
         return False
 
+    # Stable per pilot purchase so Stripe rejects a duplicate credit even if
+    # the local flag write was lost after Stripe accepted the transaction
+    # (or two checkout handlers race). A new pilot session gets a new key.
+    pilot_session_id = str((mapping or {}).get("pilot_session_id") or "")
+    idempotency_key = f"pilot-credit:{tenant_id}:{pilot_session_id or customer_id}"
+
     try:
         stripe.Customer.create_balance_transaction(
             customer_id,
             amount=-fee_cents,
             currency="usd",
             description="RegEngine pilot fee credit (A-2159)",
+            idempotency_key=idempotency_key,
         )
     except stripe.error.StripeError as exc:
         # Leave pilot_credit_applied unset: a retried subscription checkout
@@ -343,6 +350,30 @@ def _handle_pilot_checkout_completed(
 
     if event_created is not None:
         mapping["last_event_created"] = str(int(event_created))
+
+    # A pilot purchase must not downgrade a tenant that already has a live
+    # subscription (e.g. a late/duplicate pilot event after conversion).
+    # Keep the subscription identity/state and only annotate the pilot
+    # fields above.
+    if bool(existing_mapping.get("subscription_id")) and str(existing_mapping.get("status") or "").lower() in _ENTITLING_STATUSES:
+        logger.warning(
+            "stripe_pilot_event_on_live_subscription_preserved",
+            tenant_id=tenant_id,
+            session_id=pilot_session_id,
+            existing_plan=existing_mapping.get("plan_id"),
+            existing_status=existing_mapping.get("status"),
+        )
+        for key in (
+            "subscription_id",
+            "plan_id",
+            "billing_period",
+            "status",
+            "current_period_end",
+            "facility_quantity",
+        ):
+            existing_value = existing_mapping.get(key)
+            if existing_value:
+                mapping[key] = existing_value
 
     _state_mod._store_subscription_mapping(tenant_id, mapping)
     logger.info(
@@ -657,10 +688,13 @@ async def _handle_checkout_completed(
         # A-2159: if this tenant previously paid a pilot fee that has not yet
         # been credited, apply it to the customer's Stripe balance now that a
         # real subscription checkout exists. Safe no-op when there is no
-        # uncredited pilot fee or it was already applied.
-        credit_mapping = _state_mod._get_subscription_mapping(tenant_id)
-        credit_customer_id = str(credit_mapping.get("customer_id") or customer_id or "")
-        _apply_pilot_credit_if_eligible(tenant_id, credit_customer_id, credit_mapping)
+        # uncredited pilot fee or it was already applied. Only a successful
+        # conversion (entitling status, settled payment) may consume the
+        # credit — an unpaid/unverifiable checkout must not move money.
+        if subscription_status in _ENTITLING_STATUSES:
+            credit_mapping = _state_mod._get_subscription_mapping(tenant_id)
+            credit_customer_id = str(credit_mapping.get("customer_id") or customer_id or "")
+            _apply_pilot_credit_if_eligible(tenant_id, credit_customer_id, credit_mapping)
 
 
 def _update_subscription_status(

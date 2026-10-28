@@ -421,6 +421,46 @@ class TestPilotWebhook:
 
         assert fake_redis.hashes["billing:tenant:tenant-pilot-retry"]["pilot_credit_applied"] == "true"
 
+    @pytest.mark.asyncio
+    async def test_pilot_event_preserves_live_subscription_state(
+        self, monkeypatch: pytest.MonkeyPatch, fake_redis: _FakeRedis
+    ) -> None:
+        fake_redis.values["billing:session:cs_pilot_late"] = "tenant-pilot-late"
+        fake_redis.hashes["billing:tenant:tenant-pilot-late"] = {
+            "tenant_id": "tenant-pilot-late",
+            "subscription_id": "sub_live",
+            "customer_id": "cus_pilot_late",
+            "plan_id": "list",
+            "billing_period": "monthly",
+            "status": "active",
+            "facility_quantity": "4",
+            "current_period_end": "2030-01-01T00:00:00+00:00",
+        }
+
+        await webhooks_mod._handle_checkout_completed(
+            {
+                "id": "cs_pilot_late",
+                "customer": "cus_pilot_late",
+                "subscription": None,
+                "mode": "payment",
+                "payment_status": "paid",
+                "amount_total": 200_000,
+                "metadata": {"plan_id": "pilot", "pilot_variant": "standard"},
+            },
+            event_created=650,
+        )
+
+        mapping = fake_redis.hashes["billing:tenant:tenant-pilot-late"]
+        assert mapping["subscription_id"] == "sub_live"
+        assert mapping["plan_id"] == "list"
+        assert mapping["billing_period"] == "monthly"
+        assert mapping["status"] == "active"
+        assert mapping["facility_quantity"] == "4"
+        assert mapping["current_period_end"] == "2030-01-01T00:00:00+00:00"
+        # The pilot purchase itself is still recorded for audit/credit.
+        assert mapping["pilot_fee_cents"] == "200000"
+        assert mapping["pilot_variant"] == "standard"
+
 
 # ── 4. A-2159 credit ───────────────────────────────────────────────────────
 
@@ -453,6 +493,7 @@ class TestPilotCredit:
                     "amount": -150_000,
                     "currency": "usd",
                     "description": "RegEngine pilot fee credit (A-2159)",
+                    "idempotency_key": "pilot-credit:tenant-credit:cus_credit",
                 },
             )
         ]
@@ -574,6 +615,7 @@ class TestPilotCredit:
                     "amount": -150_000,
                     "currency": "usd",
                     "description": "RegEngine pilot fee credit (A-2159)",
+                    "idempotency_key": "pilot-credit:tenant-convert:cus_convert",
                 },
             )
         ]
@@ -593,6 +635,58 @@ class TestPilotCredit:
             event_created=301,
         )
         assert len(calls) == 1
+
+    @pytest.mark.asyncio
+    async def test_unpaid_subscription_conversion_does_not_credit(
+        self, monkeypatch: pytest.MonkeyPatch, fake_redis: _FakeRedis
+    ) -> None:
+        monkeypatch.setenv("STRIPE_PRICE_LIST_MONTHLY", "price_list_monthly")
+        fake_redis.values["billing:session:cs_convert_unpaid"] = "tenant-convert-unpaid"
+        fake_redis.hashes["billing:tenant:tenant-convert-unpaid"] = {
+            "tenant_id": "tenant-convert-unpaid",
+            "customer_id": "cus_convert_unpaid",
+            "pilot_fee_cents": "150000",
+            "pilot_payment_settled": "true",
+            "pilot_amount_paid_cents": "150000",
+            "pilot_credit_applied": "false",
+        }
+        calls: list[Any] = []
+        monkeypatch.setattr(
+            stripe.Customer,
+            "create_balance_transaction",
+            lambda *args, **kwargs: calls.append((args, kwargs)),
+        )
+        monkeypatch.setattr(
+            stripe.Subscription,
+            "retrieve",
+            lambda _sid: {
+                "status": "active",
+                "items": {
+                    "data": [
+                        {
+                            "price": {"id": "price_list_monthly"},
+                            "quantity": 1,
+                            "current_period_end": 1_800_000_000,
+                        }
+                    ]
+                },
+            },
+        )
+
+        await webhooks_mod._handle_checkout_completed(
+            {
+                "id": "cs_convert_unpaid",
+                "customer": "cus_convert_unpaid",
+                "subscription": "sub_convert_unpaid",
+                "mode": "subscription",
+                "payment_status": "unpaid",
+                "metadata": {"plan_id": "list", "billing_period": "monthly"},
+            },
+            event_created=350,
+        )
+
+        assert calls == []
+        assert fake_redis.hashes["billing:tenant:tenant-convert-unpaid"]["status"] == "incomplete"
 
 
 # ── 4b. Pilot entitlement expiry ───────────────────────────────────────────
