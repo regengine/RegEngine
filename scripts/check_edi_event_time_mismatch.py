@@ -230,10 +230,9 @@ def main(argv: Optional[list[str]] = None) -> int:
         try:
             conn.execute(text("SET TRANSACTION READ ONLY"))
             if args.tenant_id:
-                conn.execute(
-                    text("SELECT set_config('app.tenant_id', :tid, true)"),
-                    {"tid": args.tenant_id},
-                )
+                from shared.tenant_context import set_tenant_guc
+
+                set_tenant_guc(conn, args.tenant_id)
             try:
                 count = conn.execute(text(MISMATCH_SQL)).scalar_one()
                 invalid = conn.execute(text(INVALID_DATE_SQL)).scalar_one()
