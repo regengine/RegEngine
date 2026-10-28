@@ -20,7 +20,11 @@ from ...fsma_recall import (
 from ...fsma_utils import trace_backward, trace_forward
 from ...neo4j_utils import Neo4jClient
 
-router = APIRouter(tags=["Recall"])
+# Validate the API key before any endpoint parameter. The handlers below declare
+# ``Depends(get_current_tenant_id)`` ahead of ``Depends(require_api_key)``, so a key-only
+# caller got 401 on tenant resolution before the key was checked. Router-level
+# dependencies resolve first; the per-request cache still validates the key exactly once.
+router = APIRouter(tags=["Recall"], dependencies=[Depends(require_api_key)])
 logger = structlog.get_logger("fsma-recall")
 
 

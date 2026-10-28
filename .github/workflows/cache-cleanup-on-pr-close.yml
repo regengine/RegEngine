@@ -1,0 +1,60 @@
+# PR-scoped caches cannot be restored by any other branch and only age out after 7 days, which keeps the repo near the 10 GB cache cap and evicts main lockfile caches.
+
+name: Cache cleanup on PR close
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions: {}
+
+concurrency:
+  group: cache-cleanup-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    name: Cache cleanup
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Clean up PR caches
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const number = context.payload.pull_request.number;
+            const ref = `refs/pull/${number}/merge`;
+
+            core.info(`Fetching actions caches for ${owner}/${repo} with ref ${ref}...`);
+            const caches = await github.paginate(github.rest.actions.getActionsCacheList, {
+              owner,
+              repo,
+              ref,
+              per_page: 100,
+            });
+
+            core.info(`Found ${caches.length} cache(s) for ${ref}.`);
+
+            let deletedCount = 0;
+            let totalBytesFreed = 0;
+
+            for (const cache of caches) {
+              try {
+                await github.rest.actions.deleteActionsCacheById({
+                  owner,
+                  repo,
+                  cache_id: cache.id,
+                });
+                deletedCount++;
+                totalBytesFreed += cache.size_in_bytes || 0;
+              } catch (err) {
+                core.warning(`Failed to delete cache ${cache.id} (${cache.key}): ${err.message || err}`);
+              }
+            }
+
+            core.info(`Deleted ${deletedCount} cache(s), total bytes freed: ${totalBytesFreed}`);

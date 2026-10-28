@@ -272,7 +272,7 @@ export default function FSMA204ComplianceChecklist() {
                   link: '/tools/records-request-checklist',
                 },
                 {
-                  name: 'Drill Simulator',
+                  name: 'Recall drill (Preview)',
                   desc: 'Run FDA records request drills to validate your 24-hour response capability',
                   phase: 'Phase 4-5',
                   link: '/tools/drill-simulator',

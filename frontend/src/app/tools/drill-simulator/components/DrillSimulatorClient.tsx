@@ -838,7 +838,7 @@ STATUS: ${
 
     return (
         <FreeToolPageShell
-            title="24 Hour Drill Simulator"
+            title="Recall drill (Preview)"
             subtitle="Self-paced rehearsal for your §1.1455(c) records-on-request workflow"
             relatedToolIds={['ftl-checker', 'cte-mapper', 'kde-checker']}
         >
