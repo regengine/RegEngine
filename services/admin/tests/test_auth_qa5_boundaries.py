@@ -379,7 +379,8 @@ class _NonceCrypto:
 def test_existing_browser_nonce_is_reused():
     crypto = _NonceCrypto()
 
-    assert cr._browser_nonce_for_request(_request(cookie="existing-nonce"), crypto) == "existing-nonce"
+    well_formed = "x" * 43  # token_urlsafe(32) shape
+    assert cr._browser_nonce_for_request(_request(cookie=well_formed), crypto) == well_formed
     assert crypto.minted == 0
 
 
