@@ -9,7 +9,10 @@ import {
   trackToolRunStarted,
 } from '@/lib/conversion-events';
 
+import { captureEvent } from '@/lib/posthog-provider';
+
 vi.mock('@vercel/analytics', () => ({ track: vi.fn() }));
+vi.mock('@/lib/posthog-provider', () => ({ captureEvent: vi.fn() }));
 
 beforeEach(() => {
   window.history.replaceState({}, '', '/tools/ftl-checker');
@@ -181,5 +184,22 @@ describe('marketing Web Analytics filter', () => {
     expect(window.localStorage.getItem('re_internal')).toBeNull();
     const pageview = { type: 'pageview', url: 'https://regengine.co/contact' };
     expect(filterConversionAnalyticsEvent(pageview)).toEqual(pageview);
+  });
+});
+
+describe('conversion events reach PostHog', () => {
+  it('forwards tool runs to PostHog even when Vercel Analytics is not mounted', () => {
+    setConversionAnalyticsEnabled(false);
+    trackToolRunStarted('ftl-checker');
+    expect(track).not.toHaveBeenCalled();
+    expect(captureEvent).toHaveBeenCalledWith('tool_run_started', {
+      path: '/tools/ftl-checker', tool: 'ftl-checker',
+    });
+  });
+
+  it('sends nothing to PostHog without consent', () => {
+    document.cookie = 're_cookie_consent=; max-age=0; path=/';
+    trackToolRunStarted('ftl-checker');
+    expect(captureEvent).not.toHaveBeenCalled();
   });
 });
