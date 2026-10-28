@@ -404,8 +404,8 @@ def test_missing_kdes_flag_is_not_a_second_disposition_when_ingest_rejects():
     assert exclusive[0].disposition == "rejected"
     assert exclusive[0].reason == "duplicate"
     assert "Accepted with missing KDEs" not in (exclusive[0].detail or "")
-    # Missing KDEs may appear as a note on the final entry only.
-    assert "missing KDEs" in (exclusive[0].detail or "").lower() or exclusive[0].reason == "duplicate"
+    # The missing-KDE note rides on the final rejected entry (not a second disposition).
+    assert "missing kdes" in (exclusive[0].detail or "").lower()
 
 
 def test_missing_kdes_note_on_final_accepted_entry_only():
