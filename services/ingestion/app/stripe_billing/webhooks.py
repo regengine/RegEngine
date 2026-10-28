@@ -209,9 +209,16 @@ def _apply_pilot_credit_if_eligible(tenant_id: str, customer_id: str, mapping: d
         return False
 
     # ``convert_30`` is a discounted pilot that must convert within its
-    # recorded 30-day window. Missing window (legacy/standard) does not block.
+    # recorded 30-day window. Only enforce when the *current* mapping says
+    # convert_30 — a later ``standard`` pilot (or HSET leftover from an
+    # earlier convert_30) must not inherit a stale window and block credit.
+    variant = str((mapping or {}).get("pilot_variant") or "").strip().lower()
     convert_window_end = (mapping or {}).get("pilot_convert_window_end")
-    if convert_window_end and _iso_timestamp_is_past(str(convert_window_end)):
+    if (
+        variant == "convert_30"
+        and convert_window_end
+        and _iso_timestamp_is_past(str(convert_window_end))
+    ):
         logger.info(
             "stripe_pilot_credit_skipped_convert_window_expired",
             tenant_id=tenant_id,
@@ -372,6 +379,11 @@ def _handle_pilot_checkout_completed(
         mapping["pilot_convert_window_end"] = (
             _helpers_mod._format_period_end(session_created + _plans_mod.PILOT_CONVERT_WINDOW_DAYS * 86400) or ""
         )
+    else:
+        # HSET merges: clear any leftover convert_30 window so a later
+        # standard pilot (or conversion credit) is not blocked by a stale
+        # timestamp from a prior convert_30 purchase (Bugbot 3a2bdf4b).
+        mapping["pilot_convert_window_end"] = ""
 
     if event_created is not None:
         # Never rewind the #1196 reorder watermark: a late/duplicate pilot

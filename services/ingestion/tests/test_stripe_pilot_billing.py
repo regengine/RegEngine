@@ -607,6 +607,7 @@ class TestPilotCredit:
                 "pilot_fee_cents": "150000",
                 "pilot_payment_settled": "true",
                 "pilot_amount_paid_cents": "150000",
+                "pilot_variant": "convert_30",
                 "pilot_convert_window_end": (datetime.now(timezone.utc) - timedelta(days=1)).isoformat(),
             },
         ],
@@ -623,6 +624,59 @@ class TestPilotCredit:
 
         assert webhooks_mod._apply_pilot_credit_if_eligible("tenant-skip", "cus_skip", dict(mapping)) is False
         assert calls == []
+
+    @pytest.mark.asyncio
+    async def test_standard_pilot_clears_stale_convert_window_and_credits(
+        self, monkeypatch: pytest.MonkeyPatch, fake_redis: _FakeRedis
+    ) -> None:
+        """Bugbot 3a2bdf4b: leftover convert_30 window must not block standard credit."""
+        calls: list[Any] = []
+        monkeypatch.setattr(
+            stripe.Customer,
+            "create_balance_transaction",
+            lambda *args, **kwargs: calls.append((args, kwargs)) or {"id": "cbtxn_std"},
+        )
+        # Simulate a prior convert_30 that left an expired window in Redis,
+        # then a later standard pilot purchase that must clear it.
+        expired = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+        fake_redis.hashes["billing:tenant:tenant-stale-window"] = {
+            "tenant_id": "tenant-stale-window",
+            "customer_id": "cus_stale",
+            "plan_id": "pilot",
+            "status": "pilot_active",
+            "pilot_variant": "convert_30",
+            "pilot_convert_window_end": expired,
+            "pilot_fee_cents": "150000",
+            "pilot_credit_applied": "false",
+        }
+        webhooks_mod._handle_pilot_checkout_completed(
+            {
+                "id": "cs_std_after_convert",
+                "customer": "cus_stale",
+                "mode": "payment",
+                "payment_status": "paid",
+                "amount_total": 200_000,
+                "created": int(datetime.now(timezone.utc).timestamp()),
+                "metadata": {"plan_id": "pilot", "pilot_variant": "standard"},
+            },
+            tenant_id="tenant-stale-window",
+            metadata={"plan_id": "pilot", "pilot_variant": "standard"},
+            event_created=400,
+        )
+        mapping = fake_redis.hashes["billing:tenant:tenant-stale-window"]
+        assert mapping["pilot_variant"] == "standard"
+        assert mapping.get("pilot_convert_window_end", "") == ""
+        assert mapping["pilot_fee_cents"] == "200000"
+        assert mapping["pilot_payment_settled"] == "true"
+
+        assert (
+            webhooks_mod._apply_pilot_credit_if_eligible(
+                "tenant-stale-window", "cus_stale", mapping
+            )
+            is True
+        )
+        assert len(calls) == 1
+        assert mapping["pilot_credit_applied"] == "true"
 
     @pytest.mark.asyncio
     async def test_subscription_checkout_applies_prior_pilot_credit_once(
