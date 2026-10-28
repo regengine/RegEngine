@@ -24,6 +24,7 @@ logger = logging.getLogger("partner_file_retention")
 ACTOR = "retention_job"
 REASON = "retention_30d"
 BATCH_LIMIT = 100
+_CHAIN_LOCK_KEY_PREFIX = "partner_file_deletion:"
 
 
 def _canonical_entry_payload(fields: Dict[str, Any]) -> str:
@@ -37,7 +38,19 @@ def compute_entry_hash(*, prev_entry_hash: Optional[str], fields: Dict[str, Any]
     return hashlib.sha256(material).hexdigest()
 
 
+def _lock_tenant_deletion_chain(db, *, tenant_id: str) -> None:
+    """Serialize deletion-log tip updates for one tenant (multi-replica safe)."""
+    db.execute(
+        # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
+        text(
+            "SELECT pg_advisory_xact_lock(hashtextextended(:lock_key, 0))"
+        ),
+        {"lock_key": f"{_CHAIN_LOCK_KEY_PREFIX}{tenant_id}"},
+    )
+
+
 def _latest_entry_hash(db, *, tenant_id: str) -> Optional[str]:
+    """Tip of the tenant deletion chain, locked for the current transaction."""
     row = db.execute(
         # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
         text(
@@ -47,6 +60,7 @@ def _latest_entry_hash(db, *, tenant_id: str) -> Optional[str]:
              WHERE tenant_id = CAST(:tenant_id AS uuid)
              ORDER BY deleted_at DESC, id DESC
              LIMIT 1
+             FOR UPDATE
             """
         ),
         {"tenant_id": tenant_id},
@@ -54,7 +68,19 @@ def _latest_entry_hash(db, *, tenant_id: str) -> Optional[str]:
     return row[0] if row else None
 
 
-def _due_rows(db, *, limit: int = BATCH_LIMIT) -> List[Dict[str, Any]]:
+def _list_tenant_ids(db) -> List[str]:
+    """Tenant ids the runtime role can see (column-scoped SELECT on public.tenants)."""
+    rows = db.execute(
+        # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
+        text("SELECT id::text FROM public.tenants ORDER BY id")
+    ).fetchall()
+    return [str(r[0]) for r in rows]
+
+
+def _due_rows_for_tenant(
+    db, *, tenant_id: str, limit: int = BATCH_LIMIT
+) -> List[Dict[str, Any]]:
+    """Due partner_files for one tenant. Caller must set the tenant GUC first."""
     rows = db.execute(
         # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
         text(
@@ -63,15 +89,17 @@ def _due_rows(db, *, limit: int = BATCH_LIMIT) -> List[Dict[str, Any]]:
                    content_sha256, ciphertext_sha256, byte_size, report_delivered_at,
                    delete_after
               FROM public.partner_files
-             WHERE deleted_at IS NULL
+             WHERE tenant_id = CAST(:tenant_id AS uuid)
+               AND deleted_at IS NULL
                AND delete_after IS NOT NULL
                AND delete_after <= now()
                AND status <> 'deleted'
              ORDER BY delete_after ASC
              LIMIT :limit
+             FOR UPDATE SKIP LOCKED
             """
         ),
-        {"limit": limit},
+        {"tenant_id": tenant_id, "limit": limit},
     ).fetchall()
     out: List[Dict[str, Any]] = []
     for r in rows:
@@ -93,16 +121,50 @@ def _due_rows(db, *, limit: int = BATCH_LIMIT) -> List[Dict[str, Any]]:
 
 
 def delete_one_due_file(db, row: Dict[str, Any]) -> Dict[str, Any]:
-    """Delete storage object, append deletion_log, mark metadata deleted, audit."""
+    """Delete storage object, append deletion_log, mark metadata deleted, audit.
+
+    Requires object storage. Order: tenant GUC → chain advisory lock → lock tip
+    → S3 delete (idempotent) → durable log/update/audit. Caller wraps in a
+    savepoint so a PG error does not abort the whole batch.
+    """
     from .partner_file_storage import PARTNER_UPLOADS_BUCKET
     from .remediation.audit_utils import audit_event
     from .s3_utils import delete_object, is_object_storage_configured
 
+    if not is_object_storage_configured():
+        raise RuntimeError(
+            "partner file retention requires object storage; refusing to mark deleted"
+        )
+
     tenant_id = row["tenant_id"]
     set_tenant_guc(db, tenant_id)
+    _lock_tenant_deletion_chain(db, tenant_id=tenant_id)
 
-    if is_object_storage_configured():
-        delete_object(row["storage_bucket"] or PARTNER_UPLOADS_BUCKET, row["storage_path"])
+    # Re-claim under FOR UPDATE: concurrent pass may have won already.
+    claimed = db.execute(
+        # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
+        text(
+            """
+            SELECT id
+              FROM public.partner_files
+             WHERE id = CAST(:id AS uuid)
+               AND tenant_id = CAST(:tenant_id AS uuid)
+               AND deleted_at IS NULL
+               AND status <> 'deleted'
+             FOR UPDATE
+            """
+        ),
+        {"id": row["id"], "tenant_id": tenant_id},
+    ).fetchone()
+    if claimed is None:
+        return {
+            "partner_file_id": row["id"],
+            "skipped": True,
+            "reason": "already_deleted_or_missing",
+        }
+
+    # S3 first (missing object is success on rerun), then durable DB state.
+    delete_object(row["storage_bucket"] or PARTNER_UPLOADS_BUCKET, row["storage_path"])
 
     prev = _latest_entry_hash(db, tenant_id=tenant_id)
     deleted_at = datetime.now(timezone.utc)
@@ -206,24 +268,51 @@ def delete_one_due_file(db, row: Dict[str, Any]) -> Dict[str, Any]:
         },
     )
 
-    return {"partner_file_id": row["id"], "deletion_log_id": log_id, "entry_hash": entry_hash}
+    return {
+        "partner_file_id": row["id"],
+        "deletion_log_id": log_id,
+        "entry_hash": entry_hash,
+        "skipped": False,
+    }
 
 
 def run_retention_pass(db, *, limit: int = BATCH_LIMIT) -> Dict[str, int]:
-    """Process up to ``limit`` due partner files. Returns counts."""
-    due = _due_rows(db, limit=limit)
+    """Process up to ``limit`` due partner files across tenants. Returns counts.
+
+    When object storage is unconfigured the pass is a no-op: no rows are marked
+    deleted and no retention audits are written.
+    """
+    from .s3_utils import is_object_storage_configured
+
+    if not is_object_storage_configured():
+        logger.warning("partner_file_retention_skipped_storage_unconfigured")
+        return {"due": 0, "deleted": 0, "errors": 0, "skipped_unconfigured": 1}
+
     deleted = 0
     errors = 0
-    for row in due:
-        try:
-            delete_one_due_file(db, row)
-            deleted += 1
-        except Exception as exc:  # pragma: no cover — per-row isolation
-            errors += 1
-            logger.exception(
-                "partner_file_retention_row_failed file=%s tenant=%s error=%s",
-                row.get("id"),
-                row.get("tenant_id"),
-                exc,
-            )
-    return {"due": len(due), "deleted": deleted, "errors": errors}
+    due_total = 0
+    remaining = limit
+
+    for tenant_id in _list_tenant_ids(db):
+        if remaining <= 0:
+            break
+        set_tenant_guc(db, tenant_id)
+        rows = _due_rows_for_tenant(db, tenant_id=tenant_id, limit=remaining)
+        due_total += len(rows)
+        for row in rows:
+            try:
+                with db.begin_nested():
+                    result = delete_one_due_file(db, row)
+                if not result.get("skipped"):
+                    deleted += 1
+            except Exception as exc:  # pragma: no cover — per-row isolation
+                errors += 1
+                logger.exception(
+                    "partner_file_retention_row_failed file=%s tenant=%s error=%s",
+                    row.get("id"),
+                    row.get("tenant_id"),
+                    exc,
+                )
+            remaining -= 1
+
+    return {"due": due_total, "deleted": deleted, "errors": errors, "skipped_unconfigured": 0}
