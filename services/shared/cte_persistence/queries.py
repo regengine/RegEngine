@@ -10,6 +10,7 @@ this code exactly as before the split.
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from datetime import date as _date, datetime as _datetime, time as _time, timedelta as _timedelta, timezone as _timezone
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -19,6 +20,49 @@ from sqlalchemy.exc import (
     OperationalError,
     ProgrammingError,
 )
+
+# Directions a transformation-link walk can take. ``forward`` follows
+# input lot -> output lot (what did this lot go into), ``backward`` follows
+# output lot -> input lot (what went into this lot), ``both`` is the union
+# of a pure forward walk and a pure backward walk from the seed. ``both``
+# is NOT an undirected walk: stepping backward to a parent and then
+# forward again would pull in sibling lots that share an input but never
+# touched the seed, which 21 CFR 1.1350(c) does not ask for.
+TRACE_DIRECTIONS = ("forward", "backward", "both")
+
+# VALUES fragments seeding the recursive walk's direction column. Keyed by
+# the validated direction name, so no caller-supplied text reaches SQL.
+_DIRECTION_SEED_VALUES = {
+    "forward": "(CAST('f' AS text))",
+    "backward": "(CAST('b' AS text))",
+    "both": "(CAST('f' AS text)), (CAST('b' AS text))",
+}
+
+
+def _validate_direction(direction: str) -> str:
+    if direction not in TRACE_DIRECTIONS:
+        raise ValueError(f"direction must be one of {TRACE_DIRECTIONS}, got {direction!r}")
+    return direction
+
+
+@dataclass(frozen=True)
+class TlcExpansion:
+    """Result of expanding a seed lot through ``fsma.transformation_links``.
+
+    ``tlcs`` always includes the seed. ``depth_exhausted`` is True when at
+    least one lot was reached at ``max_depth`` and therefore not expanded:
+    the graph may continue past the returned set. It is conservative (the
+    lot at the limit may have no further links) and costs no extra query.
+    ``reached_via`` maps each lot to the shallowest depth it was found at
+    and whether the forward (downstream) or backward (upstream) walk
+    reached it; the seed is reached by neither.
+    """
+
+    tlcs: List[str]
+    depth_exhausted: bool
+    direction: str
+    max_depth: int
+    reached_via: Dict[str, Dict[str, Any]] = field(default_factory=dict)
 
 
 def _end_bound_utc(end_date: str) -> str:
@@ -94,12 +138,26 @@ class QueryPathMixin:
         tenant_id: str,
         seed_tlc: str,
         depth: Optional[int] = None,
+        direction: str = "both",
     ) -> List[str]:
         """Return all TLCs reachable from seed_tlc through transformation_links.
 
-        Walks both directions (forward: seed → outputs, backward: seed → inputs)
-        using a breadth-first traversal capped at ``depth`` hops.  Returns the
-        full set of TLCs including the seed itself.
+        Thin list-returning wrapper over :meth:`_expand_tlcs_detailed` for
+        callers on the original contract. ``direction`` defaults to ``both``:
+        the union of a forward walk (seed → outputs) and a backward walk
+        (seed → inputs), capped at ``depth`` hops, seed included. Whether
+        the depth cap was reached is only available from the detailed form.
+        """
+        return self._expand_tlcs_detailed(tenant_id, seed_tlc, depth=depth, direction=direction).tlcs
+
+    def _expand_tlcs_detailed(
+        self,
+        tenant_id: str,
+        seed_tlc: str,
+        depth: Optional[int] = None,
+        direction: str = "both",
+    ) -> TlcExpansion:
+        """Expand ``seed_tlc`` through ``fsma.transformation_links``.
 
         Args:
             tenant_id: RLS tenant identifier.
@@ -109,8 +167,15 @@ class QueryPathMixin:
                 in the signature, now a class attribute so callers and
                 tests can raise/lower it without patching the signature
                 (#1322).
+            direction: ``forward``, ``backward`` or ``both`` (see
+                ``TRACE_DIRECTIONS``). ``both`` is the union of the two
+                directed walks, not an undirected walk, so sibling lots
+                that merely share an input with the seed are excluded.
 
-        Falls back to ``[seed_tlc]`` ONLY when the transformation_links
+        Returns a :class:`TlcExpansion` whose ``depth_exhausted`` flag says
+        whether the walk reached ``depth`` with lots left unexpanded.
+
+        Falls back to the seed alone ONLY when the transformation_links
         table does not exist (fresh DB bootstrapping). Every other SQL
         error — including transient connectivity loss mid-export — is
         re-raised so it surfaces in callers instead of silently
@@ -124,6 +189,7 @@ class QueryPathMixin:
         max_depth = depth if depth is not None else self.DEFAULT_TRAVERSAL_DEPTH
         if max_depth < 0:
             raise ValueError(f"depth must be >= 0, got {max_depth}")
+        direction = _validate_direction(direction)
 
         try:
             # Note: use CAST(:tlc AS text) rather than :tlc::text — SQLAlchemy's
@@ -135,29 +201,78 @@ class QueryPathMixin:
             # seed UNION forward UNION backward puts the forward branch inside
             # the non-recursive term and every execution fails with
             # InvalidRecursion ("recursive reference ... must not appear within
-            # its non-recursive term"). Both directions are therefore walked in
-            # one branch: join a link whichever side matches, emit the other.
+            # its non-recursive term"). Direction therefore travels as a
+            # column: the seed is emitted once per requested direction and
+            # each row only ever steps the way its own ``dir`` says, so a
+            # backward step is never followed by a forward one.
+            #
+            # ``_DIRECTION_SEED_VALUES`` holds fixed SQL fragments chosen by
+            # the validated direction name; no caller text is interpolated.
+            dir_values = _DIRECTION_SEED_VALUES[direction]
             rows = self.session.execute(
-                text("""
-                    WITH RECURSIVE tlc_graph(tlc, depth) AS (
-                        -- Seed
-                        SELECT CAST(:tlc AS text), 0
+                text(f"""
+                    WITH RECURSIVE tlc_graph(tlc, depth, dir) AS (
+                        -- Seed, once per direction
+                        SELECT CAST(:tlc AS text), 0, d.dir
+                        FROM   (VALUES {dir_values}) AS d(dir)
                         UNION
-                        -- Walk both directions: input → output and output → input
-                        SELECT CASE WHEN tg.tlc = tl.input_tlc
-                                    THEN tl.output_tlc
+                        -- Forward rows follow input → output; backward rows
+                        -- follow output → input. Never the other way round.
+                        SELECT CASE WHEN tg.dir = 'f' THEN tl.output_tlc
                                     ELSE tl.input_tlc
                                END,
-                               tg.depth + 1
+                               tg.depth + 1,
+                               tg.dir
                         FROM   fsma.transformation_links tl
-                        JOIN   tlc_graph tg ON tg.tlc IN (tl.input_tlc, tl.output_tlc)
+                        JOIN   tlc_graph tg
+                          ON   (tg.dir = 'f' AND tg.tlc = tl.input_tlc)
+                            OR (tg.dir = 'b' AND tg.tlc = tl.output_tlc)
                         WHERE  tl.tenant_id = :tid AND tg.depth < :max_depth
                     )
-                    SELECT DISTINCT tlc FROM tlc_graph
+                    SELECT tlc,
+                           MIN(depth)        AS depth,
+                           BOOL_OR(dir = 'f') AS via_forward,
+                           BOOL_OR(dir = 'b') AS via_backward
+                    FROM   tlc_graph
+                    GROUP  BY tlc
                 """),
                 {"tid": tenant_id, "tlc": seed_tlc, "max_depth": max_depth},
             ).fetchall()
-            return [r[0] for r in rows] if rows else [seed_tlc]
+            if not rows:
+                return TlcExpansion(
+                    tlcs=[seed_tlc],
+                    depth_exhausted=False,
+                    direction=direction,
+                    max_depth=max_depth,
+                    reached_via={seed_tlc: {"depth": 0, "downstream": False, "upstream": False}},
+                )
+            tlcs: List[str] = []
+            reached_via: Dict[str, Dict[str, Any]] = {}
+            deepest = 0
+            for row in rows:
+                tlc = row[0]
+                row_depth = int(row[1]) if len(row) > 1 and row[1] is not None else 0
+                via_forward = bool(row[2]) if len(row) > 2 and row[2] is not None else False
+                via_backward = bool(row[3]) if len(row) > 3 and row[3] is not None else False
+                tlcs.append(tlc)
+                deepest = max(deepest, row_depth)
+                reached_via[tlc] = {
+                    "depth": row_depth,
+                    # The seed is reached by neither walk, whatever ``dir``
+                    # rows it was emitted with.
+                    "downstream": via_forward and tlc != seed_tlc,
+                    "upstream": via_backward and tlc != seed_tlc,
+                }
+            return TlcExpansion(
+                tlcs=tlcs,
+                # A lot found at the depth limit was never expanded (the
+                # recursive term stops at ``depth < max_depth``), so the
+                # graph may continue past it. Conservative by design.
+                depth_exhausted=deepest >= max_depth,
+                direction=direction,
+                max_depth=max_depth,
+                reached_via=reached_via,
+            )
         except (ProgrammingError, OperationalError) as e:
             if not _is_missing_table_error(e):
                 # Fail closed (#1322 spirit): transient connectivity loss or
@@ -193,7 +308,13 @@ class QueryPathMixin:
                 self.session.rollback()
             except DatabaseError:
                 _core.logger.debug("Rollback failed in recovery handler", exc_info=True)
-            return [seed_tlc]
+            return TlcExpansion(
+                tlcs=[seed_tlc],
+                depth_exhausted=False,
+                direction=direction,
+                max_depth=max_depth,
+                reached_via={seed_tlc: {"depth": 0, "downstream": False, "upstream": False}},
+            )
 
     def query_events_by_tlc(
         self,
@@ -361,15 +482,18 @@ class QueryPathMixin:
         tenant_id: str,
         seed_tlcs: List[str],
         depth: Optional[int] = None,
+        direction: str = "both",
     ) -> List[str]:
         """Batch variant of ``_expand_tlcs_via_transformation_links`` (#2515).
 
         Expands *all* ``seed_tlcs`` through ``fsma.transformation_links`` in a
         single ``WITH RECURSIVE`` traversal instead of one recursive-CTE
         round-trip per seed. The seed set is materialized as a ``VALUES`` list
-        feeding the recursion base case; the bidirectional walk and depth cap
-        are identical to the single-seed method. Returns the full reachable TLC
-        set (including the seeds), de-duplicated.
+        feeding the recursion base case; the directed walk and depth cap are
+        identical to the single-seed method (``both`` is the union of a
+        forward and a backward walk from each seed, never an undirected
+        walk). Returns the full reachable TLC set (including the seeds),
+        de-duplicated.
 
         Degrades to the seed set ONLY when ``transformation_links`` does not
         exist (fresh DB bootstrapping) — mirroring the single-seed fallback.
@@ -384,35 +508,43 @@ class QueryPathMixin:
         max_depth = depth if depth is not None else self.DEFAULT_TRAVERSAL_DEPTH
         if max_depth < 0:
             raise ValueError(f"depth must be >= 0, got {max_depth}")
+        direction = _validate_direction(direction)
 
         seeds = list(dict.fromkeys(seed_tlcs))  # preserve order, drop dupes
         seed_placeholders = ", ".join(f"(:seed_{i})" for i in range(len(seeds)))
         params: Dict[str, Any] = {"tid": tenant_id, "max_depth": max_depth}
         for i, s in enumerate(seeds):
             params[f"seed_{i}"] = s
+        dir_values = _DIRECTION_SEED_VALUES[direction]
 
         try:
             # Single recursive branch for the same reason as the single-seed
             # twin above: Postgres splits a recursive CTE at the LAST top-level
             # UNION, so a seed/forward/backward three-branch UNION fails with
-            # InvalidRecursion on every execution.
+            # InvalidRecursion on every execution. Direction travels as a
+            # column, exactly as in the single-seed walk.
             rows = self.session.execute(
                 text(f"""
                     WITH RECURSIVE seeds(tlc) AS (
                         VALUES {seed_placeholders}
                     ),
-                    tlc_graph(tlc, depth) AS (
-                        -- Seed set
-                        SELECT CAST(tlc AS text), 0 FROM seeds
+                    tlc_graph(tlc, depth, dir) AS (
+                        -- Seed set, once per direction
+                        SELECT CAST(s.tlc AS text), 0, d.dir
+                        FROM   seeds s
+                        CROSS JOIN (VALUES {dir_values}) AS d(dir)
                         UNION
-                        -- Walk both directions: input → output and output → input
-                        SELECT CASE WHEN tg.tlc = tl.input_tlc
-                                    THEN tl.output_tlc
+                        -- Forward rows follow input → output; backward rows
+                        -- follow output → input. Never the other way round.
+                        SELECT CASE WHEN tg.dir = 'f' THEN tl.output_tlc
                                     ELSE tl.input_tlc
                                END,
-                               tg.depth + 1
+                               tg.depth + 1,
+                               tg.dir
                         FROM   fsma.transformation_links tl
-                        JOIN   tlc_graph tg ON tg.tlc IN (tl.input_tlc, tl.output_tlc)
+                        JOIN   tlc_graph tg
+                          ON   (tg.dir = 'f' AND tg.tlc = tl.input_tlc)
+                            OR (tg.dir = 'b' AND tg.tlc = tl.output_tlc)
                         WHERE  tl.tenant_id = :tid AND tg.depth < :max_depth
                     )
                     SELECT DISTINCT tlc FROM tlc_graph

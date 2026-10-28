@@ -281,6 +281,116 @@ class TestTraversalDepth_Issue1322:
 
 
 # ---------------------------------------------------------------------------
+# Gap analysis 2026-10-28, S2 — directed walk and depth-limit reporting
+# ---------------------------------------------------------------------------
+
+
+class TestTraversalDirection_S2:
+    """The expansion used to join a link whichever side matched, so a
+    backward step to a parent could be followed by a forward step to a
+    sibling lot that never touched the seed. Direction now travels as a
+    column in the recursive CTE and ``both`` is the union of a pure
+    forward and a pure backward walk. Reaching the depth limit is
+    reported through ``TlcExpansion.depth_exhausted``."""
+
+    @staticmethod
+    def _cte_sql(session: FakeSession) -> str:
+        return next(sql for sql, _ in session.calls if "RECURSIVE tlc_graph" in sql)
+
+    def test_default_direction_is_both_and_seeds_both_rows(self):
+        session = FakeSession()
+        p = CTEPersistence(session=session)
+        result = p._expand_tlcs_detailed(tenant_id=TENANT_A, seed_tlc="TLC-1")
+        assert result.direction == "both"
+        sql = self._cte_sql(session)
+        assert "CAST('f' AS text)" in sql and "CAST('b' AS text)" in sql
+        # Forward rows only ever join on input_tlc, backward rows only on output_tlc.
+        assert "tg.dir = 'f' AND tg.tlc = tl.input_tlc" in sql
+        assert "tg.dir = 'b' AND tg.tlc = tl.output_tlc" in sql
+        # The undirected join is gone.
+        assert "tg.tlc IN (tl.input_tlc, tl.output_tlc)" not in sql
+
+    def test_forward_only_seeds_forward_direction(self):
+        session = FakeSession()
+        p = CTEPersistence(session=session)
+        p._expand_tlcs_via_transformation_links(tenant_id=TENANT_A, seed_tlc="TLC-1", direction="forward")
+        sql = self._cte_sql(session)
+        assert "CAST('f' AS text)" in sql
+        assert "CAST('b' AS text)" not in sql
+
+    def test_backward_only_seeds_backward_direction(self):
+        session = FakeSession()
+        p = CTEPersistence(session=session)
+        p._expand_tlcs_via_transformation_links(tenant_id=TENANT_A, seed_tlc="TLC-1", direction="backward")
+        sql = self._cte_sql(session)
+        assert "CAST('b' AS text)" in sql
+        assert "CAST('f' AS text)" not in sql
+
+    def test_invalid_direction_is_rejected_before_sql(self):
+        session = FakeSession()
+        p = CTEPersistence(session=session)
+        with pytest.raises(ValueError, match="direction"):
+            p._expand_tlcs_detailed(tenant_id=TENANT_A, seed_tlc="TLC-1", direction="sideways")
+        assert not session.calls
+
+    def test_batch_walk_is_directed_too(self):
+        session = FakeSession()
+        p = CTEPersistence(session=session)
+        p._expand_tlcs_via_transformation_links_batch(tenant_id=TENANT_A, seed_tlcs=["TLC-1", "TLC-2"], direction="forward")
+        sql = next(sql for sql, _ in session.calls if "tlc_graph(tlc, depth, dir)" in sql)
+        assert "CROSS JOIN (VALUES (CAST('f' AS text)))" in sql
+        assert "tg.tlc IN (tl.input_tlc, tl.output_tlc)" not in sql
+
+    def test_depth_exhausted_when_a_lot_sits_at_the_limit(self):
+        """Rows come back as (tlc, depth, via_forward, via_backward). A lot
+        at depth == max_depth was never expanded, so the expansion must
+        say the limit was reached."""
+        session = FakeSession()
+        session.add_rule(
+            r"FROM\s+tlc_graph",
+            _FakeResult(rows=[("TLC-1", 0, True, True), ("TLC-2", 1, True, False), ("TLC-3", 2, True, False)]),
+        )
+        p = CTEPersistence(session=session)
+        result = p._expand_tlcs_detailed(tenant_id=TENANT_A, seed_tlc="TLC-1", depth=2)
+        assert result.tlcs == ["TLC-1", "TLC-2", "TLC-3"]
+        assert result.depth_exhausted is True
+        assert result.max_depth == 2
+        # The seed is reached by neither walk; TLC-2 and TLC-3 are downstream.
+        assert result.reached_via["TLC-1"] == {"depth": 0, "downstream": False, "upstream": False}
+        assert result.reached_via["TLC-3"] == {"depth": 2, "downstream": True, "upstream": False}
+
+    def test_not_exhausted_when_graph_ends_early(self):
+        session = FakeSession()
+        session.add_rule(r"FROM\s+tlc_graph", _FakeResult(rows=[("TLC-1", 0, True, True), ("TLC-0", 1, False, True)]))
+        p = CTEPersistence(session=session)
+        result = p._expand_tlcs_detailed(tenant_id=TENANT_A, seed_tlc="TLC-1", depth=5)
+        assert result.depth_exhausted is False
+        assert result.reached_via["TLC-0"]["upstream"] is True
+
+    def test_single_column_rows_still_work(self):
+        """Older fakes and the missing-table fallback hand back bare TLC
+        rows; the detailed form must not require the extra columns."""
+        session = FakeSession()
+        session.add_rule(r"FROM\s+tlc_graph", _FakeResult(rows=[("TLC-1",), ("TLC-9",)]))
+        p = CTEPersistence(session=session)
+        result = p._expand_tlcs_detailed(tenant_id=TENANT_A, seed_tlc="TLC-1", depth=5)
+        assert result.tlcs == ["TLC-1", "TLC-9"]
+        assert result.depth_exhausted is False
+
+    def test_missing_table_fallback_is_a_detailed_result_too(self):
+        session = FakeSession()
+
+        def _raise_programming(sql, params):
+            raise ProgrammingError("stmt", {}, Exception('relation "fsma.transformation_links" does not exist'))
+
+        session.add_rule(r"RECURSIVE tlc_graph", _raise_programming)
+        p = CTEPersistence(session=session)
+        result = p._expand_tlcs_detailed(tenant_id=TENANT_A, seed_tlc="TLC-X")
+        assert result.tlcs == ["TLC-X"]
+        assert result.depth_exhausted is False
+
+
+# ---------------------------------------------------------------------------
 # Shared-kernel #1336 — gaps in prior hardening test coverage
 # ---------------------------------------------------------------------------
 

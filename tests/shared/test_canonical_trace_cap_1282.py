@@ -218,3 +218,89 @@ class TestMaxDepthUnchanged_Issue1282:
         links, truncated = store.trace_forward("tenant-1", "L0", max_depth=3, max_results=1000)
         assert len(links) == 3
         assert truncated is False
+
+
+# ---------------------------------------------------------------------------
+# Gap analysis 2026-10-28, S1 — reaching max_depth is reported, not silent
+# ---------------------------------------------------------------------------
+
+
+class TestDepthExhaustedFlag_S1:
+    """``trace_walk`` reports ``depth_exhausted`` when a lot was reached at
+    ``max_depth`` and therefore never expanded. Before this flag the only
+    signal was ``truncated`` (the result cap), so a depth-capped trace read
+    as complete. The flag is conservative and costs no extra query."""
+
+    def test_depth_exhausted_when_chain_outruns_max_depth(self):
+        chain = {f"L{i}": [f"L{i + 1}"] for i in range(20)}
+        chain["L20"] = []
+        session = _GraphSession(forward=chain)
+        store = CanonicalEventStore(session=session, dual_write=False, skip_chain_write=True)
+
+        walk = store.trace_walk("tenant-1", "L0", "forward", max_depth=3, max_results=1000)
+        assert len(walk.links) == 3
+        assert walk.truncated is False
+        assert walk.depth_exhausted is True
+        assert walk.direction == "forward"
+        assert walk.max_depth == 3
+        # Lots at the depth limit are not expanded: exactly 3 queries (L0, L1, L2).
+        assert session.call_count == 3
+
+    def test_not_exhausted_when_graph_ends_before_max_depth(self):
+        session = _GraphSession(forward={"L0": ["L1"], "L1": ["L2"], "L2": []})
+        store = CanonicalEventStore(session=session, dual_write=False, skip_chain_write=True)
+
+        walk = store.trace_walk("tenant-1", "L0", "forward", max_depth=5, max_results=1000)
+        assert len(walk.links) == 2
+        assert walk.truncated is False
+        assert walk.depth_exhausted is False
+
+    def test_leaf_exactly_at_max_depth_is_reported_conservatively(self):
+        """L2 is reached at depth 2 == max_depth and is never queried, so
+        the walk cannot know it is a leaf. It must say so rather than
+        claim completeness."""
+        session = _GraphSession(forward={"L0": ["L1"], "L1": ["L2"], "L2": []})
+        store = CanonicalEventStore(session=session, dual_write=False, skip_chain_write=True)
+
+        walk = store.trace_walk("tenant-1", "L0", "forward", max_depth=2, max_results=1000)
+        assert len(walk.links) == 2
+        assert walk.depth_exhausted is True
+
+    def test_backward_walk_reports_depth_exhausted(self):
+        session = _GraphSession(backward={"L3": ["L2"], "L2": ["L1"], "L1": ["L0"], "L0": []})
+        store = CanonicalEventStore(session=session, dual_write=False, skip_chain_write=True)
+
+        walk = store.trace_walk("tenant-1", "L3", "backward", max_depth=2, max_results=1000)
+        assert [l["input_tlc"] for l in walk.links] == ["L2", "L1"]
+        assert walk.depth_exhausted is True
+        assert walk.direction == "backward"
+
+    def test_cap_and_depth_flags_are_independent(self):
+        """Result cap hit on the first expansion: ``truncated`` is True and,
+        because the frontier is dropped before any lot reaches
+        ``max_depth``, ``depth_exhausted`` stays False."""
+        fan_out = [f"L{i}" for i in range(100)]
+        session = _GraphSession(forward={"ROOT": fan_out, **{c: [] for c in fan_out}})
+        store = CanonicalEventStore(session=session, dual_write=False, skip_chain_write=True)
+
+        walk = store.trace_walk("tenant-1", "ROOT", "forward", max_depth=5, max_results=10)
+        assert walk.truncated is True
+        assert walk.depth_exhausted is False
+        assert session.call_count == 1
+
+    def test_invalid_direction_rejected(self):
+        session = _GraphSession()
+        store = CanonicalEventStore(session=session, dual_write=False, skip_chain_write=True)
+        with pytest.raises(ValueError, match="direction"):
+            store.trace_walk("tenant-1", "L0", "sideways")
+        assert session.call_count == 0
+
+    def test_tuple_contract_wrappers_delegate_to_trace_walk(self):
+        chain = {f"L{i}": [f"L{i + 1}"] for i in range(5)}
+        chain["L5"] = []
+        session = _GraphSession(forward=chain)
+        store = CanonicalEventStore(session=session, dual_write=False, skip_chain_write=True)
+
+        links, truncated = store.trace_forward("tenant-1", "L0", max_depth=2)
+        assert len(links) == 2
+        assert truncated is False

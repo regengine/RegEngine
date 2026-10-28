@@ -94,3 +94,56 @@ def test_tlc_traversal_executes_and_walks_both_directions() -> None:
         assert persistence._expand_tlcs_via_transformation_links_batch(tenant_id=tenant_id, seed_tlcs=[]) == []
 
         session.rollback()
+
+
+def test_tlc_traversal_is_directed_and_excludes_sibling_lots() -> None:
+    """S2 (gap analysis 2026-10-28): ``both`` is the union of a forward and
+    a backward walk, not an undirected walk. With A → B and A → S, a trace
+    from B must reach A (its input) but never S (a sibling output of A that
+    B never touched); a forward trace from B must not step back to A at all.
+    Also checks the depth-limit flag against real SQL."""
+    from shared.cte_persistence.core import CTEPersistence
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session
+
+    engine = create_engine(sync_postgres_url(DATABASE_URL))
+    tenant_id = str(uuid.uuid4())
+
+    with Session(engine) as session:
+        #   A → B → C      (seed chain)
+        #   A → S          (sibling of B; shares the input A)
+        #   S → T          (downstream of the sibling)
+        _seed_link(session, tenant_id, "A", "B")
+        _seed_link(session, tenant_id, "B", "C")
+        _seed_link(session, tenant_id, "A", "S")
+        _seed_link(session, tenant_id, "S", "T")
+
+        persistence = CTEPersistence(session)
+
+        both = persistence._expand_tlcs_detailed(tenant_id=tenant_id, seed_tlc="B", direction="both")
+        assert set(both.tlcs) == {"A", "B", "C"}
+        assert both.reached_via["A"] == {"depth": 1, "downstream": False, "upstream": True}
+        assert both.reached_via["C"] == {"depth": 1, "downstream": True, "upstream": False}
+        assert both.depth_exhausted is False
+
+        forward = persistence._expand_tlcs_detailed(tenant_id=tenant_id, seed_tlc="B", direction="forward")
+        assert set(forward.tlcs) == {"B", "C"}
+
+        backward = persistence._expand_tlcs_detailed(tenant_id=tenant_id, seed_tlc="S", direction="backward")
+        assert set(backward.tlcs) == {"S", "A"}
+
+        # Depth limit: from A forward with depth=1, B and S are reached at
+        # the limit and never expanded, so the flag must be raised and C, T
+        # must be absent.
+        capped = persistence._expand_tlcs_detailed(tenant_id=tenant_id, seed_tlc="A", depth=1, direction="forward")
+        assert set(capped.tlcs) == {"A", "B", "S"}
+        assert capped.depth_exhausted is True
+
+        # Batch twin honours direction as well: forward from B and S never
+        # reaches A.
+        batch = persistence._expand_tlcs_via_transformation_links_batch(
+            tenant_id=tenant_id, seed_tlcs=["B", "S"], direction="forward"
+        )
+        assert set(batch) == {"B", "C", "S", "T"}
+
+        session.rollback()

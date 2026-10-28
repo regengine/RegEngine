@@ -1276,9 +1276,13 @@ async def get_merkle_proof(
     summary="Trace transformation graph for a TLC",
     description=(
         "Returns all TLCs reachable from the given lot code via "
-        "fsma.transformation_links — both upstream inputs and downstream outputs.  "
-        "Also returns the full CTE event count per linked lot so the UI can "
-        "show the trace tree without fetching the full FDA export."
+        "fsma.transformation_links. ``direction`` selects upstream inputs "
+        "(backward), downstream outputs (forward) or the union of both walks "
+        "(both, the default). ``depth_exhausted`` in the response is true when "
+        "a lot was reached at the depth limit and not expanded, so the graph "
+        "may continue past what is returned. Also returns the full CTE event "
+        "count per linked lot so the UI can show the trace tree without "
+        "fetching the full FDA export."
     ),
     tags=["Traceability"],
 )
@@ -1289,6 +1293,11 @@ def trace_transformation_graph(
     tlc: str,
     tenant_id: str = Query(..., description="Tenant identifier"),
     depth: int = Query(default=5, ge=1, le=10, description="Max traversal depth"),
+    direction: str = Query(
+        default="both",
+        pattern="^(forward|backward|both)$",
+        description="forward = downstream outputs, backward = upstream inputs, both = union of the two walks",
+    ),
     principal: IngestionPrincipal = Depends(require_permission("fda.read")),
     _subscription=Depends(require_active_subscription),
 ) -> dict:
@@ -1311,6 +1320,7 @@ def trace_transformation_graph(
             tenant_id=tenant_id,
             tlc=tlc,
             depth=depth,
+            direction=direction,
         )
 
     except HTTPException:

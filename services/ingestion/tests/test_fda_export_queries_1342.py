@@ -119,14 +119,56 @@ def test_fetch_v2_events_empty_result() -> None:
 
 
 def test_trace_with_no_linked_lots_has_no_nodes_or_edges() -> None:
+    from shared.cte_persistence.queries import TlcExpansion
+
     class EmptyPersistence:
-        def _expand_tlcs_via_transformation_links(self, **_kwargs):
-            return []
+        def _expand_tlcs_detailed(self, **kwargs):
+            return TlcExpansion(tlcs=[], depth_exhausted=False, direction=kwargs["direction"], max_depth=kwargs["depth"])
 
     session = _EmptySession()
     graph = q.fetch_trace_graph_data(session, EmptyPersistence(), "", "", 0)
     assert graph["nodes"] == []
     assert graph["edges"] == []
     assert graph["total_events"] == 0
+    assert graph["direction"] == "both"
+    assert graph["depth_exhausted"] is False
     assert len(session.calls) == 1
     assert "fsma.transformation_links" in session.calls[0][0]
+
+
+def test_trace_roles_follow_walk_direction_and_report_depth_limit() -> None:
+    """S2 (gap analysis 2026-10-28): node roles come from the walk that
+    reached the lot, so a lot two hops downstream is ``downstream`` (it used
+    to read ``upstream`` because only seed-adjacent edges were checked), and
+    reaching the depth limit is surfaced on the response."""
+    from shared.cte_persistence.queries import TlcExpansion
+
+    class Persistence:
+        def __init__(self):
+            self.calls = []
+
+        def _expand_tlcs_detailed(self, **kwargs):
+            self.calls.append(kwargs)
+            return TlcExpansion(
+                tlcs=["SEED", "OUT1", "OUT2", "IN1"],
+                depth_exhausted=True,
+                direction=kwargs["direction"],
+                max_depth=kwargs["depth"],
+                reached_via={
+                    "SEED": {"depth": 0, "downstream": False, "upstream": False},
+                    "OUT1": {"depth": 1, "downstream": True, "upstream": False},
+                    "OUT2": {"depth": 2, "downstream": True, "upstream": False},
+                    "IN1": {"depth": 1, "downstream": False, "upstream": True},
+                },
+            )
+
+    persistence = Persistence()
+    session = _EmptySession()
+    graph = q.fetch_trace_graph_data(session, persistence, "tenant-1", "SEED", 2, direction="forward")
+    assert persistence.calls == [{"tenant_id": "tenant-1", "seed_tlc": "SEED", "depth": 2, "direction": "forward"}]
+    roles = {n["tlc"]: n["role"] for n in graph["nodes"]}
+    assert roles == {"SEED": "seed", "OUT1": "downstream", "OUT2": "downstream", "IN1": "upstream"}
+    assert {n["tlc"]: n["depth"] for n in graph["nodes"]}["OUT2"] == 2
+    assert graph["direction"] == "forward"
+    assert graph["depth_exhausted"] is True
+    assert graph["node_count"] == 4
