@@ -361,20 +361,26 @@ async def export_epcis_events(
             filtered_records.append(entry)
         events = [entry["epcis_document"] for entry in filtered_records]
 
+    filters = {
+        f"regengine:{key}": value
+        for key, value in (("start_date", start_date), ("end_date", end_date), ("product_id", product_id))
+        if value is not None
+    }
     return {
-        "@context": ["https://ref.gs1.org/standards/epcis/2.0.0/epcis-context.jsonld"],
+        "@context": [
+            "https://ref.gs1.org/standards/epcis/2.0.0/epcis-context.jsonld",
+            {"regengine": "https://regengine.co/ns/"},
+        ],
         "type": "EPCISDocument",
         "schemaVersion": "2.0",
         "creationDate": datetime.now(timezone.utc).isoformat(),
         "epcisBody": {"eventList": events},
-        "metadata": {
-            "source": "regengine-epcis-ingestion",
-            "event_count": len(events),
-            "filters": {
-                "start_date": start_date,
-                "end_date": end_date,
-                "product_id": product_id,
-            },
+        "regengine:metadata": {
+            "regengine:source": "regengine-epcis-ingestion",
+            "regengine:event_count": len(events),
+            "regengine:skipped_event_count": 0,
+            **({"regengine:message": "No data yet"} if not events else {}),
+            **({"regengine:filters": filters} if filters else {}),
         },
     }
 
