@@ -5,6 +5,7 @@ across NLP, Review, and Graph services, preventing schema drift.
 """
 
 import re
+import warnings
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional
@@ -386,11 +387,8 @@ class FSMAEvent(BaseModel):
     )
     tlc: str = Field(
         ...,
-        description="Traceability Lot Code (GTIN-14 + lot, LGTIN class URN, or GS1 Digital Link)",
-        # 15 is the GTIN-14 form (14 digits + 1 lot character). An LGTIN class
-        # URN is at least 36 characters and a GS1 Digital Link at least 31,
-        # so this floor does not reject either lot-level form.
-        min_length=15,
+        description="Traceability Lot Code (production-pattern mismatches warn only)",
+        min_length=3,
     )
     product_description: str = Field(
         default="Unknown Product",
@@ -424,18 +422,27 @@ class FSMAEvent(BaseModel):
     @field_validator("tlc")
     @classmethod
     def validate_tlc_format(cls, v: str) -> str:
-        """Accept GTIN-14 + lot, an LGTIN class URN, or a GS1 Digital Link."""
+        """Warn on strict/production-pattern misses; never reject for pattern.
+
+        Only blank TLCs and TLCs shorter than 3 characters after stripping
+        whitespace hard-fail. Preserve accepted values exactly as supplied.
+        """
+        if not v.strip():
+            raise ValueError("TLC must not be blank")
+        if len(v.strip()) < 3:
+            raise ValueError("TLC must be at least 3 characters")
         if _TLC_PRODUCTION_RE.fullmatch(v):
             return v
         for pattern in (_TLC_LGTIN_RE, _TLC_DIGITAL_LINK_RE):
             matched = pattern.fullmatch(v)
             if matched is not None and _decoded_ai10_lot_within_limit(matched.group("lot")):
                 return v
-        raise ValueError(
-            f"TLC '{v}' does not match FSMA 204 production pattern "
-            "(accepted formats: a fourteen-digit GTIN prefix followed by a lot "
-            "suffix, an LGTIN class URN, or a GS1 Digital Link)"
+        warnings.warn(
+            "Warning: TLC does not match production pattern; this is not a validation failure",
+            UserWarning,
+            stacklevel=2,
         )
+        return v
 
     @field_validator("event_time")
     @classmethod

@@ -558,8 +558,8 @@ def test_2976_batched_interchange_never_half_lands(client: TestClient, captured_
         "/api/v1/ingest/edi/document",
         params={"strict": "false"},
         data={
-            # Fails FSMAEvent.validate_tlc_format for every set.
-            "traceability_lot_code": "not-a-gtin-tlc",
+            # Below the shared TLC minimum for every set; pattern misses only warn.
+            "traceability_lot_code": "A" * 2,
             "tenant_id": TEST_TENANT_ID,
         },
         files={"file": ("batch.edi", raw, "application/edi-x12")},
