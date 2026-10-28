@@ -77,7 +77,162 @@ export default function ChangelogPage() {
                 description="Latest updates and improvements to RegEngine"
             />
 
+            <p className="mb-2 text-ui text-re-text-secondary">
+                Going forward, this page updates on a monthly cadence. Entries after{' '}
+                <span className="font-mono text-[0.8125rem] text-re-text-primary">v1.6.0</span> group
+                real merges since May 10, 2026 by ship month.
+            </p>
+
             <div className="space-y-8">
+                {/* v1.12.0 - October 2026 */}
+                <Release
+                    version="v1.12.0"
+                    date="October 28, 2026"
+                    latest
+                    title="Site Honesty, Tools UX, and Supplier Quality"
+                >
+                    <div>
+                        <h4 className={GROUP}>Product Copy</h4>
+                        <ul className={LIST}>
+                            <li>Homepage hook, problem statement, and next steps; pre-revenue marketing copy removed from pages</li>
+                            <li>July 20, 2028 framed as FDA non-enforcement date, not a compliance deadline, across site pages with dated blog correction notes</li>
+                            <li>Hashing claims qualified on trace, supplier-compliance, and export surfaces</li>
+                            <li>EPCIS 2.0 export labeled Preview on plans and related product copy</li>
+                        </ul>
+                    </div>
+
+                    <div>
+                        <h4 className={GROUP}>Tools</h4>
+                        <ul className={LIST}>
+                            <li>FTL checker facts corrected against FDA list; results loading and continue-to-exemptions flow</li>
+                            <li>Free tools loading skeletons, results-only email gate, and consent-gated analytics events</li>
+                            <li>Drill simulator and data import no longer offer sample-data buttons; records and checklist surfaces use empty states instead of invented data</li>
+                        </ul>
+                    </div>
+
+                    <div>
+                        <h4 className={GROUP}>Ingest and Exports</h4>
+                        <ul className={LIST}>
+                            <li>EPCIS document receipts and live EPCIS failure metric</li>
+                            <li>FDA spreadsheet and EPCIS export fail loudly instead of silent empty or truncated output</li>
+                            <li>Supplier data quality views, agreed sending hours, and late CTE metrics for owners</li>
+                            <li>Excel .xlsx on CSV ingest, EPCIS 2.0 upload tab, and X12 944/945 warehouse advice intake</li>
+                        </ul>
+                    </div>
+
+                    <div>
+                        <h4 className={GROUP}>Security</h4>
+                        <ul className={LIST}>
+                            <li>Session auth restored for records, rules, exceptions, requests, and ingest routes</li>
+                            <li>Waitlist read and task-queue RLS hardening; contact form email length capped before validation</li>
+                        </ul>
+                    </div>
+                </Release>
+
+                {/* v1.11.0 - September 2026 */}
+                <Release version="v1.11.0" date="September 29, 2026" title="Ingest Receipts and Public Honesty">
+                    <div>
+                        <h4 className={GROUP}>Product Copy</h4>
+                        <ul className={LIST}>
+                            <li>Public site and /tools honesty rewrite; banned outcome-promise strings removed from tool surfaces</li>
+                            <li>Proof-bundle verification described as self-consistency checking, not publisher authentication</li>
+                        </ul>
+                    </div>
+
+                    <div>
+                        <h4 className={GROUP}>Ingest and Billing</h4>
+                        <ul className={LIST}>
+                            <li><code className={CODE}>/ingest/csv</code> retains each upload as an ingestion run with receipt and verbatim file</li>
+                            <li>Postmark inbound-email webhook path for emailed CSV uploads (not enabled in production at ship time)</li>
+                            <li>Per-label metered billing with Stripe Billing Meters reporting</li>
+                            <li>TypeSafe Jev header-mapping suggestions on CSV ingest</li>
+                            <li>Tri-state evaluation verdicts carried through to FDA export consumers</li>
+                            <li>Recall reconstruction engine for fixture audit without requiring a live database</li>
+                        </ul>
+                    </div>
+                </Release>
+
+                {/* v1.10.0 - August 2026 */}
+                <Release version="v1.10.0" date="August 27, 2026" title="Claims Honesty and Export Correctness">
+                    <div>
+                        <h4 className={GROUP}>Product Copy</h4>
+                        <ul className={LIST}>
+                            <li>Site-wide copy remediation: implied-customer claims removed, capability and pricing claims reconciled, terminology unified</li>
+                            <li>DPA and no-SLA copy aligned with solo-operator reality; API docs match the deployed backend</li>
+                            <li>Sandbox front door restored; developer portal keys labeled sandbox-only</li>
+                            <li>Real robots.txt and per-page social cards for crawled pages</li>
+                        </ul>
+                    </div>
+
+                    <div>
+                        <h4 className={GROUP}>Platform</h4>
+                        <ul className={LIST}>
+                            <li>FDA <code className={CODE}>/export/all</code> refuses over-limit requests instead of truncated delivery</li>
+                            <li>Cross-tenant proxy and pre-auth isolation holes closed</li>
+                            <li>EPCIS (Preview) transformation quantity lists and FDA export filter/verify fixes</li>
+                        </ul>
+                    </div>
+                </Release>
+
+                {/* v1.9.0 - July 2026 */}
+                <Release version="v1.9.0" date="July 31, 2026" title="Tenant Cutover and Remediation UX">
+                    <div>
+                        <h4 className={GROUP}>Platform</h4>
+                        <ul className={LIST}>
+                            <li>App-wide tenant GUC propagation and fail-hard RLS predicates</li>
+                            <li>Canonical FDA v1 recall export read path and chain verification (flagged, then recorded as flipped in production docs)</li>
+                            <li>Passwordless identity backfill so sign-in code emails send; opaque browser sessions revoked server-side on logout</li>
+                        </ul>
+                    </div>
+
+                    <div>
+                        <h4 className={GROUP}>Product</h4>
+                        <ul className={LIST}>
+                            <li>Supplier CSV remediation and buyer dashboard slice; remediation delivery UX with email input and delivery status</li>
+                            <li>Mock-audit drills persisted; FTL classification hints derived at normalization time</li>
+                            <li>Marketing footer says enforcement, not deadline; trace demo labeled synthetic</li>
+                            <li>Inflow Lab available via per-tool experimental gate</li>
+                        </ul>
+                    </div>
+                </Release>
+
+                {/* v1.8.0 - June 2026 */}
+                <Release version="v1.8.0" date="June 30, 2026" title="Passwordless Auth and Export Hardening">
+                    <div>
+                        <h4 className={GROUP}>Auth</h4>
+                        <ul className={LIST}>
+                            <li>Passwordless auth and OTP email via Resend; browser auth proxy stability</li>
+                            <li>Trust readiness and public claims alignment</li>
+                        </ul>
+                    </div>
+
+                    <div>
+                        <h4 className={GROUP}>Exports and Security</h4>
+                        <ul className={LIST}>
+                            <li>FDA <code className={CODE}>/export/all</code> batch TLC fan-out and blocking DB I/O offload</li>
+                            <li>EPCIS (Preview) dual-write and hash-chain core hardening</li>
+                            <li>Canonical chain verifier and SDK hash fix</li>
+                            <li>Tenant ownership enforced on compliance proxy routes; RLS backstops on ingestion read routers</li>
+                            <li>Graph tenant isolation fails closed on null tenant</li>
+                        </ul>
+                    </div>
+                </Release>
+
+                {/* v1.7.0 - late May 2026 (after v1.6.0) */}
+                <Release version="v1.7.0" date="May 28, 2026" title="Auth Hardening and Public Proof Loop">
+                    <div>
+                        <h4 className={GROUP}>Platform</h4>
+                        <ul className={LIST}>
+                            <li>Auth session readiness hardened; stale session generations rejected on refresh</li>
+                            <li>Public proof verification loop wired; guided Inflow proof path</li>
+                            <li>Rate-limit headers on successful ingest responses</li>
+                            <li>Login with email confirmation codes fixed; JWT session path when Supabase rejects a token</li>
+                            <li>SSRF closures and Stripe rate-limit XFF bypass fixed</li>
+                            <li>Peppered HMAC-SHA256 API key hashing</li>
+                        </ul>
+                    </div>
+                </Release>
+
                 {/* v1.6.0 - Proof Bundle Verification */}
                 <Release version="v1.6.0" date="May 10, 2026" title="Proof Bundle Verification">
                     <div>
