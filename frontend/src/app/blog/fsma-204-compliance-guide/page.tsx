@@ -11,12 +11,12 @@ import { blogPostingJsonLd } from '@/lib/blog-jsonld';
 
 export const metadata: Metadata = {
   title: 'FSMA 204 Compliance: The Complete Guide for Food Businesses (2026)',
-  description: 'FDA FSMA 204 requirements, deadlines, CTEs, KDEs, and what your food business must do to comply with food traceability rules by July 2028.',
+  description: 'FDA FSMA 204 requirements, deadlines, CTEs, KDEs, and what your food business must do to comply with food traceability rules. FDA has said it will not enforce the Food Traceability Rule before July 20, 2028, following a Congressional directive.',
   openGraph: {
     url: 'https://regengine.co/blog/fsma-204-compliance-guide',
     siteName: 'RegEngine',
     title: 'FSMA 204 Compliance: The Complete Guide for Food Businesses (2026)',
-    description: 'FDA FSMA 204 requirements, deadlines, CTEs, KDEs, and what your food business must do to comply with food traceability rules by July 2028.',
+    description: 'FDA FSMA 204 requirements, deadlines, CTEs, KDEs, and what your food business must do to comply with food traceability rules. FDA has said it will not enforce the Food Traceability Rule before July 20, 2028, following a Congressional directive.',
     type: 'article',
   },
 };
@@ -24,7 +24,7 @@ export const metadata: Metadata = {
 export default function FSMA204ComplianceGuide() {
   return (
     <div className="bg-re-surface-base">
-      <JSONLD data={blogPostingJsonLd('fsma-204-compliance-guide', 'FDA FSMA 204 requirements, deadlines, CTEs, KDEs, and what your food business must do to comply with food traceability rules by July 2028.')} />
+      <JSONLD data={blogPostingJsonLd('fsma-204-compliance-guide', 'FDA FSMA 204 requirements, deadlines, CTEs, KDEs, and what your food business must do to comply with food traceability rules. FDA has said it will not enforce the Food Traceability Rule before July 20, 2028, following a Congressional directive.')} />
       <Container as="article" width="prose" className="py-12 sm:py-16">
         <Link
           href="/blog"
@@ -44,6 +44,9 @@ export default function FSMA204ComplianceGuide() {
           }
         />
         <div>
+          <Callout tone="info" className="mb-8">
+            <p><strong>Correction (Oct 26, 2026):</strong> FDA has said it will not enforce the Food Traceability Rule before July 20, 2028, following a Congressional directive. The compliance date in the rule remains January 20, 2026 (87 FR 70910); the proposed extension (90 FR 38084) has not been finalized.</p>
+          </Callout>
           {/* Introduction */}
           <div className="mb-10">
             <p className="text-body text-re-text-secondary mb-6">

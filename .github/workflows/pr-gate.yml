@@ -513,14 +513,7 @@ jobs:
       - name: Install detect-secrets
         run: pip install detect-secrets==1.5.0
       - name: Scan for new secrets against baseline
-        run: |
-          # shellcheck disable=SC2046
-          detect-secrets-hook \
-            --baseline .secrets.baseline \
-            --exclude-files '.*\.lock$' \
-            --exclude-files '.*package-lock\.json$' \
-            --exclude-files '\.secrets\.baseline$' \
-            $(git ls-files)
+        run: bash scripts/ci/check_secrets_baseline.sh
 
   # The aggregate required context. It combines the per-area, workflow
   # contract, and secret-scan jobs on every PR. `needs` plus explicit result
@@ -560,7 +553,7 @@ jobs:
       tools: ${{ steps.filter.outputs.tools }}
       review: ${{ steps.filter.outputs.review }}
     steps:
-      - uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad  # v3.0.4
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
         id: filter
         with:
           filters: |
