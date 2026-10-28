@@ -11,6 +11,7 @@ from __future__ import annotations
 import importlib.util
 import io
 import json
+import os
 import stat
 import sys
 import uuid
@@ -61,7 +62,7 @@ def test_key_file_permissions_tightened_on_overwrite(keygen, tmp_path):
     target = keygen._prepare_key_file_path(tmp_path / "key")
     target.write_text("")
     target.chmod(0o644)
-    keygen._write_key_file(_raw_key(), target)
+    keygen._write_key_file(_raw_key(), target, allow_replace=True)
     assert stat.S_IMODE(target.stat().st_mode) == 0o600
 
 
@@ -99,7 +100,7 @@ def test_key_file_allows_replace_when_requested(keygen, tmp_path):
     path.write_text("prior-raw-key\n")
     path = keygen._prepare_key_file_path(tmp_path / "key", allow_replace=True)
     raw = _raw_key()
-    keygen._write_key_file(raw, path)
+    keygen._write_key_file(raw, path, allow_replace=True)
     assert path.read_text().strip() == raw
 
 
@@ -233,3 +234,23 @@ def test_non_pipe_stdout_full_bundle_is_refused(bundle, monkeypatch, tmp_path):
             bundle.main()
         assert exc.value.code == 2
     assert out_path.read_text() == ""
+
+
+def test_parent_not_owned_by_user_is_refused(keygen, tmp_path, monkeypatch):
+    parent = tmp_path / "keys"
+    parent.mkdir(mode=0o700)
+    real_getuid = os.getuid
+    monkeypatch.setattr(keygen.os, "getuid", lambda: real_getuid() + 1)
+    with pytest.raises(SystemExit, match="not owned by"):
+        keygen._prepare_key_file_path(parent / "key")
+
+
+def test_default_write_never_overwrites_a_file_created_after_prepare(keygen, tmp_path):
+    path = keygen._prepare_key_file_path(tmp_path / "key")
+    first = _raw_key()
+    path.write_text(first + "\n")  # another run won the race
+    with pytest.raises(SystemExit, match="Refusing to overwrite"):
+        keygen._write_key_file(_raw_key(), path)
+    assert path.read_text().strip() == first
+    assert not [p for p in tmp_path.iterdir() if ".tmp." in p.name]
+

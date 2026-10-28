@@ -121,6 +121,12 @@ def _prepare_key_file_path(path: Path, *, allow_replace: bool = False) -> Path:
     parent = path.parent
     if parent.exists():
         st = parent.stat()
+        if hasattr(os, "getuid") and st.st_uid != os.getuid():
+            raise SystemExit(
+                f"Refusing to write key file: parent {parent} is not owned by "
+                f"the current user. Choose a private key directory owned by "
+                f"you with mode 0700 (for example ~/.regengine/)."
+            )
         parent_mode = stat.S_IMODE(st.st_mode)
         if parent_mode & 0o077:
             raise SystemExit(
@@ -142,7 +148,7 @@ def _prepare_key_file_path(path: Path, *, allow_replace: bool = False) -> Path:
     return path
 
 
-def _write_key_file(raw_key: str, path: Path) -> None:
+def _write_key_file(raw_key: str, path: Path, *, allow_replace: bool = False) -> None:
     """Write the raw key to ``path`` with owner-only (0600) permissions.
 
     ``path`` must already be prepared via ``_prepare_key_file_path``. Writes
@@ -195,8 +201,22 @@ def _write_key_file(raw_key: str, path: Path) -> None:
         raise SystemExit(f"Refusing to write key file: {path} is a symlink")
 
     try:
-        os.replace(tmp_path, path)
-    except Exception:
+        if allow_replace:
+            os.replace(tmp_path, path)
+        else:
+            # No-overwrite publish: link() fails with EEXIST if another run
+            # created the destination after _prepare_key_file_path checked it,
+            # so a concurrent run can never destroy an earlier raw key.
+            try:
+                os.link(tmp_path, path)
+            except FileExistsError as exc:
+                raise SystemExit(
+                    f"Refusing to overwrite existing key file {path}: it was "
+                    f"created after the pre-mint check. Pass --replace-key-file "
+                    f"to replace it explicitly."
+                ) from exc
+            os.unlink(tmp_path)
+    except BaseException:
         try:
             os.unlink(tmp_path)
         except OSError:
@@ -455,15 +475,23 @@ async def _main() -> None:
             metadata={"purpose": "local-testing"},
         )
         try:
-            _write_key_file(key.raw_key, key_path)
+            _write_key_file(
+                key.raw_key, key_path, allow_replace=args.replace_key_file
+            )
         except BaseException as write_exc:
             # SystemExit (symlink refusal, etc.) must also revoke: it is not
             # a subclass of Exception.
-            await store.revoke_key(
+            revoked = await store.revoke_key(
                 key.key_id,
                 revoked_by="scripts/create_test_api_key.py",
                 reason="key-file write failed after mint",
             )
+            if revoked is False:
+                raise SystemExit(
+                    f"Key-file write failed after minting {key.key_id}, and "
+                    f"revoking it also failed: the key may still be active. "
+                    f"Revoke {key.key_id} manually. Cause: {write_exc}"
+                ) from write_exc
             raise SystemExit(
                 f"Key-file write failed after minting {key.key_id}; "
                 f"the key was revoked. Cause: {write_exc}"
