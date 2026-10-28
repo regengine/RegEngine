@@ -59,10 +59,13 @@ weekday schedule (at most two or three times):
 2. Fast-forward `release` to that commit. No merge commit. Refuse the run
    when `release` is not an ancestor of the commit. Rollback is not an
    exception (section 6).
-3. The push to `release` is the production deploy. `deploy.yml`'s production
-   job then triggers on `push` to `release` and on `workflow_dispatch`, and
-   stops triggering on `push` to `main`. Same wait for **Backend CI Status
-   Gate**, same backend path filter, same `railway up --ci`.
+3. The push to `release` is the production deploy. `deploy.yml`'s push
+   trigger is `release` only. It stops triggering on `push` to `main`.
+   Any `workflow_dispatch`, including Deploy previous SHA, refuses unless
+   the SHA is an ancestor of `release` or equal to it, and runs in the
+   protected `production` GitHub Environment with required reviewer C.Lee
+   (section 8(c)). Same wait for **Backend CI Status Gate**, same backend
+   path filter, same `railway up --ci`.
    `backend-ci.yml` does not run on `release`, so the gate has to already
    exist on that commit. A missing gate fails the deploy (`fail-on-no-checks`).
 
@@ -86,31 +89,43 @@ protection bypass.
 - **Forward revert (preferred).** `git revert` the bad change(s) on `main`
   through the normal pull request. Promote to production fast-forwards
   `release` to that commit. Same ancestor check as any other promotion.
-- **Deploy previous SHA.** A `workflow_dispatch` runs `railway up --ci` for
-  a chosen earlier commit that `release` already contained. The branch does
-  not move. The job summary records the SHA. The next promotion supersedes
-  this deploy.
+- **Deploy previous SHA.** A `workflow_dispatch` on `deploy.yml` runs
+  `railway up --ci` for a chosen earlier commit. Refuse unless that SHA is
+  an ancestor of `release` or equal to it. The job runs in the protected
+  `production` GitHub Environment with required reviewer C.Lee
+  (section 8(c)). The branch does not move. The job summary records the
+  SHA. The next promotion supersedes this deploy.
 - **Railway dashboard (fastest).** Deployments → last good deployment →
   Rollback. Restores the image and that deployment's variables
   (`DISASTER_RECOVERY.md` section 7). Does not move `release`. Do not use
-  `railway down`.
+  `railway down`. Record the deployed SHA, then reconcile with a forward
+  revert on `main` plus Promote so `release` and the running image match
+  again. The rollback restores that deployment's variables: if any secret
+  was rotated since, re-apply the current variables and secrets before the
+  rollback or right after it. Never reinstate a retired credential.
 
 The schema stays. On boot the app runs `alembic upgrade head`. If the
 database is already past a revision the older image contains, `/readiness`
 fails and Railway keeps the current deployment. Going backward across a
 migration is a database restore (`DISASTER_RECOVERY.md`) or a forward fix.
 Follow `MIGRATION_ROLLBACK.md`: destructive downgrades are refused in
-production. One migration-bearing pull request on `main` at a time stays
-the rule.
+production. Any rollback that touches `fsma.cte_events`, `fsma.hash_chain`,
+or `fsma.traceability_events` requires the audit-chain integrity check in
+that runbook (section 7.1, Hash Chain Verification). Do not roll back past
+`V039__hash_chain_immutability.sql`: removing it drops `fsma.hash_chain`
+immutability protections, so UPDATE and DELETE become possible. One
+migration-bearing pull request on `main` at a time stays the rule.
 
 ## 7. Railway-side settings
 
 Separate from this document. Needs the founder's yes in the Railway dashboard.
 
-- One production deploy path. Turn Railway's GitHub auto-deploy **off** on
-  the production service, or point it at `release` with **Wait for CI**
-  enabled. Leaving it on `main` while `deploy.yml` also deploys is two
-  paths.
+- Exactly one production deploy owner. Recommended: `deploy.yml` owns
+  production deploys, and Railway's GitHub auto-deploy for the production
+  service is **off**. Do not leave auto-deploy on for a push that
+  `deploy.yml` also deploys. Pointing auto-deploy at `release` while
+  `deploy.yml` deploys `release` is two owners of the same push. That
+  option is not allowed.
 - Consider a shorter `healthcheckTimeout` than the current 300 seconds, so
   a crashed boot fails faster. Keep one concurrent deployment so failed
   candidates cannot stack beside the live replica. Dashboard only. This
@@ -126,25 +141,39 @@ ruleset (promote identity only, no force-push, no deletion).
 (b) Add Promote to production: fast-forward only, require the green backend
 gate and the green staging smoke. Refuse when `release` is not an ancestor.
 No input rewinds the branch. Add Deploy previous SHA: `workflow_dispatch`
-runs `railway up --ci` for an earlier release SHA, records it in the job
-summary, and does not move the branch.
+on `deploy.yml` runs `railway up --ci` only when the SHA is an ancestor of
+`release` or equal to it (section 8(c)), records it in the job summary,
+and does not move the branch.
 
-(c) Switch the `deploy.yml` production trigger from `main` to `release`.
-Keep `workflow_dispatch`. Leave staging on `main`. Rename concurrency group
-`deploy-main` in that same change.
+(c) Switch the `deploy.yml` production push trigger from `main` to
+`release` only. Exactly one production deploy owner: `deploy.yml` owns
+production deploys, and Railway GitHub auto-deploy for the production
+service is off (section 7). Keep `workflow_dispatch`, and refuse the run
+unless the SHA is an ancestor of `release` or equal to it. That includes
+Deploy previous SHA. The job runs in a protected `production` GitHub
+Environment with required reviewer C.Lee. Leave staging on `main`. Rename
+concurrency group `deploy-main` in that same change.
 
 (d) Update the runbooks (including `DISASTER_RECOVERY.md`, where
 `railway redeploy --from-source` means latest `main`) and run the
 Reliability smoke check after each promotion. No workflow here has that
 title; that PR names it. Closest today: the deployed-commit assert in
 `deploy.yml`, Production Uptime, Public API Surface Probe, and
-`scripts/security/staging_release_gate.py`.
+`scripts/security/staging_release_gate.py`. Before adopting this process,
+add read-only checks that an FDA sortable export generates, and that TLC,
+KDE, and CTE data and the append-only chain verify. Run those same checks
+after each promotion.
 
 (e) Rollback drill: promote forward, then roll back without rewinding
-`release`. Exercise the Railway dashboard rollback, Deploy previous SHA
-(branch unchanged; job summary names the SHA), and a forward `git revert`
-fast-forwarded by Promote. Confirm `/readiness` and the deployed commit,
-and record a migration in between.
+`release`. Exercise the Railway dashboard rollback (record the deployed
+SHA; re-apply current variables and secrets if any were rotated; then a
+forward revert and Promote so `release` matches the running image), Deploy
+previous SHA (branch unchanged; job summary names the SHA; refused unless
+that SHA is an ancestor of `release` or equal to it), and a forward
+`git revert` fast-forwarded by Promote. Confirm `/readiness` and the
+deployed commit, and record a migration in between. When that migration
+touches `fsma.cte_events`, `fsma.hash_chain`, or `fsma.traceability_events`,
+run the audit-chain integrity check (section 6).
 
 ## 9. Risks and open questions
 
