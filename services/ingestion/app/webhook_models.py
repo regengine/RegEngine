@@ -17,7 +17,7 @@ from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 from pydantic import BaseModel, Field, field_validator, model_validator
-from shared.fsma_validation import calculate_gs1_check_digit
+from shared.fsma_validation import calculate_gs1_check_digit, is_location_description_complete
 
 _gln_logger = logging.getLogger("gln-validation")
 
@@ -180,6 +180,8 @@ class IngestEvent(BaseModel):
     unit_of_measure: str = Field(..., description="Unit (cases, lbs, kg, pallets, etc.)")
     location_gln: Optional[str] = Field(None, description="GS1 Global Location Number (13 digits)")
     location_name: Optional[str] = Field(None, description="Human-readable location name")
+    location_phone: Optional[str] = Field(None, description="Business phone number")
+    location_address: Optional[str] = Field(None, description="Physical location address")
     timestamp: str = Field(..., description="ISO 8601 timestamp of the event")
     kdes: Dict[str, Any] = Field(
         default_factory=dict, description="Additional Key Data Elements (temperature, carrier, PO, field ID, etc.)"
@@ -265,28 +267,28 @@ class IngestEvent(BaseModel):
 
     @model_validator(mode="after")
     def require_location(self) -> "IngestEvent":
-        """FSMA 204 requires location description for every CTE (§1.1325–§1.1350)."""
-        has_gln = self.location_gln and self.location_gln.strip()
-        has_name = self.location_name and self.location_name.strip()
-        if not has_gln and not has_name:
-            # Also check KDEs for location fields
-            kde_locations = [
-                "ship_from_location",
-                "ship_to_location",
-                "receiving_location",
-                "ship_from_gln",
-                "ship_to_gln",
-            ]
-            has_kde_location = any(
-                self.kdes.get(k) for k in kde_locations if self.kdes.get(k) and str(self.kdes[k]).strip()
-            )
-            if not has_kde_location:
-                raise ValueError(
-                    "FSMA 204 requires at least one location identifier per CTE. "
-                    "Provide location_gln, location_name, or a location KDE "
-                    "(ship_from_location, receiving_location, etc.)"
-                )
-        return self
+        """Require one complete location description or GLN per 21 CFR 1.1310."""
+
+        def first_nonblank(*values: Any) -> Optional[str]:
+            return next((value for value in values if isinstance(value, str) and value.strip()), None)
+
+        for prefix in ("location", "ship_from", "ship_to", "receiving"):
+
+            def description_field(field: str) -> Optional[str]:
+                top_level = getattr(self, f"location_{field}") if prefix == "location" else None
+                legacy_name = self.kdes.get(f"{prefix}_location") if field == "name" else None
+                return first_nonblank(top_level, self.kdes.get(f"{prefix}_{field}"), legacy_name)
+
+            if is_location_description_complete(
+                gln=first_nonblank(self.location_gln, self.kdes.get(f"{prefix}_gln")),
+                name=description_field("name"),
+                phone=description_field("phone"),
+                address=description_field("address"),
+            ):
+                return self
+        raise ValueError(
+            "FSMA 204 requires (name AND phone AND address) OR GLN for at least one location per CTE (21 CFR 1.1310)."
+        )
 
 
 class WebhookPayload(BaseModel):

@@ -266,6 +266,7 @@ class Location(BaseModel):
 
     gln: Optional[str] = Field(None, description="GS1 Global Location Number (13 digits)")
     name: Optional[str] = Field(None, description="Human-readable location name")
+    phone: Optional[str] = Field(None, description="Business phone number")
     address: Optional[str] = Field(None, description="Physical address")
 
     model_config = {
@@ -473,6 +474,7 @@ class FSMALocation(BaseModel):
     gln: Optional[str] = Field(None, description="GS1 Global Location Number (13 digits)")
     fda_registration: Optional[str] = Field(None, description="FDA Facility Registration Number")
     name: Optional[str] = Field(None, description="Human-readable location name")
+    phone: Optional[str] = Field(None, description="Business phone number")
     address: Optional[str] = Field(None, description="Physical address")
 
     model_config = {

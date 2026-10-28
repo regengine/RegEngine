@@ -109,6 +109,21 @@ def _validate_gs1_check(clean: str, field_name: str, id_type: IdentifierType) ->
 # ---------------------------------------------------------------------------
 
 
+def is_location_description_complete(
+    *,
+    name: Optional[str] = None,
+    phone: Optional[str] = None,
+    address: Optional[str] = None,
+    gln: Optional[str] = None,
+) -> bool:
+    """Check location completeness under 21 CFR 1.1310, not GLN validity."""
+
+    def present(value: Optional[str]) -> bool:
+        return isinstance(value, str) and bool(value.strip())
+
+    return present(gln) or all(present(value) for value in (name, phone, address))
+
+
 def validate_gln(gln: str) -> ValidationResult:
     """Validate GS1 Global Location Number (13 digits with check digit)."""
     if not isinstance(gln, str) or not gln:
