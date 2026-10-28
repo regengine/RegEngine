@@ -57,8 +57,8 @@ weekday schedule (at most two or three times):
    Gate** (posted by `backend-ci.yml` when the commit landed on `main`) and
    a green post-deploy staging smoke.
 2. Fast-forward `release` to that commit. No merge commit. Refuse the run
-   when `release` is not an ancestor of the commit, unless the run is an
-   explicit rollback (section 6).
+   when `release` is not an ancestor of the commit. Rollback is not an
+   exception (section 6).
 3. The push to `release` is the production deploy. `deploy.yml`'s production
    job then triggers on `push` to `release` and on `workflow_dispatch`, and
    stops triggering on `push` to `main`. Same wait for **Backend CI Status
@@ -67,8 +67,9 @@ weekday schedule (at most two or three times):
    exist on that commit. A missing gate fails the deploy (`fail-on-no-checks`).
 
 Protect `release`: no direct pushes except the promote workflow's GitHub
-identity, no force-push, no deletion. The rule lives in GitHub settings,
-same as `main` (`BRANCH_PROTECTION.md`).
+identity, no force-push, no deletion. No protection bypass for rollback
+(section 6). The rule lives in GitHub settings, same as `main`
+(`BRANCH_PROTECTION.md`).
 
 ## 5. Hotfixes
 
@@ -78,13 +79,21 @@ branch.
 
 ## 6. Rollback
 
-Two ways, same commit:
+`release` is never rewound. Pointing the branch at an older commit is a
+non-fast-forward update, and the no-force-push rule forbids it. No
+protection bypass.
 
-- Promote to production with a `sha` input set to the previous release
-  commit, so `release` moves back and `deploy.yml` ships that tree.
-- Railway: Deployments → last good deployment → Rollback. That restores
-  the image and that deployment's variables (`DISASTER_RECOVERY.md`
-  section 7). Do not use `railway down`.
+- **Forward revert (preferred).** `git revert` the bad change(s) on `main`
+  through the normal pull request. Promote to production fast-forwards
+  `release` to that commit. Same ancestor check as any other promotion.
+- **Deploy previous SHA.** A `workflow_dispatch` runs `railway up --ci` for
+  a chosen earlier commit that `release` already contained. The branch does
+  not move. The job summary records the SHA. The next promotion supersedes
+  this deploy.
+- **Railway dashboard (fastest).** Deployments → last good deployment →
+  Rollback. Restores the image and that deployment's variables
+  (`DISASTER_RECOVERY.md` section 7). Does not move `release`. Do not use
+  `railway down`.
 
 The schema stays. On boot the app runs `alembic upgrade head`. If the
 database is already past a revision the older image contains, `/readiness`
@@ -115,7 +124,10 @@ Each step is its own pull request, after section 10 is approved.
 ruleset (promote identity only, no force-push, no deletion).
 
 (b) Add Promote to production: fast-forward only, require the green backend
-gate and the green staging smoke, `sha` input for rollback.
+gate and the green staging smoke. Refuse when `release` is not an ancestor.
+No input rewinds the branch. Add Deploy previous SHA: `workflow_dispatch`
+runs `railway up --ci` for an earlier release SHA, records it in the job
+summary, and does not move the branch.
 
 (c) Switch the `deploy.yml` production trigger from `main` to `release`.
 Keep `workflow_dispatch`. Leave staging on `main`. Rename concurrency group
@@ -128,8 +140,11 @@ title; that PR names it. Closest today: the deployed-commit assert in
 `deploy.yml`, Production Uptime, Public API Surface Probe, and
 `scripts/security/staging_release_gate.py`.
 
-(e) Rollback drill: promote forward, promote back one commit, confirm
-`/readiness` and the deployed commit, and record a migration in between.
+(e) Rollback drill: promote forward, then roll back without rewinding
+`release`. Exercise the Railway dashboard rollback, Deploy previous SHA
+(branch unchanged; job summary names the SHA), and a forward `git revert`
+fast-forwarded by Promote. Confirm `/readiness` and the deployed commit,
+and record a migration in between.
 
 ## 9. Risks and open questions
 
