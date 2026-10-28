@@ -99,6 +99,14 @@ export function ToolsLandingClient() {
                     ))}
                 </div>
 
+                {filtered.length === 0 ? (
+                    <div role="status" className="rounded-lg border border-re-border bg-re-surface-card p-8 text-center">
+                        <p className="text-heading text-re-text-primary">No tools in this category yet.</p>
+                        <p className="mt-3 text-ui text-re-text-secondary">
+                            Try All or another category to browse every tool.
+                        </p>
+                    </div>
+                ) : (
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                     {filtered.map(([id, title, description, Icon, category]) => (
                         <Link
@@ -125,6 +133,7 @@ export function ToolsLandingClient() {
                         </Link>
                     ))}
                 </div>
+                )}
             </Container>
         </div>
     );
