@@ -79,10 +79,12 @@ async def export(format, rows):
         return rows
 
     today = datetime.now(timezone.utc).date().isoformat()
+    # Bypass slowapi so the suite can call the endpoint many times in one process.
+    endpoint = getattr(compliance.export_epcis, "__wrapped__", compliance.export_epcis)
     with patch.object(compliance, "Neo4jClient", FakeNeo4j), patch.object(
         compliance, "reconcile_tenant_scope", return_value=str(TENANT)
     ), patch.object(fsma_utils, "query_events_by_range", query):
-        response = await compliance.export_epcis(
+        response = await endpoint(
             Request({"type": "http", "method": "GET", "path": "/export/epcis", "query_string": b"", "headers": []}),
             today, today, format, TENANT, object(),
         )
@@ -136,3 +138,76 @@ def test_missing_event_time_is_skipped():
     row["event_time"] = None
     document = json.loads(asyncio.run(export("json-ld", [row])))
     assert document["epcisBody"]["eventList"] == []
+
+
+def test_gs1_location_check_digit_accepts_known_valid_gln():
+    """Graph location helper must use GS1 weight-3-from-right."""
+    row = graph_row("RECEIVING")
+    row["location_gln"] = "0614141000005"
+    row["tlc"] = epc_identifier()
+    document = json.loads(asyncio.run(export("json-ld", [row])))
+    assert document["epcisBody"]["eventList"]
+    assert document["epcisBody"]["eventList"][0]["readPoint"]["id"] == "https://id.gs1.org/414/0614141000005"
+
+
+def test_graph_exports_raw_tlc_with_lot_gtin_as_digital_link():
+    """Real FSMA lots use free-text TLC + Lot.gtin — must not be silently dropped."""
+    row = {
+        "type": "SHIPPING",
+        "event_date": datetime.now(timezone.utc).date().isoformat(),
+        "event_time": datetime.now(timezone.utc).time().isoformat(timespec="seconds"),
+        "tlc": "LOT-2024-001",
+        "gtin": "09506000134352",
+        "location_gln": "0614141000005",
+        "ship_from_gln": "0614141000005",
+        "ship_to_gln": location_identifier(),
+        "quantity": 12,
+        "unit_of_measure": "KGM",
+        "event_id": f"urn:uuid:{uuid.uuid4()}",
+    }
+    document = json.loads(asyncio.run(export("json-ld", [row])))
+    events = document["epcisBody"]["eventList"]
+    assert len(events) == 1
+    event = events[0]
+    assert event["type"] == "ObjectEvent"
+    assert event["quantityList"][0]["epcClass"] == "https://id.gs1.org/01/09506000134352/10/LOT-2024-001"
+    assert event["bizStep"] == "shipping"
+    assert document["regengine:exportMetadata"]["skippedEventsCount"] == 0
+
+
+def test_graph_exports_transformation_with_input_tlc_and_gtin():
+    row = {
+        "type": "TRANSFORMATION",
+        "event_date": datetime.now(timezone.utc).date().isoformat(),
+        "event_time": datetime.now(timezone.utc).time().isoformat(timespec="seconds"),
+        "tlc": "OUT-LOT-9",
+        "gtin": "09506000134352",
+        "input_tlc": "IN-LOT-9",
+        "input_gtin": "09506000134352",
+        "location_gln": location_identifier(),
+        "event_id": "evt-bare-id-123",
+        "quantity": 3,
+        "unit_of_measure": "KGM",
+    }
+    document = json.loads(asyncio.run(export("json-ld", [row])))
+    event = document["epcisBody"]["eventList"][0]
+    assert event["type"] == "TransformationEvent"
+    assert event["outputQuantityList"][0]["epcClass"].endswith("/10/OUT-LOT-9")
+    assert event["inputQuantityList"][0]["epcClass"].endswith("/10/IN-LOT-9")
+    assert event["transformationID"].startswith("urn:uuid:")
+
+
+def test_graph_harvesting_uses_collecting_bizstep():
+    row = graph_row("HARVESTING")
+    # graph_row uses split SGTIN-shaped tlc
+    document = json.loads(asyncio.run(export("json-ld", [row])))
+    assert document["epcisBody"]["eventList"][0]["bizStep"] == "collecting"
+
+
+def test_missing_event_time_records_skip_reason():
+    row = graph_row("RECEIVING")
+    row["event_time"] = None
+    document = json.loads(asyncio.run(export("json-ld", [row])))
+    assert document["epcisBody"]["eventList"] == []
+    assert document["regengine:exportMetadata"]["skippedEventsCount"] == 1
+    assert document["regengine:exportMetadata"]["skippedEventsByReason"]["missing_time"] == 1

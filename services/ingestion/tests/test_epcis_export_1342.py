@@ -235,7 +235,9 @@ class TestExportEpcisEndpoint:
         assert response.headers["X-RegEngine-Integrity-Verified"] == "true"
         assert response.headers["X-RegEngine-Events-Count"] == "1"
 
-    def test_fills_defaults_when_row_fields_are_null(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_null_timestamp_is_skipped_without_no_data_message(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         row = dict(_event_row(event_timestamp=None)._mapping)
         monkeypatch.setattr(epcis_export, "_query_tenant_events", lambda *a, **k: [row])
         response = client.post(
@@ -245,10 +247,13 @@ class TestExportEpcisEndpoint:
         assert response.status_code == 200
         body = response.json()
         assert body["epcisBody"]["eventList"] == []
-        assert body["regengine:exportMetadata"]["eventsCount"] == 0
-        assert body["regengine:exportMetadata"]["skippedEventsCount"] == 1
-        assert body["regengine:exportMetadata"]["regengine:message"] == "No data yet"
+        meta = body["regengine:exportMetadata"]
+        assert meta["eventsCount"] == 0
+        assert meta["skippedEventsCount"] == 1
+        assert meta["skippedEventsByReason"]["missing_timestamp"] == 1
+        assert "regengine:message" not in meta
         assert response.headers["X-RegEngine-Events-Count"] == "0"
+        assert response.headers["X-RegEngine-Skipped-Events-Count"] == "1"
 
     def test_validate_flag_emits_validation_block_and_header(
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch

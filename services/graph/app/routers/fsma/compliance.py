@@ -10,11 +10,16 @@ from __future__ import annotations
 
 import csv
 import io
+import json
+import re
 import sys
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
+from urllib.parse import quote
+
+from shared.fsma_validation import normalize_gtin, verify_gs1_check_digit
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Path as PathParam, Query, Request
@@ -244,47 +249,88 @@ async def export_epcis(
         async with Neo4jClient(database=db_name) as client:
             events = await query_events_by_range(client, start_date, end_date, scoped_tenant_id)
 
-        import re
-
         # EPC URNs need an actual company-prefix split. A bare GTIN or TLC
         # does not provide that split, so only retain complete identifiers.
+        # When Lot.gtin + TLC are both present, emit a GS1 Digital Link class
+        # URI via quantityList instead of fabricating an invalid SGTIN.
         def epc_id(value, scheme):
             if not isinstance(value, str) or not value:
                 return None
             candidate = value if value.startswith("urn:epc:id:") else f"urn:epc:id:{scheme}:{value}"
             match = re.fullmatch(
-                rf"urn:epc:id:{scheme}:(\d{{6,12}})\.(\d+)\.([A-Za-z0-9_~!$&'()*+,;=:@%\-]+)",
+                rf"urn:epc:id:{scheme}:(\d{{6,12}})\.(\d+)\.([A-Za-z0-9_~!$&\'()*+,;=:@%\-]+)",
                 candidate,
             )
             if match and match[1] != "0000000" and len(match[1]) + len(match[2]) == (13 if scheme == "sgtin" else 12):
                 return candidate
             return None
 
+        def class_uri(tlc, gtin):
+            if not isinstance(tlc, str) or not tlc or tlc == "N/A":
+                return None
+            if isinstance(tlc, str) and _valid_class_uri(tlc):
+                return tlc
+            if not isinstance(gtin, str) or not gtin:
+                return None
+            digits = re.sub(r"\D", "", gtin)
+            if not digits:
+                return None
+            try:
+                gtin14 = normalize_gtin(digits)
+            except ValueError:
+                return None
+            if not verify_gs1_check_digit(gtin14):
+                return None
+            return f"https://id.gs1.org/01/{gtin14}/10/{quote(tlc, safe='-._~')}"
+
+        def _valid_class_uri(value: object) -> bool:
+            if not isinstance(value, str) or "0000000.000000" in value:
+                return False
+            match = re.fullmatch(
+                r"urn:epc:class:lgtin:(\d{6,12})\.(\d+)\.([A-Za-z0-9_~!$&\'()*+,;=:@%\-]+)",
+                value,
+            )
+            if match:
+                return len(match[1]) + len(match[2]) == 13
+            match = re.fullmatch(r"https://id\.gs1\.org/01/(\d{14})/10/[^/?#]+", value)
+            return bool(match and verify_gs1_check_digit(match[1]))
+
         def location(value):
-            if isinstance(value, str) and re.fullmatch(r"\d{13}", value):
-                total = sum(int(digit) * (3 if offset % 2 else 1) for offset, digit in enumerate(reversed(value[:-1])))
-                if (10 - total % 10) % 10 == int(value[-1]):
-                    return f"https://id.gs1.org/414/{value}"
+            if isinstance(value, str) and re.fullmatch(r"\d{13}", value) and verify_gs1_check_digit(value):
+                return f"https://id.gs1.org/414/{value}"
             return epc_id(value, "sgln")
 
+        # Phase A: harvesting maps to CBV collecting (kept intentionally).
         BIZ_STEP_MAP = {
             "CREATION": "commissioning",
             "RECEIVING": "receiving",
             "SHIPPING": "shipping",
             "TRANSFORMATION": "commissioning",
+            "HARVESTING": "collecting",
+            "COOLING": "storing",
+            "INITIAL_PACKING": "packing",
+            "FIRST_LAND_BASED_RECEIVING": "receiving",
         }
 
-        # Build EPCIS document
         epcis_events = []
+        skipped_by_reason: dict[str, int] = {}
+
+        def _skip(reason: str) -> None:
+            skipped_by_reason[reason] = skipped_by_reason.get(reason, 0) + 1
 
         for event in events:
             event_type = event.get("type", "").upper()
 
             epc_urn = epc_id(event.get("tlc"), "sgtin")
+            out_class = None if epc_urn else class_uri(event.get("tlc"), event.get("gtin"))
             read_point = location(event.get("location_gln") or event.get("facility_gln"))
             event_time = event.get("event_date")
             event_clock = event.get("event_time")
             if not event_time or not event_clock:
+                _skip("missing_time")
+                continue
+            if event_type not in BIZ_STEP_MAP:
+                _skip("unsupported_cte_type")
                 continue
             common = {
                 "eventTime": f"{event_time}T{event_clock}Z",
@@ -293,34 +339,64 @@ async def export_epcis(
             if read_point:
                 common["readPoint"] = {"id": read_point}
 
+            quantity = event.get("quantity")
+            uom = event.get("unit_of_measure")
+            if isinstance(uom, str) and re.fullmatch(r"[A-Z0-9]{2,3}", uom):
+                mapped_uom = uom
+            else:
+                mapped_uom = None
+
             if event_type == "TRANSFORMATION":
-                # TransformationEvent for TRANSFORMATION CTEs
                 input_epc = epc_id(event.get("input_tlc"), "sgtin")
+                input_class = None if input_epc else class_uri(event.get("input_tlc"), event.get("input_gtin"))
                 transformation_id = event.get("event_id")
                 valid_transformation_id = isinstance(transformation_id, str) and transformation_id.startswith(
                     ("urn:", "https://")
                 )
-                if not (input_epc and epc_urn) and not (valid_transformation_id and (input_epc or epc_urn)):
+                has_output = bool(epc_urn or out_class)
+                has_input = bool(input_epc or input_class)
+                if not (has_input and has_output) and not (valid_transformation_id and (has_input or has_output)):
+                    _skip("transformation_incomplete")
                     continue
+                if not valid_transformation_id and transformation_id:
+                    transformation_id = f"urn:uuid:{transformation_id}" if not str(transformation_id).startswith("urn:") else transformation_id
+                    valid_transformation_id = True
                 epcis_event = {"type": "TransformationEvent", **common, "bizStep": BIZ_STEP_MAP[event_type]}
                 if input_epc:
                     epcis_event["inputEPCList"] = [input_epc]
+                elif input_class:
+                    epcis_event["inputQuantityList"] = [{"epcClass": input_class}]
                 if epc_urn:
                     epcis_event["outputEPCList"] = [epc_urn]
+                elif out_class:
+                    out_qty = {"epcClass": out_class}
+                    if quantity is not None:
+                        out_qty["quantity"] = quantity
+                        if mapped_uom:
+                            out_qty["uom"] = mapped_uom
+                    epcis_event["outputQuantityList"] = [out_qty]
                 if valid_transformation_id:
                     epcis_event["transformationID"] = transformation_id
             else:
-                # ObjectEvent for CREATION, RECEIVING, SHIPPING
-                if not epc_urn or event_type not in BIZ_STEP_MAP:
+                if not epc_urn and not out_class:
+                    _skip("invalid_epc_or_missing_gtin")
                     continue
                 epcis_event = {
                     "type": "ObjectEvent",
                     **common,
-                    "epcList": [epc_urn],
-                    "action": "ADD" if event_type in ("CREATION", "RECEIVING") else "OBSERVE",
+                    "action": "ADD" if event_type in ("CREATION", "RECEIVING", "HARVESTING", "INITIAL_PACKING") else "OBSERVE",
                     "bizStep": BIZ_STEP_MAP[event_type],
                     "disposition": "in_transit" if event_type == "SHIPPING" else "in_progress",
                 }
+                if epc_urn:
+                    epcis_event["epcList"] = [epc_urn]
+                else:
+                    qty_item = {"epcClass": out_class}
+                    if quantity is not None:
+                        qty_item["quantity"] = quantity
+                        if mapped_uom:
+                            qty_item["uom"] = mapped_uom
+                    epcis_event["quantityList"] = [qty_item]
                 if read_point:
                     epcis_event["bizLocation"] = {"id": read_point}
                 for key, field, identifier in (
@@ -333,6 +409,15 @@ async def export_epcis(
 
             epcis_events.append(epcis_event)
 
+        skipped_total = sum(skipped_by_reason.values())
+        if skipped_total:
+            logger.info(
+                "epcis_export_skipped_events",
+                skipped=skipped_total,
+                by_reason=skipped_by_reason,
+                exported=len(epcis_events),
+            )
+
         # Build full EPCIS document
         epcis_document = {
             "@context": ["https://ref.gs1.org/standards/epcis/2.0.0/epcis-context.jsonld"],
@@ -340,35 +425,45 @@ async def export_epcis(
             "schemaVersion": "2.0",
             "creationDate": datetime.now(timezone.utc).isoformat(),
             "epcisBody": {"eventList": epcis_events},
+            "regengine:exportMetadata": {
+                "eventsCount": len(epcis_events),
+                "skippedEventsCount": skipped_total,
+                "skippedEventsByReason": skipped_by_reason,
+            },
         }
 
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        skip_header = str(skipped_total)
 
         if format == "xml":
-            # Convert to XML format
             xml_content = _epcis_to_xml(epcis_document)
             filename = header_filename(f"epcis_export_{start_date}_{end_date}_{timestamp}.xml")
 
-            logger.info("epcis_xml_export_completed", count=len(epcis_events))
+            logger.info("epcis_xml_export_completed", count=len(epcis_events), skipped=skipped_total)
 
             return StreamingResponse(
                 io.BytesIO(xml_content.encode("utf-8")),
                 media_type="application/xml",
-                headers={"Content-Disposition": f"attachment; filename={filename}"},
+                headers={
+                    "Content-Disposition": f"attachment; filename={filename}",
+                    "X-RegEngine-Events-Count": str(len(epcis_events)),
+                    "X-RegEngine-Skipped-Events-Count": skip_header,
+                },
             )
         else:
-            # JSON-LD format (default)
-            import json
-
             json_content = json.dumps(epcis_document, indent=2)
             filename = header_filename(f"epcis_export_{start_date}_{end_date}_{timestamp}.jsonld")
 
-            logger.info("epcis_jsonld_export_completed", count=len(epcis_events))
+            logger.info("epcis_jsonld_export_completed", count=len(epcis_events), skipped=skipped_total)
 
             return StreamingResponse(
                 io.BytesIO(json_content.encode("utf-8")),
                 media_type="application/ld+json",
-                headers={"Content-Disposition": f"attachment; filename={filename}"},
+                headers={
+                    "Content-Disposition": f"attachment; filename={filename}",
+                    "X-RegEngine-Events-Count": str(len(epcis_events)),
+                    "X-RegEngine-Skipped-Events-Count": skip_header,
+                },
             )
 
     except Exception as e:
@@ -427,26 +522,41 @@ def _epcis_to_xml(epcis_doc: dict) -> str:
                 continue
             add(node, f"{{{key[: separator + 1]}}}{key[separator + 1 :]}", value)
 
-    def add_common_tail(parent, event):
-        for field in ("transformationID", "action", "bizStep", "disposition"):
-            if field == "bizStep" and event.get(field) in {"shipping", "receiving", "commissioning"}:
-                add(parent, field, f"https://ref.gs1.org/cbv/BizStep-{event[field]}")
-            elif field == "disposition" and event.get(field) in {"in_transit", "in_progress"}:
-                add(parent, field, f"https://ref.gs1.org/cbv/Disp-{event[field]}")
-            elif field != "action" or event.get("type") == "ObjectEvent":
-                add(parent, field, event.get(field))
+    _CBV_BIZSTEPS = {"shipping", "receiving", "commissioning", "collecting", "storing", "packing"}
+    _CBV_DISPOSITIONS = {"in_transit", "in_progress"}
+
+    def cbv_value(field, value):
+        if value is None:
+            return None
+        if field == "bizStep" and value in _CBV_BIZSTEPS:
+            return f"https://ref.gs1.org/cbv/BizStep-{value}"
+        if field == "disposition" and value in _CBV_DISPOSITIONS:
+            return f"https://ref.gs1.org/cbv/Disp-{value}"
+        return value
+
+    def add_location_lists(parent, event):
+        for field, member in (("sourceList", "source"), ("destinationList", "destination")):
+            if event.get(field):
+                container = sub_element(parent, field)
+                for item in event[field]:
+                    kind_uri = item.get("type", "")
+                    if kind_uri in {"location", "possessing_party", "owning_party"}:
+                        kind_uri = f"https://ref.gs1.org/cbv/SDT-{kind_uri}"
+                    sub_element(container, member, {"type": kind_uri}).text = str(item[member])
+
+    def add_common_tail(parent, event, *, include_action: bool = True):
+        fields = ("transformationID", "action", "bizStep", "disposition") if include_action else ("transformationID", "bizStep", "disposition")
+        for field in fields:
+            if field == "action" and event.get("type") != "ObjectEvent" and include_action:
+                # TransformationEvent has no action; still allow explicit passthrough when present
+                if event.get(field) is None:
+                    continue
+            add(parent, field, cbv_value(field, event.get(field)))
         for field in ("readPoint", "bizLocation"):
             identifier = (event.get(field) or {}).get("id")
             if identifier:
                 add(sub_element(parent, field), "id", identifier)
-        for field, member in (("sourceList", "source"), ("destinationList", "destination")):
-            if event.get(field):
-                node = sub_element(parent, field)
-                for item in event[field]:
-                    kind = item.get("type", "")
-                    if kind in {"location", "possessing_party", "owning_party"}:
-                        kind = f"https://ref.gs1.org/cbv/SDT-{kind}"
-                    sub_element(node, member, {"type": kind}).text = str(item[member])
+        add_location_lists(parent, event)
         add_ilmd(parent, event)
 
     for event in epcis_doc.get("epcisBody", {}).get("eventList", []):
@@ -459,32 +569,20 @@ def _epcis_to_xml(epcis_doc: dict) -> str:
         if kind == "ObjectEvent":
             add_epcs(node, event, "epcList")
             for field in ("action", "bizStep", "disposition"):
-                value = event.get(field)
-                if field == "bizStep" and value in {"shipping", "receiving", "commissioning"}:
-                    value = f"https://ref.gs1.org/cbv/BizStep-{value}"
-                if field == "disposition" and value in {"in_transit", "in_progress"}:
-                    value = f"https://ref.gs1.org/cbv/Disp-{value}"
-                add(node, field, value)
+                add(node, field, cbv_value(field, event.get(field)))
             for field in ("readPoint", "bizLocation"):
                 identifier = (event.get(field) or {}).get("id")
                 if identifier:
                     add(sub_element(node, field), "id", identifier)
             add_quantities(node, event, "quantityList")
-            for field, member in (("sourceList", "source"), ("destinationList", "destination")):
-                if event.get(field):
-                    container = sub_element(node, field)
-                    for item in event[field]:
-                        kind_uri = item.get("type", "")
-                        if kind_uri in {"location", "possessing_party", "owning_party"}:
-                            kind_uri = f"https://ref.gs1.org/cbv/SDT-{kind_uri}"
-                        sub_element(container, member, {"type": kind_uri}).text = str(item[member])
+            add_location_lists(node, event)
             add_ilmd(node, event)
         else:
             add_epcs(node, event, "inputEPCList")
             add_quantities(node, event, "inputQuantityList")
             add_epcs(node, event, "outputEPCList")
             add_quantities(node, event, "outputQuantityList")
-            add_common_tail(node, event)
+            add_common_tail(node, event, include_action=False)
 
     return ET.tostring(root, encoding="utf-8", xml_declaration=True).decode("utf-8")
 
