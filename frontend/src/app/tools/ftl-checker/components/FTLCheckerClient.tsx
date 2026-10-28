@@ -454,6 +454,7 @@ export function FTLCheckerClient() {
     const [exemptionAnswers, setExemptionAnswers] = useState<Record<string, boolean | null>>({});
     const [showExemptionHelp, setShowExemptionHelp] = useState<string | null>(null);
     const [showResults, setShowResults] = useState(false);
+    const [isResultsLoading, setIsResultsLoading] = useState(false);
     const [email, setEmail] = useState('');
     const [emailSubmitted, setEmailSubmitted] = useState(false);
     const [isDownloading, setIsDownloading] = useState(false);
@@ -492,6 +493,14 @@ export function FTLCheckerClient() {
             posthog?.capture('tool_completed', { tool_id: 'ftl-checker', status: 'success' });
         }
     }, [currentStep, posthog]);
+
+    // F6: clear the results transition flag after the results step has painted.
+    useEffect(() => {
+        if (currentStep === 'results' && isResultsLoading) {
+            const frame = requestAnimationFrame(() => setIsResultsLoading(false));
+            return () => cancelAnimationFrame(frame);
+        }
+    }, [currentStep, isResultsLoading]);
 
     // Generate shareable URL
     const getShareableUrl = () => {
@@ -562,14 +571,15 @@ export function FTLCheckerClient() {
             if (hasCoveredCategories) {
                 setCurrentStep('exemptions');
             } else {
+                setIsResultsLoading(true);
                 setCurrentStep('results');
                 setShowResults(true);
             }
         }
     };
 
-    const handleSkipExemptions = () => { setCurrentStep('results'); setShowResults(true); };
-    const handleFinishExemptions = () => { setCurrentStep('results'); setShowResults(true); };
+    const handleSkipExemptions = () => { setIsResultsLoading(true); setCurrentStep('results'); setShowResults(true); };
+    const handleFinishExemptions = () => { setIsResultsLoading(true); setCurrentStep('results'); setShowResults(true); };
     const handleBackToCategories = () => { setCurrentStep('categories'); setExemptionAnswers({}); };
     const handleStartOver = () => { runStarted.current = false; runCompleted.current = false; setSelectedCategories([]); setExemptionAnswers({}); setCurrentStep('categories'); setShowResults(false); setEmailSubmitted(false); };
 
@@ -862,7 +872,7 @@ export function FTLCheckerClient() {
                                         disabled={selectedCategories.length === 0}
                                         trailingIcon={<ArrowRight size={16} strokeWidth={1.75} aria-hidden="true" />}
                                     >
-                                        Check Listed Groupings
+                                        Continue to exemptions
                                     </Button>
                                 </div>
                             </Card>
@@ -917,6 +927,7 @@ export function FTLCheckerClient() {
                                                                     variant="secondary"
                                                                     aria-pressed={answer === true}
                                                                     className={cn(answer === true && 'bg-re-surface-inset font-semibold text-re-text-primary')}
+                                                                    disabled={isResultsLoading}
                                                                     onClick={() => handleExemptionAnswer(q.id, true)}
                                                                 >
                                                                     Yes
@@ -926,6 +937,7 @@ export function FTLCheckerClient() {
                                                                     variant="secondary"
                                                                     aria-pressed={answer === false}
                                                                     className={cn(answer === false && 'bg-re-surface-inset font-semibold text-re-text-primary')}
+                                                                    disabled={isResultsLoading}
                                                                     onClick={() => handleExemptionAnswer(q.id, false)}
                                                                 >
                                                                     No
@@ -960,9 +972,10 @@ export function FTLCheckerClient() {
                                 <div className="mt-6 flex flex-col items-stretch justify-between gap-3 sm:flex-row sm:items-center">
                                     <Button variant="secondary" onClick={handleBackToCategories}>← Back to Categories</Button>
                                     <div className="flex flex-col gap-3 sm:flex-row">
-                                        <Button variant="secondary" onClick={handleSkipExemptions}>Skip Exemptions</Button>
+                                        <Button variant="secondary" disabled={isResultsLoading} onClick={handleSkipExemptions}>Skip Exemptions</Button>
                                         <Button
                                             size="lg"
+                                            disabled={isResultsLoading}
                                             onClick={handleFinishExemptions}
                                             trailingIcon={<ArrowRight size={16} strokeWidth={1.75} aria-hidden="true" />}
                                         >
@@ -975,7 +988,19 @@ export function FTLCheckerClient() {
                     )}
 
                     {/* Step 3: Results */}
-                    {currentStep === 'results' && (
+                    {currentStep === 'results' && isResultsLoading && (
+                        <motion.div key="results-loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                            <Card padding="spacious" className="mb-6 text-center" role="status" aria-busy="true" aria-label="Loading results" data-testid="results-loading">
+                                <p className="text-ui text-re-text-secondary">Loading results</p>
+                                <div className="mx-auto mt-4 flex max-w-md flex-col gap-2" aria-hidden="true">
+                                    <div className="h-4 rounded bg-re-surface-inset" />
+                                    <div className="h-4 w-5/6 rounded bg-re-surface-inset" />
+                                    <div className="h-4 w-2/3 rounded bg-re-surface-inset" />
+                                </div>
+                            </Card>
+                        </motion.div>
+                    )}
+                    {currentStep === 'results' && !isResultsLoading && (
                         <motion.div key="results" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
                             <LeadGate
                                 source="ftl-checker"
