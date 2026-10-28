@@ -80,6 +80,14 @@ describe('TRUST_SUBPROCESSORS', () => {
     }
   });
 
+  it('uses Vercel UK Addendum wording from the Vercel DPA', () => {
+    const vercel = TRUST_SUBPROCESSORS.find((sp) => sp.name === 'Vercel');
+    expect(vercel?.transferMechanism).toBe(
+      'EU Standard Contractual Clauses with UK International Data Transfer Addendum',
+    );
+    expect(vercel?.transferMechanism).not.toMatch(/Agreement/i);
+  });
+
   it('requires non-empty required display fields', () => {
     for (const sp of TRUST_SUBPROCESSORS as TrustSubprocessor[]) {
       expect(sp.name.length).toBeGreaterThan(0);

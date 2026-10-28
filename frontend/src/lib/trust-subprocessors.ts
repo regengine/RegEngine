@@ -59,7 +59,7 @@ export const TRUST_SUBPROCESSORS: TrustSubprocessor[] = [
     location: 'United States / global CDN',
     region: 'United States',
     transferMechanism:
-      'EU Standard Contractual Clauses with UK International Data Transfer Agreement',
+      'EU Standard Contractual Clauses with UK International Data Transfer Addendum',
     link: 'https://vercel.com/legal/privacy-policy',
     availability: 'default',
     availabilityLabel: 'Default platform processor',
