@@ -52,14 +52,58 @@ def test_between_date_window_still_parses():
     assert plan.end_date == "2026-01-31"
 
 
-def test_long_between_query_is_capped_and_fast():
-    import time
+def test_between_with_trailing_and_filter_keeps_date_range():
+    plan = parse_query(
+        "between 2026-01-01 and 2026-02-01 and product spinach",
+        today=date(2026, 3, 10),
+    )
+    assert plan.start_date == "2026-01-01"
+    assert plan.end_date == "2026-02-01"
 
-    from services.nlp.app.query_planner import MAX_QUERY_CHARS
+
+def test_between_human_dates_with_trailing_and_filter():
+    plan = parse_query(
+        "events between january 5, 2026 and january 20, 2026 and lot abc",
+        today=date(2026, 3, 10),
+    )
+    assert plan.start_date == "2026-01-05"
+    assert plan.end_date == "2026-01-20"
+
+
+def test_long_query_is_not_truncated():
+    import services.nlp.app.query_planner as qp
+
+    assert not hasattr(qp, "MAX_QUERY_CHARS")
+    padding = "x " * 400
+    plan = parse_query(padding + "events between 2026-01-01 and 2026-01-31", today=date(2026, 3, 10))
+    assert plan.start_date == "2026-01-01"
+    assert plan.end_date == "2026-01-31"
+
+
+def test_long_between_query_is_fast():
+    import time
 
     hostile = "between " + "a " * 50_000 + "!"
     started = time.monotonic()
     plan = parse_query(hostile, today=date(2026, 3, 10))
     assert time.monotonic() - started < 2.0
     assert plan.start_date == "2026-02-08"  # 30-day default
-    assert len(hostile) > MAX_QUERY_CHARS
+
+
+def test_many_and_separators_query_is_fast():
+    import time
+
+    hostile = "between " + "a and " * 20_000 + "!"
+    started = time.monotonic()
+    plan = parse_query(hostile, today=date(2026, 3, 10))
+    assert time.monotonic() - started < 2.0
+    assert plan.start_date == "2026-02-08"
+
+
+def test_long_since_query_is_fast():
+    import time
+
+    hostile = "since " + "a " * 50_000 + "!"
+    started = time.monotonic()
+    parse_query(hostile, today=date(2026, 3, 10))
+    assert time.monotonic() - started < 2.0

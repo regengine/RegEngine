@@ -72,8 +72,12 @@ _CTE_KEYWORDS: list[tuple[str, str]] = [
 ]
 
 
-# Upper bound on query text fed to the regex extractors (ReDoS guard).
-MAX_QUERY_CHARS = 500
+# Longest text handed to the date-prefix parser for one date. Real dates
+# ("september 30, 2026") are far shorter; bounding each side keeps the
+# trim-and-retry parse linear without truncating the whole query.
+_MAX_DATE_CHARS = 40
+# Only the first few " and " separators are tried as the range split.
+_MAX_BETWEEN_SPLITS = 16
 
 _BETWEEN_RE = re.compile(r"\bbetween\s+([A-Za-z0-9,\-\s]+)")
 _AND_SEP_RE = re.compile(r"\sand\s")
@@ -90,7 +94,7 @@ def parse_query(
     if not isinstance(query, str):
         raise TypeError(f"parse_query requires str, got {type(query).__name__}")
 
-    normalized = _normalize(query)[:MAX_QUERY_CHARS]
+    normalized = _normalize(query)
     lowered = normalized.lower()
     effective_today = today or datetime.now(timezone.utc).date()
 
@@ -220,26 +224,28 @@ def _extract_date_window(lowered_query: str, today: date) -> tuple[Optional[str]
 
     explicit_since = re.search(r"\bsince\s+([A-Za-z0-9,\-\s]+)", lowered_query)
     if explicit_since:
-        raw_token = _clean_capture(explicit_since.group(1))
+        raw_token = _clean_capture(explicit_since.group(1)[:_MAX_DATE_CHARS])
         parsed = _parse_human_date_prefix(raw_token, today)
         if parsed:
             return parsed.isoformat(), today.isoformat()
 
-    # Single capture plus a plain split on the last " and " keeps the
-    # original greedy semantics without overlapping quantified groups.
+    # Single capture, then try each " and " separator left to right and use
+    # the first one with a parseable date on both sides. Splitting on the last
+    # separator dropped ranges followed by "... and product spinach".
     between = _BETWEEN_RE.search(lowered_query)
-    separators = list(_AND_SEP_RE.finditer(between.group(1))) if between else []
-    if separators:
+    if between:
         segment = between.group(1)
-        last = separators[-1]
-        start_raw = _clean_capture(segment[: last.start()])
-        end_raw = _clean_capture(segment[last.end() :])
-        start_dt = _parse_human_date_prefix(start_raw, today)
-        end_dt = _parse_human_date_prefix(end_raw, today)
-        if start_dt and end_dt:
-            if start_dt > end_dt:
-                start_dt, end_dt = end_dt, start_dt
-            return start_dt.isoformat(), end_dt.isoformat()
+        for index, sep in enumerate(_AND_SEP_RE.finditer(segment)):
+            if index >= _MAX_BETWEEN_SPLITS:
+                break
+            start_raw = _clean_capture(segment[max(0, sep.start() - _MAX_DATE_CHARS) : sep.start()])
+            end_raw = _clean_capture(segment[sep.end() : sep.end() + _MAX_DATE_CHARS])
+            start_dt = _parse_human_date(start_raw, today) if start_raw else None
+            end_dt = _parse_human_date_prefix(end_raw, today) if end_raw else None
+            if start_dt and end_dt:
+                if start_dt > end_dt:
+                    start_dt, end_dt = end_dt, start_dt
+                return start_dt.isoformat(), end_dt.isoformat()
 
     return None, None
 
