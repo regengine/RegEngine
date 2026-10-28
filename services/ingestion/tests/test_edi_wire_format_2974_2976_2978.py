@@ -670,3 +670,27 @@ def test_scalar_overrides_still_work_for_a_single_transaction_set(client: TestCl
 
     assert response.status_code in (200, 201), response.text
     assert captured_payload["payload"].events[0].quantity == 42.0
+
+
+@pytest.mark.parametrize("transaction_set", ("856", "861", "944", "945"))
+def test_tlc_pattern_miss_is_accepted_with_persisted_warning(transaction_set):
+    validated = edi_ingestion_routes._validate_edi_as_fsma_event(
+        {"lot_number": " \t" + "A" * 3 + "\n", "quantity": 1},
+        transaction_set,
+        "A" * 3,
+    )
+    assert validated["tlc"] == "A" * 3
+    assert any("production pattern" in warning for warning in validated["warnings"])
+
+
+@pytest.mark.parametrize("transaction_set", ("944", "945"))
+@pytest.mark.parametrize("lot", ("A" * 3, "0" * 14 + "A", "A", " "))
+def test_warehouse_tlc_prefix_rebuild_is_reachable(transaction_set, lot):
+    validated = edi_ingestion_routes._validate_edi_as_fsma_event(
+        {"lot_number": lot, "quantity": 1, "gtin": "0" * 14},
+        transaction_set,
+        lot,
+    )
+    expected = lot if lot.startswith("0" * 14) else "0" * 14 + "-" + lot.strip()
+    assert validated["tlc"] == expected
+    assert validated["warnings"] == []

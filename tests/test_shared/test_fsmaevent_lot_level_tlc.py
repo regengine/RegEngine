@@ -1,7 +1,7 @@
 """Data-free checks for FSMAEvent lot-level TLC acceptance.
 
 No identifier records. Blank and short input fail; production-pattern misses
-warn and preserve the input. Pattern-shape checks remain independent of
+warn and strip surrounding whitespace. Pattern-shape checks remain independent of
 acceptance, including anchoring and the percent-decoded AI (10) limit.
 """
 
@@ -54,9 +54,8 @@ def test_short_tlc_rejected(value: str) -> None:
         *(prefix + "%" for prefix in _BARE_PREFIXES),
     ),
 )
-def test_production_pattern_miss_warns_and_preserves_value(value: str) -> None:
-    with pytest.warns(UserWarning, match="Warning:.*production pattern"):
-        assert FSMAEvent.validate_tlc_format(value) == value
+def test_production_pattern_miss_strips_value(value: str) -> None:
+    assert FSMAEvent.validate_tlc_format(value) == value.strip()
 
 
 def test_production_pattern_match_has_no_warning() -> None:
@@ -123,3 +122,23 @@ def test_tlc_field_minimum_does_not_reject_plain_three_character_value() -> None
     assert adapter.validate_python("A" * 3) == "A" * 3
     with pytest.raises(ValueError):
         adapter.validate_python("A" * 2)
+
+
+@pytest.mark.parametrize("value", ("A" * 3, " \t" + "A" * 3 + "\n"))
+def test_each_tlc_event_records_pattern_warning(value: str) -> None:
+    from datetime import datetime, timezone
+
+    for _ in range(2):
+        event = FSMAEvent(event_type="SHIPPING", tlc=value, event_time=datetime.now(timezone.utc).isoformat())
+        assert event.tlc == value.strip()
+        assert any("production pattern" in warning for warning in event.warnings)
+        assert event.model_dump()["warnings"] == event.warnings
+        restored = FSMAEvent.model_validate(event.model_dump())
+        assert restored.warnings == event.warnings
+
+
+def test_production_tlc_event_has_no_advisory() -> None:
+    from datetime import datetime, timezone
+
+    event = FSMAEvent(event_type="SHIPPING", tlc="0" * 14 + "A", event_time=datetime.now(timezone.utc).isoformat())
+    assert event.warnings == []
