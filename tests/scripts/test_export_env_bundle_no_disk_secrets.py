@@ -131,9 +131,12 @@ def test_missing_required_secret_fails_without_emitting(tmp_path):
     )
     assert proc.returncode == 1
     assert proc.stdout.strip() == "", "emitted a bundle despite failing validation"
-    # Error path lists REQUIRED_SECRETS from the constant (unfiltered), not a
-    # payload-derived missing set, so CodeQL cannot taint the printed names.
+    # Error path embeds required names as literals (not from payload /
+    # REQUIRED_SECRETS iteration), so CodeQL cannot taint the printed text.
     assert "POSTGRES_PASSWORD" in proc.stderr
+    assert "NEO4J_PASSWORD" in proc.stderr
+    assert "OBJECT_STORAGE_ACCESS_KEY_ID" in proc.stderr
+    assert "OBJECT_STORAGE_SECRET_ACCESS_KEY" in proc.stderr
     assert "required secret(s) missing" in proc.stderr
     for value in FAKE_ENV.values():
         assert value not in proc.stderr, "a credential value was printed on the error path"
@@ -152,10 +155,12 @@ def test_plaintext_bundle_filenames_are_gitignored(candidate):
 
 
 def test_status_names_come_from_constants_not_payload():
-    """Code scanning alerts 19 and 20: status lines print names only.
+    """Code scanning alerts 19 / 20 / 82: status names stay in sync.
 
-    PAYLOAD_KEYS must match the payload exactly, so the names printed are
-    the names validated, and nothing printed is derived from payload data.
+    Status lines embed env-var names as literals (not by iterating the
+    credential payload or REQUIRED_SECRETS/PAYLOAD_KEYS into print). Keep
+    PAYLOAD_KEYS identical to build_secret_payload keys and REQUIRED_SECRETS
+    a subset, so the literal lists and validation stay aligned.
     """
     import importlib.util
 

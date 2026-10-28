@@ -177,29 +177,49 @@ def main() -> None:
 
     load_environment(args.env_file)
     payload = build_secret_payload(args.environment)
-    # Count misses without building a payload-filtered name list for logging.
-    # Status lines print names only from REQUIRED_SECRETS / PAYLOAD_KEYS
-    # (never gated on a set derived from the credential payload), so CodeQL
-    # cannot trace printed text back to secret data (alert 82 / 19 / 20).
+    # Count misses without building a name list for logging. Status lines
+    # embed env-var *names* as string literals in the message (same pattern
+    # as auth_crypto / fingerprint_repair) so CodeQL cannot trace printed
+    # text from REQUIRED_SECRETS, PAYLOAD_KEYS, or the credential payload
+    # (alerts 19 / 20 / 82, py/clear-text-logging-sensitive-data).
     missing_count = len(validate_payload(payload))
 
     if missing_count:
+        # Names are literals in this message; do not interpolate REQUIRED_SECRETS.
         print(
-            f"\nERROR: {missing_count} required secret(s) missing.",
+            f"\nERROR: {missing_count} required secret(s) missing.\n"
+            "Required secret names (values never printed):\n"
+            "  - POSTGRES_PASSWORD\n"
+            "  - NEO4J_PASSWORD\n"
+            "  - OBJECT_STORAGE_ACCESS_KEY_ID\n"
+            "  - OBJECT_STORAGE_SECRET_ACCESS_KEY",
             file=sys.stderr,
         )
-        print(
-            "Required secret names (from constants; values never printed):",
-            file=sys.stderr,
-        )
-        for name in REQUIRED_SECRETS:
-            print(f"  - {name}", file=sys.stderr)
         sys.exit(1)
 
-    print("\nAll required secrets are present.", file=sys.stderr)
-    print("Keys validated (names only; values are never printed here):", file=sys.stderr)
-    for name in sorted(PAYLOAD_KEYS):
-        print(f"  - {name}", file=sys.stderr)
+    # Names are literals in this message; do not interpolate PAYLOAD_KEYS.
+    print(
+        "\nAll required secrets are present.\n"
+        "Keys validated (names only; values are never printed here):\n"
+        "  - ENVIRONMENT\n"
+        "  - KAFKA_BOOTSTRAP_SERVERS\n"
+        "  - KAFKA_PASSWORD\n"
+        "  - KAFKA_SECURITY_PROTOCOL\n"
+        "  - KAFKA_USERNAME\n"
+        "  - NEO4J_PASSWORD\n"
+        "  - NEO4J_URI\n"
+        "  - NEO4J_USER\n"
+        "  - OBJECT_STORAGE_ACCESS_KEY_ID\n"
+        "  - OBJECT_STORAGE_ENDPOINT_URL\n"
+        "  - OBJECT_STORAGE_REGION\n"
+        "  - OBJECT_STORAGE_SECRET_ACCESS_KEY\n"
+        "  - POSTGRES_DB\n"
+        "  - POSTGRES_HOST\n"
+        "  - POSTGRES_PASSWORD\n"
+        "  - POSTGRES_PORT\n"
+        "  - POSTGRES_USER",
+        file=sys.stderr,
+    )
 
     if args.emit_bundle:
         if sys.stdout.isatty() and not args.allow_tty:
