@@ -30,7 +30,7 @@ const jsonLd = {
     "name": "Supply Chain Knowledge Graph",
     "operatingSystem": "All",
     "applicationCategory": "BusinessApplication",
-    "description": "Interactive visual builder for designing FSMA 204 compliant supply chain networks.",
+    "description": "Interactive visual builder for mapping supply chain networks for FSMA 204 recordkeeping.",
     "publisher": {
         "@type": "Organization",
         "name": "RegEngine"

@@ -8,12 +8,12 @@ import { PageHeader } from "@/components/layout/page-header";
 import { CheckCircle, XCircle, Minus, ArrowRight, Shield, ShoppingCart, Zap, Code } from "lucide-react";
 
 export const metadata: Metadata = {
-  title: "RegEngine vs ReposiTrak: FSMA 204 Compliance Comparison",
+  title: "RegEngine vs ReposiTrak: FSMA 204 Traceability Comparison",
   description:
-    "Compare RegEngine and ReposiTrak for FSMA 204 compliance. Deep rule validation vs retailer compliance tracking.",
+    "Compare RegEngine and ReposiTrak for FSMA 204 traceability recordkeeping. Deep rule validation vs retailer compliance tracking.",
   openGraph: {
-    title: 'RegEngine vs ReposiTrak: FSMA 204 Compliance Comparison',
-    description: 'Compare RegEngine and ReposiTrak for FSMA 204 compliance. Deep rule validation vs retailer compliance tracking.',
+    title: 'RegEngine vs ReposiTrak: FSMA 204 Traceability Comparison',
+    description: 'Compare RegEngine and ReposiTrak for FSMA 204 traceability recordkeeping. Deep rule validation vs retailer compliance tracking.',
     url: 'https://regengine.co/compare/repositrak',
     type: 'website',
   },
@@ -28,11 +28,11 @@ const FEATURES = [
   { feature: "CSV upload and JSON events API", regengine: "check", competitor: "partial", note: "Both; verify ReposiTrak's current ingestion options" },
   { feature: "Retailer compliance network", regengine: "partial", competitor: "check", note: "ReposiTrak's core strength" },
   { feature: "Supplier portal", regengine: "check", competitor: "check", note: "Both offer supplier management" },
-  { feature: "Published pricing on website", regengine: "check", competitor: "x", note: "List price from $849/mo (Founding rates from $425/mo, billed annually) vs custom retailer quotes" },
+  { feature: "Published pricing on website", regengine: "check", competitor: "x", note: "List price $999 per month, per facility. Founding design partner price $499 per month, per facility. ReposiTrak: custom retailer quotes" },
 ];
 
 const WHY_SWITCH = [
-  { title: "Validation, not just submission tracking", icon: Zap, desc: "ReposiTrak focuses on supplier-data submission tracking. RegEngine validates whether the underlying data is FSMA 204 compliant, checking KDEs, cross-event integrity, and mass balance. You can use both." },
+  { title: "Validation, not just submission tracking", icon: Zap, desc: "ReposiTrak focuses on supplier-data submission tracking. RegEngine checks the underlying CTE/KDE records for gaps, including KDE coverage, cross-event integrity, and mass balance. Checks are advisory and RegEngine does not certify compliance. You can use both." },
   { title: "Works beyond one retailer", icon: Shield, desc: "ReposiTrak is optimized for retailer-supplier compliance mandates. RegEngine works across your supply chain regardless of which retailers you serve." },
   { title: "Public API and open egress", icon: Code, desc: "RegEngine ships a public REST API, OpenAPI spec, JSON events API, and CSV export at any time. Confirm ReposiTrak's current integration options for your stack." },
   { title: "Complement your retailer tools", icon: ShoppingCart, desc: "Use ReposiTrak for retailer compliance tracking AND RegEngine for FSMA 204 validation. They solve adjacent problems." },
@@ -64,8 +64,8 @@ export default function ReposiTrakCompare() {
         title={"RegEngine vs ReposiTrak"}
         description={
           <>
-            ReposiTrak connects suppliers to retailer compliance mandates. RegEngine validates your traceability data
-            against FSMA 204 rules before the FDA asks to see it.
+            ReposiTrak connects suppliers to retailer compliance mandates. RegEngine helps you check CTE/KDE gaps
+            in your traceability records before you assemble an FDA-oriented export. Checks are advisory.
           </>
         }
       />

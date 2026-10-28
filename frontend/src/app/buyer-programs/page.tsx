@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
 import { Card } from "@/components/ui/card";
 import { Container } from "@/components/layout/container";
+import { FOUNDING_PRICE_LINE, LIST_PRICE_LINE, PILOT_LINE } from "@/lib/pricing-terms";
 
 export const metadata: Metadata = {
   title: "Buyer traceability programs | RegEngine",
@@ -92,20 +93,6 @@ export default function BuyerProgramsPage() {
 
             <Card padding="spacious">
               <h3 className="mb-3 text-subheading text-re-text-primary">
-                Albertsons Companies
-              </h3>
-              <p className="mb-3 text-ui leading-relaxed text-re-text-secondary">
-                Source: Letter dated 17 September 2025 (PDF at suppliers.safeway.com)
-              </p>
-              <ul className={factList}>
-                <li>• All food and non-alcoholic beverages</li>
-                <li>• Albertsons deadline January 1, 2027</li>
-                <li>• FDA enforcement not before July 20, 2028</li>
-              </ul>
-            </Card>
-
-            <Card padding="spacious">
-              <h3 className="mb-3 text-subheading text-re-text-primary">
                 Kroger Food Traceability Policy
               </h3>
               <p className="mb-3 text-ui leading-relaxed text-re-text-secondary">
@@ -165,12 +152,13 @@ export default function BuyerProgramsPage() {
             Pricing
           </h2>
           <Card padding="spacious">
-            <div className="mb-4 flex flex-wrap items-baseline gap-3">
-              <span className="text-title tabular-nums text-re-text-primary">$425</span>
-              <span className="text-ui text-re-text-tertiary">per month, billed annually</span>
-            </div>
+            <ul className={`mb-4 ${factList}`}>
+              <li>• {LIST_PRICE_LINE}</li>
+              <li>• {FOUNDING_PRICE_LINE}</li>
+              <li>• {PILOT_LINE}</li>
+            </ul>
             <p className="text-ui leading-relaxed text-re-text-secondary">
-              No facility/CTE cap. No SLA. No retailer-specific benchmark. No quarterly compliance review. No audit. No readiness score. No FDA/buyer approval. No three-tier ladder or strikethrough list prices.
+              No CTE cap. No SLA. No retailer-specific benchmark. No quarterly compliance review. No audit. No readiness score. No FDA/buyer approval. No three-tier ladder or strikethrough list prices.
             </p>
           </Card>
         </Container>

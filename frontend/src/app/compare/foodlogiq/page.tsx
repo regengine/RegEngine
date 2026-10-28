@@ -8,12 +8,12 @@ import { PageHeader } from "@/components/layout/page-header";
 import { CheckCircle, XCircle, Minus, ArrowRight, Shield, Clock, Code, Zap } from "lucide-react";
 
 export const metadata: Metadata = {
-  title: "RegEngine vs FoodLogiQ (Aptean): FSMA 204 Compliance Comparison",
+  title: "RegEngine vs FoodLogiQ (Aptean): FSMA 204 Traceability Comparison",
   description:
-    "Compare RegEngine and FoodLogiQ for FSMA 204 compliance. See how self-serve setup, rule evaluation, and transparent pricing differ from enterprise-only deployment.",
+    "Compare RegEngine and FoodLogiQ for FSMA 204 traceability recordkeeping. See how self-serve setup, rule evaluation, and transparent pricing differ from enterprise-only deployment.",
   openGraph: {
-    title: 'RegEngine vs FoodLogiQ (Aptean): FSMA 204 Compliance Comparison',
-    description: 'Compare RegEngine and FoodLogiQ for FSMA 204 compliance. See how self-serve setup, rule evaluation, and transparent pricing differ from enterprise-only deployment.',
+    title: 'RegEngine vs FoodLogiQ (Aptean): FSMA 204 Traceability Comparison',
+    description: 'Compare RegEngine and FoodLogiQ for FSMA 204 traceability recordkeeping. See how self-serve setup, rule evaluation, and transparent pricing differ from enterprise-only deployment.',
     url: 'https://regengine.co/compare/foodlogiq',
     type: 'website',
   },
@@ -28,7 +28,7 @@ const FEATURES = [
   { feature: "CSV upload and JSON events API", regengine: "check", competitor: "partial", note: "Both; verify FoodLogiQ's current ingestion surface" },
   { feature: "Supplier portal with compliance scoring", regengine: "check", competitor: "check", note: "Both offer supplier management" },
   { feature: "Recall drills", regengine: "check", competitor: "check", note: "FoodLogiQ's original strength" },
-  { feature: "Published pricing on website", regengine: "check", competitor: "x", note: "List price from $849/mo (Founding rates from $425/mo, billed annually) vs custom enterprise quotes" },
+  { feature: "Published pricing on website", regengine: "check", competitor: "x", note: "List price $999 per month, per facility. Founding design partner price $499 per month, per facility. FoodLogiQ: custom enterprise quotes" },
 ];
 
 const WHY_SWITCH = [
@@ -38,7 +38,7 @@ const WHY_SWITCH = [
   { title: "Self-serve onboarding", desc: "RegEngine evaluates your first CSV against the FSMA 204 rule set on upload, with no implementation project to get a readiness answer. FoodLogiQ ships through enterprise implementation; verify current onboarding timelines with their team." },
   { title: "Purpose-built for FSMA 204", desc: "FoodLogiQ originated as recall management; FSMA 204 capabilities were added later per their public roadmap. RegEngine was designed for the Food Traceability Rule from day one with KDE validation and cross-event integrity checks." },
   { title: "Open data egress", desc: "RegEngine ships a public API, OpenAPI docs, and CSV export of every record. Confirm FoodLogiQ's current data-egress options with their team before committing." },
-  { title: "Published pricing", desc: "Facility-based list pricing from $849/mo, with Founding rates from $425/mo (billed annually) and no multi-year commitment required. FoodLogiQ pricing is custom-quoted, so request both to compare for your facility count." },
+  { title: "Published pricing", desc: "List price is $999 per month, per facility. The founding design partner price is $499 per month, per facility. FoodLogiQ pricing is custom-quoted, so request both to compare for your facility count." },
 ];
 
 
@@ -71,7 +71,7 @@ export default function FoodLogiQCompare() {
         }
         description={
           <>
-            FoodLogiQ was built for enterprise recall management. RegEngine was built for FSMA 204 compliance from day one.
+            FoodLogiQ was built for enterprise recall management. RegEngine was built for FSMA 204 recordkeeping from day one.
             FoodLogiQ was acquired by Aptean in 2023; check their roadmap for current direction.
           </>
         }

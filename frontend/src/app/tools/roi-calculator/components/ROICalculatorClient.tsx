@@ -89,7 +89,7 @@ export function ROICalculatorClient() {
                         <h5 className="mb-2 text-label text-re-text-muted">Methodology Note</h5>
                         <p className="text-small leading-relaxed text-re-text-tertiary">
                             Estimates use simple multipliers applied to your reported hours, record volume, and revenue.
-                            We don&apos;t have verified customer ROI data yet, and the Founding rate reflects that.
+                            We don&apos;t have verified customer ROI data yet, and the founding design partner price reflects that.
                             FDA has said it will not enforce the Food Traceability Rule before July 20, 2028, following a Congressional directive.
                             No public fine schedule exists, so the
                             risk-concentration tile is illustrative only. Actual results depend on your contracts,
@@ -130,7 +130,7 @@ export function ROICalculatorClient() {
                     {[
                         {
                             title: 'Labor time avoided',
-                            desc: 'Teams typically move record retrieval from hours to minutes. We don\'t have verified customer ROI data yet, and the Founding rate reflects that.',
+                            desc: 'Teams typically move record retrieval from hours to minutes. We don\'t have verified customer ROI data yet, and the founding design partner price reflects that.',
                             icon: Clock
                         },
                         {

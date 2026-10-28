@@ -47,16 +47,39 @@ describe('pre-revenue public copy', () => {
         }
     });
 
-    it('shows no hardcoded prices on pricing surfaces', () => {
+    it('pricing surfaces take prices only from the approved terms module', () => {
         const client = read('src/components/pricing/PricingPageClient.tsx');
-        expect(client).not.toContain('$425');
-        expect(client).toContain('Founding rate\n');
+        expect(client).toContain("from '@/lib/pricing-terms'");
+        expect(client).not.toMatch(/tier\.(gaAnnual|gaMonthly|partnerAnnual|partnerMonthly)/);
+        expect(client).not.toContain('50% off');
+        expect(client).not.toMatch(/annual billing/i);
 
         const page = read('src/app/pricing/page.tsx');
-        expect(page).not.toContain('$425');
+        expect(page).toContain("from '@/lib/pricing-terms'");
         expect(page).not.toMatch(/gaMonthly: \d/);
-        expect(page).toContain('Pricing is temporarily unavailable');
-        expect(page).toContain('What does the Founding rate include?');
+        expect(page).toContain('How does the pilot work?');
+    });
+
+    it('approved terms module carries the A-2155 prices and pilot terms', () => {
+        const terms = read('src/lib/pricing-terms.ts');
+        expect(terms).toContain("'$999 per month, per facility'");
+        expect(terms).toContain("'$499 per month, per facility'");
+        expect(terms).toContain("'$2,000 for 90 days on 1 facility'");
+        expect(terms).toContain("'$1,500 if you convert to a subscription within 30 days'");
+        expect(terms).toContain('credited toward your first subscription invoice');
+    });
+
+    it.each([
+        ...PUBLIC_FILES,
+        'src/app/about/page.tsx',
+        'src/app/buyer-programs/page.tsx',
+        'src/lib/pricing-terms.ts',
+    ])('%s carries no stale prices, retailer deadlines, or billed-annually terms', (file) => {
+        const source = read(file);
+        for (const stale of ['$425', '$849', '$850', '$549', '$1,099', '$639', '$1,275', 'billed annually']) {
+            expect(source, `${file} still contains "${stale}"`).not.toContain(stale);
+        }
+        expect(source).not.toMatch(/sysco|albertsons/i);
     });
 
     it('home page and root layout never say pre-revenue (metadata and JSON-LD included)', () => {

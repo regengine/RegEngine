@@ -22,7 +22,8 @@ describe('about page public copy', () => {
         );
         expect(source).not.toContain('Design-partner feedback is scoped to');
         expect(source).not.toContain('quarterly release trains');
-        expect(source).toContain('$425/mo');
+        expect(source).toContain('List price is $999 per month, per facility.');
+        expect(source).not.toContain('$425');
     });
 
     it('renders the two sentences as continuous copy', () => {
@@ -34,7 +35,9 @@ describe('about page public copy', () => {
         expect(text).toContain(
             'No committee approvals. Early tester feedback is scoped by the founder and ships when the change is ready to verify, without waiting on a large release committee.',
         );
-        expect(text).toContain('$425/mo');
+        expect(text).toContain('List price is $999 per month, per facility.');
+        expect(text).toContain('The founding design partner price is $499 per month, per facility.');
+        expect(text).not.toContain('$425');
         expect(text).not.toContain('Customers can independently verify');
         expect(text).not.toContain('Design-partner feedback is scoped to');
         expect(text).not.toContain('quarterly release trains');
