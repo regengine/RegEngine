@@ -451,6 +451,20 @@ jobs:
               delay = Math.min(Math.round(delay * 1.5), 120000);
             }
 
+            // Final poll: Frontend CI may have finished during the last sleep.
+            const finalRes = await github.rest.checks.listForRef({
+              owner, repo, ref: sha, check_name: CHECK_NAME, filter: 'latest', per_page: 20,
+            }).catch(() => null);
+            const finalRun = (finalRes?.data?.check_runs || []).find(r => r.status === 'completed');
+            if (finalRun) {
+              if (finalRun.conclusion === 'success') {
+                core.info(`Check ${CHECK_NAME} succeeded with conclusion: success`);
+                return;
+              }
+              core.setFailed(finalRun.conclusion);
+              return;
+            }
+
             core.setFailed(
               `${CHECK_NAME} is still pending (not created yet or queued) after 12 minutes; ` +
               `this is a CI queue delay, not a frontend failure. This job is re-run ` +
