@@ -137,7 +137,7 @@ def _prepare_key_file_path(path: Path, *, allow_replace: bool = False) -> Path:
             )
     else:
         parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        os.chmod(parent, 0o700)
+        os.chmod(parent, stat.S_IRWXU)
 
     if path.exists() and not allow_replace:
         raise SystemExit(

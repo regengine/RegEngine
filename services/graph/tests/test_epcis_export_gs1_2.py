@@ -74,19 +74,26 @@ def graph_row(kind):
 
 
 async def export(format, rows):
-    async def query(client, start, end, tenant):
+    async def query(client, start, end, tenant, **kwargs):
         assert tenant == str(TENANT)
         return rows
 
     today = datetime.now(timezone.utc).date().isoformat()
     # Bypass slowapi so the suite can call the endpoint many times in one process.
     endpoint = getattr(compliance.export_epcis, "__wrapped__", compliance.export_epcis)
-    with patch.object(compliance, "Neo4jClient", FakeNeo4j), patch.object(
-        compliance, "reconcile_tenant_scope", return_value=str(TENANT)
-    ), patch.object(fsma_utils, "query_events_by_range", query):
+    with (
+        patch.object(compliance, "Neo4jClient", FakeNeo4j),
+        patch.object(compliance, "reconcile_tenant_scope", return_value=str(TENANT)),
+        patch.object(fsma_utils, "query_events_by_range", query),
+        patch.object(compliance, "query_events_by_range", query),
+    ):
         response = await endpoint(
             Request({"type": "http", "method": "GET", "path": "/export/epcis", "query_string": b"", "headers": []}),
-            today, today, format, TENANT, object(),
+            today,
+            today,
+            format,
+            TENANT,
+            object(),
         )
         return await body(response)
 
@@ -124,9 +131,7 @@ def test_empty_export_has_no_events_in_either_format():
     xml = asyncio.run(export("xml", []))
     assert document["epcisBody"]["eventList"] == []
     jsonschema = pytest.importorskip("jsonschema")
-    jsonschema.Draft7Validator(
-        json.loads(schema_file("EPCIS-JSON-Schema.json").read_text())
-    ).validate(document)
+    jsonschema.Draft7Validator(json.loads(schema_file("EPCIS-JSON-Schema.json").read_text())).validate(document)
     schema = etree.XMLSchema(etree.parse(str(schema_file("XSD/EPCglobal-epcis-2_0.xsd"))))
     tree = etree.fromstring(xml, etree.XMLParser(no_network=True)).getroottree()
     assert schema.validate(tree), str(schema.error_log)
