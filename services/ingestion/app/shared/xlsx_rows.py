@@ -145,6 +145,11 @@ def xlsx_to_csv_text(
         else:
             sheet = workbook.worksheets[0]
         formula_sheet = formula_workbook[sheet.title]
+        if reject_on_scan_limit:
+            # Declared dimensions can omit stored rows. Strict previews must
+            # inspect the actual records, subject to the bounds below.
+            sheet.reset_dimensions()
+            formula_sheet.reset_dimensions()
 
         out = io.StringIO()
         writer = csv.writer(out, lineterminator="\n")

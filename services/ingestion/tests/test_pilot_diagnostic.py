@@ -6,6 +6,8 @@ import csv
 import io
 import json
 import logging
+import re
+import zipfile
 from pathlib import Path
 
 import httpx2
@@ -50,6 +52,40 @@ def xlsx_bytes(header, rows, *, padding=False):
     out = io.BytesIO()
     workbook.save(out)
     return out.getvalue()
+
+
+@pytest.mark.parametrize("record_count,declared_last_row,status", [(3, 2, 200), (501, 501, 413), (3, 30000, 200)])
+def test_xlsx_preview_uses_stored_rows_instead_of_declared_dimensions(
+    client, monkeypatch, record_count, declared_last_row, status
+):
+    header, rows = fixture_rows()
+    original = xlsx_bytes(header, [rows[0]] * record_count)
+    altered = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(original)) as source, zipfile.ZipFile(altered, "w") as destination:
+        for entry in source.infolist():
+            contents = source.read(entry.filename)
+            if entry.filename == "xl/worksheets/sheet1.xml":
+                contents, changed = re.subn(
+                    rb'<dimension ref="[^"]+"',
+                    f'<dimension ref="A1:J{declared_last_row}"'.encode(),
+                    contents,
+                    count=1,
+                )
+                assert changed == 1
+            destination.writestr(entry, contents)
+
+    if status == 413:
+
+        def forbidden(*args, **kwargs):
+            pytest.fail("Oversized workbook must be rejected before canonical parsing or Jev")
+
+        monkeypatch.setattr(ct, "parse_csv_rows", forbidden)
+        monkeypatch.setattr(review_policy, "review_pilot_diagnostic", forbidden)
+    response = post(client, altered.getvalue(), xlsx=True, semantic_review="false")
+    assert response.status_code == status
+    if status == 200:
+        assert response.json()["parsed_record_count"] == record_count
+        assert response.json()["valid_event_count"] == record_count
 
 
 @pytest.fixture

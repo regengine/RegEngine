@@ -17,6 +17,8 @@ existing converter with strict scan-limit rejection: a worksheet that cannot be
 fully inspected within 20,000 worksheet rows is rejected. Empty worksheet rows
 are skipped, and the first nonempty row is the header. The first worksheet is
 used unless a sheet name is supplied; other worksheets are outside this preview.
+Strict previews ignore declared worksheet dimensions so inaccurate metadata
+cannot silently omit stored rows or bypass the record limit.
 
 The response groups canonical parser observations by reason, field, disposition,
 and file-level status. Each group includes exact record indices. CSV indices
