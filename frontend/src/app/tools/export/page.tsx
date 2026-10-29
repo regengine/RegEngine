@@ -42,7 +42,7 @@ const PACKAGE_PARTS = [
   {
     icon: FileText,
     title: 'FDA Sortable Spreadsheet',
-    body: 'FDA-oriented sortable CSV organized around requested FSMA 204 records. Column mapping should be reviewed against the specific FDA request.',
+    body: 'Headline FDA-oriented sortable CSV organized around requested FSMA 204 records (§1.1455). Column mapping should be reviewed against the specific FDA request.',
   },
   {
     icon: Shield,
@@ -320,7 +320,7 @@ export default function ExportPage() {
     <EmailGate toolName="export">
       <FreeToolPageShell
         title="FDA Export Package Generator"
-        subtitle="Generate a verifiable FSMA 204 records package to support 21 CFR 1.1455 record-availability workflows."
+        subtitle="Generate a verifiable FSMA 204 sortable spreadsheet package to support 21 CFR 1.1455 record-availability workflows."
         relatedToolIds={['drill-simulator', 'cte-mapper', 'kde-checker']}
       >
         {/* Section 1: Package Overview */}
