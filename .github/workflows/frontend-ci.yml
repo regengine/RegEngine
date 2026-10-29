@@ -360,10 +360,15 @@ jobs:
     timeout-minutes: 40
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/playwright_shared # pragma: allowlist secret
-      ADMIN_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/playwright_shared # pragma: allowlist secret
+      # Admin API-key store requires NOSUPERUSER/NOBYPASSRLS regengine_sysadmin
+      # (provisioned by scripts/setup_e2e_postgres.py). Fake CI-only password.
+      ADMIN_DATABASE_URL: postgresql://regengine_sysadmin:ci-e2e-only-sysadmin-not-a-real-secret@localhost:5432/playwright_shared # pragma: allowlist secret — CI-only fake password for E2E NOSUPERUSER role
       PGOPTIONS: "-c timezone=UTC -c search_path=public,fsma,extensions"
       REGENGINE_ENV: test
       REGENGINE_E2E_MODE: "true"
+      # Raise product-mutation slowapi budget for authenticated-core-journeys
+      # (55 creates). Production default stays 30/minute when this is unset.
+      REGENGINE_E2E_RELAX_PRODUCT_MUTATION_LIMIT: "true"
       REGENGINE_E2E_EMAIL_OUTBOX: /tmp/regengine-playwright-email-outbox.jsonl
       AUTH_SECRET_KEY: playwright-local-jwt-signing-key-2026 # pragma: allowlist secret
       JWT_SIGNING_KEY: playwright-local-jwt-signing-key-2026 # pragma: allowlist secret
