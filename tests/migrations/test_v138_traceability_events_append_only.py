@@ -69,6 +69,8 @@ def test_trigger_sql_covers_update_delete_and_truncate() -> None:
     assert "ERRCODE = 'check_violation'" in mod._ROW_FUNCTION_SQL
     assert "current_setting('fsma.allow_mutation', true)" in mod._ROW_FUNCTION_SQL
     assert "current_setting('fsma.allow_mutation', true)" in mod._TRUNCATE_FUNCTION_SQL
+    # Null-safe transition guard (the Supabase twin leaves status nullable).
+    assert "(OLD.status = 'active' AND NEW.status = 'superseded') IS NOT TRUE" in mod._ROW_FUNCTION_SQL
 
 
 def test_allowlist_matches_the_production_writers() -> None:
@@ -252,6 +254,49 @@ def test_other_status_transitions_rejected(seeded, target) -> None:
         f"UPDATE fsma.traceability_events SET status = '{target}' WHERE event_id = CAST(:eid AS uuid)",
         {"eid": event_id},
     )
+
+
+def test_null_status_rejected_on_nullable_catalogs(seeded) -> None:
+    """A NULL ``status`` must not slip past the transition guard.
+
+    The alembic catalog declares ``status NOT NULL``, but the Supabase twin
+    (``supabase/migrations/20260403234813_*.sql``) leaves it nullable, and
+    ``NOT (OLD.status = 'active' AND NEW.status = 'superseded')`` is NULL,
+    not TRUE, when either side is NULL. Both transactions below drop the
+    NOT NULL constraint only inside a transaction that the rejection rolls
+    back, so the catalog is unchanged afterwards.
+    """
+    engine, event_id = seeded
+    drop_not_null = text("ALTER TABLE fsma.traceability_events ALTER COLUMN status DROP NOT NULL")
+    set_status = text("UPDATE fsma.traceability_events SET status = :status WHERE event_id = CAST(:eid AS uuid)")
+
+    # active -> NULL
+    with pytest.raises(DBAPIError) as exc:
+        with engine.begin() as conn:
+            conn.execute(drop_not_null)
+            conn.execute(set_status, {"status": None, "eid": event_id})
+    assert "status may only move" in str(exc.value), str(exc.value)
+    assert getattr(exc.value.orig, "sqlstate", "23514") == "23514"
+
+    # NULL -> active (the row got its NULL through break-glass)
+    with pytest.raises(DBAPIError) as exc:
+        with engine.begin() as conn:
+            conn.execute(drop_not_null)
+            conn.execute(text("SET LOCAL fsma.allow_mutation = 'true'"))
+            conn.execute(set_status, {"status": None, "eid": event_id})
+            conn.execute(text("SET LOCAL fsma.allow_mutation = 'false'"))
+            conn.execute(set_status, {"status": "active", "eid": event_id})
+    assert "status may only move" in str(exc.value), str(exc.value)
+    assert getattr(exc.value.orig, "sqlstate", "23514") == "23514"
+
+    with engine.connect() as conn:
+        nullable = conn.execute(
+            text(
+                "SELECT is_nullable FROM information_schema.columns"
+                " WHERE table_schema = 'fsma' AND table_name = 'traceability_events' AND column_name = 'status'"
+            )
+        ).scalar()
+    assert nullable == "NO"
 
 
 @pytest.mark.parametrize(

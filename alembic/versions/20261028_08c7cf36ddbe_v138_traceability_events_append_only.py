@@ -117,8 +117,11 @@ BEGIN
     END IF;
 
     -- status may only move active -> superseded (an amendment landed).
+    -- IS NOT TRUE, not NOT (...): the Supabase twin leaves status nullable,
+    -- and a NULL on either side would turn NOT (...) into NULL and let the
+    -- change through.
     IF NEW.status IS DISTINCT FROM OLD.status
-       AND NOT (OLD.status = 'active' AND NEW.status = 'superseded') THEN
+       AND (OLD.status = 'active' AND NEW.status = 'superseded') IS NOT TRUE THEN
         RAISE EXCEPTION
             'traceability_events status may only move from active to superseded; % -> % rejected for event_id=%. Set fsma.allow_mutation=true for authorized break-glass.',
             OLD.status, NEW.status, OLD.event_id
