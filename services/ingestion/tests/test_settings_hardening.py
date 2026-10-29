@@ -47,6 +47,9 @@ from app.settings import (  # noqa: E402
 from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override  # noqa: E402
 
 FAKE_KEY = "sk_test_FAKE_DO_NOT_USE_1234"
+FAKE_SECRET_VALUE = (
+    "super-" + FAKE_KEY  # pragma: allowlist secret  # synthetic test fixture only; never a real credential
+)
 
 
 # ---------------------------------------------------------------------------
@@ -185,7 +188,7 @@ def _blob_with_key():
             "prefix": "sk_test",
             "last4": "1234",
             "key": FAKE_KEY,
-            "secret": "super-" + FAKE_KEY,
+            "secret": FAKE_SECRET_VALUE,
             "hash": "deadbeef",
             "status": "active",
         }
