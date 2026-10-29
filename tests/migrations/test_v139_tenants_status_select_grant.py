@@ -84,7 +84,7 @@ def test_supabase_pair_matches_column_grant() -> None:
         flags=re.IGNORECASE,
     )
     assert "SEL-616" in sql
-    assert "e7a1c9d2f4b0" in sql or "v139" in sql.lower()
+    assert "e7a1c9d2f4b0" in sql or "v139" in sql.lower()  # pragma: allowlist secret
 
 
 def test_v111_inventory_lists_id_and_status_only_no_table_select() -> None:
