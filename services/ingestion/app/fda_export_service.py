@@ -12,6 +12,7 @@ import csv
 import hashlib
 import io
 import json
+import logging
 import zipfile
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -23,6 +24,8 @@ from shared.rules.verdict import classify_event_verdict
 
 from .shared.csv_safety import sanitize_cell
 from .webhook_models import REQUIRED_KDES_BY_CTE, WebhookCTEType
+
+logger = logging.getLogger("fda-export")
 
 # ---------------------------------------------------------------------------
 # FDA Spreadsheet Column Spec
@@ -664,6 +667,74 @@ def _build_chain_verification_payload(
     }
 
 
+def _rule_versions_for_events(db_session: Any, tenant_id: str, events: list[dict]) -> dict:
+    """Snapshot rule versions for the events going into a package.
+
+    Thin wrapper over ``shared.rules.versions.snapshot_rule_versions`` that
+    pulls the event ids out of the exported rows and never raises: an
+    export must not fail because the rule catalog could not be read, it
+    must say so in the package instead.
+    """
+    from shared.rules.versions import snapshot_rule_versions
+
+    event_ids = [str(e.get("id")) for e in events if isinstance(e, dict) and e.get("id")]
+    try:
+        return snapshot_rule_versions(db_session, tenant_id=tenant_id, event_ids=event_ids)
+    except Exception:
+        logger.debug("fda_export_rule_versions_unavailable", exc_info=True)
+        return {
+            "catalog": {},
+            "catalog_status": "unavailable",
+            "evaluated": [],
+            "evaluated_status": "unavailable",
+            "enforcement_mode": None,
+        }
+
+
+def _build_known_gaps(
+    *,
+    completeness_summary: dict,
+    chain_payload: dict,
+    coverage_gate_bypassed: bool,
+    rule_versions: Optional[dict],
+) -> dict:
+    """Collect everything this package knows it does NOT prove.
+
+    The data already existed across the completeness summary, the chain
+    payload and a log line; this puts it in one hashed place so a reviewer
+    does not have to infer the gaps. Every key is read with ``.get`` so a
+    partial completeness summary (older callers, tests) still works.
+    """
+    missing_listed = completeness_summary.get("missing_required_events") or []
+    missing_total = int(completeness_summary.get("events_with_missing_required_fields") or 0)
+    row_hash_coverage = chain_payload.get("row_hash_coverage") or {}
+    rules = rule_versions or {}
+    gaps: dict[str, Any] = {
+        "required_kde_coverage_ratio": completeness_summary.get("required_kde_coverage_ratio"),
+        "events_with_missing_required_fields": missing_total,
+        "missing_required_by_field": completeness_summary.get("missing_required_by_field") or {},
+        # The per-event list in ``completeness`` is capped (250); say so
+        # rather than let a reader count the list and call it complete.
+        "missing_required_events_listed": len(missing_listed),
+        "missing_required_events_truncated": missing_total > len(missing_listed),
+        "events_unchecked_type": completeness_summary.get("events_unchecked_type", 0),
+        "unchecked_event_types": completeness_summary.get("unchecked_event_types") or [],
+        "coverage_gate_bypassed": bool(coverage_gate_bypassed),
+        "verification_status": chain_payload.get("verification_status"),
+        "missing_record_hashes": row_hash_coverage.get("missing_record_hashes", 0),
+        "missing_chain_hashes": row_hash_coverage.get("missing_chain_hashes", 0),
+        "rules_enforcement_mode": rules.get("enforcement_mode"),
+        "rules_catalog_status": rules.get("catalog_status", "unavailable"),
+        "rules_evaluated_status": rules.get("evaluated_status", "not_requested"),
+        "notes": [
+            "Hash and Merkle checks establish that these bytes are internally consistent; they do not establish that the source data is accurate.",
+            "A rules enforcement mode of 'off' means rule failures were advisory at ingest and did not block the records in this package.",
+            "FSMA 204 permits paper and electronic records; this package covers only records ingested into RegEngine.",
+        ],
+    }
+    return gaps
+
+
 def _build_fda_package(
     *,
     events: list[dict],
@@ -676,6 +747,8 @@ def _build_fda_package(
     query_start_date: Optional[str],
     query_end_date: Optional[str],
     include_pii: bool = False,
+    rule_versions: Optional[dict] = None,
+    coverage_gate_bypassed: bool = False,
 ) -> tuple[bytes, dict]:
     """Build zip package bytes and return package metadata.
 
@@ -685,12 +758,21 @@ def _build_fda_package(
     redacted. The flag does NOT re-generate ``csv_content``; the caller
     must pass a CSV that was generated with the same ``include_pii``
     setting (issue #1219).
+
+    ``rule_versions`` (from ``shared.rules.versions.snapshot_rule_versions``)
+    and ``coverage_gate_bypassed`` feed the ``evidence_context_*.json``
+    member: the rule catalog and evaluated versions behind the records,
+    plus a known-gaps section. That member is hashed and sits under the
+    Merkle root like every other file, so the gaps the package admits to
+    are as tamper-evident as the data it carries. The manifest only
+    points at it; manifest keys themselves are not integrity-protected.
     """
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     scope = _safe_filename_token(tlc or "all")
     csv_name = f"fda_spreadsheet_{scope}_{timestamp}.csv"
     chain_name = f"chain_verification_{scope}_{timestamp}.json"
     validation_name = f"VALIDATION_ERRORS_{scope}_{timestamp}.log"
+    evidence_context_name = f"evidence_context_{scope}_{timestamp}.json"
     manifest_name = "manifest.json"
     readme_name = "README.txt"
 
@@ -698,6 +780,20 @@ def _build_fda_package(
     chain_bytes = json.dumps(chain_payload, indent=2, sort_keys=True).encode("utf-8")
     validation_log = _build_validation_errors_log(events, completeness_summary)
     validation_bytes = validation_log.encode("utf-8") if validation_log else None
+    known_gaps = _build_known_gaps(
+        completeness_summary=completeness_summary,
+        chain_payload=chain_payload,
+        coverage_gate_bypassed=coverage_gate_bypassed,
+        rule_versions=rule_versions,
+    )
+    evidence_context = {
+        "version": "1.0",
+        "rule_versions": rule_versions
+        if rule_versions is not None
+        else {"catalog_status": "unavailable", "evaluated_status": "not_requested", "catalog": {}, "evaluated": []},
+        "known_gaps": known_gaps,
+    }
+    evidence_context_bytes = json.dumps(evidence_context, indent=2, sort_keys=True).encode("utf-8")
     pii_note = (
         f"PII: Facility names and shipping locations are redacted to "
         f"'{PII_REDACTION_PLACEHOLDER}'. Use GLN / FDA Registration for "
@@ -716,7 +812,9 @@ def _build_fda_package(
         "1) fda_spreadsheet_*.csv - FDA-sortable traceability rows\n"
         "2) chain_verification_*.json - chain integrity and hash coverage metadata\n"
         "3) manifest.json - package metadata and file checksums\n"
-        + ("4) VALIDATION_ERRORS_*.log - KDE validation warnings per event\n" if validation_log else "")
+        "4) evidence_context_*.json - rule catalog and evaluated rule versions behind these records, "
+        "plus the known gaps this package does not prove\n"
+        + ("5) VALIDATION_ERRORS_*.log - KDE validation warnings per event\n" if validation_log else "")
         + "\n"
         + pii_note
         + "\n"
@@ -735,6 +833,7 @@ def _build_fda_package(
         (csv_name, csv_bytes),
         (chain_name, chain_bytes),
         (readme_name, readme_bytes),
+        (evidence_context_name, evidence_context_bytes),
     ]
     if validation_bytes:
         manifest_file_payloads.append((validation_name, validation_bytes))
@@ -804,6 +903,17 @@ def _build_fda_package(
             "chain_valid": chain_payload.get("chain_verification", {}).get("valid"),
             "chain_length": chain_payload.get("chain_verification", {}).get("chain_length"),
         },
+        # Pointer to the hashed member that holds rule versions and known
+        # gaps, plus the few counts a reviewer wants at a glance. The full
+        # content lives in the file so it is covered by the Merkle root.
+        "evidence_context": {
+            "path": evidence_context_name,
+            "sha256": hashlib.sha256(evidence_context_bytes).hexdigest(),
+            "rules_enforcement_mode": known_gaps["rules_enforcement_mode"],
+            "coverage_gate_bypassed": known_gaps["coverage_gate_bypassed"],
+            "events_with_missing_required_fields": known_gaps["events_with_missing_required_fields"],
+            "events_unchecked_type": known_gaps["events_unchecked_type"],
+        },
         "files": manifest_files,
         "merkle": {
             "algorithm": "sha256",
@@ -824,6 +934,7 @@ def _build_fda_package(
         zipf.writestr(chain_name, chain_bytes)
         if validation_bytes:
             zipf.writestr(validation_name, validation_bytes)
+        zipf.writestr(evidence_context_name, evidence_context_bytes)
         zipf.writestr(manifest_name, manifest_bytes)
         zipf.writestr(readme_name, readme_bytes)
 
@@ -833,6 +944,7 @@ def _build_fda_package(
     return package_bytes, {
         "csv_name": csv_name,
         "chain_name": chain_name,
+        "evidence_context_name": evidence_context_name,
         "manifest_name": manifest_name,
         "readme_name": readme_name,
         "package_hash": package_hash,

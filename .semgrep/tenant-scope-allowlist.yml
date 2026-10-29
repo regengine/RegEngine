@@ -135,11 +135,11 @@ baseline:
     qhash: "eb0a0cae5fb8514e"
     reason: "WHERE clause seeded with tenant_id = :tid; verified scoped at runtime."
   - file: services/ingestion/app/epcis/persistence.py
-    scope: _list_events_from_db
+    scope: _list_events_from_db_detailed
     rule: sql-without-tenant-predicate
     target: fsma.cte_events
-    qhash: "098f1e781ca4005c"
-    reason: "WHERE list seeded with tenant_id = :tenant_id; verified scoped at runtime."
+    qhash: "fca01504a1f86781"  # pragma: allowlist secret
+    reason: "WHERE list seeded with tenant_id = :tenant_id; verified scoped at runtime. Query moved from _list_events_from_db and LIMIT is now bound (:row_limit) so the export can report truncation."
   - file: services/ingestion/app/incident_router.py
     scope: list_incidents
     rule: sql-without-tenant-predicate
