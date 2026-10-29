@@ -3,6 +3,21 @@ Settings Router.
 
 Tenant-level account settings — company profile, API key management,
 data retention, and integrations configuration.
+
+Hardening (settings router):
+
+- Data-retention floors are enforced on *writes* only. The PUT body model
+  (:class:`DataRetentionUpdate`) rejects values below the FSMA-204 /
+  21 CFR 1.1455(c) floor with HTTP 422. Reads deliberately use the
+  floor-free :class:`DataRetention` so legacy JSONB written before the
+  floor existed still loads without a 500.
+- ``api_keys`` are redacted at every response boundary: callers only ever
+  see safe metadata, never the stored key/secret/token material. Redaction
+  operates on a copy — the persisted blob and the in-memory cache keep the
+  full records so profile/retention re-saves do not destroy key state.
+- Both PUT endpoints are rate limited with the shared slowapi limiter and
+  emit a best-effort ``SETTINGS_UPDATE`` audit event (changed field names
+  only — never profile values, which are PII).
 """
 
 from __future__ import annotations
@@ -10,8 +25,9 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, Request
+from pydantic import BaseModel, Field
+from shared.rate_limit import limiter
 from shared.tenant_context import TenantContext
 from shared.tenant_settings import get_jsonb, set_jsonb
 
@@ -21,6 +37,25 @@ logger = logging.getLogger("settings")
 
 
 router = APIRouter(prefix="/api/v1/settings", tags=["Settings"])
+
+# ---------------------------------------------------------------------------
+# Data-retention floors (21 CFR 1.1455(c): FSMA 204 records kept 2 years).
+#
+# Enforced on writes only — see ``DataRetentionUpdate``. ``DataRetention``
+# itself stays floor-free so legacy under-floor blobs still deserialize on
+# GET instead of raising a validation error (500).
+# ---------------------------------------------------------------------------
+MIN_CTE_RETENTION_DAYS = 730
+MIN_AUDIT_LOG_RETENTION_DAYS = 730
+MIN_EXPORT_RETENTION_DAYS = 1
+
+# Allowlist / denylist for api_keys redaction. Only the safe metadata keys
+# are ever echoed back; anything key-ish is dropped (and, when it is the only
+# identifier, reduced to a last-4 fingerprint).
+_API_KEY_SAFE_FIELDS = frozenset(
+    {"id", "name", "label", "prefix", "last4", "created_at", "last_used_at", "status", "scopes"}
+)
+_API_KEY_SECRET_FIELDS = ("key", "secret", "token", "hash", "api_key", "value")
 
 
 class CompanyProfile(BaseModel):
@@ -43,6 +78,20 @@ class DataRetention(BaseModel):
     audit_log_retention_days: int = 2555  # 7 years
     export_retention_days: int = 365
     auto_archive: bool = True
+
+
+class DataRetentionUpdate(DataRetention):
+    """Write-time data retention model with FSMA-204 floors.
+
+    Used *only* by ``PUT /{tenant_id}/retention``. Values below the floor are
+    rejected with HTTP 422. The read model (:class:`DataRetention`) stays
+    floor-free so legacy JSONB persisted before these floors existed still
+    loads on GET.
+    """
+
+    cte_retention_days: int = Field(default=1095, ge=MIN_CTE_RETENTION_DAYS)
+    audit_log_retention_days: int = Field(default=2555, ge=MIN_AUDIT_LOG_RETENTION_DAYS)
+    export_retention_days: int = Field(default=365, ge=MIN_EXPORT_RETENTION_DAYS)
 
 
 class IntegrationStatus(BaseModel):
@@ -104,6 +153,122 @@ def _default_settings(tenant_id: str) -> SettingsResponse:
 _settings_store: dict[str, SettingsResponse] = {}
 
 
+def _redact_api_key_entry(entry: object) -> dict:
+    """Reduce one api_keys record to safe metadata.
+
+    Keeps only allowlisted keys (id, name, label, prefix, last4, timestamps,
+    status, scopes). Drops anything key-ish (key, secret, token, hash,
+    api_key, value). If the entry carries no safe identifier at all but does
+    carry a raw key-ish string, it is masked to a last-4 fingerprint so the
+    caller can still distinguish keys without ever seeing the material.
+    """
+    if not isinstance(entry, dict):
+        return {}
+    safe = {k: v for k, v in entry.items() if k in _API_KEY_SAFE_FIELDS}
+    if not safe:
+        for field_name in _API_KEY_SECRET_FIELDS:
+            value = entry.get(field_name)
+            if isinstance(value, str) and value:
+                safe = {"last4": value[-4:], "status": "redacted"}
+                break
+    return safe
+
+
+def _redact_api_keys(api_keys: object) -> list[dict]:
+    """Redact a whole api_keys list for response."""
+    if not isinstance(api_keys, list):
+        return []
+    return [_redact_api_key_entry(entry) for entry in api_keys]
+
+
+def _redacted_response(settings: SettingsResponse) -> SettingsResponse:
+    """Return a response copy with api_keys reduced to safe metadata.
+
+    Operates on a copy: the stored blob and the in-memory cache retain the
+    full key records so profile/retention re-saves do not destroy them.
+    """
+    return settings.model_copy(update={"api_keys": _redact_api_keys(settings.api_keys)})
+
+
+def _audit_settings_update(
+    tenant_id: str,
+    endpoint: str,
+    changed_fields: list[str],
+    *,
+    db_fallback: bool,
+) -> None:
+    """Fire-and-forget audit log for a settings mutation.
+
+    Best-effort by design: a successful PUT never fails because the audit
+    write failed. Scheduled on the running loop like the EPCIS validation and
+    chain-verification audit paths; a failed write is logged via a done
+    callback and never raised into the request path.
+
+    Details carry tenant_id, endpoint, the changed field *names*, and whether
+    the DB write fell back to memory -- never profile values (PII) or any key
+    material.
+    """
+    try:
+        import asyncio
+
+        from shared.audit_logging import (
+            AuditActor,
+            AuditEventCategory,
+            AuditEventType,
+            AuditLogger,
+            AuditResource,
+            AuditSeverity,
+        )
+
+        audit = AuditLogger.get_instance()
+        actor = AuditActor(
+            actor_id="settings-router",
+            actor_type="service",
+            tenant_id=tenant_id,
+        )
+        resource = AuditResource(
+            resource_type="tenant_settings",
+            resource_id=tenant_id,
+            tenant_id=tenant_id,
+        )
+        coro = audit.log(
+            event_type=AuditEventType.SETTINGS_UPDATE,
+            category=AuditEventCategory.CONFIGURATION,
+            severity=AuditSeverity.WARNING if db_fallback else AuditSeverity.INFO,
+            actor=actor,
+            action="settings_update",
+            outcome="success",
+            resource=resource,
+            message=f"Tenant settings updated via {endpoint}",
+            details={
+                "tenant_id": tenant_id,
+                "endpoint": endpoint,
+                "changed_fields": changed_fields,
+                "db_fallback_to_memory": db_fallback,
+            },
+            tags=["settings", "configuration"],
+        )
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(coro).add_done_callback(_audit_task_done)
+        except RuntimeError:
+            pass  # No running loop -- skip async audit
+    except Exception:
+        logger.debug("settings_audit: could not emit audit event", exc_info=True)
+
+
+def _audit_task_done(task) -> None:
+    """Fail loud, not silent: a detached audit write that raised must log."""
+    import asyncio
+
+    try:
+        task.result()
+    except asyncio.CancelledError:
+        pass
+    except Exception as exc:
+        logger.error("settings_audit_write_failed error=%s", exc)
+
+
 def _db_get_settings(tenant_id: str) -> Optional[SettingsResponse]:
     """Query settings from database via shared helper.
 
@@ -137,19 +302,21 @@ async def get_settings_endpoint(
     settings = _db_get_settings(tenant_id)
     if settings:
         _settings_store[tenant_id] = settings  # cache for fallback
-        return settings
+        return _redacted_response(settings)
 
     # Fall back to memory or return defaults
     if tenant_id not in _settings_store:
         _settings_store[tenant_id] = _default_settings(tenant_id)
-    return _settings_store[tenant_id]
+    return _redacted_response(_settings_store[tenant_id])
 
 
 @router.put(
     "/{tenant_id}/profile",
     summary="Update company profile",
 )
+@limiter.limit("30/minute")
 async def update_profile(
+    request: Request,
     tenant_id: str,
     profile: CompanyProfile,
     ctx: TenantContext = Depends(require_tenant_context),
@@ -173,6 +340,13 @@ async def update_profile(
         logger.error("db_write_failed_fallback_to_memory tenant_id=%s endpoint=update_profile", tenant_id)
         _settings_store[tenant_id] = settings
 
+    _audit_settings_update(
+        tenant_id,
+        endpoint="update_profile",
+        changed_fields=sorted(profile.model_dump().keys()),
+        db_fallback=not db_success,
+    )
+
     return {"updated": True}
 
 
@@ -180,9 +354,11 @@ async def update_profile(
     "/{tenant_id}/retention",
     summary="Update data retention",
 )
+@limiter.limit("30/minute")
 async def update_retention(
+    request: Request,
     tenant_id: str,
-    retention: DataRetention,
+    retention: DataRetentionUpdate,
     ctx: TenantContext = Depends(require_tenant_context),
 ):
     """Update data retention settings."""
@@ -194,7 +370,9 @@ async def update_retention(
             _settings_store[tenant_id] = _default_settings(tenant_id)
         settings = _settings_store[tenant_id]
 
-    settings.data_retention = retention
+    # Persist via the floor-free read model so the stored blob round-trips
+    # through GET without re-validation.
+    settings.data_retention = DataRetention(**retention.model_dump())
 
     # Try DB first, fall back to memory
     db_success = _db_save_settings(tenant_id, settings)
@@ -203,5 +381,12 @@ async def update_retention(
     else:
         logger.error("db_write_failed_fallback_to_memory tenant_id=%s endpoint=update_retention", tenant_id)
         _settings_store[tenant_id] = settings
+
+    _audit_settings_update(
+        tenant_id,
+        endpoint="update_retention",
+        changed_fields=sorted(retention.model_dump().keys()),
+        db_fallback=not db_success,
+    )
 
     return {"updated": True}
