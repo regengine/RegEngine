@@ -40,6 +40,7 @@ sys.path.insert(0, str(service_dir))
 import importlib  # noqa: E402
 
 router_mod = importlib.import_module("app.epcis.router")
+persistence_mod = importlib.import_module("app.epcis.persistence")
 from app.webhook_compat import _verify_api_key  # noqa: E402
 
 from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override  # noqa: E402
@@ -286,18 +287,65 @@ def _ordered_export_times() -> tuple[str, str, str]:
     return early, bound, late
 
 
+def _page(events: list[dict] | None = None, *, truncated: bool = False) -> persistence_mod.EpcisExportPage:
+    """Stub result for the DB export path."""
+    return persistence_mod.EpcisExportPage(
+        events=events or [], truncated=truncated, limit=persistence_mod.EXPORT_EVENT_LIMIT
+    )
+
+
 class TestExportEpcis:
     @pytest.fixture(autouse=True)
     def _stub_tenant(self, stub_resolve_tenant: dict[str, Any]) -> None:
         stub_resolve_tenant["return"] = TEST_TENANT_ID
 
+    def test_db_path_states_limit_and_truncation(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+        """S3: the response says how many events one export can carry and whether it was cut off."""
+        monkeypatch.setattr(
+            router_mod,
+            "_list_events_from_db_detailed",
+            lambda *a, **kw: _page([{"type": "ObjectEvent"}], truncated=True),
+        )
+        monkeypatch.setattr(router_mod, "_allow_in_memory_fallback", lambda: False)
+
+        resp = client.get("/api/v1/epcis/export")
+        assert resp.status_code == 200
+        meta = resp.json()["regengine:metadata"]
+        assert meta["regengine:event_count"] == 1
+        assert meta["regengine:limit"] == persistence_mod.EXPORT_EVENT_LIMIT == 2000
+        assert meta["regengine:truncated"] is True
+        assert meta["regengine:ordering"] == "event_timestamp desc"
+
+    def test_db_path_not_truncated_when_under_cap(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(router_mod, "_list_events_from_db_detailed", lambda *a, **kw: _page([{"type": "ObjectEvent"}]))
+        monkeypatch.setattr(router_mod, "_allow_in_memory_fallback", lambda: False)
+
+        meta = client.get("/api/v1/epcis/export").json()["regengine:metadata"]
+        assert meta["regengine:truncated"] is False
+        assert meta["regengine:limit"] == 2000
+
+    def test_fallback_path_reports_no_cap(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The in-memory fallback is uncapped, so the response must not claim a limit."""
+        monkeypatch.setattr(router_mod, "_list_events_from_db_detailed", _page)
+        monkeypatch.setattr(router_mod, "_allow_in_memory_fallback", lambda: True)
+        monkeypatch.setattr(
+            router_mod,
+            "_fallback_store_for",
+            lambda t: {"k": {"normalized_cte": {}, "epcis_document": {"type": "ObjectEvent"}}},
+        )
+
+        meta = client.get("/api/v1/epcis/export").json()["regengine:metadata"]
+        assert meta["regengine:event_count"] == 1
+        assert meta["regengine:limit"] is None
+        assert meta["regengine:truncated"] is False
+
     def test_db_error_without_fallback_returns_503(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
         """Line 225: DB error + fallback disabled → 503."""
 
-        def _boom(*_: Any, **__: Any) -> list[dict]:
+        def _boom(*_: Any, **__: Any) -> persistence_mod.EpcisExportPage:
             raise RuntimeError("pg offline")
 
-        monkeypatch.setattr(router_mod, "_list_events_from_db", _boom)
+        monkeypatch.setattr(router_mod, "_list_events_from_db_detailed", _boom)
         monkeypatch.setattr(router_mod, "_allow_in_memory_fallback", lambda: False)
 
         resp = client.get("/api/v1/epcis/export")
@@ -307,7 +355,7 @@ class TestExportEpcis:
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Line 248: event_time < start_date → excluded from fallback export."""
-        monkeypatch.setattr(router_mod, "_list_events_from_db", lambda *a, **kw: [])
+        monkeypatch.setattr(router_mod, "_list_events_from_db_detailed", _page)
         monkeypatch.setattr(router_mod, "_allow_in_memory_fallback", lambda: True)
 
         early, bound, late = _ordered_export_times()
@@ -333,7 +381,7 @@ class TestExportEpcis:
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Line 250: event_time >= end_date → excluded from fallback export."""
-        monkeypatch.setattr(router_mod, "_list_events_from_db", lambda *a, **kw: [])
+        monkeypatch.setattr(router_mod, "_list_events_from_db_detailed", _page)
         monkeypatch.setattr(router_mod, "_allow_in_memory_fallback", lambda: True)
 
         early, bound, late = _ordered_export_times()

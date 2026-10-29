@@ -16,6 +16,7 @@ from starlette.requests import Request
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from shared.fsma_validation import calculate_gs1_check_digit, verify_gs1_check_digit  # noqa: E402
+from services.graph.app import fsma_utils  # noqa: E402
 from services.graph.app.routers.fsma import compliance  # noqa: E402
 
 FIXTURES = Path(__file__).resolve().parents[2] / "ingestion" / "tests" / "fixtures" / "epcis_gs1"
@@ -102,12 +103,19 @@ async def export(format, rows):
     today = datetime.now(timezone.utc).date().isoformat()
     # Bypass slowapi so the suite can call the endpoint many times in one process.
     endpoint = getattr(compliance.export_epcis, "__wrapped__", compliance.export_epcis)
-    with patch.object(compliance, "Neo4jClient", FakeNeo4j), patch.object(
-        compliance, "reconcile_tenant_scope", return_value=str(TENANT)
-    ), patch.object(compliance, "query_events_by_range", query):
+    with (
+        patch.object(compliance, "Neo4jClient", FakeNeo4j),
+        patch.object(compliance, "reconcile_tenant_scope", return_value=str(TENANT)),
+        patch.object(fsma_utils, "query_events_by_range", query),
+        patch.object(compliance, "query_events_by_range", query),
+    ):
         response = await endpoint(
             Request({"type": "http", "method": "GET", "path": "/export/epcis", "query_string": b"", "headers": []}),
-            today, today, format, TENANT, object(),
+            today,
+            today,
+            format,
+            TENANT,
+            object(),
         )
         assert response.headers["X-RegEngine-Preview"] == "true"
         payload = await body(response)
@@ -163,9 +171,7 @@ def test_empty_export_has_no_events_in_either_format():
     xml = asyncio.run(export("xml", []))
     assert document["epcisBody"]["eventList"] == []
     jsonschema = pytest.importorskip("jsonschema")
-    jsonschema.Draft7Validator(
-        json.loads(schema_file("EPCIS-JSON-Schema.json").read_text())
-    ).validate(document)
+    jsonschema.Draft7Validator(json.loads(schema_file("EPCIS-JSON-Schema.json").read_text())).validate(document)
     schema = etree.XMLSchema(etree.parse(str(schema_file("XSD/EPCglobal-epcis-2_0.xsd"))))
     tree = etree.fromstring(xml, etree.XMLParser(no_network=True)).getroottree()
     assert schema.validate(tree), str(schema.error_log)
