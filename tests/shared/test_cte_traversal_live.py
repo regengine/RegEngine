@@ -147,3 +147,46 @@ def test_tlc_traversal_is_directed_and_excludes_sibling_lots() -> None:
         assert set(batch) == {"B", "C", "S", "T"}
 
         session.rollback()
+
+
+def test_depth_limit_is_reported_per_direction_on_a_cycle() -> None:
+    """Codex review on #3713: S -> A -> X -> S plus X -> Y. A ``both`` trace
+    from S at depth 2 reaches X at depth 2 forward (so Y is never reached)
+    and at depth 1 backward. Collapsing the two walks to MIN(depth) before
+    judging the limit hid the exhausted forward frontier."""
+    from shared.cte_persistence.core import CTEPersistence
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session
+
+    engine = create_engine(sync_postgres_url(DATABASE_URL))
+    tenant_id = str(uuid.uuid4())
+
+    with Session(engine) as session:
+        _seed_link(session, tenant_id, "S", "A")
+        _seed_link(session, tenant_id, "A", "X")
+        _seed_link(session, tenant_id, "X", "S")
+        _seed_link(session, tenant_id, "X", "Y")
+
+        persistence = CTEPersistence(session)
+
+        both = persistence._expand_tlcs_detailed(tenant_id=tenant_id, seed_tlc="S", depth=2, direction="both")
+        assert set(both.tlcs) == {"S", "A", "X"}
+        assert "Y" not in both.tlcs
+        assert both.reached_via["X"]["depth"] == 1
+        assert both.depth_exhausted is True
+
+        # One more hop and the forward walk reaches Y, but only at the new
+        # limit, so Y itself is unexpanded and the flag stays raised.
+        at_three = persistence._expand_tlcs_detailed(tenant_id=tenant_id, seed_tlc="S", depth=3, direction="both")
+        assert set(at_three.tlcs) == {"S", "A", "X", "Y"}
+        assert at_three.reached_via["Y"]["depth"] == 3
+        assert at_three.depth_exhausted is True
+
+        # At depth 4 every lot is expanded below the limit in the direction
+        # that found it (the cycle only re-finds S, A and X at depths above
+        # their per-direction minimum), so nothing is left unexplored.
+        at_four = persistence._expand_tlcs_detailed(tenant_id=tenant_id, seed_tlc="S", depth=4, direction="both")
+        assert set(at_four.tlcs) == {"S", "A", "X", "Y"}
+        assert at_four.depth_exhausted is False
+
+        session.rollback()

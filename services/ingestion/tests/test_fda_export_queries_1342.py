@@ -172,3 +172,49 @@ def test_trace_roles_follow_walk_direction_and_report_depth_limit() -> None:
     assert graph["direction"] == "forward"
     assert graph["depth_exhausted"] is True
     assert graph["node_count"] == 4
+
+
+def test_trace_edges_are_restricted_to_returned_nodes() -> None:
+    """Codex and Cursor reviews on #3713: the edge query used to select every
+    link touching a returned lot, so a sibling branch (A -> S) or an
+    opposite-direction neighbour leaked into ``edges`` and named lots absent
+    from ``nodes``. Both ends must now be returned lots, in SQL and again on
+    the rows (persistence stubs do not run the SQL)."""
+    from shared.cte_persistence.queries import TlcExpansion
+
+    class Persistence:
+        def _expand_tlcs_detailed(self, **kwargs):
+            return TlcExpansion(
+                tlcs=["A", "B", "C"],
+                depth_exhausted=False,
+                direction=kwargs["direction"],
+                max_depth=kwargs["depth"],
+                reached_via={
+                    "A": {"depth": 1, "downstream": False, "upstream": True},
+                    "B": {"depth": 0, "downstream": False, "upstream": False},
+                    "C": {"depth": 1, "downstream": True, "upstream": False},
+                },
+            )
+
+    class _EdgeResult:
+        def fetchall(self):
+            # A -> S is the sibling branch the directed walk excluded.
+            return [("A", "B", "ship", 1.0), ("B", "C", "transform", 0.5), ("A", "S", "ship", None)]
+
+    class EdgeSession(_EmptySession):
+        def execute(self, statement, params=None):
+            self.calls.append((str(statement), params))
+            if "fsma.transformation_links" in str(statement):
+                return _EdgeResult()
+            return _EmptyResult()
+
+    session = EdgeSession()
+    graph = q.fetch_trace_graph_data(session, Persistence(), "tenant-1", "B", 5)
+    edge_sql = next(sql for sql, _ in session.calls if "fsma.transformation_links" in sql)
+    assert "input_tlc = ANY(:tlcs)" in edge_sql
+    assert "AND  output_tlc = ANY(:tlcs)" in edge_sql
+    assert " OR " not in edge_sql
+    pairs = {(e["input_tlc"], e["output_tlc"]) for e in graph["edges"]}
+    assert pairs == {("A", "B"), ("B", "C")}
+    assert graph["edge_count"] == 2
+    assert {n["tlc"] for n in graph["nodes"]} == {"A", "B", "C"}

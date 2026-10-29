@@ -367,6 +367,48 @@ class TestTraversalDirection_S2:
         assert result.depth_exhausted is False
         assert result.reached_via["TLC-0"]["upstream"] is True
 
+    def test_depth_limit_is_judged_per_direction_before_collapsing(self):
+        """Codex review on #3713: with S -> A -> X -> S and X -> Y, a
+        ``both`` trace from S at depth 2 reaches X at depth 2 forward (never
+        expanded, so Y is missing) but at depth 1 backward. Collapsing to
+        MIN(depth) first made every lot look shallower than the limit and
+        reported ``depth_exhausted=False``. The SQL now judges the limit per
+        (lot, direction) and returns it as a fifth column."""
+        session = FakeSession()
+        session.add_rule(
+            r"FROM\s+tlc_graph",
+            _FakeResult(
+                rows=[
+                    ("S", 0, True, True, False),
+                    ("A", 1, True, True, False),
+                    ("X", 1, True, True, True),  # forward min depth 2 == limit
+                ]
+            ),
+        )
+        p = CTEPersistence(session=session)
+        result = p._expand_tlcs_detailed(tenant_id=TENANT_A, seed_tlc="S", depth=2)
+        assert result.tlcs == ["S", "A", "X"]
+        assert result.depth_exhausted is True
+        # Display depth is still the shallowest reach.
+        assert result.reached_via["X"]["depth"] == 1
+        sql = self._cte_sql(session)
+        assert "GROUP  BY tlc, dir" in sql
+        assert "BOOL_OR(depth >= :max_depth)" in sql
+        assert "MIN(depth)" in sql
+
+    def test_explicit_limit_column_wins_over_collapsed_depth(self):
+        """When the fifth column says no lot sat at the limit in any
+        direction, a collapsed depth equal to the limit does not raise the
+        flag (the per-direction judgement is authoritative)."""
+        session = FakeSession()
+        session.add_rule(
+            r"FROM\s+tlc_graph",
+            _FakeResult(rows=[("S", 0, True, True, False), ("A", 1, True, False, False)]),
+        )
+        p = CTEPersistence(session=session)
+        result = p._expand_tlcs_detailed(tenant_id=TENANT_A, seed_tlc="S", depth=1)
+        assert result.depth_exhausted is False
+
     def test_single_column_rows_still_work(self):
         """Older fakes and the missing-table fallback hand back bare TLC
         rows; the detailed form must not require the extra columns."""

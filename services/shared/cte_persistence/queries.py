@@ -50,12 +50,15 @@ class TlcExpansion:
     """Result of expanding a seed lot through ``fsma.transformation_links``.
 
     ``tlcs`` always includes the seed. ``depth_exhausted`` is True when at
-    least one lot was reached at ``max_depth`` and therefore not expanded:
-    the graph may continue past the returned set. It is conservative (the
-    lot at the limit may have no further links) and costs no extra query.
-    ``reached_via`` maps each lot to the shallowest depth it was found at
-    and whether the forward (downstream) or backward (upstream) walk
-    reached it; the seed is reached by neither.
+    least one lot was reached at ``max_depth`` by some walk and therefore
+    not expanded in that direction: the graph may continue past the
+    returned set. The limit is judged per (lot, direction) before the
+    walks are collapsed, so a lot the backward walk found early does not
+    hide a forward frontier. It is conservative (the lot at the limit may
+    have no further links) and costs no extra query. ``reached_via`` maps
+    each lot to the shallowest depth it was found at and whether the
+    forward (downstream) or backward (upstream) walk reached it; the seed
+    is reached by neither.
     """
 
     tlcs: List[str]
@@ -229,11 +232,23 @@ class QueryPathMixin:
                             OR (tg.dir = 'b' AND tg.tlc = tl.output_tlc)
                         WHERE  tl.tenant_id = :tid AND tg.depth < :max_depth
                     )
+                    -- The depth limit is judged per (lot, direction) BEFORE
+                    -- the two walks are collapsed into one display depth:
+                    -- a lot the forward walk only reaches at the limit was
+                    -- never expanded forward, even when the backward walk
+                    -- found it sooner (S -> A -> X -> S plus X -> Y, depth 2
+                    -- from S: X is at depth 2 forward and 1 backward, and Y
+                    -- is missing).
                     SELECT tlc,
-                           MIN(depth)        AS depth,
-                           BOOL_OR(dir = 'f') AS via_forward,
-                           BOOL_OR(dir = 'b') AS via_backward
-                    FROM   tlc_graph
+                           MIN(depth)                    AS depth,
+                           BOOL_OR(dir = 'f')            AS via_forward,
+                           BOOL_OR(dir = 'b')            AS via_backward,
+                           BOOL_OR(depth >= :max_depth)  AS at_limit
+                    FROM   (
+                        SELECT tlc, dir, MIN(depth) AS depth
+                        FROM   tlc_graph
+                        GROUP  BY tlc, dir
+                    ) per_direction
                     GROUP  BY tlc
                 """),
                 {"tid": tenant_id, "tlc": seed_tlc, "max_depth": max_depth},
@@ -249,11 +264,16 @@ class QueryPathMixin:
             tlcs: List[str] = []
             reached_via: Dict[str, Dict[str, Any]] = {}
             deepest = 0
+            at_limit_any = False
+            has_limit_column = False
             for row in rows:
                 tlc = row[0]
                 row_depth = int(row[1]) if len(row) > 1 and row[1] is not None else 0
                 via_forward = bool(row[2]) if len(row) > 2 and row[2] is not None else False
                 via_backward = bool(row[3]) if len(row) > 3 and row[3] is not None else False
+                if len(row) > 4 and row[4] is not None:
+                    has_limit_column = True
+                    at_limit_any = at_limit_any or bool(row[4])
                 tlcs.append(tlc)
                 deepest = max(deepest, row_depth)
                 reached_via[tlc] = {
@@ -265,10 +285,13 @@ class QueryPathMixin:
                 }
             return TlcExpansion(
                 tlcs=tlcs,
-                # A lot found at the depth limit was never expanded (the
-                # recursive term stops at ``depth < max_depth``), so the
-                # graph may continue past it. Conservative by design.
-                depth_exhausted=deepest >= max_depth,
+                # A lot a walk only found at the depth limit was never
+                # expanded in that direction (the recursive term stops at
+                # ``depth < max_depth``), so the graph may continue past it.
+                # ``at_limit`` is judged per direction before the walks are
+                # collapsed; rows without that column (older fakes) fall
+                # back to the collapsed depth. Conservative by design.
+                depth_exhausted=at_limit_any if has_limit_column else deepest >= max_depth,
                 direction=direction,
                 max_depth=max_depth,
                 reached_via=reached_via,

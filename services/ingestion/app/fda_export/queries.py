@@ -895,13 +895,20 @@ def fetch_trace_graph_data(
     else:
         tlc_stats = {}
 
-    # Also fetch direct link edges for the graph visualization
+    # Edges for the graph visualization: only links whose BOTH ends are
+    # lots the directed walk returned, so ``nodes`` and ``edges`` describe
+    # the same graph. A link touching one returned lot and one excluded
+    # lot (a sibling branch, an opposite-direction neighbour, or a lot
+    # past the depth limit) used to leak in through an OR predicate and
+    # name lots absent from ``nodes``.
+    node_set = set(linked_tlcs)
     link_rows = db_session.execute(
         text("""
             SELECT input_tlc, output_tlc, process_type, confidence_score
             FROM   fsma.transformation_links
             WHERE  tenant_id = :tid
-              AND  (input_tlc = ANY(:tlcs) OR output_tlc = ANY(:tlcs))
+              AND  input_tlc = ANY(:tlcs)
+              AND  output_tlc = ANY(:tlcs)
         """),
         {"tid": tenant_id, "tlcs": linked_tlcs},
     ).fetchall()
@@ -913,6 +920,9 @@ def fetch_trace_graph_data(
             "confidence_score": float(row[3]) if row[3] is not None else None,
         }
         for row in link_rows
+        # Defence in depth for persistence stubs and older catalogs: the
+        # SQL already restricts both ends.
+        if row[0] in node_set and row[1] in node_set
     ]
 
     def _role(t: str) -> str:
