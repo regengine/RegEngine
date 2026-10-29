@@ -90,6 +90,18 @@ def _stub_funnel(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(funnel_events, "emit_funnel_event", lambda **_: True)
 
 
+@pytest.fixture(autouse=True)
+def _uncached_webhook_logger(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Module logger may already be bound to production processors
+    # (cache_logger_on_first_use). Fresh wrap so capture_logs sees events —
+    # same pattern as test_stripe_webhook_missing_handlers_1189.
+    monkeypatch.setattr(
+        webhooks_mod,
+        "logger",
+        structlog.wrap_logger(None, cache_logger_on_first_use=False),
+    )
+
+
 @pytest.fixture
 def fake_redis(monkeypatch: pytest.MonkeyPatch) -> _FakeRedis:
     fake = _FakeRedis()
