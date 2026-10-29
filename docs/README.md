@@ -31,6 +31,8 @@
 - [Product Overview](product/PRODUCT_OVERVIEW.md)
 - [Product Roadmap](product/PRODUCT_ROADMAP.md)
 - [Roadmap](product/ROADMAP.md)
+- [Product PRD, October 2026](product/PRODUCT_PRD_2026-10.md)
+- [FSMA 204 Readiness PRD gap analysis, 2026-10-28](product/FSMA_204_READINESS_GAP_ANALYSIS_2026-10-28.md)
 - [Positioning](product/POSITIONING.md)
 - [Pitch Deck](product/PITCH_DECK.md)
 - [Website Copy](product/WEBSITE_COPY.md)

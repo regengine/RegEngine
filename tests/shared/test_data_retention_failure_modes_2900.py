@@ -191,7 +191,15 @@ def test_cleanup_job_rolls_back_between_policies(monkeypatch):
     stats = _run(cleanup_deleted_records_job())
 
     # One rollback per policy that failed (AUDIT_LOG is handled separately).
-    failing_policies = [p for p in RETENTION_CONFIGS if p is not RetentionPolicy.AUDIT_LOG]
+    failing_policies = [
+        p
+        for p in RETENTION_CONFIGS
+        if p
+        not in (
+            RetentionPolicy.AUDIT_LOG,
+            RetentionPolicy.PARTNER_FILE_DELETION_LOG,
+        )
+    ]
     assert db.rollback.call_count >= len(failing_policies), (
         f"expected a rollback after each failed policy sweep, got {db.rollback.call_count}"
     )
@@ -312,9 +320,7 @@ def test_process_deletion_request_reports_failed_schedule_audit():
     """Delete and its audit both succeed, but the follow-up schedule audit
     fails: the delete must still read as done, with the error attached."""
     mgr = _manager()
-    mgr.audit_logger.log = AsyncMock(
-        side_effect=AuditStorageError("audit event evt-2 was not persisted")
-    )
+    mgr.audit_logger.log = AsyncMock(side_effect=AuditStorageError("audit event evt-2 was not persisted"))
     db = _ok_update(MagicMock())
 
     result = _run(
