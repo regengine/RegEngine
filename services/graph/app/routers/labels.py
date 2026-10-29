@@ -211,8 +211,8 @@ def health_check():
 @router.post("/batch/init", response_model=LabelBatchInitResponse)
 async def initialize_label_batch(
     request: LabelBatchInitRequest,
-    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
     api_key: str = Depends(require_api_key),
+    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
 ):
     # Reject a malformed packer GLN before touching Neo4j: generate_sscc
     # raises ValueError on non-numeric input, which would otherwise surface
