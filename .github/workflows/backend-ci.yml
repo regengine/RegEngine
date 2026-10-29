@@ -682,7 +682,8 @@ jobs:
   security:
     name: Security Audit ${{ matrix.service }}
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # 15 min: pip-audit itself takes ~1 min, but runner post-job cleanup has hung past 5 min (#3599, run 40176059711).
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -1002,6 +1003,7 @@ jobs:
             tests/invariants/test_dual_write_parity.py \
             tests/invariants/test_fda_export_v1_golden.py \
             tests/invariants/test_chain_verify_golden.py \
+            tests/invariants/test_no_third_party_regengine_domains.py \
             tests/migrations/test_v097_pin_get_tenant_context.py \
             tests/migrations/test_v099_set_tenant_context.py \
             tests/migrations/test_v120_rule_citations.py \

@@ -432,6 +432,9 @@ class TestPackageExport:
         assert pkg_k["extra_headers"]["X-Export-Type"] == "recall_package"
         assert pkg_k["extra_headers"]["X-KDE-Coverage"] == "0.95"
         assert pkg_k["include_pii"] is False
+        # S7: gate outcome and rule-version snapshot reach the package builder.
+        assert pkg_k["coverage_gate_bypassed"] is False
+        assert "catalog_status" in pkg_k["rule_versions"]
         # Did NOT go through the CSV response path
         assert cap["csv_response_kwargs"] is None
 

@@ -132,7 +132,7 @@ export default function ExportJobsPage() {
                         icon={Link2Off}
                         title={"Scheduled export jobs aren't available on this workspace yet."}
                     >
-                        Recurring archive scheduling is still in development. No amount of connected data unlocks it today. Your records stay exportable on demand from FDA Export, and this page will activate when scheduling ships.
+                        Recurring archive scheduling is still in development. No amount of connected data unlocks it today. Your records stay exportable on demand as an FDA sortable spreadsheet, and this page will activate when scheduling ships.
                     </Callout>
                 ) : (
                     <Callout tone="info" icon={Archive}>
@@ -182,7 +182,7 @@ export default function ExportJobsPage() {
                                 onChange={(e) => setFormat(e.target.value as ArchiveExportJob['format'])}
                                 className={`${fieldControlClasses} h-11`}
                             >
-                                <option value="FDA Package">FDA Package</option>
+                                <option value="FDA Package">FDA Sortable Spreadsheet</option>
                                 <option value="GS1 EPCIS 2.0">GS1 EPCIS 2.0 (Preview)</option>
                                 <option value="Audit Bundle">Audit Bundle</option>
                             </select>
@@ -251,7 +251,7 @@ export default function ExportJobsPage() {
                             <EmptyState
                                 icon={Archive}
                                 title={NO_DATA_YET}
-                                description="Export jobs package accepted traceability records into FDA, EPCIS (Preview), or audit bundles on a cadence. Start by sending records: upload a CSV or post to the JSON events API."
+                                description="Export jobs package accepted traceability records into FDA sortable spreadsheets as your primary compliance export, with EPCIS (Preview) available for partner exchange. Start by sending records: upload a CSV or post to the JSON events API."
                                 action={
                                     <Button asChild size="sm">
                                         <Link href="/ingest">Upload a CSV</Link>
@@ -290,7 +290,7 @@ export default function ExportJobsPage() {
                                     <dl className="divide-y divide-re-border-subtle">
                                         {[
                                             ['Cadence', 'Weekly / Daily / Monthly'],
-                                            ['Bundle', 'FDA or EPCIS (Preview)'],
+                                            ['Bundle', 'FDA sortable spreadsheet (primary) · EPCIS Preview (partner exchange)'],
                                             ['Integrity', 'Manifest hash'],
                                         ].map(([term, detail]) => (
                                             <div key={term} className="flex items-center justify-between gap-4 px-5 py-3 text-ui">

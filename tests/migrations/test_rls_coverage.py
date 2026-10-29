@@ -121,6 +121,10 @@ PUBLIC_TENANT_SCOPED_TABLES: Set[str] = {
     "supplier_traceability_lots",
     "supplier_cte_events",
     "supplier_funnel_events",
+    # Data gap time to fix (#3572, alembic v135): created with tenant_id uuid NOT
+    # NULL, ENABLE + FORCE row level security, and tenant_isolation_data_gap_events
+    # predicated on get_tenant_context() (sysadmin arm first, v096 and v134 shape).
+    "data_gap_events",
 }
 
 # Tenant-scoped public tables that reach their tenant through a parent row

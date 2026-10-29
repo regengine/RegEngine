@@ -12,6 +12,7 @@ const sdk = vi.hoisted(() => ({
     opt_out_capturing: vi.fn(),
     set_config: vi.fn(),
     identify: vi.fn(),
+    reset: vi.fn(),
   },
 }));
 
@@ -76,6 +77,7 @@ async function initializedOptions() {
     capture_pageview: boolean;
     disable_session_recording: boolean;
     persistence: string;
+    person_profiles: string;
     before_send: (event: {
       event: string;
       properties: Record<string, unknown>;
@@ -110,6 +112,7 @@ describe('PostHog client initialization', () => {
     captureEvent('tool_started', { tool_id: 'ftl-checker' });
     const options = await initializedOptions();
     expect(options.persistence).toBe('memory');
+    expect(options.person_profiles).toBe('never');
     await waitFor(() => expect(sdk.client.capture).toHaveBeenCalledWith('tool_started', { tool_id: 'ftl-checker' }));
     expect(sdk.client.opt_in_capturing).not.toHaveBeenCalled();
     expect(sdk.client.opt_out_capturing).not.toHaveBeenCalled();
@@ -523,5 +526,118 @@ describe('PostHog App Router pageviews', () => {
     expect(sdk.client.opt_in_capturing).toHaveBeenCalledTimes(1);
     expect(sdk.client.opt_in_capturing.mock.invocationCallOrder[0])
       .toBeLessThan(sdk.client.capture.mock.invocationCallOrder[0]);
+  });
+});
+
+describe('PostHog identity', () => {
+  it('identifies a consented visitor by email and sends only the email to the person profile', async () => {
+    document.cookie = 're_cookie_consent=accepted; path=/';
+    const { identifyUser, CSPostHogProvider } = await providerModule();
+    render(<CSPostHogProvider>content</CSPostHogProvider>);
+    identifyUser('  Lead@Example.com ');
+    const options = await initializedOptions();
+    expect(options.person_profiles).toBe('never');
+    await waitFor(() => expect(sdk.client.identify).toHaveBeenCalledWith(
+      'lead@example.com', { email: 'lead@example.com' },
+    ));
+    expect(sdk.client.identify).toHaveBeenCalledTimes(1);
+    expect(sdk.client.set_config).toHaveBeenCalledWith({ person_profiles: 'identified_only' });
+
+    const beforeSend = options.before_send;
+    const identify = beforeSend({
+      event: '$identify',
+      properties: {
+        token: 'phc_test', distinct_id: 'lead@example.com', $anon_distinct_id: 'anon-123',
+        $current_url: 'https://regengine.co/?x=1',
+      },
+      $set: { email: 'lead@example.com', name: 'Jane Sellers' },
+      $set_once: { $initial_current_url: 'https://regengine.co/?x=1' },
+    });
+    expect(identify?.properties).toEqual({
+      token: 'phc_test', distinct_id: 'lead@example.com', $anon_distinct_id: 'anon-123',
+    });
+    expect(identify?.$set).toEqual({ email: 'lead@example.com' });
+    expect(identify?.$set_once).toBeUndefined();
+
+    const toolEvent = beforeSend({
+      event: 'tool_run_started',
+      properties: { token: 'phc_test', distinct_id: 'lead@example.com', tool: 'ftl-checker' },
+    });
+    expect(toolEvent?.properties).toEqual({
+      token: 'phc_test', distinct_id: 'lead@example.com', tool: 'ftl-checker',
+    });
+  });
+
+  it('does not identify without consent and drops $identify for other distinct ids', async () => {
+    const { identifyUser } = await providerModule();
+    identifyUser('lead@example.com');
+    expect(sdk.imported).not.toHaveBeenCalled();
+    expect(sdk.client.identify).not.toHaveBeenCalled();
+
+    document.cookie = 're_cookie_consent=accepted; path=/';
+    const { CSPostHogProvider } = await providerModule();
+    render(<CSPostHogProvider>content</CSPostHogProvider>);
+    const { before_send: beforeSend } = await initializedOptions();
+    expect(beforeSend({
+      event: '$identify',
+      properties: { token: 'phc_test', distinct_id: 'other@example.com' },
+    })).toBeNull();
+  });
+
+  it('identifies when consent arrives after login in the same session', async () => {
+    const { identifyUser, captureEvent, CSPostHogProvider } = await providerModule();
+    render(<CSPostHogProvider>content</CSPostHogProvider>);
+    // Login before Accept: email is held locally; cookieless capture may run, but no identify.
+    identifyUser('lead@example.com');
+    captureEvent('tool_started', { tool_id: 'ftl-checker' });
+    const options = await initializedOptions();
+    expect(options.persistence).toBe('memory');
+    expect(options.person_profiles).toBe('never');
+    expect(sdk.client.identify).not.toHaveBeenCalled();
+
+    document.cookie = 're_cookie_consent=accepted; path=/';
+    await waitFor(() => expect(sdk.client.identify).toHaveBeenCalledWith(
+      'lead@example.com', { email: 'lead@example.com' },
+    ), { timeout: 2000 });
+    expect(sdk.client.set_config).toHaveBeenCalledWith({ person_profiles: 'identified_only' });
+    expect(sdk.client.set_config).toHaveBeenCalledWith({ persistence: 'localStorage+cookie' });
+  });
+
+  it('ignores values that are not an email and resets on sign-out', async () => {
+    document.cookie = 're_cookie_consent=accepted; path=/';
+    const { identifyUser, resetAnalyticsIdentity, CSPostHogProvider } = await providerModule();
+    render(<CSPostHogProvider>content</CSPostHogProvider>);
+    await initializedOptions();
+    identifyUser('not an email');
+    expect(sdk.client.identify).not.toHaveBeenCalled();
+    identifyUser('lead@example.com');
+    await waitFor(() => expect(sdk.client.identify).toHaveBeenCalledTimes(1));
+    resetAnalyticsIdentity();
+    expect(sdk.client.reset).toHaveBeenCalledTimes(1);
+    expect(sdk.client.set_config).toHaveBeenCalledWith({ person_profiles: 'never' });
+  });
+
+  it('revoking consent after identify calls reset and returns to never/cookieless', async () => {
+    document.cookie = 're_cookie_consent=accepted; path=/';
+    window.localStorage.setItem('ph_phc_test_posthog', '{}');
+    const { identifyUser, captureEvent, CSPostHogProvider } = await providerModule();
+    render(<CSPostHogProvider>content</CSPostHogProvider>);
+    identifyUser('lead@example.com');
+    const options = await initializedOptions();
+    await waitFor(() => expect(sdk.client.identify).toHaveBeenCalledTimes(1));
+    captureEvent('tool_started', { tool_id: 'ftl-checker' });
+
+    document.cookie = 're_cookie_consent=declined; path=/';
+    await waitFor(() => expect(sdk.client.reset).toHaveBeenCalled(), { timeout: 2000 });
+    await waitFor(() => expect(sdk.client.opt_out_capturing).toHaveBeenCalled(), { timeout: 2000 });
+    expect(sdk.client.set_config).toHaveBeenCalledWith({ person_profiles: 'never' });
+    expect(window.localStorage.getItem('ph_phc_test_posthog')).toBeNull();
+    sdk.client.capture.mockClear();
+    captureEvent('tool_completed', { tool_id: 'ftl-checker', status: 'success' });
+    expect(sdk.client.capture).not.toHaveBeenCalled();
+    expect(options.before_send({
+      event: '$identify',
+      properties: { token: 'phc_test', distinct_id: 'lead@example.com' },
+    })).toBeNull();
   });
 });
