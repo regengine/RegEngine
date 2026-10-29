@@ -331,11 +331,15 @@ class _FakeSession:
 
     def __init__(self) -> None:
         self.execute_queue: list[Any] = []  # list of fetch-returning objects
+        self.calls: list[tuple[str, dict]] = []  # (sql text, params) per execute
 
     def queue(self, fetch_result: Any) -> None:
         self.execute_queue.append(fetch_result)
 
     def execute(self, *_args: Any, **_kwargs: Any) -> Any:
+        sql = str(_args[0].text) if _args and hasattr(_args[0], "text") else str(_args[0]) if _args else ""
+        params = _args[1] if len(_args) > 1 and isinstance(_args[1], dict) else {}
+        self.calls.append((sql, params))
         nxt = self.execute_queue.pop(0)
         holder = MagicMock()
         # Each queued item is either:
@@ -455,6 +459,90 @@ class TestListEventsFromDb:
         monkeypatch.setattr(persistence_mod, "get_db_safe", lambda: sess)
         events = persistence_mod._list_events_from_db("tenant-1", None, None, None)
         assert events == []
+
+
+def _export_row(idx: int) -> types.SimpleNamespace:
+    return types.SimpleNamespace(
+        id=f"evt-{idx}",
+        event_type="shipping",
+        epcis_event_type="ObjectEvent",
+        epcis_action="OBSERVE",
+        epcis_biz_step="shipping",
+        event_timestamp=None,
+        traceability_lot_code=f"TLC-{idx}",
+        source="api",
+        location_gln=None,
+        quantity=1.0,
+        unit_of_measure="case",
+    )
+
+
+class TestListEventsFromDbDetailed_S3:
+    """S3: a single export is capped at a stated limit and says when it hit it."""
+
+    def test_limit_is_bound_not_literal(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        sess = _FakeSession()
+        sess.queue([])
+        monkeypatch.setattr(persistence_mod, "get_db_safe", lambda: sess)
+        persistence_mod._list_events_from_db_detailed("tenant-1", None, None, None, limit=5)
+        sql, params = sess.calls[0]
+        assert "LIMIT :row_limit" in sql
+        assert "LIMIT 2000" not in sql
+        assert params["row_limit"] == 6
+        assert params["tenant_id"] == "tenant-1"
+
+    def test_default_limit_is_module_constant(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        sess = _FakeSession()
+        sess.queue([])
+        monkeypatch.setattr(persistence_mod, "get_db_safe", lambda: sess)
+        page = persistence_mod._list_events_from_db_detailed("tenant-1", None, None, None)
+        assert page.limit == persistence_mod.EXPORT_EVENT_LIMIT == 2000
+        assert sess.calls[0][1]["row_limit"] == 2001
+
+    def test_extra_row_sets_truncated_and_is_dropped(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        sess = _FakeSession()
+        sess.queue([_export_row(i) for i in range(4)])  # limit + 1 rows
+        for _ in range(3):
+            sess.queue([])  # KDE lookups for the 3 kept rows
+        monkeypatch.setattr(persistence_mod, "get_db_safe", lambda: sess)
+        monkeypatch.setattr(persistence_mod, "_parse_epcis_document", lambda kde_map, normalized: normalized)
+        page = persistence_mod._list_events_from_db_detailed("tenant-1", None, None, None, limit=3)
+        assert page.truncated is True
+        assert len(page.events) == 3
+        assert [e["tlc"] for e in page.events] == ["TLC-0", "TLC-1", "TLC-2"]
+
+    def test_exactly_limit_rows_is_not_truncated(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        sess = _FakeSession()
+        sess.queue([_export_row(i) for i in range(3)])
+        for _ in range(3):
+            sess.queue([])
+        monkeypatch.setattr(persistence_mod, "get_db_safe", lambda: sess)
+        monkeypatch.setattr(persistence_mod, "_parse_epcis_document", lambda kde_map, normalized: normalized)
+        page = persistence_mod._list_events_from_db_detailed("tenant-1", None, None, None, limit=3)
+        assert page.truncated is False
+        assert len(page.events) == 3
+
+    def test_truncation_is_decided_before_product_filter(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A product filter can empty the page; the cap still bit, and the flag must say so."""
+        sess = _FakeSession()
+        sess.queue([_export_row(i) for i in range(3)])
+        for _ in range(2):
+            sess.queue([])  # no KDEs -> product_id None -> filtered out
+        monkeypatch.setattr(persistence_mod, "get_db_safe", lambda: sess)
+        monkeypatch.setattr(persistence_mod, "_parse_epcis_document", lambda kde_map, normalized: normalized)
+        page = persistence_mod._list_events_from_db_detailed("tenant-1", None, None, "sku-9", limit=2)
+        assert page.events == []
+        assert page.truncated is True
+
+    def test_wrapper_returns_plain_list(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        sess = _FakeSession()
+        sess.queue([])
+        monkeypatch.setattr(persistence_mod, "get_db_safe", lambda: sess)
+        assert persistence_mod._list_events_from_db("tenant-1", None, None, None) == []
+
+    def test_rejects_non_positive_limit(self) -> None:
+        with pytest.raises(ValueError):
+            persistence_mod._list_events_from_db_detailed("tenant-1", None, None, None, limit=0)
 
 
 def _empty_prepared() -> dict:

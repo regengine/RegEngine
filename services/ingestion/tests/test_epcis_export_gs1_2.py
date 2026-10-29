@@ -20,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from app import epcis_export as exporter  # noqa: E402
 
 epcis_router = importlib.import_module("app.epcis.router")
+epcis_persistence = importlib.import_module("app.epcis.persistence")
 FIXTURES = Path(__file__).parent / "fixtures" / "epcis_gs1"
 CONTEXT_URL = "https://ref.gs1.org/standards/epcis/2.0.0/epcis-context.jsonld"
 
@@ -132,7 +133,8 @@ def test_stored_event_export_preserves_metadata_namespace():
         "quantityList": [{"epcClass": class_uri()}],
     }
     ctx = type("Tenant", (), {"tenant_id": str(uuid4())})()
-    with patch.object(epcis_router, "_list_events_from_db", return_value=[event]), patch.object(
+    page = epcis_persistence.EpcisExportPage(events=[event], truncated=False, limit=epcis_persistence.EXPORT_EVENT_LIMIT)
+    with patch.object(epcis_router, "_list_events_from_db_detailed", return_value=page), patch.object(
         epcis_router, "_allow_in_memory_fallback", return_value=False
     ):
         document = asyncio.run(epcis_router.export_epcis_events(None, None, None, None, None, None, ctx))

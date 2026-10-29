@@ -15,17 +15,30 @@ import logging
 import os
 import uuid
 from datetime import datetime, timezone
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 from shared.database import get_db_safe
 from shared.pagination import PaginationParams
+from shared.rate_limit import limiter
 from shared.tenant_context import TenantContext
 from sqlalchemy.exc import SQLAlchemyError
 
 from .webhook_compat import require_tenant_context
 
 logger = logging.getLogger("product-catalog")
+
+# Rate limits for catalog mutations. Product catalog edits are low-frequency
+# human actions (operators curating the FTL list), so a modest per-client
+# budget is ample while still blocking scripted abuse. GET routes are left
+# unthrottled here.
+_ADD_PRODUCT_RATE_LIMIT = "30/minute"
+_UPDATE_PRODUCT_RATE_LIMIT = "30/minute"
+_DELETE_PRODUCT_RATE_LIMIT = "30/minute"
+
+# Bounded list-item type reused by request models.
+_CatalogListItem = Annotated[str, StringConstraints(max_length=200)]
 
 router = APIRouter(prefix="/api/v1/products", tags=["Product Catalog"])
 
@@ -64,25 +77,32 @@ class ProductCatalogResponse(BaseModel):
 class CreateProductRequest(BaseModel):
     """Request to add a product."""
 
-    name: str
-    category: str
-    sku: str = ""
-    gtin: str = ""
-    description: str = ""
-    suppliers: list[str] = Field(default_factory=list)
-    facilities: list[str] = Field(default_factory=list)
+    # extra="forbid": the only callers (frontend products page and mobile
+    # field-capture) send exactly these keys, so unknown fields are a client
+    # bug or probe and should 422 rather than be silently dropped.
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=200)
+    category: str = Field(min_length=1, max_length=100)
+    sku: str = Field(default="", max_length=100)
+    gtin: str = Field(default="", max_length=14)
+    description: str = Field(default="", max_length=2000)
+    suppliers: list[_CatalogListItem] = Field(default_factory=list, max_length=100)
+    facilities: list[_CatalogListItem] = Field(default_factory=list, max_length=100)
 
 
 class UpdateProductRequest(BaseModel):
     """Request to update a product."""
 
-    name: str
-    category: str
-    sku: str = ""
-    gtin: str = ""
-    description: str = ""
-    suppliers: list[str] = Field(default_factory=list)
-    facilities: list[str] = Field(default_factory=list)
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=200)
+    category: str = Field(min_length=1, max_length=100)
+    sku: str = Field(default="", max_length=100)
+    gtin: str = Field(default="", max_length=14)
+    description: str = Field(default="", max_length=2000)
+    suppliers: list[_CatalogListItem] = Field(default_factory=list, max_length=100)
+    facilities: list[_CatalogListItem] = Field(default_factory=list, max_length=100)
 
 
 FTL_CATEGORIES = [
@@ -517,6 +537,92 @@ def _memory_learn(tenant_id: str, gtin: str, name: str, facility: str, now: str)
 
 
 # ---------------------------------------------------------------------------
+# Audit (best-effort, never blocks the request path)
+# ---------------------------------------------------------------------------
+
+
+def _audit_task_done(task) -> None:
+    """Fail loud, not silent: a detached audit write that raised must log."""
+    import asyncio
+
+    try:
+        task.result()
+    except asyncio.CancelledError:
+        pass
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.error("product_catalog_audit_write_failed error=%s", exc)
+
+
+def _audit_product_mutation(
+    *,
+    ctx: TenantContext,
+    event_type_name: str,
+    action: str,
+    tenant_id: str,
+    product_id: str,
+    changed_fields: list[str],
+) -> None:
+    """Fire-and-forget audit log for a successful catalog mutation.
+
+    Best-effort by design: a successful mutation never fails because the
+    audit write could not be scheduled. The write is scheduled on the
+    running loop and a failed write is logged via a done callback; it
+    never raises into the request path.
+
+    ``changed_fields`` carries field NAMES only — never field values — so no
+    secret material or PII ends up in the audit details.
+    """
+    try:
+        import asyncio
+
+        from shared.audit_logging import (
+            AuditActor,
+            AuditEventCategory,
+            AuditEventType,
+            AuditLogger,
+            AuditResource,
+            AuditSeverity,
+        )
+
+        event_type = getattr(AuditEventType, event_type_name)
+        audit = AuditLogger.get_instance()
+        actor = AuditActor(
+            actor_id=ctx.principal_id,
+            actor_type=ctx.principal_kind,
+            email=ctx.actor_email,
+            tenant_id=tenant_id,
+        )
+        resource = AuditResource(
+            resource_type="product",
+            resource_id=product_id,
+            tenant_id=tenant_id,
+        )
+        coro = audit.log(
+            event_type=event_type,
+            category=AuditEventCategory.DATA_MODIFICATION,
+            severity=AuditSeverity.INFO,
+            actor=actor,
+            action=action,
+            outcome="success",
+            resource=resource,
+            message=f"product catalog {action}",
+            details={"tenant_id": tenant_id, "changed_fields": changed_fields},
+            tags=["product", "catalog"],
+        )
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(coro).add_done_callback(_audit_task_done)
+        except RuntimeError:
+            # No running loop (e.g. sync context) — skip async audit.
+            try:
+                coro.close()
+            except Exception:
+                pass
+    except Exception:  # pragma: no cover - defensive
+        logger.debug("audit_product_mutation: could not emit audit event", exc_info=True)
+
+
+# ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
 
@@ -573,37 +679,59 @@ async def get_catalog(
     "/{tenant_id}",
     summary="Add a product",
 )
+@limiter.limit(_ADD_PRODUCT_RATE_LIMIT)
 async def add_product(
+    request: Request,
     tenant_id: str,
-    request: CreateProductRequest,
+    payload: CreateProductRequest,
     ctx: TenantContext = Depends(require_tenant_context),
 ):
     """Add a product to the catalog."""
+    # The authenticated tenant is authoritative: the write lands under
+    # ctx.tenant_id, never the client-supplied path tenant id.
     tenant_id = ctx.tenant_id
     now = datetime.now(timezone.utc)
-    is_ftl = request.category in FTL_CATEGORIES
+    is_ftl = payload.category in FTL_CATEGORIES
 
     product = Product(
         id=str(uuid.uuid4()),
-        name=request.name,
-        category=request.category,
+        name=payload.name,
+        category=payload.category,
         ftl_covered=is_ftl,
-        sku=request.sku,
-        gtin=request.gtin,
-        description=request.description,
-        suppliers=request.suppliers,
-        facilities=request.facilities,
+        sku=payload.sku,
+        gtin=payload.gtin,
+        description=payload.description,
+        suppliers=payload.suppliers,
+        facilities=payload.facilities,
         created_at=now.isoformat(),
     )
 
+    created_fields = ["name", "category", "sku", "gtin", "description", "suppliers", "facilities"]
+
     # Try Supabase
     if _db_add_product(tenant_id, product):
+        _audit_product_mutation(
+            ctx=ctx,
+            event_type_name="DATA_CREATE",
+            action="product_create",
+            tenant_id=tenant_id,
+            product_id=product.id,
+            changed_fields=created_fields,
+        )
         return {"created": True, "product": product.model_dump(), "ftl_covered": is_ftl}
 
     # Fallback: in-memory
     if tenant_id not in _catalog_store:
         _catalog_store[tenant_id] = []
     _catalog_store[tenant_id].append(product)
+    _audit_product_mutation(
+        ctx=ctx,
+        event_type_name="DATA_CREATE",
+        action="product_create",
+        tenant_id=tenant_id,
+        product_id=product.id,
+        changed_fields=created_fields,
+    )
     return {"created": True, "product": product.model_dump(), "ftl_covered": is_ftl}
 
 
@@ -661,30 +789,32 @@ async def get_product(
     "/{tenant_id}/{product_id}",
     summary="Update product",
 )
+@limiter.limit(_UPDATE_PRODUCT_RATE_LIMIT)
 async def update_product(
+    request: Request,
     tenant_id: str,
     product_id: str,
-    request: UpdateProductRequest,
+    payload: UpdateProductRequest,
     ctx: TenantContext = Depends(require_tenant_context),
 ):
     """Update one product in the catalog."""
     tenant_id = ctx.tenant_id
     now = datetime.now(timezone.utc)
-    is_ftl = request.category in FTL_CATEGORIES
+    is_ftl = payload.category in FTL_CATEGORIES
     existing = _db_get_product(tenant_id, product_id) or _memory_get_product(tenant_id, product_id)
     if not existing:
         raise HTTPException(status_code=404, detail="Product not found")
 
     product = Product(
         id=product_id,
-        name=request.name,
-        category=request.category,
+        name=payload.name,
+        category=payload.category,
         ftl_covered=is_ftl,
-        sku=request.sku,
-        gtin=request.gtin,
-        description=request.description,
-        suppliers=request.suppliers,
-        facilities=request.facilities,
+        sku=payload.sku,
+        gtin=payload.gtin,
+        description=payload.description,
+        suppliers=payload.suppliers,
+        facilities=payload.facilities,
         cte_count=existing.cte_count,
         last_cte=existing.last_cte,
         created_at=existing.created_at or now.isoformat(),
@@ -695,6 +825,14 @@ async def update_product(
     )
     if not updated:
         raise HTTPException(status_code=404, detail="Product not found")
+    _audit_product_mutation(
+        ctx=ctx,
+        event_type_name="DATA_UPDATE",
+        action="product_update",
+        tenant_id=tenant_id,
+        product_id=product_id,
+        changed_fields=["name", "category", "sku", "gtin", "description", "suppliers", "facilities"],
+    )
     return {"updated": True, "product": updated.model_dump(), "ftl_covered": is_ftl}
 
 
@@ -703,7 +841,9 @@ async def update_product(
     status_code=204,
     summary="Delete product",
 )
+@limiter.limit(_DELETE_PRODUCT_RATE_LIMIT)
 async def delete_product(
+    request: Request,
     tenant_id: str,
     product_id: str,
     ctx: TenantContext = Depends(require_tenant_context),
@@ -711,5 +851,13 @@ async def delete_product(
     """Delete one product from the catalog."""
     tenant_id = ctx.tenant_id
     if _db_delete_product(tenant_id, product_id) or _memory_delete_product(tenant_id, product_id):
+        _audit_product_mutation(
+            ctx=ctx,
+            event_type_name="DATA_DELETE",
+            action="product_delete",
+            tenant_id=tenant_id,
+            product_id=product_id,
+            changed_fields=[],
+        )
         return Response(status_code=204)
     raise HTTPException(status_code=404, detail="Product not found")
