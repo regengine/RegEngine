@@ -36,10 +36,13 @@ _REASONS = frozenset(
         "extra_fields",
         "header_guess_applied",
         "location_normalized",
+        "lot_code_possible_character_swap",
+        "lot_code_no_digits",
         "mapped_cte_not_recognized",
         "missing_column",
         "missing_cte_type",
         "missing_header",
+        "missing_input_quantity_data",
         "missing_quantity",
         "missing_required_columns",
         "missing_unit_of_measure",
@@ -107,6 +110,8 @@ def _parse_preview(text: str, fallback_cte: Optional[str]) -> tuple[dict[str, An
 
     row_log: list = []
     source_rows: list[int] = []
+    # Human-readable warnings may contain uploaded values. Their deterministic
+    # conditions are represented by row_log and the KDE checks below instead.
     events, errors, _warnings = ct.parse_csv_rows(text, fallback_cte, row_log=row_log, event_source_rows=source_rows)
     grouped: dict[tuple[str, Optional[str], str, bool], set[int]] = {}
 

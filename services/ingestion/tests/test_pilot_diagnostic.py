@@ -205,6 +205,88 @@ def test_mixed_clusters_retain_exact_rows_and_counts(client):
     assert reference["row_indices"] == [4] and reference["affected_row_count"] == 1
 
 
+@pytest.mark.parametrize("include_input_columns", [True, False])
+def test_transformation_input_warnings_are_row_associated_and_private(
+    client, monkeypatch, caplog, include_input_columns
+):
+    header, rows = fixture_rows()
+    header[header.index("harvest_date")] = "transformation_date"
+    header.extend(["cte_type", "input_lot_codes"])
+    if include_input_columns:
+        header.extend(["input_quantities", "input_units_of_measure"])
+    for row in rows:
+        row["transformation_date"] = row.pop("harvest_date")
+        row["cte_type"] = "transformation"
+    rows[0]["input_lot_codes"] = rows[1]["traceability_lot_code"]
+    if include_input_columns:
+        rows[1].update(
+            input_lot_codes=rows[2]["traceability_lot_code"], input_quantities="10", input_units_of_measure="lbs"
+        )
+    text = csv_bytes(header, rows)
+    events, errors, warnings = ct.parse_csv_rows(text.decode())
+    assert len(events) == 3 and errors == []
+    assert sum("input_quantities missing" in warning for warning in warnings) == 1
+    states = []
+
+    async def review(state):
+        states.append(state)
+        return {"status": "review", "automatic_assignment_enabled": False}
+
+    monkeypatch.setattr(review_policy, "review_pilot_diagnostic", review)
+    caplog.set_level(logging.INFO)
+    response = post(client, text, cte_type="transformation", semantic_review="true")
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["valid_event_count"] == 3 and body["rejected_record_count"] == 0
+    missing = {issue["field"]: issue for issue in body["issues"] if issue["reason"] == "missing_input_quantity_data"}
+    assert set(missing) == {"input_quantities", "input_units_of_measure"}
+    for issue in missing.values():
+        assert issue["disposition"] == "flagged" and issue["row_indices"] == [2]
+        assert issue["affected_row_count"] == 1
+    assert {state["error_cluster"]["field"] for state in states} == set(missing)
+    rendered = response.text + json.dumps(states) + caplog.text
+    for row in rows:
+        for field in ("traceability_lot_code", "product_description", "location_name", "reference_document"):
+            assert row[field] not in rendered
+
+
+@pytest.mark.parametrize(
+    "lot_code,reason",
+    [
+        ("LOT1O23", "lot_code_possible_character_swap"),
+        ("LOT1I23", "lot_code_possible_character_swap"),
+        ("ALPHABETICAL", "lot_code_no_digits"),
+    ],
+)
+def test_lot_code_integrity_warnings_survive_preview_without_values(client, monkeypatch, caplog, lot_code, reason):
+    header, rows = fixture_rows()
+    header.append("cte_type")
+    for row in rows:
+        row["cte_type"] = "harvesting"
+    rows[1]["traceability_lot_code"] = lot_code
+    text = csv_bytes(header, rows)
+    events, errors, warnings = ct.parse_csv_rows(text.decode())
+    assert len(events) == 3 and errors == []
+    assert any(lot_code in warning for warning in warnings)
+    states = []
+
+    async def review(state):
+        states.append(state)
+        return {"status": "review", "automatic_assignment_enabled": False}
+
+    monkeypatch.setattr(review_policy, "review_pilot_diagnostic", review)
+    caplog.set_level(logging.INFO)
+    response = post(client, text, semantic_review="true")
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["valid_event_count"] == 3 and body["rejected_record_count"] == 0
+    issue = next(issue for issue in body["issues"] if issue["reason"] == reason)
+    assert issue["row_indices"] == [3] and issue["affected_row_count"] == 1
+    assert issue["field"] == "traceability_lot_code" and issue["disposition"] == "flagged"
+    assert len(states) == 1 and states[0]["error_cluster"]["issue_reason"] == reason
+    assert lot_code not in response.text + json.dumps(states) + caplog.text
+
+
 def test_skipped_and_multiline_records_use_record_indices(client):
     header, rows = fixture_rows()
     rows[0]["product_description"] += "\n" + rows[0]["product_description"]

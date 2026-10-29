@@ -635,7 +635,9 @@ def _parse_date_flexible(raw: str, event_time: str = "") -> tuple[str | None, st
 _LOT_DIGIT_ADJACENT = re.compile(r"(?<=[0-9])[OI]|[OI](?=[0-9])", re.IGNORECASE)
 
 
-def _check_lot_code_integrity(lot_code: str) -> list[str]:
+def _check_lot_code_integrity(
+    lot_code: str, *, row_log: Optional[list[CsvRowDispositionEntry]] = None, row_number: int = 0
+) -> list[str]:
     """Flag likely O↔0 and I↔1 character swaps in a Traceability Lot Code.
 
     Returns a (possibly empty) list of human-readable integrity warnings.
@@ -646,18 +648,37 @@ def _check_lot_code_integrity(lot_code: str) -> list[str]:
     warnings: list[str] = []
     suspicious = _LOT_DIGIT_ADJACENT.findall(lot_code)
     if suspicious:
+        _append_row_log(
+            row_log,
+            row_number=row_number,
+            disposition="flagged",
+            reason="lot_code_possible_character_swap",
+            field="traceability_lot_code",
+        )
         chars = ", ".join(f"'{c}'" for c in set(s.upper() for s in suspicious))
         warnings.append(
             f"lot_code '{lot_code}': possible character swap ({chars} adjacent to digits — verify O vs 0 or I vs 1)"
         )
     # All-alpha codes longer than 3 chars have no digits — flag for review
     if lot_code.isalpha() and len(lot_code) > 3:
+        _append_row_log(
+            row_log,
+            row_number=row_number,
+            disposition="flagged",
+            reason="lot_code_no_digits",
+            field="traceability_lot_code",
+        )
         warnings.append(f"lot_code '{lot_code}': no digits found — confirm this is not a data entry error")
     return warnings
 
 
 def _parse_input_quantities(
-    row: dict, input_lot_codes: list[str], row_cte: str
+    row: dict,
+    input_lot_codes: list[str],
+    row_cte: str,
+    *,
+    row_log: Optional[list[CsvRowDispositionEntry]] = None,
+    row_number: int = 0,
 ) -> tuple[list[dict], Optional[str], Optional[str]]:
     """Build ``kdes.inputs`` from ``input_quantities`` / ``input_units_of_measure``.
 
@@ -671,6 +692,14 @@ def _parse_input_quantities(
     units_raw = (row.get("input_units_of_measure") or "").strip()
     if not quantities_raw and not units_raw:
         if input_lot_codes and row_cte == "transformation":
+            for field in ("input_quantities", "input_units_of_measure"):
+                _append_row_log(
+                    row_log,
+                    row_number=row_number,
+                    disposition="flagged",
+                    reason="missing_input_quantity_data",
+                    field=field,
+                )
             return (
                 [],
                 None,
@@ -1398,7 +1427,7 @@ def parse_csv_rows(
 
             # Lot code: extract and run integrity checks
             lot_code = _first_present(row, _LOT_CODE_COLUMNS)
-            for integrity_warn in _check_lot_code_integrity(lot_code):
+            for integrity_warn in _check_lot_code_integrity(lot_code, row_log=row_log, row_number=row_num):
                 kde_warnings.append(f"Row {row_num}: {integrity_warn}")
 
             kdes: dict = {}
@@ -1435,7 +1464,9 @@ def parse_csv_rows(
             # the row: guessing which quantity belongs to which lot would fabricate
             # a KDE. Rows without the columns still ingest (older templates) with a
             # warning for transformations.
-            inputs, input_error, input_warning = _parse_input_quantities(row, input_lot_codes, row_cte)
+            inputs, input_error, input_warning = _parse_input_quantities(
+                row, input_lot_codes, row_cte, row_log=row_log, row_number=row_num
+            )
             if input_error:
                 _reject("bad_input_quantities", f"Row {row_num}: {input_error}")
                 continue
