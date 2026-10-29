@@ -689,7 +689,7 @@ def test_tlc_pattern_miss_is_accepted_with_persisted_warning(transaction_set):
 
 
 @pytest.mark.parametrize("transaction_set", ("944", "945"))
-@pytest.mark.parametrize("lot", ("A" * 3, "0" * 14 + "A", "A", " "))
+@pytest.mark.parametrize("lot", ("A" * 3, "0" * 14 + "A", "A"))
 def test_warehouse_tlc_prefix_rebuild_is_reachable(transaction_set, lot):
     validated = edi_ingestion_routes._validate_edi_as_fsma_event(
         {"lot_number": lot, "quantity": 1, "gtin": "0" * 14},
@@ -711,3 +711,23 @@ def test_invalid_warehouse_prefix_keeps_lot_and_warning(transaction_set, item_id
     )
     assert validated["tlc"] == "A" * 3
     assert any("production pattern" in warning for warning in validated["warnings"])
+
+
+@pytest.mark.parametrize("transaction_set", ("944", "945"))
+@pytest.mark.parametrize("lot", ("", " ", "   ", "\t"))
+def test_warehouse_stripped_empty_lot_rejected_before_rebuild(transaction_set, lot):
+    """A-2170: empty or whitespace-only 944/945 lots reject like a missing lot.
+
+    Must fail before the GTIN/UPC rebuild; otherwise a blank lot becomes
+    ``{gtin}-`` and FSMAEvent accepts it with no warning.
+    """
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError) as excinfo:
+        edi_ingestion_routes._validate_edi_as_fsma_event(
+            {"lot_number": lot, "quantity": 1, "gtin": "0" * 14},
+            transaction_set,
+            "caller-tlc",
+        )
+    assert any(err["loc"][-1] == "lot_number" for err in excinfo.value.errors())
+

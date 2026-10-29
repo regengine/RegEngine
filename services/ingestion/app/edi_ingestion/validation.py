@@ -57,6 +57,11 @@ def _validate_edi_as_fsma_event(
             quantity=extracted.get("quantity"),
         )
         tlc = line.lot_number.strip()
+        # A-2170: a whitespace-only lot strips empty. Reject before the
+        # GTIN/UPC rebuild so we never emit a production-shaped "GTIN-"
+        # TLC that FSMAEvent would accept, collapsing blank lots onto one id.
+        if not tlc:
+            _WarehouseLineRequiredKDEs(lot_number=tlc, quantity=line.quantity)
         # Pattern misses are advisory, so check explicitly to retain the
         # warehouse GTIN/UPC rebuild for both accepted and short lots.
         try:
