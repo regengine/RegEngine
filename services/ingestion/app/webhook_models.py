@@ -235,7 +235,7 @@ class IngestEvent(BaseModel):
             strict = os.getenv("STRICT_GLN_VALIDATION", "true").lower() == "true"
             if strict:
                 raise ValueError(f"Invalid GLN: {error_msg}")
-            _gln_logger.warning("invalid_gln value=%s error=%s (strict mode disabled)", v, error_msg)
+            _gln_logger.warning("invalid_gln accepted_as_is=true (strict mode disabled)")
             return clean if len(clean) == 13 else v
         return clean
 
@@ -255,9 +255,7 @@ class IngestEvent(BaseModel):
             import logging as _logging
 
             _logging.getLogger("uom-validation").warning(
-                "unknown_unit value=%s accepted_as_is=true valid=%s",
-                v,
-                ",".join(sorted(VALID_UNITS_OF_MEASURE)),
+                "unknown_unit accepted_as_is=true",
             )
             # Accept it — KDE completeness checks will flag it to the user
             return normalized
