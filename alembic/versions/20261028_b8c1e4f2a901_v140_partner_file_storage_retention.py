@@ -1,4 +1,4 @@
-"""Partner file storage metadata + 30-day retention (v138 / SEL-549 first-file).
+"""Partner file storage metadata + 30-day retention (v140 / SEL-549 first-file).
 
 Mirrors supabase/migrations/20261028100000_partner_files_storage_retention.sql
 (metadata + RLS + delete_after trigger) and the manifest_blobs payload-pointer
@@ -17,7 +17,7 @@ Additive and idempotent. Do not apply to prod without C.Lee yes.
 Synthetic fixtures only until SEL-590 clears.
 
 Revision ID: b8c1e4f2a901
-Revises: a3f7ce361b0e
+Revises: e7a1c9d2f4b0
 Create Date: 2026-10-28
 """
 
@@ -26,7 +26,7 @@ from typing import Sequence, Union
 from alembic import op
 
 revision: str = "b8c1e4f2a901"  # pragma: allowlist secret
-down_revision: Union[str, Sequence[str], None] = "a3f7ce361b0e"  # pragma: allowlist secret
+down_revision: Union[str, Sequence[str], None] = "e7a1c9d2f4b0"  # pragma: allowlist secret
 branch_labels = None
 depends_on = None
 
@@ -335,7 +335,7 @@ ALTER TABLE fsma.manifest_blobs
     """
 DO $$
 BEGIN
-    -- v138: runtime role must INSERT storage_url for partner-uploads pointer rows.
+    -- v140: runtime role must INSERT storage_url for partner-uploads pointer rows.
     -- Inventory (v111 REGENGINE_COLUMN_GRANTS) also lists storage_url so
     -- apply_runtime_role_cutover.py keeps the grant across deploys.
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'regengine')

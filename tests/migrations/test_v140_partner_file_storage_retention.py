@@ -1,4 +1,4 @@
-"""v138 partner file storage retention — structure + stub PG16 behavior.
+"""v140 partner file storage retention — structure + stub PG16 behavior.
 
 Covers the Codex FAIL fixes on #3729:
 
@@ -30,11 +30,11 @@ from sqlalchemy import create_engine, text
 from tests.migrations.scratch_db import scratch_database_engine
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-MIGRATION_PATH = REPO_ROOT / "alembic" / "versions" / "20261028_b8c1e4f2a901_v138_partner_file_storage_retention.py"
+MIGRATION_PATH = REPO_ROOT / "alembic" / "versions" / "20261028_b8c1e4f2a901_v140_partner_file_storage_retention.py"
 
 
 def _load_migration():
-    spec = importlib.util.spec_from_file_location(f"v138_partner_{uuid4().hex}", MIGRATION_PATH)
+    spec = importlib.util.spec_from_file_location(f"v140_partner_{uuid4().hex}", MIGRATION_PATH)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -134,11 +134,11 @@ def _apply_upgrade(engine, monkeypatch) -> None:
 
 @pytest.fixture(scope="module")
 def pg_engine():
-    """Disposable PG16 database with v138 minimal deps, or skip/fail."""
+    """Disposable PG16 database with v140 minimal deps, or skip/fail."""
     # Prefer an explicit scratch URL; otherwise peer-auth local Homebrew PG.
     if not os.environ.get("REGENGINE_MIGRATION_TEST_DB"):
         os.environ["REGENGINE_MIGRATION_TEST_DB"] = "postgresql://sellers@/postgres?host=/tmp"
-    db_name = "inc2_scratch_v138_" + uuid4().hex[:12]
+    db_name = "inc2_scratch_v140_" + uuid4().hex[:12]
     with scratch_database_engine(db_name) as engine:
         _bootstrap_minimal_schema(engine)
         yield engine
@@ -255,14 +255,14 @@ def test_delete_after_recomputed_on_direct_update(pg_engine, monkeypatch) -> Non
 
 
 def test_runtime_grant_includes_storage_url_insert() -> None:
-    """v138 must GRANT INSERT (storage_url) and inventory must list it.
+    """v140 must GRANT INSERT (storage_url) and inventory must list it.
 
     Structural only — no live DB / no partner payloads.
     """
     import importlib.util
     from pathlib import Path
 
-    alembic = Path("alembic/versions/20261028_b8c1e4f2a901_v138_partner_file_storage_retention.py")
+    alembic = Path("alembic/versions/20261028_b8c1e4f2a901_v140_partner_file_storage_retention.py")
     text = alembic.read_text(encoding="utf-8")
     assert "GRANT INSERT (storage_url) ON TABLE fsma.manifest_blobs TO regengine" in text
     assert "REVOKE INSERT (storage_url) ON TABLE fsma.manifest_blobs FROM regengine" in text
@@ -278,7 +278,7 @@ def test_runtime_grant_includes_storage_url_insert() -> None:
 
 
 def test_runtime_grant_includes_partner_files_delete_for_retention_sweep() -> None:
-    """v138 + cutover inventory must grant DELETE on the two sweep targets.
+    """v140 + cutover inventory must grant DELETE on the two sweep targets.
 
     cleanup_deleted_records_job hard-deletes expired partner_files /
     partner_file_derived rows as the regengine role. Without DELETE the sweep
@@ -289,7 +289,7 @@ def test_runtime_grant_includes_partner_files_delete_for_retention_sweep() -> No
     import importlib.util
     from pathlib import Path
 
-    alembic = Path("alembic/versions/20261028_b8c1e4f2a901_v138_partner_file_storage_retention.py")
+    alembic = Path("alembic/versions/20261028_b8c1e4f2a901_v140_partner_file_storage_retention.py")
     text = alembic.read_text(encoding="utf-8")
     assert "GRANT SELECT, INSERT, UPDATE, DELETE ON public.partner_files TO regengine" in text
     assert "GRANT SELECT, INSERT, UPDATE, DELETE ON public.partner_file_derived TO regengine" in text

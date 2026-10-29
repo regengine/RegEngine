@@ -258,7 +258,7 @@ END $$;
 -- Runtime role: allow pointer-only manifest_blobs inserts (partner-uploads).
 DO $$
 BEGIN
-    -- v138: runtime role must INSERT storage_url for partner-uploads pointer rows.
+    -- v140: runtime role must INSERT storage_url for partner-uploads pointer rows.
     -- Inventory (v111 REGENGINE_COLUMN_GRANTS) also lists storage_url so
     -- apply_runtime_role_cutover.py keeps the grant across deploys.
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'regengine')
