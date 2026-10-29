@@ -278,8 +278,10 @@ describe('CSV import results on /ingest', () => {
 
       expect(await screen.findByText('API key could not be saved. Please try again.')).toBeInTheDocument();
       expect(screen.getByRole('alert')).toHaveTextContent('API key could not be saved. Please try again.');
-      expect(screen.getByText('Normalized document viewer')).toBeInTheDocument();
-      expect(screen.getByText(`Receipt: ${jobId}`)).toBeInTheDocument();
+      expect(screen.getByText('Ingestion request completed')).toBeInTheDocument();
+      // No DEMO-DOC-ID / job_id fallback: completed panel shows empty state, not a fake viewer receipt.
+      expect(screen.getByText('No normalized document is available for this ingest.')).toBeInTheDocument();
+      expect(screen.queryByText('Normalized document viewer')).not.toBeInTheDocument();
     } finally {
       vi.useRealTimers();
     }

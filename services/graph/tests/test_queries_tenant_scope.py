@@ -99,6 +99,12 @@ async def test_query_events_by_range_cypher_scopes_event_lot_and_facility():
         "product_description and quantity without this predicate (#1261)"
     )
     assert "f.tenant_id = $tenant_id" in cypher, "query_events_by_range must scope the joined Facility by tenant"
+    # EPCIS export RETURN contract (#3680): Digital Link + shipping endpoints
+    assert "l.gtin as gtin" in cypher
+    assert "input_lot.tlc as input_tlc" in cypher
+    assert "input_lot.gtin as input_gtin" in cypher
+    assert "ship_from_f.gln as ship_from_gln" in cypher
+    assert "ship_to_f.gln as ship_to_gln" in cypher
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -186,10 +192,15 @@ async def test_query_events_by_range_raises_on_cross_tenant_lot():
         "event_time": None,
         "risk_flag": None,
         "tlc": "LOT-OTHER",
+        "gtin": "09506000134352",
         "product_description": "LEAKED PRODUCT",
         "quantity": 100,
         "uom": "KG",
         "lot_tenant": TENANT_B,  # WRONG
+        "input_tlc": None,
+        "input_gtin": None,
+        "ship_from_gln": None,
+        "ship_to_gln": None,
         "facility_name": None,
         "facility_gln": None,
         "facility_address": None,
@@ -216,10 +227,15 @@ async def test_query_events_by_range_raises_on_cross_tenant_facility():
         "event_time": None,
         "risk_flag": None,
         "tlc": "LOT-A",
+        "gtin": "09506000134352",
         "product_description": "OK PRODUCT",
         "quantity": 50,
         "uom": "KG",
         "lot_tenant": TENANT_A,  # correct
+        "input_tlc": None,
+        "input_gtin": None,
+        "ship_from_gln": "0614141000005",
+        "ship_to_gln": "0614141123452",
         "facility_name": "Other Tenant's Depot",
         "facility_gln": "9999999999999",
         "facility_address": "Somewhere Else",
@@ -273,10 +289,15 @@ async def test_query_events_by_range_returns_in_tenant_records():
         "event_time": None,
         "risk_flag": None,
         "tlc": "LOT-A",
+        "gtin": "09506000134352",
         "product_description": "Lettuce",
         "quantity": 100,
         "uom": "KG",
         "lot_tenant": TENANT_A,
+        "input_tlc": None,
+        "input_gtin": None,
+        "ship_from_gln": "0614141000005",
+        "ship_to_gln": "0614141123452",
         "facility_name": "Tenant A Farm",
         "facility_gln": "1234567890123",
         "facility_address": "101 Farm Rd",
@@ -294,6 +315,11 @@ async def test_query_events_by_range_returns_in_tenant_records():
     assert len(out) == 1
     assert out[0]["product_description"] == "Lettuce"
     assert out[0]["location_description"] == "Tenant A Farm"
+    assert out[0]["gtin"] == "09506000134352"
+    assert out[0]["input_tlc"] == ""
+    assert out[0]["input_gtin"] == ""
+    assert out[0]["ship_from_gln"] == "0614141000005"
+    assert out[0]["ship_to_gln"] == "0614141123452"
 
 
 # ─────────────────────────────────────────────────────────────────────

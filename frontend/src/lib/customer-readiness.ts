@@ -307,7 +307,7 @@ export const CAPABILITY_REGISTRY: CapabilityRegistryEntry[] = [
         status: 'preview',
         delivery_mode: 'export_only',
         integration_type: 'one_way_export',
-        customer_copy: 'EPCIS export and ingest are in Preview. Default deployments use PostgreSQL-backed task processing; legacy Kafka-compatible signing is opt-in.',
+        customer_copy: 'EPCIS export and ingest are in Preview. A single export returns at most 2,000 events, newest first, and reports when it was cut off. Default deployments use PostgreSQL-backed task processing; legacy Kafka-compatible signing is opt-in.',
         evidence_url: '/developers',
     },
     {
@@ -439,7 +439,7 @@ export const RECALL_DRILL_RUNS: RecallDrillRun[] = [
         dateRange: '2026-02-01 to 2026-02-28',
         status: 'completed',
         elapsed: '18m 24s',
-        artifacts: ['FDA package', 'EPCIS export (Preview)', 'drill report'],
+        artifacts: ['FDA package (sortable spreadsheet)', 'EPCIS export (Preview)', 'drill report'],
         warnings: [],
     },
     {
@@ -449,7 +449,7 @@ export const RECALL_DRILL_RUNS: RecallDrillRun[] = [
         dateRange: '2026-03-01 to 2026-03-11',
         status: 'completed_with_warnings',
         elapsed: '31m 09s',
-        artifacts: ['FDA package', 'supplier contact list', 'warning summary'],
+        artifacts: ['FDA package (sortable spreadsheet)', 'supplier contact list', 'warning summary'],
         warnings: ['2 supplier facilities missing GLNs', '1 receiving event required manual identity resolution'],
     },
     {
