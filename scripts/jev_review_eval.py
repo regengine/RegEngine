@@ -23,6 +23,11 @@ RATE = 0.042 / 1_000_000  # docs.typesafe.ai/models, verified 2026-10-29; output
 RESERVATION = 64_000 * RATE  # Default documented maximum input tokens per request.
 ENDPOINT = "https://api.typesafe.ai/v1/systemone"
 MODELS = ("jev-1.14.0", "jev-1.13.0")
+DIAGNOSTIC_ANSWER_IDS = {
+    "owner_choice": "correction_owner_role",
+    "tlc_source_choice": "tlc_source_assessment",
+    "origin_choice": "data_gap_origin",
+}
 
 
 def load_cases(original_path: Path, heldout_path: Path) -> list[dict]:
@@ -70,10 +75,38 @@ def load_cases(original_path: Path, heldout_path: Path) -> list[dict]:
     return cases
 
 
+def _validate_case(case: dict) -> None:
+    mode, expected = case.get("mode"), case.get("expected")
+    if not isinstance(mode, str) or mode not in QUESTION_SETS:
+        raise ValueError("Invalid evaluation case mode")
+    if not isinstance(expected, dict) or not expected:
+        raise ValueError("Evaluation case requires expected fields")
+    if mode == "mode_b":
+        if set(expected) != {"label"} or expected["label"] not in (
+            "supported",
+            "contradicted",
+            "conflicting",
+            "insufficient",
+        ):
+            raise ValueError("Invalid evaluation case expected label")
+    else:
+        for key, value in expected.items():
+            if (
+                key not in DIAGNOSTIC_ANSWER_IDS
+                or not isinstance(value, str)
+                or value not in QUESTION_SETS[mode][DIAGNOSTIC_ANSWER_IDS[key]]["criteria"]
+            ):
+                raise ValueError("Invalid evaluation case expected choice")
+    if not isinstance(case.get("evidence_flags", {}), dict):
+        raise ValueError("Invalid evaluation case evidence flags")
+
+
 def build_plan(cases: list[dict]) -> list[dict]:
     plan = []
     if any(not re.fullmatch(r"[A-Za-z0-9_-]{1,80}", case["id"]) for case in cases):
         raise ValueError("Unsafe case identifier")
+    for case in cases:
+        _validate_case(case)
     for model in MODELS:
         for case in cases:
             # Reorder only Choice options, with identical state and batch membership.
@@ -110,15 +143,8 @@ def score_result(item: dict, response: dict) -> dict:
         matches = {"label": decision["label"] == case["expected"]["label"]}
     else:
         decision = summarize_diagnostic(answers, evidence_flags=case.get("evidence_flags", {}))
-        answer_ids = {
-            "owner_choice": "correction_owner_role",
-            "tlc_source_choice": "tlc_source_assessment",
-            "origin_choice": "data_gap_origin",
-        }
         matches = {
-            key: answers[answer_ids[key]]["choice"] == expected
-            for key, expected in case["expected"].items()
-            if key in answer_ids
+            key: answers[DIAGNOSTIC_ANSWER_IDS[key]]["choice"] == expected for key, expected in case["expected"].items()
         }
     return {"decision": decision, "matches": matches}
 
@@ -131,6 +157,8 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 def run(plan: list[dict], output: Path, budget: float) -> dict:
     if not 0 < budget <= 1:
         raise ValueError("Evaluation budget must be positive and at most $1")
+    for item in plan:
+        _validate_case(item["case"])
     key = os.environ.get("TYPESAFE_API_KEY")
     if not key:
         raise RuntimeError("TYPESAFE_API_KEY is not configured; nothing sent")
@@ -163,7 +191,11 @@ def run(plan: list[dict], output: Path, budget: float) -> dict:
         for item in plan:
             previous = next((row for row in ledger["attempts"] if row["name"] == item["name"]), None)
             if previous:
-                if previous["sha256"] != item["sha256"] or previous["status"] not in {"complete", "contract_rejected"}:
+                if previous["sha256"] != item["sha256"] or previous["status"] not in {
+                    "complete",
+                    "contract_rejected",
+                    "processing_failed",
+                }:
                     raise RuntimeError("Changed or ambiguous prior request; automatic replay prohibited")
                 if not (output / (item["name"] + ".json")).is_file():
                     raise RuntimeError("Saved response missing; automatic replay prohibited")
@@ -179,11 +211,25 @@ def run(plan: list[dict], output: Path, budget: float) -> dict:
                 data=json.dumps(item["payload"], ensure_ascii=False).encode(),
                 headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"},
             )
+            saved = None
             try:
                 started = time.monotonic()
                 with opener.open(request, timeout=30) as result:
                     raw = json.load(result)
                     request_id = result.headers.get("x-typesafe-request-id")
+                saved = {
+                    "case_id": item["case"]["id"],
+                    "cohort": item["case"]["cohort"],
+                    "mode": item["case"]["mode"],
+                    "variant": item["variant"],
+                    "expected": item["case"]["expected"],
+                    "request": item["payload"],
+                    "response": {k: raw[k] for k in ("model", "answers", "usage") if k in raw}
+                    if isinstance(raw, dict)
+                    else {},
+                    "request_id": request_id,
+                    "elapsed_seconds": time.monotonic() - started,
+                }
                 if raw.get("model") != item["payload"]["model"]:
                     raise ValueError("Returned model does not match pinned model")
                 usage = raw.get("usage", {})
@@ -193,17 +239,6 @@ def run(plan: list[dict], output: Path, budget: float) -> dict:
                     raise ValueError("Usage exceeds reservation")
                 ledger["input_tokens"] += usage["input_tokens"]
                 ledger["estimated_usage_usd"] = ledger["input_tokens"] * RATE
-                saved = {
-                    "case_id": item["case"]["id"],
-                    "cohort": item["case"]["cohort"],
-                    "mode": item["case"]["mode"],
-                    "variant": item["variant"],
-                    "expected": item["case"]["expected"],
-                    "request": item["payload"],
-                    "response": {k: raw[k] for k in ("model", "answers", "usage")},
-                    "request_id": request_id,
-                    "elapsed_seconds": time.monotonic() - started,
-                }
                 try:
                     validate_review_answers(raw["answers"], item["payload"]["questions"])
                     saved.update(score_result(item, raw))
@@ -215,8 +250,14 @@ def run(plan: list[dict], output: Path, budget: float) -> dict:
                 save()
                 print(item["name"], record["status"], flush=True)
             except Exception as exc:
+                if saved is not None:
+                    # Exception messages may contain response data; retain only the type.
+                    saved["processing_error"] = type(exc).__name__
+                    (output / (item["name"] + ".json")).write_text(json.dumps(saved, indent=2) + "\n")
                 record.update(
-                    status="failed_or_ambiguous", error_type=type(exc).__name__, http_status=getattr(exc, "code", None)
+                    status="processing_failed" if saved is not None else "failed_or_ambiguous",
+                    error_type=type(exc).__name__,
+                    http_status=getattr(exc, "code", None),
                 )
                 save()
                 raise RuntimeError("Request failed; reservation retained; no retry") from None
