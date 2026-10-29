@@ -1,4 +1,4 @@
-"""v138 — fsma.traceability_events mutation policy (column allowlist trigger).
+"""v141 — fsma.traceability_events mutation policy (column allowlist trigger).
 
 ``fsma.traceability_events`` is the canonical FSMA 204 evidence table and
 the chain hash is computed over its payload columns, yet until now nothing
@@ -40,7 +40,7 @@ before ``CREATE TRIGGER``, ``to_regclass`` guard. No grant changes (v111
 still grants UPDATE to the runtime role; the trigger is the enforcement).
 
 Revision ID: 08c7cf36ddbe
-Revises: a3f7ce361b0e
+Revises: b8c1e4f2a901
 Create Date: 2026-10-28
 """
 
@@ -49,7 +49,7 @@ from typing import Sequence, Union
 from alembic import op
 
 revision: str = "08c7cf36ddbe"  # pragma: allowlist secret
-down_revision: Union[str, Sequence[str], None] = "a3f7ce361b0e"  # pragma: allowlist secret
+down_revision: Union[str, Sequence[str], None] = "b8c1e4f2a901"  # pragma: allowlist secret
 branch_labels = None
 depends_on = None
 

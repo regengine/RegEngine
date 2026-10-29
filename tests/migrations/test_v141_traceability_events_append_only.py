@@ -1,4 +1,4 @@
-"""v138 — ``fsma.traceability_events`` mutation policy (S4).
+"""v141 — ``fsma.traceability_events`` mutation policy (S4).
 
 Static checks run everywhere. Behavioural checks run against a real
 PostgreSQL at alembic head (``REGENGINE_MIGRATION_TEST_DB`` or a
@@ -31,13 +31,13 @@ from sqlalchemy.exc import DBAPIError
 from tests.migrations.rls_db import rls_postgres_or_skip, skip_or_fail_db
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-MIGRATION = REPO_ROOT / "alembic" / "versions" / "20261028_08c7cf36ddbe_v138_traceability_events_append_only.py"
+MIGRATION = REPO_ROOT / "alembic" / "versions" / "20261028_08c7cf36ddbe_v141_traceability_events_append_only.py"
 
 TENANT = "00000000-0000-4000-8000-0000000138aa"
 
 
 def _load_migration():
-    spec = importlib.util.spec_from_file_location("v138_traceability_events_append_only", MIGRATION)
+    spec = importlib.util.spec_from_file_location("v141_traceability_events_append_only", MIGRATION)
     assert spec is not None and spec.loader is not None
     mod = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = mod
@@ -53,7 +53,7 @@ def _load_migration():
 def test_revision_chain_and_shape() -> None:
     mod = _load_migration()
     assert mod.revision == "08c7cf36ddbe"  # pragma: allowlist secret
-    assert mod.down_revision == "a3f7ce361b0e"  # pragma: allowlist secret
+    assert mod.down_revision == "b8c1e4f2a901"  # pragma: allowlist secret
     tree = ast.parse(MIGRATION.read_text())
     names = {n.name for n in tree.body if isinstance(n, ast.FunctionDef)}
     assert {"upgrade", "downgrade"} <= names

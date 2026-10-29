@@ -237,7 +237,7 @@ def test_canonical_content_tampering_is_rejected(workflow, tmp_path, column):
     _assert_package(w, tmp_path, verified=True)
     # Simulate corruption by a cluster administrator; runtime ACLs stay intact.
     expression = "quantity + 0.25" if column == "quantity" else "event_timestamp + interval '1 minute'"
-    # v138 makes the canonical table append-only; the simulated administrator
+    # v141 makes the canonical table append-only; the simulated administrator
     # uses the break-glass GUC inside one transaction, as a real one would.
     with w.admin.transaction(), w.admin.cursor() as cur:
         cur.execute("SET LOCAL fsma.allow_mutation = 'true'")
@@ -559,7 +559,7 @@ def test_runtime_ingest_evidence_grants_stay_tenant_isolated(workflow, monkeypat
         blob_insert,
         {"run": other_blobless_run, "tenant": w.tenant, "sha": "0" * 64},
     )
-    # INSERT is column-scoped: created_at still cannot be forged. v138 grants
+    # INSERT is column-scoped: created_at still cannot be forged. v140 grants
     # storage_url INSERT for partner-uploads pointer-only rows.
     rejected(
         "permission denied",

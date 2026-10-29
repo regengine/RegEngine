@@ -758,7 +758,7 @@ class TestAgainstLiveDatabase:
         database_url, engine, tenant = seeded_tenant
         with engine.begin() as conn:
             conn.execute(text("SELECT set_config('app.tenant_id', :tid, true)"), {"tid": tenant})
-            # v138 append-only trigger: simulated drift needs the break-glass GUC.
+            # v141 append-only trigger: simulated drift needs the break-glass GUC.
             conn.execute(text("SET LOCAL fsma.allow_mutation = 'true'"))
             conn.execute(
                 text(
