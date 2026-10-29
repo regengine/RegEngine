@@ -555,6 +555,7 @@ def _audit_task_done(task) -> None:
 
 def _audit_product_mutation(
     *,
+    ctx: TenantContext,
     event_type_name: str,
     action: str,
     tenant_id: str,
@@ -586,8 +587,9 @@ def _audit_product_mutation(
         event_type = getattr(AuditEventType, event_type_name)
         audit = AuditLogger.get_instance()
         actor = AuditActor(
-            actor_id="product-catalog",
-            actor_type="service",
+            actor_id=ctx.principal_id,
+            actor_type=ctx.principal_kind,
+            email=ctx.actor_email,
             tenant_id=tenant_id,
         )
         resource = AuditResource(
@@ -709,6 +711,7 @@ async def add_product(
     # Try Supabase
     if _db_add_product(tenant_id, product):
         _audit_product_mutation(
+            ctx=ctx,
             event_type_name="DATA_CREATE",
             action="product_create",
             tenant_id=tenant_id,
@@ -722,6 +725,7 @@ async def add_product(
         _catalog_store[tenant_id] = []
     _catalog_store[tenant_id].append(product)
     _audit_product_mutation(
+        ctx=ctx,
         event_type_name="DATA_CREATE",
         action="product_create",
         tenant_id=tenant_id,
@@ -822,6 +826,7 @@ async def update_product(
     if not updated:
         raise HTTPException(status_code=404, detail="Product not found")
     _audit_product_mutation(
+        ctx=ctx,
         event_type_name="DATA_UPDATE",
         action="product_update",
         tenant_id=tenant_id,
@@ -847,6 +852,7 @@ async def delete_product(
     tenant_id = ctx.tenant_id
     if _db_delete_product(tenant_id, product_id) or _memory_delete_product(tenant_id, product_id):
         _audit_product_mutation(
+            ctx=ctx,
             event_type_name="DATA_DELETE",
             action="product_delete",
             tenant_id=tenant_id,

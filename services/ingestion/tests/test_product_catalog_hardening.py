@@ -178,6 +178,98 @@ def test_delete_product_emits_audit(monkeypatch: pytest.MonkeyPatch) -> None:
     assert calls[0]["event_type_name"] == "DATA_DELETE"
 
 
+# ---------------------------------------------------------------------------
+# Audit actor provenance (PR #3745): actor is the signed-in principal, not a
+# hardcoded service identity.
+# ---------------------------------------------------------------------------
+
+
+class _FakeAuditLogger:
+    """Fake AuditLogger that records the actor passed to ``log`` synchronously.
+
+    ``log`` is invoked (and its kwargs materialised) before the router
+    schedules the fire-and-forget task, so the actor is captured even though
+    the returned coroutine may never be awaited.
+    """
+
+    def __init__(self, sink: list) -> None:
+        self._sink = sink
+
+    def log(self, **kwargs):
+        self._sink.append(kwargs)
+
+        async def _noop() -> None:
+            return None
+
+        return _noop()
+
+
+def _install_fake_audit(monkeypatch: pytest.MonkeyPatch) -> list[dict]:
+    import shared.audit_logging as audit_mod
+
+    sink: list[dict] = []
+    fake = _FakeAuditLogger(sink)
+    monkeypatch.setattr(audit_mod.AuditLogger, "get_instance", classmethod(lambda cls: fake))
+    return sink
+
+
+def test_add_audit_actor_is_signed_in_principal(monkeypatch: pytest.MonkeyPatch) -> None:
+    sink = _install_fake_audit(monkeypatch)
+    client = TestClient(_build_app())
+    resp = client.post("/api/v1/products/tenant-a", json=_valid_body())
+    assert resp.status_code == 200
+    assert len(sink) == 1
+    actor = sink[0]["actor"]
+    assert actor.actor_id == "router-test"
+    assert actor.actor_type == "test"
+    assert actor.actor_id != "product-catalog"
+    assert actor.actor_type != "service"
+    assert actor.tenant_id == "tenant-a"
+
+
+def test_add_audit_actor_email_from_ctx(monkeypatch: pytest.MonkeyPatch) -> None:
+    app = _build_app()
+
+    async def _ctx(request: Request) -> TenantContext:
+        return TenantContext(
+            tenant_id="tenant-a",
+            principal_kind="test",
+            principal_id="router-test",
+            actor_email="[email protected]",
+        )
+
+    app.dependency_overrides[pc.require_tenant_context] = _ctx
+    sink = _install_fake_audit(monkeypatch)
+    client = TestClient(app)
+    resp = client.post("/api/v1/products/tenant-a", json=_valid_body())
+    assert resp.status_code == 200
+    assert len(sink) == 1
+    actor = sink[0]["actor"]
+    assert actor.actor_id == "router-test"
+    assert actor.email == "[email protected]"
+
+
+def test_update_delete_audit_actor_is_signed_in_principal(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(pc, "_memory_get_product", lambda t, pid: Product(id=pid, name="x", category="Herbs"))
+    monkeypatch.setattr(pc, "_memory_update_product", lambda t, pid, product: product)
+    monkeypatch.setattr(pc, "_memory_delete_product", lambda t, pid: True)
+    sink = _install_fake_audit(monkeypatch)
+    client = TestClient(_build_app())
+
+    resp = client.put("/api/v1/products/tenant-a/p1", json=_valid_body())
+    assert resp.status_code == 200
+    resp = client.delete("/api/v1/products/tenant-a/p1")
+    assert resp.status_code == 204
+
+    assert len(sink) == 2
+    for call in sink:
+        actor = call["actor"]
+        assert actor.actor_id == "router-test"
+        assert actor.actor_type == "test"
+        assert actor.actor_id != "product-catalog"
+        assert actor.actor_type != "service"
+
+
 def test_no_audit_on_update_404(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[dict] = []
     monkeypatch.setattr(pc, "_audit_product_mutation", lambda **kw: calls.append(kw))
