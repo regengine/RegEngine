@@ -240,7 +240,7 @@ export const FREE_TOOLS = [
     },
     {
         id: 'drill-simulator',
-        title: '24-Hour Drill Simulator',
+        title: 'Recall drill (Preview)',
         description: 'Self-paced rehearsal for the §1.1455(c) records-on-request workflow.',
         icon: Timer,
         href: '/tools/drill-simulator'
@@ -269,7 +269,7 @@ export const FREE_TOOLS = [
     {
         id: 'export',
         title: 'FDA Export Package Generator',
-        description: 'Generate a §1.1455(c) sortable spreadsheet with SHA-256 integrity hashes.',
+        description: 'Generate an FDA sortable spreadsheet (§1.1455(c)) with SHA-256 integrity hashes.',
         icon: FileOutput,
         href: '/tools/export'
     }

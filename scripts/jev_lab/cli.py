@@ -160,7 +160,6 @@ def _decider(
 ) -> Any:
     """A :class:`LabDecider`, or ``None`` after printing why Jev is not configured."""
     from shared.jev import JevDecider
-    from shared.jev.settings import API_KEY_ENV, ENABLED_ENV
 
     from .jev_access import FAKE, LIVE, LabDecider, build_decider
 
@@ -168,12 +167,19 @@ def _decider(
         return LabDecider(build_decider(FAKE), mode=FAKE, max_requests=args.max_jev_requests)
     settings = _settings(args, env, read_key)
     if not settings.enabled:
-        reason = f"{API_KEY_ENV} is not set" if not settings.api_key else f"{ENABLED_ENV} switches Jev off"
-        print(
-            f"{PROG}: not configured: {reason}. Nothing was sent. "
-            "Set the key in your shell, use --prompt-key, or run with --fake for the offline stand-in.",
-            file=sys.stderr,
-        )
+        # Constant-only messages: never interpolate API_KEY_ENV/api_key (CodeQL clear-text-logging).
+        if not settings.api_key:
+            print(
+                f"{PROG}: not configured: TYPESAFE_API_KEY is not set. Nothing was sent. "
+                "Set the key in your shell, use --prompt-key, or run with --fake for the offline stand-in.",
+                file=sys.stderr,
+            )
+        else:
+            print(
+                f"{PROG}: not configured: REGENGINE_JEV_ENABLED switches Jev off. Nothing was sent. "
+                "Set the key in your shell, use --prompt-key, or run with --fake for the offline stand-in.",
+                file=sys.stderr,
+            )
         return None
     decider = (
         JevDecider(dataclasses.replace(settings, header_sample_values=0), transport=transport)

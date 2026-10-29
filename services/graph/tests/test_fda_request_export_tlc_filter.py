@@ -72,7 +72,7 @@ def _call_route(params):
     client = TestClient(app, raise_server_exceptions=False)
     with (
         patch("services.graph.app.routers.fsma.compliance.Neo4jClient", _neo4j_stub()),
-        patch("services.graph.app.fsma_utils.query_events_by_range", new=query),
+        patch("services.graph.app.routers.fsma.compliance.query_events_by_range", new=query),
     ):
         resp = client.get(URL, params=params)
     return resp, query
