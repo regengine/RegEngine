@@ -1,0 +1,15 @@
+{
+  "cases_sha256": "0b200fb67749b2a704af61e7e4907f71a658c6b44d200c14698e2ad43eea0188",
+  "case_count": 16,
+  "labels": {
+    "supported": 4,
+    "contradicted": 4,
+    "insufficient": 4,
+    "conflicting": 4
+  },
+  "reviewed_at_utc": "2026-10-29T09:37:30.944365+00:00",
+  "candidate_frozen_before_authorship": true,
+  "independent_authorship": "Author saw no candidate prompts, original cases or results.",
+  "lead_review": "Reviewed after prompt freeze; all cases and labels accepted without edits.",
+  "limitations": "Synthetic related cases, not independent production samples."
+}
