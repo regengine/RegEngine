@@ -408,6 +408,44 @@ class TestBuildPackageResponse:
         assert captured["package_kwargs"]["include_pii"] is True
         assert resp.headers["x-pii-redacted"] == "false"
 
+    def test_evidence_context_kwargs_forwarded(self, monkeypatch):
+        """S7: rule versions and the coverage-gate bypass reach the package builder."""
+        captured = _patch_package_deps(monkeypatch)
+        rule_versions = {"catalog_status": "ok", "catalog": {}}
+        fmt.build_package_response(
+            events=[],
+            csv_content="csv",
+            export_hash="h",
+            chain_verification=SimpleNamespace(valid=True),
+            completeness_summary={"required_kde_coverage_ratio": 1.0},
+            tenant_id="t",
+            tlc=None,
+            start_date=None,
+            end_date=None,
+            filename="f.zip",
+            rule_versions=rule_versions,
+            coverage_gate_bypassed=True,
+        )
+        assert captured["package_kwargs"]["rule_versions"] is rule_versions
+        assert captured["package_kwargs"]["coverage_gate_bypassed"] is True
+
+    def test_evidence_context_kwargs_default(self, monkeypatch):
+        captured = _patch_package_deps(monkeypatch)
+        fmt.build_package_response(
+            events=[],
+            csv_content="csv",
+            export_hash="h",
+            chain_verification=SimpleNamespace(valid=True),
+            completeness_summary={"required_kde_coverage_ratio": 1.0},
+            tenant_id="t",
+            tlc=None,
+            start_date=None,
+            end_date=None,
+            filename="f.zip",
+        )
+        assert captured["package_kwargs"]["rule_versions"] is None
+        assert captured["package_kwargs"]["coverage_gate_bypassed"] is False
+
     def test_extra_headers_merged(self, monkeypatch):
         _patch_package_deps(monkeypatch)
         resp = fmt.build_package_response(
