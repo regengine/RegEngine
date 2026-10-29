@@ -360,6 +360,7 @@ jobs:
     timeout-minutes: 40
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/playwright_shared # pragma: allowlist secret
+      ADMIN_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/playwright_shared # pragma: allowlist secret
       PGOPTIONS: "-c timezone=UTC -c search_path=public,fsma,extensions"
       REGENGINE_ENV: test
       REGENGINE_E2E_MODE: "true"
