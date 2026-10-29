@@ -45,6 +45,7 @@ class TestValidateGlnFormat:
         invalid = probe[:-1] + str((int(probe[-1]) + 1) % 10)
         assert models.IngestEvent.validate_gln_format(invalid) == invalid
         assert any("invalid_gln" in record.message for record in caplog.records)
+        assert invalid not in caplog.text
 
     def test_permissive_mode_wrong_length_returns_raw(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("STRICT_GLN_VALIDATION", "false")
@@ -52,3 +53,11 @@ class TestValidateGlnFormat:
 
     def test_whitespace_only_gln_short_circuits(self) -> None:
         assert models.IngestEvent.validate_gln_format("   ") == "   "
+
+
+def test_unknown_unit_warning_omits_uploaded_value(caplog: pytest.LogCaptureFixture) -> None:
+    marker = "synthetic-private-unit"
+    caplog.set_level("WARNING", logger="uom-validation")
+    assert models.IngestEvent.validate_unit_of_measure(marker) == marker
+    assert "unknown_unit" in caplog.text
+    assert marker not in caplog.text

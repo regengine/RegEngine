@@ -94,14 +94,22 @@ def cell_to_text(value: object) -> str:
     return str(value)
 
 
-def xlsx_to_csv_text(content: bytes, *, sheet_name: Optional[str] = None, max_data_rows: int) -> tuple[str, list[str]]:
+def xlsx_to_csv_text(
+    content: bytes,
+    *,
+    sheet_name: Optional[str] = None,
+    max_data_rows: int,
+    reject_on_scan_limit: bool = False,
+) -> tuple[str, list[str]]:
     """Convert workbook bytes to CSV text and report formulas without cached values.
 
     Reads the first worksheet, or ``sheet_name`` when given (400 if it does
     not exist). Fully empty rows are skipped and the first non-empty row is
     the header. At most ``max_data_rows + 1`` data rows are emitted: one past
     the cap, so ``parse_csv_rows`` still reports that the file is over its
-    row limit.
+    row limit. ``reject_on_scan_limit`` rejects a partial scan of a sparse
+    worksheet instead of returning an incomplete converted file. This limit
+    counts worksheet rows, including blanks, separately from data records.
     """
     if not content.startswith(_ZIP_MAGIC):
         raise HTTPException(status_code=400, detail=_INVALID_DETAIL)
@@ -149,6 +157,8 @@ def xlsx_to_csv_text(content: bytes, *, sheet_name: Optional[str] = None, max_da
             formula_rows = formula_sheet.iter_rows(max_col=MAX_XLSX_COLUMNS + 1)
             for scanned, (row, formula_row) in enumerate(zip(rows, formula_rows), start=1):
                 if scanned > _MAX_XLSX_SCAN_ROWS:
+                    if reject_on_scan_limit:
+                        raise HTTPException(status_code=413, detail="Excel worksheet exceeds the safe row scan limit")
                     break
                 cells = [cell_to_text(cell.value) for cell in row]
                 while cells and not cells[-1].strip():
@@ -159,7 +169,8 @@ def xlsx_to_csv_text(content: bytes, *, sheet_name: Optional[str] = None, max_da
                     formula_value = formula_cell.value
                     if cached_cell.value is None and (
                         formula_cell.data_type == "f"
-                        or isinstance(formula_value, str) and formula_value.startswith("=")
+                        or isinstance(formula_value, str)
+                        and formula_value.startswith("=")
                     ):
                         uncached_count += 1
                         if len(uncached_formulas) < _MAX_UNCACHED_FORMULA_CELLS_LISTED:

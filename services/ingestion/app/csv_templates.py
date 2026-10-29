@@ -851,12 +851,10 @@ def _append_row_log(
     )
     row_log.append(entry)
     logger.info(
-        "csv_row_disposition row=%s disposition=%s reason=%s field=%s guessed_as=%s",
+        "csv_row_disposition row=%s disposition=%s reason=%s",
         row_number,
         disposition,
         reason,
-        field or "",
-        guessed_as or "",
     )
 
 
@@ -1478,9 +1476,9 @@ def parse_csv_rows(
             if event_source_rows is not None:
                 event_source_rows.append(row_num)
         except Exception as e:
-            # Log the detail server-side; return a generic per-row message so
-            # raw exception text (library internals) isn't echoed to callers.
-            logger.warning("csv_row_parse_failed row=%s error=%s", row_num, str(e))
+            # Validation exceptions can include uploaded cell values. Keep
+            # only the exception type in logs and a generic per-row response.
+            logger.warning("csv_row_parse_failed row=%s error_type=%s", row_num, type(e).__name__)
             _reject("parse_exception", f"Row {row_num}: could not be parsed (see server logs)")
 
     return events, parse_errors, kde_warnings
@@ -2132,3 +2130,9 @@ async def ingest_csv(
         missing_columns=missing_columns,
         unrecognized_columns=unrecognized_columns,
     )
+
+
+# Read-only preview shares this router's production ownership and parser.
+from .pilot_diagnostic import router as pilot_diagnostic_router  # noqa: E402
+
+router.include_router(pilot_diagnostic_router)
