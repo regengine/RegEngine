@@ -153,21 +153,14 @@ class AssemblyMixin:
         # Run gap analysis snapshot
         gap_analysis = self._compute_gap_snapshot(tenant_id, request_case_id, event_ids)
 
-        # Snapshot rule versions at assembly time
-        rule_versions = {}
-        try:
-            rv_result = self.db.execute(
-                text("SELECT rule_id, rule_version, title, severity, category FROM fsma.rule_definitions"),
-            )
-            for rv in rv_result.mappings().fetchall():
-                rule_versions[str(rv["rule_id"])] = {
-                    "version": rv.get("rule_version"),
-                    "title": rv.get("title"),
-                    "severity": rv.get("severity"),
-                    "category": rv.get("category"),
-                }
-        except Exception:
-            logger.debug("rule_versions_snapshot_skipped", exc_info=True)
+        # Snapshot rule versions at assembly time. Shared with the FDA export
+        # package so both evidence artefacts describe rules the same way;
+        # the stored shape stays the catalog map this package always had.
+        # The per-event evaluations are already gathered above, so only the
+        # catalog is requested here (one query, as before).
+        from shared.rules.versions import snapshot_rule_versions
+
+        rule_versions = snapshot_rule_versions(self.db).get("catalog", {})
 
         # Snapshot identity state at assembly time (single query with LEFT JOIN
         # to avoid N+1 — previously fired one alias query per entity).
