@@ -21,6 +21,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 from shared.database import get_db_safe
+from shared.fsma_validation import gln_for_export
 from sqlalchemy import text
 
 from .authz import IngestionPrincipal, require_permission
@@ -172,15 +173,15 @@ def _build_records(rows: list[Any]) -> list[dict[str, Any]]:
             "quantity": float(row.quantity) if row.quantity is not None else None,
             "unit_of_measure": row.unit_of_measure,
             "ship_from": {
-                "gln": ship_from_gln,
+                "gln": gln_for_export(ship_from_gln),
                 "name": ship_from_name,
             },
             "ship_to": {
-                "gln": kdes.get("ship_to_gln"),
+                "gln": gln_for_export(kdes.get("ship_to_gln")),
                 "name": ship_to_name,
             },
             "tlc_source": {
-                "gln": kdes.get("tlc_source_gln"),
+                "gln": gln_for_export(kdes.get("tlc_source_gln")),
                 "fda_registration": kdes.get("tlc_source_fda_reg"),
                 "immediate_previous_source": kdes.get("immediate_previous_source"),
             },
@@ -190,7 +191,9 @@ def _build_records(rows: list[Any]) -> list[dict[str, Any]]:
                 "record_hash": row.sha256_hash,
                 "chain_hash": row.chain_hash,
             },
-            "additional_kdes": {k: v for k, v in kdes.items() if k not in known_kdes},
+            "additional_kdes": {
+                k: gln_for_export(v) if k.endswith("_gln") else v for k, v in kdes.items() if k not in known_kdes
+            },
             "source": row.source,
         }
         records.append(record)

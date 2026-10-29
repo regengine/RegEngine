@@ -71,7 +71,8 @@ def test_unflagged_location_still_rejected(build):
     with pytest.raises(ValidationError, match="21 CFR"):
         IngestEvent(**payload)
     payload["kdes"]["location_incomplete"] = True
-    assert IngestEvent(**payload).kdes["location_incomplete"] is True
+    with pytest.raises(ValidationError, match="21 CFR"):
+        IngestEvent(**payload)
 
 
 @pytest.mark.parametrize("lot", ["", "x"])
@@ -115,3 +116,22 @@ def test_quantity_element_cannot_be_replaced_with_default(build):
     with pytest.raises(HTTPException) as error:
         build(extracted={"quantity": None}, segments=[["SN1", "", "x"]])
     assert error.value.status_code == 422
+
+
+@pytest.mark.parametrize("source", ["csv", "portal", "sensitech", "webhook"])
+@pytest.mark.parametrize("private_spoof", [False, True])
+def test_non_edi_cannot_spoof_bypass(build, source, private_spoof):
+    payload = build().model_dump()
+    payload["kdes"]["source"] = source
+    if private_spoof:
+        payload["_edi_allow_incomplete_location"] = True
+    with pytest.raises(ValidationError, match="21 CFR"):
+        IngestEvent.model_validate(payload)
+
+
+def test_edi_private_flag_survives_nested_validation(build):
+    from app.webhook_models import WebhookPayload
+
+    event = build()
+    assert WebhookPayload(source="x", events=[event]).events[0].kdes["location_incomplete"]
+    assert "_edi_allow_incomplete_location" not in event.model_dump()

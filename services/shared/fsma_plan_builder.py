@@ -18,6 +18,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 
 import structlog
+from shared.fsma_validation import gln_for_export
 
 logger = structlog.get_logger("fsma-plan-builder")
 
@@ -61,7 +62,7 @@ class FirmInfo:
             "name": self.name,
             "address": self.address,
             "firm_type": self.firm_type.value,
-            "gln": self.gln,
+            "gln": gln_for_export(self.gln),
             "fda_registration": self.fda_registration,
             "contact_name": self.contact_name,
             "contact_email": self.contact_email,
@@ -843,7 +844,7 @@ def export_plan_markdown(plan: TraceabilityPlan) -> str:
 - **Company:** {plan.firm.name}
 - **Address:** {plan.firm.address}
 - **FDA Registration:** {plan.firm.fda_registration or "N/A"}
-- **GLN:** {plan.firm.gln or "N/A"}
+- **GLN:** {gln_for_export(plan.firm.gln) or "N/A"}
 
 - **Plan Version:** {plan.version}
 - **Created:** {plan.created_date}

@@ -30,7 +30,7 @@ from collections.abc import Callable
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, UploadFile
-from pydantic import ValidationError
+from pydantic import PrivateAttr, ValidationError
 from shared.fsma_validation import is_location_description_complete
 
 from ..authz import IngestionPrincipal, require_permission
@@ -343,6 +343,15 @@ def _preflight_event_date(
         detail["needs_review"] = True
         detail["rejection_id"] = record["rejection_id"]
         raise HTTPException(status_code=400, detail=detail) from exc
+
+
+class _EDIIngestEvent(IngestEvent):
+    """Internal EDI model; the private permission is never accepted from payloads.
+
+    Inherited field validators still enforce every non-location constraint.
+    """
+
+    _edi_allow_incomplete_location: bool = PrivateAttr(default=True)
 
 
 router = APIRouter(prefix="/api/v1/ingest/edi", tags=["EDI Import"])
@@ -723,7 +732,7 @@ async def ingest_edi_856(
             "immediate_previous_source": ship_from_name,
         }
         events.append(
-            IngestEvent(
+            _EDIIngestEvent(
                 cte_type=WebhookCTEType.SHIPPING,
                 traceability_lot_code=line_tlc,
                 product_description=product_name,
@@ -1038,7 +1047,7 @@ def _build_ingest_event_for_set(
     # Retain even empty raw location values for audit evidence.
     kdes.update({key: value for key, value in extracted.items() if key.endswith(("_gln", "_name"))})
 
-    return IngestEvent(
+    return _EDIIngestEvent(
         cte_type=cte_type,
         traceability_lot_code=traceability_lot_code,
         product_description=product_name,

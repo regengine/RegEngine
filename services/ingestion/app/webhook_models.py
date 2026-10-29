@@ -16,7 +16,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
 from shared.fsma_validation import calculate_gs1_check_digit, is_location_description_complete
 
 _gln_logger = logging.getLogger("gln-validation")
@@ -173,6 +173,8 @@ REQUIRED_KDES_BY_CTE: Dict[WebhookCTEType, List[str]] = {
 class IngestEvent(BaseModel):
     """A single CTE event to ingest."""
 
+    _edi_allow_incomplete_location: bool = PrivateAttr(default=False)
+
     cte_type: WebhookCTEType = Field(..., description="Critical Tracking Event type")
     traceability_lot_code: str = Field(..., description="Traceability Lot Code (TLC)", min_length=3)
     product_description: str = Field(..., description="Human-readable product name", min_length=1, max_length=500)
@@ -269,8 +271,8 @@ class IngestEvent(BaseModel):
     def require_location(self) -> "IngestEvent":
         """Require one complete location description or GLN per 21 CFR 1.1310."""
 
-        # A-2170: explicitly flagged incomplete EDI locations are accepted.
-        if self.kdes.get("location_incomplete") is True:
+        # A-2170: only internally constructed EDI events may accept incomplete locations.
+        if self._edi_allow_incomplete_location and self.kdes.get("location_incomplete") is True:
             _gln_logger.warning("location_incomplete accepted=true")
             return self
 
