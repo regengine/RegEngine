@@ -7,23 +7,42 @@ Provides REST endpoints for:
   - Triggering manual syncs
   - CSV upload for the generic CSV/SFTP connector
   - Receiving inbound webhooks from external systems
+
+Hardening (findings 2-6; finding 1 credential store deferred):
+
+- Rate limits on configure / sync / csv-upload / disconnect / profile
+  mutations and the inbound webhook (shared slowapi limiter).
+- Webhook path fails closed with a uniform 401 body (no secret-state
+  oracle) and rejects replayed signature digests inside a short TTL
+  nonce window.
+- CSV ingest runs every cell through ``sanitize_cell`` before events
+  leave the upload handler (formula-injection neutralization).
+- Request models are bounded (``extra="forbid"`` + max_length / ge/le).
+- Tenant-bound audit events on configure / disconnect / sync /
+  csv-upload / profile mutations attribute the signed-in principal
+  (``ctx.principal_id`` / ``principal_kind`` / ``actor_email``) and
+  never carry secret material.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
+import threading
+import time
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from shared.database import get_db_safe
 from shared.rate_limit import limiter
 from shared.tenant_context import TenantContext
 from sqlalchemy import text
 
+from .shared.csv_safety import sanitize_cell
 from .shared.upload_limits import (
     MAX_CSV_FILE_SIZE_BYTES,
     read_upload_with_limit,
@@ -35,29 +54,61 @@ logger = logging.getLogger("integration-router")
 
 router = APIRouter(prefix="/api/v1/integrations", tags=["Integrations"])
 
+# Abuse budgets (finding 2). Credential configure and sync are the highest
+# risk; webhook already had a limit and keeps 60/min. Profile edits are
+# low-frequency human actions.
+_CONFIGURE_RATE_LIMIT = "10/minute"
+_SYNC_RATE_LIMIT = "10/minute"
+_CSV_UPLOAD_RATE_LIMIT = "20/minute"
+_DISCONNECT_RATE_LIMIT = "20/minute"
+_PROFILE_MUTATION_RATE_LIMIT = "30/minute"
+_WEBHOOK_RATE_LIMIT = "60/minute"
+
+# Replay window for webhook signature digests (finding 3). Same digest
+# inside this TTL is treated as a replay and rejected with the same
+# uniform 401 body as any other verification failure (no oracle).
+_WEBHOOK_NONCE_TTL_SECONDS = 300
+_webhook_nonce_lock = threading.Lock()
+_webhook_nonce_seen: dict[str, float] = {}
+
+# Uniform webhook rejection body — never distinguish missing secret,
+# missing signature, bad digest, stale timestamp, or replay.
+_WEBHOOK_REJECTED_DETAIL = {"error": "webhook_rejected", "message": "Webhook verification failed"}
+
+
 
 # ── Models ────────────────────────────────────────────────────
 
 
 class ConnectorConfigRequest(BaseModel):
-    """Request to configure a connector."""
+    """Request to configure a connector.
 
-    connector_id: str
-    api_key: Optional[str] = None
-    api_secret: Optional[str] = None
-    oauth_client_id: Optional[str] = None
-    oauth_client_secret: Optional[str] = None
-    webhook_secret: Optional[str] = None
-    base_url: Optional[str] = None
-    extra: Dict[str, Any] = Field(default_factory=dict)
+    Finding 5: bounded + ``extra="forbid"``. Secret fields are accepted
+    on write but never echoed by the configure response. Finding 1
+    (credential store) is deferred — secrets still live in the
+    process-local registry until that lands.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    connector_id: str = Field(..., min_length=1, max_length=120)
+    api_key: Optional[str] = Field(default=None, max_length=4096)
+    api_secret: Optional[str] = Field(default=None, max_length=4096)
+    oauth_client_id: Optional[str] = Field(default=None, max_length=512)
+    oauth_client_secret: Optional[str] = Field(default=None, max_length=4096)
+    webhook_secret: Optional[str] = Field(default=None, max_length=4096)
+    base_url: Optional[str] = Field(default=None, max_length=2048)
+    extra: Dict[str, Any] = Field(default_factory=dict, max_length=50)
 
 
 class SyncRequest(BaseModel):
     """Request to trigger a manual sync."""
 
-    connector_id: str
-    since: Optional[str] = None  # ISO 8601
-    limit: int = 100
+    model_config = ConfigDict(extra="forbid")
+
+    connector_id: str = Field(..., min_length=1, max_length=120)
+    since: Optional[str] = Field(default=None, max_length=40)  # ISO 8601
+    limit: int = Field(default=100, ge=1, le=1000)
 
 
 ProfileSourceType = Literal["csv", "edi", "epcis", "api", "webhook", "spreadsheet", "supplier_portal"]
@@ -100,10 +151,12 @@ class IntegrationProfile(BaseModel):
 class CreateIntegrationProfileRequest(BaseModel):
     """Create a saved mapping profile for a supplier or source system."""
 
+    model_config = ConfigDict(extra="forbid")
+
     display_name: str = Field(..., min_length=2, max_length=120)
     source_type: ProfileSourceType = "csv"
-    field_mapping: Dict[str, str] = Field(default_factory=lambda: dict(DEFAULT_PROFILE_MAPPING))
-    default_cte_type: str = "shipping"
+    field_mapping: Dict[str, str] = Field(default_factory=lambda: dict(DEFAULT_PROFILE_MAPPING), max_length=64)
+    default_cte_type: str = Field(default="shipping", max_length=64)
     status: ProfileStatus = "active"
     confidence: float = Field(default=0.75, ge=0, le=1)
     supplier_id: Optional[str] = Field(default=None, max_length=120)
@@ -114,10 +167,12 @@ class CreateIntegrationProfileRequest(BaseModel):
 class UpdateIntegrationProfileRequest(BaseModel):
     """Patch mutable fields on a saved integration profile."""
 
+    model_config = ConfigDict(extra="forbid")
+
     display_name: Optional[str] = Field(default=None, min_length=2, max_length=120)
     source_type: Optional[ProfileSourceType] = None
-    field_mapping: Optional[Dict[str, str]] = None
-    default_cte_type: Optional[str] = None
+    field_mapping: Optional[Dict[str, str]] = Field(default=None, max_length=64)
+    default_cte_type: Optional[str] = Field(default=None, max_length=64)
     status: Optional[ProfileStatus] = None
     confidence: Optional[float] = Field(default=None, ge=0, le=1)
     supplier_id: Optional[str] = Field(default=None, max_length=120)
@@ -126,6 +181,8 @@ class UpdateIntegrationProfileRequest(BaseModel):
 
 
 class MappingPreviewRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     events: List[Dict[str, Any]] = Field(default_factory=list, max_length=50)
 
 
@@ -352,6 +409,146 @@ def _apply_profile_mapping(event: Dict[str, Any], profile: IntegrationProfile) -
     return mapped, missing
 
 
+# ── Hardening helpers (findings 3, 4, 6) ───────────────────────
+
+
+def _sanitize_value(value: Any) -> Any:
+    """Recursively neutralize CSV formula prefixes in string leaves."""
+    if isinstance(value, str):
+        return sanitize_cell(value)
+    if isinstance(value, dict):
+        return {str(k): _sanitize_value(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_sanitize_value(v) for v in value]
+    return value
+
+
+def _sanitize_ingest_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Apply ``sanitize_cell`` to every string in parse_csv ingest dicts."""
+    return [_sanitize_value(event) for event in events]
+
+
+def _webhook_nonce_key(tenant_id: str, connector_id: str, payload: bytes, signature_header: str) -> str:
+    """Stable digest for replay detection (tenant + connector + body + sig)."""
+    material = b"|".join(
+        [
+            tenant_id.encode("utf-8"),
+            connector_id.encode("utf-8"),
+            payload,
+            signature_header.encode("utf-8"),
+        ]
+    )
+    return hashlib.sha256(material).hexdigest()
+
+
+def _webhook_nonce_seen_before(nonce_key: str) -> bool:
+    """Return True if this nonce was already accepted inside the TTL window.
+
+    Does not record the key — call ``_webhook_nonce_remember`` only after
+    successful verification so a failed attempt does not burn the nonce.
+    """
+    now = time.monotonic()
+    with _webhook_nonce_lock:
+        stale = [k for k, ts in _webhook_nonce_seen.items() if now - ts > _WEBHOOK_NONCE_TTL_SECONDS]
+        for k in stale:
+            _webhook_nonce_seen.pop(k, None)
+        return nonce_key in _webhook_nonce_seen
+
+
+def _webhook_nonce_remember(nonce_key: str) -> None:
+    """Record a successfully verified webhook digest for the replay TTL."""
+    with _webhook_nonce_lock:
+        _webhook_nonce_seen[nonce_key] = time.monotonic()
+
+
+def _reset_webhook_nonces_for_tests() -> None:
+    """Test-only: clear the in-process webhook nonce cache."""
+    with _webhook_nonce_lock:
+        _webhook_nonce_seen.clear()
+
+
+def _audit_task_done(task) -> None:
+    """Fail loud, not silent: a detached audit write that raised must log."""
+    import asyncio
+
+    try:
+        task.result()
+    except asyncio.CancelledError:
+        pass
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.error("integration_audit_write_failed error=%s", exc)
+
+
+def _audit_integration_event(
+    *,
+    ctx: TenantContext,
+    event_type_name: str,
+    action: str,
+    tenant_id: str,
+    connector_or_profile_id: str,
+    resource_type: str,
+    changed_fields: list[str],
+) -> None:
+    """Fire-and-forget tenant-bound audit for an integration mutation.
+
+    Best-effort: a successful mutation never fails because the audit
+    write could not be scheduled. Details carry field NAMES and ids
+    only — never api_key / api_secret / oauth / webhook_secret / extra
+    secret material (finding 1 / finding 6).
+    """
+    try:
+        import asyncio
+
+        from shared.audit_logging import (
+            AuditActor,
+            AuditEventCategory,
+            AuditEventType,
+            AuditLogger,
+            AuditResource,
+            AuditSeverity,
+        )
+
+        event_type = getattr(AuditEventType, event_type_name)
+        audit = AuditLogger.get_instance()
+        actor = AuditActor(
+            actor_id=ctx.principal_id,
+            actor_type=ctx.principal_kind,
+            email=ctx.actor_email,
+            tenant_id=tenant_id,
+        )
+        resource = AuditResource(
+            resource_type=resource_type,
+            resource_id=connector_or_profile_id,
+            tenant_id=tenant_id,
+        )
+        coro = audit.log(
+            event_type=event_type,
+            category=AuditEventCategory.CONFIGURATION,
+            severity=AuditSeverity.INFO,
+            actor=actor,
+            action=action,
+            outcome="success",
+            resource=resource,
+            message=f"integration {action}",
+            details={
+                "tenant_id": tenant_id,
+                "changed_fields": changed_fields,
+                "resource_id": connector_or_profile_id,
+            },
+            tags=["integration", "connector"],
+        )
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(coro).add_done_callback(_audit_task_done)
+        except RuntimeError:
+            try:
+                coro.close()
+            except Exception:
+                pass
+    except Exception:  # pragma: no cover - defensive
+        logger.debug("audit_integration_event: could not emit audit event", exc_info=True)
+
+
 # ── Endpoints ─────────────────────────────────────────────────
 
 
@@ -376,9 +573,11 @@ async def list_integration_profiles(
     response_model=IntegrationProfile,
     summary="Create a saved integration profile",
 )
+@limiter.limit(_PROFILE_MUTATION_RATE_LIMIT)
 async def create_integration_profile(
+    request: Request,
     tenant_id: str,
-    request: CreateIntegrationProfileRequest,
+    body: CreateIntegrationProfileRequest,
     ctx: TenantContext = Depends(require_tenant_context),
 ) -> IntegrationProfile:
     """Create a reusable field mapping profile for supplier onboarding."""
@@ -389,9 +588,19 @@ async def create_integration_profile(
         tenant_id=tenant_id,
         created_at=now,
         updated_at=now,
-        **request.model_dump(),
+        **body.model_dump(),
     )
-    return _save_profile(profile)
+    saved = _save_profile(profile)
+    _audit_integration_event(
+        ctx=ctx,
+        event_type_name="DATA_CREATE",
+        action="profile_create",
+        tenant_id=tenant_id,
+        connector_or_profile_id=saved.profile_id,
+        resource_type="integration_profile",
+        changed_fields=sorted(body.model_dump(exclude_unset=True).keys()) or ["display_name"],
+    )
+    return saved
 
 
 @router.get(
@@ -414,18 +623,30 @@ async def get_integration_profile(
     response_model=IntegrationProfile,
     summary="Update a saved integration profile",
 )
+@limiter.limit(_PROFILE_MUTATION_RATE_LIMIT)
 async def update_integration_profile(
+    request: Request,
     tenant_id: str,
     profile_id: str,
-    request: UpdateIntegrationProfileRequest,
+    body: UpdateIntegrationProfileRequest,
     ctx: TenantContext = Depends(require_tenant_context),
 ) -> IntegrationProfile:
     """Patch a saved supplier/source mapping profile."""
     tenant_id = ctx.tenant_id
     profile = _get_profile_or_404(tenant_id, profile_id)
-    updates = request.model_dump(exclude_unset=True)
+    updates = body.model_dump(exclude_unset=True)
     profile = profile.model_copy(update={**updates, "updated_at": _now_iso()})
-    return _save_profile(profile)
+    saved = _save_profile(profile)
+    _audit_integration_event(
+        ctx=ctx,
+        event_type_name="DATA_UPDATE",
+        action="profile_update",
+        tenant_id=tenant_id,
+        connector_or_profile_id=profile_id,
+        resource_type="integration_profile",
+        changed_fields=sorted(updates.keys()) or ["profile_id"],
+    )
+    return saved
 
 
 @router.post(
@@ -433,10 +654,12 @@ async def update_integration_profile(
     response_model=MappingPreviewResponse,
     summary="Preview profile mapping against sample events",
 )
+@limiter.limit(_PROFILE_MUTATION_RATE_LIMIT)
 async def preview_integration_profile_mapping(
+    request: Request,
     tenant_id: str,
     profile_id: str,
-    request: MappingPreviewRequest,
+    body: MappingPreviewRequest,
     ctx: TenantContext = Depends(require_tenant_context),
 ) -> MappingPreviewResponse:
     """Apply a saved profile to sample events without committing records."""
@@ -444,7 +667,7 @@ async def preview_integration_profile_mapping(
     profile = _get_profile_or_404(tenant_id, profile_id)
     mapped_events: list[Dict[str, Any]] = []
     missing_fields: Dict[str, List[str]] = {}
-    for index, event in enumerate(request.events):
+    for index, event in enumerate(body.events):
         mapped, missing = _apply_profile_mapping(event, profile)
         mapped_events.append(mapped)
         if missing:
@@ -491,7 +714,9 @@ async def get_integration_statuses(
     "/configure/{tenant_id}",
     summary="Configure an integration connector",
 )
+@limiter.limit(_CONFIGURE_RATE_LIMIT)
 async def configure_connector(
+    request: Request,
     tenant_id: str,
     config_req: ConnectorConfigRequest,
     ctx: TenantContext = Depends(require_tenant_context),
@@ -584,6 +809,29 @@ async def configure_connector(
     # takes effect immediately for this tenant.
     remove_connector(tenant_id, connector_id)
     connector = get_or_create_connector(tenant_id, connector_id, config)
+    # Finding 6: audit configure with field NAMES only — never secret values.
+    changed = [
+        name
+        for name, present in (
+            ("api_key", bool(config_req.api_key)),
+            ("api_secret", bool(config_req.api_secret)),
+            ("oauth_client_id", bool(config_req.oauth_client_id)),
+            ("oauth_client_secret", bool(config_req.oauth_client_secret)),
+            ("webhook_secret", bool(config_req.webhook_secret)),
+            ("base_url", bool(config_req.base_url)),
+            ("extra", bool(config_req.extra)),
+        )
+        if present
+    ]
+    _audit_integration_event(
+        ctx=ctx,
+        event_type_name="CONFIG_CHANGE",
+        action="configure",
+        tenant_id=tenant_id,
+        connector_or_profile_id=connector_id,
+        resource_type="integration_connector",
+        changed_fields=changed or ["connector_id"],
+    )
     return {
         "configured": True,
         "connector_id": connector_id,
@@ -628,7 +876,9 @@ async def test_connection(
     "/sync/{tenant_id}",
     summary="Trigger a manual sync",
 )
+@limiter.limit(_SYNC_RATE_LIMIT)
 async def trigger_sync(
+    request: Request,
     tenant_id: str,
     sync_req: SyncRequest,
     ctx: TenantContext = Depends(require_tenant_context),
@@ -659,6 +909,15 @@ async def trigger_sync(
 
     result = await connector.sync(since=since, limit=sync_req.limit)
 
+    _audit_integration_event(
+        ctx=ctx,
+        event_type_name="DATA_BULK_OPERATION",
+        action="sync",
+        tenant_id=tenant_id,
+        connector_or_profile_id=connector_id,
+        resource_type="integration_connector",
+        changed_fields=["sync"],
+    )
     return {
         "connector_id": result.connector_id,
         "events_fetched": result.events_fetched,
@@ -674,11 +933,13 @@ async def trigger_sync(
     "/csv-upload/{tenant_id}",
     summary="Upload CSV for CTE import",
 )
+@limiter.limit(_CSV_UPLOAD_RATE_LIMIT)
 async def upload_csv(
+    request: Request,
     tenant_id: str,
     file: UploadFile = File(...),
-    source_system: str = Query(default="csv_upload", description="Source ERP system name"),
-    default_cte_type: str = Query(default="receiving", description="Default CTE type for rows"),
+    source_system: str = Query(default="csv_upload", description="Source ERP system name", max_length=120),
+    default_cte_type: str = Query(default="receiving", description="Default CTE type for rows", max_length=64),
     ctx: TenantContext = Depends(require_tenant_context),
 ):
     """Upload a CSV file and import rows as CTE events.
@@ -717,9 +978,20 @@ async def upload_csv(
     connector = CSVSFTPConnector(config)
     events = connector.parse_csv(csv_text, source_file=safe_filename)
 
-    # Convert to ingest format
-    ingest_events = [e.to_ingest_dict() for e in events]
+    # Convert to ingest format, then neutralize CSV formula prefixes
+    # (finding 4). Applied at the HTTP ingest surface so every string
+    # that leaves parse_csv is sanitized before it reaches callers.
+    ingest_events = _sanitize_ingest_events([e.to_ingest_dict() for e in events])
 
+    _audit_integration_event(
+        ctx=ctx,
+        event_type_name="DATA_CREATE",
+        action="csv_upload",
+        tenant_id=tenant_id,
+        connector_or_profile_id="csv_sftp",
+        resource_type="integration_csv_upload",
+        changed_fields=["csv_upload"],
+    )
     return {
         "filename": safe_filename,
         "rows_parsed": len(events),
@@ -733,7 +1005,7 @@ async def upload_csv(
     "/webhook/{tenant_id}/{connector_id}",
     summary="Receive inbound webhook from external system",
 )
-@limiter.limit("60/minute")
+@limiter.limit(_WEBHOOK_RATE_LIMIT)
 async def receive_webhook(
     tenant_id: str,
     connector_id: str,
@@ -746,10 +1018,14 @@ async def receive_webhook(
 
     Note: This endpoint does NOT require API key auth — it uses
     the connector's webhook secret for verification instead.
-    Connectors must fail closed (raise ValueError, mapped to 401)
-    when their webhook secret is not configured or the signature
-    is missing or invalid. The response carries only an accepted
-    count, never the normalized inspection data.
+    Connectors must fail closed (raise ValueError, mapped to a
+    uniform 401) when their webhook secret is not configured or
+    the signature is missing or invalid. Finding 3: the 401 body
+    never distinguishes missing-secret / bad-digest / replay
+    (no secret-state oracle), and a repeated signature digest
+    inside the nonce TTL is rejected as a replay. The response
+    carries only an accepted count, never the normalized
+    inspection data.
     """
     from shared.external_connectors.registry import (
         get_tenant_connectors,
@@ -767,9 +1043,23 @@ async def receive_webhook(
 
     payload = await request.body()
     headers = dict(request.headers)
+    # Prefer the common HMAC header names; empty string if absent so
+    # the nonce key is still stable for a given body.
+    signature_header = (
+        headers.get("x-signature")
+        or headers.get("x-hub-signature-256")
+        or headers.get("x-safetyculture-signature")
+        or ""
+    )
+    nonce_key = _webhook_nonce_key(tenant_id, connector_id, payload, signature_header)
+    if _webhook_nonce_seen_before(nonce_key):
+        # Replay inside the TTL — same uniform body as any other
+        # verification failure (finding 3).
+        raise HTTPException(status_code=401, detail=_WEBHOOK_REJECTED_DETAIL)
 
     try:
         events = await connector.handle_webhook(payload, headers)
+        _webhook_nonce_remember(nonce_key)
         logger.info(
             "webhook_received connector=%s tenant=%s events=%d",
             connector_id,
@@ -785,19 +1075,24 @@ async def receive_webhook(
             "connector_id": connector_id,
         }
     except NotImplementedError:
+        # NotImplemented is not a secret-state signal; keep 501 so
+        # clients can disable an unsupported webhook.
         raise HTTPException(
             status_code=501,
             detail=f"Connector '{connector_id}' does not support webhooks",
         )
-    except ValueError as exc:
-        raise HTTPException(status_code=401, detail=str(exc))
+    except ValueError:
+        # Finding 3: uniform body — never echo str(exc) (oracle).
+        raise HTTPException(status_code=401, detail=_WEBHOOK_REJECTED_DETAIL)
 
 
 @router.delete(
     "/disconnect/{tenant_id}/{connector_id}",
     summary="Disconnect an integration",
 )
+@limiter.limit(_DISCONNECT_RATE_LIMIT)
 async def disconnect_connector(
+    request: Request,
     tenant_id: str,
     connector_id: str,
     ctx: TenantContext = Depends(require_tenant_context),
@@ -811,4 +1106,13 @@ async def disconnect_connector(
     tenant_id = ctx.tenant_id
     connector_id = resolve_connector_id(connector_id)
     remove_connector(tenant_id, connector_id)
+    _audit_integration_event(
+        ctx=ctx,
+        event_type_name="CONFIG_CHANGE",
+        action="disconnect",
+        tenant_id=tenant_id,
+        connector_or_profile_id=connector_id,
+        resource_type="integration_connector",
+        changed_fields=["disconnect"],
+    )
     return {"disconnected": True, "connector_id": connector_id}
