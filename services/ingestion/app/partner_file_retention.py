@@ -50,7 +50,13 @@ def _lock_tenant_deletion_chain(db, *, tenant_id: str) -> None:
 
 
 def _latest_entry_hash(db, *, tenant_id: str) -> Optional[str]:
-    """Tip of the tenant deletion chain, locked for the current transaction."""
+    """Tip of the tenant deletion chain under the advisory lock.
+
+    Do not ``FOR UPDATE`` here: ``regengine`` has SELECT+INSERT only on the
+    append-only log (UPDATE is revoked). Serialization comes from
+    ``_lock_tenant_deletion_chain`` (pg_advisory_xact_lock) held for the
+    whole delete_one_due_file savepoint.
+    """
     row = db.execute(
         # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
         text(
@@ -60,21 +66,11 @@ def _latest_entry_hash(db, *, tenant_id: str) -> Optional[str]:
              WHERE tenant_id = CAST(:tenant_id AS uuid)
              ORDER BY deleted_at DESC, id DESC
              LIMIT 1
-             FOR UPDATE
             """
         ),
         {"tenant_id": tenant_id},
     ).fetchone()
     return row[0] if row else None
-
-
-def _list_tenant_ids(db) -> List[str]:
-    """Tenant ids the runtime role can see (column-scoped SELECT on public.tenants)."""
-    rows = db.execute(
-        # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
-        text("SELECT id::text FROM public.tenants ORDER BY id")
-    ).fetchall()
-    return [str(r[0]) for r in rows]
 
 
 def _due_rows_for_tenant(
@@ -293,7 +289,11 @@ def run_retention_pass(db, *, limit: int = BATCH_LIMIT) -> Dict[str, int]:
     due_total = 0
     remaining = limit
 
-    for tenant_id in _list_tenant_ids(db):
+    # Cross-tenant discovery needs ADMIN_DATABASE_URL / regengine_sysadmin;
+    # the ordinary SessionLocal role cannot list tenants under FORCE RLS.
+    from shared.maintenance_tenants import list_maintenance_tenant_ids
+
+    for tenant_id in list_maintenance_tenant_ids():
         if remaining <= 0:
             break
         set_tenant_guc(db, tenant_id)

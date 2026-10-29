@@ -941,8 +941,9 @@ class SchedulerService:
     def run_partner_file_retention(self) -> None:
         """Delete due partner uploads (delete_after passed) and audit.
 
-        Selects globally due rows then sets the tenant GUC per row inside
-        ``delete_one_due_file`` so RLS on partner_files / deletion_log holds.
+        Discovers tenants via ``list_maintenance_tenant_ids`` (sysadmin), then
+        sets the tenant GUC per tenant / row so RLS on partner_files and
+        deletion_log holds.
         """
         try:
             from shared.database import SessionLocal  # noqa: PLC0415

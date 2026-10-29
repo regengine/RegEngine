@@ -131,7 +131,13 @@ def test_delete_one_due_file_writes_log_and_audit(monkeypatch) -> None:
 
     assert deletes == [("partner-uploads", row["storage_path"])]
     assert any("pg_advisory_xact_lock" in s for s in db.statements)
-    assert any("FOR UPDATE" in s and "partner_file_deletion_log" in s for s in db.statements)
+    tip_selects = [
+        s
+        for s in db.statements
+        if "partner_file_deletion_log" in s and "entry_hash" in s and "INSERT" not in s
+    ]
+    assert tip_selects
+    assert all("FOR UPDATE" not in s for s in tip_selects)
     assert any("INSERT INTO public.partner_file_deletion_log" in s for s in db.statements)
     assert any("SET status = 'deleted'" in s for s in db.statements)
     assert audits and audits[0]["event_type"] == "partner_file.retention_delete"
@@ -187,7 +193,9 @@ def test_run_retention_pass_noop_when_storage_unconfigured(monkeypatch) -> None:
         called["due"] = True
         raise AssertionError("must not scan when unconfigured")
 
-    monkeypatch.setattr(retention, "_list_tenant_ids", _boom)
+    import shared.maintenance_tenants as maintenance_tenants
+
+    monkeypatch.setattr(maintenance_tenants, "list_maintenance_tenant_ids", _boom)
     totals = retention.run_retention_pass(object())
     assert totals == {"due": 0, "deleted": 0, "errors": 0, "skipped_unconfigured": 1}
     assert called["due"] is False
@@ -200,8 +208,11 @@ def test_run_retention_pass_sets_guc_and_savepoint(monkeypatch) -> None:
     gucs: List[str] = []
 
     import services.ingestion.app.s3_utils as s3_utils
+    import shared.maintenance_tenants as maintenance_tenants
+
     monkeypatch.setattr(s3_utils, "is_object_storage_configured", lambda: True)
     monkeypatch.setattr(retention, "set_tenant_guc", lambda db, tid: gucs.append(tid))
+    monkeypatch.setattr(maintenance_tenants, "list_maintenance_tenant_ids", lambda: [tenant_id])
     monkeypatch.setattr(
         s3_utils,
         "delete_object",
