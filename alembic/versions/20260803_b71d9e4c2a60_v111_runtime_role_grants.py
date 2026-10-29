@@ -654,8 +654,11 @@ REGENGINE_COLUMN_GRANTS = {
     "public.api_keys": {"UPDATE": ("last_used_at", "total_requests")},
     # Runtime validation/background work may test one credential-bound UUID,
     # but tenant names, settings, and webhook configuration remain control-
-    # plane data.
-    "public.tenants": {"SELECT": ("id",)},
+    # plane data. ``status`` lets api_key_store.get_tenant_status (and the
+    # Compliance Dashboard readiness path) fail closed on suspended tenants
+    # without exposing names/settings. v139 applies the same column grant to
+    # databases already past v111; this inventory keeps it across cutover.
+    "public.tenants": {"SELECT": ("id", "status")},
     # v126 -- POST /api/v1/ingest/csv (#3122) retains each upload verbatim
     # in the ingest transaction (webhook_compat._open_ingestion_run).
     # v138 extends INSERT with storage_url for partner-uploads pointer rows;
