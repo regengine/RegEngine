@@ -26,7 +26,7 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from shared.rate_limit import limiter
 from shared.tenant_context import TenantContext
 from shared.tenant_settings import get_jsonb, set_jsonb
@@ -59,16 +59,23 @@ _API_KEY_SECRET_FIELDS = ("key", "secret", "token", "hash", "api_key", "value")
 
 
 class CompanyProfile(BaseModel):
-    """Company profile settings."""
+    """Company profile settings.
 
-    company_name: str = ""
-    company_type: str = "distributor"
-    primary_contact: str = ""
-    contact_email: str = ""
-    phone: str = ""
-    address: str = ""
-    website: str = ""
-    fei_number: str = ""  # FDA Establishment Identifier
+    Bounded PUT body: unknown fields are rejected (``extra="forbid"``) and
+    every string field is length-capped so a malicious or buggy client cannot
+    push unbounded payloads into the tenant settings blob.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    company_name: str = Field(default="", max_length=200)
+    company_type: str = Field(default="distributor", max_length=100)
+    primary_contact: str = Field(default="", max_length=200)
+    contact_email: str = Field(default="", max_length=254)
+    phone: str = Field(default="", max_length=50)
+    address: str = Field(default="", max_length=500)
+    website: str = Field(default="", max_length=500)
+    fei_number: str = Field(default="", max_length=50)  # FDA Establishment Identifier
 
 
 class DataRetention(BaseModel):
@@ -195,6 +202,7 @@ def _audit_settings_update(
     endpoint: str,
     changed_fields: list[str],
     *,
+    ctx: TenantContext,
     db_fallback: bool,
 ) -> None:
     """Fire-and-forget audit log for a settings mutation.
@@ -207,6 +215,11 @@ def _audit_settings_update(
     Details carry tenant_id, endpoint, the changed field *names*, and whether
     the DB write fell back to memory -- never profile values (PII) or any key
     material.
+
+    The audit actor is the signed-in principal from the request's
+    ``TenantContext`` (``principal_id`` / ``principal_kind`` / ``actor_email``)
+    -- never a hardcoded service identity -- so the trail attributes each
+    settings change to the human or API key that made it.
     """
     try:
         import asyncio
@@ -222,8 +235,9 @@ def _audit_settings_update(
 
         audit = AuditLogger.get_instance()
         actor = AuditActor(
-            actor_id="settings-router",
-            actor_type="service",
+            actor_id=ctx.principal_id,
+            actor_type=ctx.principal_kind,
+            email=ctx.actor_email,
             tenant_id=tenant_id,
         )
         resource = AuditResource(
@@ -344,6 +358,7 @@ async def update_profile(
         tenant_id,
         endpoint="update_profile",
         changed_fields=sorted(profile.model_dump().keys()),
+        ctx=ctx,
         db_fallback=not db_success,
     )
 
@@ -386,6 +401,7 @@ async def update_retention(
         tenant_id,
         endpoint="update_retention",
         changed_fields=sorted(retention.model_dump().keys()),
+        ctx=ctx,
         db_fallback=not db_success,
     )
 

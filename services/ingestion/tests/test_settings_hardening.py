@@ -310,7 +310,7 @@ class TestAudit:
         monkeypatch.setattr(
             s,
             "_audit_settings_update",
-            lambda tenant_id, endpoint, changed_fields, db_fallback: calls.append(
+            lambda tenant_id, endpoint, changed_fields, *, ctx, db_fallback: calls.append(
                 (tenant_id, endpoint, changed_fields, db_fallback)
             ),
         )
@@ -332,7 +332,7 @@ class TestAudit:
         monkeypatch.setattr(
             s,
             "_audit_settings_update",
-            lambda tenant_id, endpoint, changed_fields, db_fallback: calls.append(
+            lambda tenant_id, endpoint, changed_fields, *, ctx, db_fallback: calls.append(
                 (tenant_id, endpoint, changed_fields, db_fallback)
             ),
         )
@@ -354,7 +354,7 @@ class TestAudit:
         monkeypatch.setattr(
             s,
             "_audit_settings_update",
-            lambda tenant_id, endpoint, changed_fields, db_fallback: calls.append(db_fallback),
+            lambda tenant_id, endpoint, changed_fields, *, ctx, db_fallback: calls.append(db_fallback),
         )
         stubbed_jsonb["set_fail_for"].add("t1")
         resp = client.put("/api/v1/settings/t1/profile", json={"company_name": "X"})
@@ -435,3 +435,155 @@ class TestNegativeAuth:
         # The write landed on tenant-a (the authenticated tenant), not tenant-b.
         assert "tenant-b" not in stubbed_jsonb["db"]
         assert stubbed_jsonb["db"]["tenant-a"]["profile"]["company_name"] == "Evil"
+
+
+# ---------------------------------------------------------------------------
+# 6. Audit actor is the signed-in principal (not a hardcoded service)
+# ---------------------------------------------------------------------------
+
+
+class _FakeAuditLogger:
+    """Records the kwargs passed to ``.log`` synchronously at call time.
+
+    ``_audit_settings_update`` calls ``audit.log(**kwargs)`` synchronously to
+    build the coroutine, then schedules it fire-and-forget. Recording in the
+    (non-async) ``log`` call makes the assertion deterministic without having
+    to await the detached task. ``log`` still returns a real awaitable so the
+    scheduled task has something to run.
+    """
+
+    def __init__(self):
+        self.calls = []
+
+    def log(self, **kwargs):
+        self.calls.append(kwargs)
+
+        async def _noop():
+            return None
+
+        return _noop()
+
+
+def _app_with_ctx(ctx):
+    """Build a settings app whose tenant context is pinned to ``ctx``."""
+    from app.webhook_compat import _verify_api_key
+
+    app = FastAPI()
+    app.state.limiter = limiter
+    app.include_router(router)
+    app.dependency_overrides[_verify_api_key] = lambda: None
+    app.dependency_overrides[s.require_tenant_context] = lambda: ctx
+    return app
+
+
+class TestAuditActorIsPrincipal:
+    def _install_fake_audit(self, monkeypatch):
+        from shared.audit_logging import AuditLogger
+
+        fake = _FakeAuditLogger()
+        monkeypatch.setattr(AuditLogger, "get_instance", classmethod(lambda cls: fake))
+        return fake
+
+    def test_profile_audit_actor_is_signed_in_principal(self, stubbed_jsonb, monkeypatch):
+        from shared.tenant_context import TenantContext
+
+        fake = self._install_fake_audit(monkeypatch)
+        ctx = TenantContext(tenant_id="t1", principal_kind="test", principal_id="router-test")
+        client = TestClient(_app_with_ctx(ctx))
+
+        resp = client.put("/api/v1/settings/t1/profile", json={"company_name": "Acme"})
+        assert resp.status_code == 200
+        assert len(fake.calls) == 1
+        actor = fake.calls[0]["actor"]
+        assert actor.actor_id == "router-test"
+        assert actor.actor_type == "test"
+        assert actor.tenant_id == "t1"
+        # Never the old hardcoded service identity.
+        assert actor.actor_id != "settings-router"
+        assert actor.actor_type != "service"
+
+    def test_retention_audit_actor_is_signed_in_principal(self, stubbed_jsonb, monkeypatch):
+        from shared.tenant_context import TenantContext
+
+        fake = self._install_fake_audit(monkeypatch)
+        ctx = TenantContext(tenant_id="t1", principal_kind="api_key", principal_id="key-42")
+        client = TestClient(_app_with_ctx(ctx))
+
+        resp = client.put(
+            "/api/v1/settings/t1/retention",
+            json={
+                "cte_retention_days": 730,
+                "audit_log_retention_days": 730,
+                "export_retention_days": 1,
+                "auto_archive": True,
+            },
+        )
+        assert resp.status_code == 200
+        actor = fake.calls[0]["actor"]
+        assert actor.actor_id == "key-42"
+        assert actor.actor_type == "api_key"
+        assert actor.actor_id != "settings-router"
+        assert actor.actor_type != "service"
+
+    def test_audit_actor_carries_email_when_present(self, stubbed_jsonb, monkeypatch):
+        from shared.tenant_context import TenantContext
+
+        fake = self._install_fake_audit(monkeypatch)
+        ctx = TenantContext(
+            tenant_id="t1",
+            principal_kind="test",
+            principal_id="router-test",
+            actor_email="user@example.test",
+        )
+        client = TestClient(_app_with_ctx(ctx))
+
+        resp = client.put("/api/v1/settings/t1/profile", json={"company_name": "Acme"})
+        assert resp.status_code == 200
+        actor = fake.calls[0]["actor"]
+        assert actor.email == "user@example.test"
+
+
+# ---------------------------------------------------------------------------
+# 7. CompanyProfile is bounded (extra=forbid + max_length)
+# ---------------------------------------------------------------------------
+
+
+class TestCompanyProfileBounds:
+    def test_put_rejects_unknown_extra_field(self, client):
+        resp = client.put(
+            "/api/v1/settings/t1/profile",
+            json={"company_name": "Acme", "unexpected": "nope"},
+        )
+        assert resp.status_code == 422
+
+    def test_put_rejects_over_max_length(self, client):
+        resp = client.put(
+            "/api/v1/settings/t1/profile",
+            json={"company_name": "A" * 201},
+        )
+        assert resp.status_code == 422
+
+    def test_put_accepts_bounded_values(self, client, stubbed_jsonb):
+        resp = client.put(
+            "/api/v1/settings/t1/profile",
+            json={
+                "company_name": "Acme Foods",
+                "company_type": "distributor",
+                "primary_contact": "Jane Doe",
+                "contact_email": "jane@example.test",
+                "phone": "555-0100",
+                "address": "1 Market St",
+                "website": "https://example.test",
+                "fei_number": "1234567",
+            },
+        )
+        assert resp.status_code == 200
+        assert stubbed_jsonb["db"]["t1"]["profile"]["company_name"] == "Acme Foods"
+
+    def test_model_forbids_extra_fields(self):
+        with pytest.raises(ValueError):
+            s.CompanyProfile(bogus="x")
+
+    def test_model_enforces_max_length(self):
+        with pytest.raises(ValueError):
+            s.CompanyProfile(fei_number="9" * 51)
