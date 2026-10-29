@@ -559,15 +559,15 @@ def test_runtime_ingest_evidence_grants_stay_tenant_isolated(workflow, monkeypat
         blob_insert,
         {"run": other_blobless_run, "tenant": w.tenant, "sha": "0" * 64},
     )
-    # INSERT is column-scoped: retention metadata cannot be forged.
-    for forged_column, forged_value in (("storage_url", "https://attacker.example/x"), ("created_at", "1990-01-01")):
-        rejected(
-            "permission denied",
-            f"""INSERT INTO fsma.manifest_blobs
-                    (ingestion_run_id, tenant_id, raw_bytes, sha256, original_filename, {forged_column})
-                VALUES (CAST(:run AS uuid), CAST(:tenant AS uuid), '\\x00', :sha, 'forged.csv', :value)""",
-            {"run": own_run, "tenant": w.tenant, "sha": "0" * 64, "value": forged_value},
-        )
+    # INSERT is column-scoped: created_at still cannot be forged. v138 grants
+    # storage_url INSERT for partner-uploads pointer-only rows.
+    rejected(
+        "permission denied",
+        """INSERT INTO fsma.manifest_blobs
+                (ingestion_run_id, tenant_id, raw_bytes, sha256, original_filename, created_at)
+            VALUES (CAST(:run AS uuid), CAST(:tenant AS uuid), '\\x00', :sha, 'forged.csv', :value)""",
+        {"run": own_run, "tenant": w.tenant, "sha": "0" * 64, "value": "1990-01-01"},
+    )
     rejected("row-level security", None, call=lambda db: persist_agent_artifact(db, other_payload))
     # Reusing another tenant's artifact id under the own tenant is a loud
     # primary-key violation, never a silent ON CONFLICT no-op.
