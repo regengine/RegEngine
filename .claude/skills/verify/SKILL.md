@@ -64,12 +64,11 @@ set -a; source "$S/verify.env"; set +a
 venv/bin/alembic upgrade head          # ~107 revisions, under a minute
 # Port 8000 must be free before we start, or curl below would be probing
 # someone else's server while ours is still importing.
-[ -z "$(ss -ltnH 'sport = :8000')" ] || { echo "port 8000 is already in use; stop here"; false; }
+! fuser 8000/tcp >/dev/null 2>&1 || { echo "port 8000 is already in use; stop here"; false; }
 nohup venv/bin/uvicorn server.main:app --host 127.0.0.1 --port 8000 > "$S/uvicorn.log" 2>&1 &
 UVICORN_PID=$!
 curl -sS --fail --retry 45 --retry-delay 2 --retry-connrefused --retry-all-errors http://127.0.0.1:8000/health \
-  && kill -0 "$UVICORN_PID" \
-  && ss -ltnpH 'sport = :8000' | grep -q "pid=$UVICORN_PID," \
+  && [ "$(fuser 8000/tcp 2>/dev/null | tr -d ' ')" = "$UVICORN_PID" ] \
   || { echo "uvicorn PID $UVICORN_PID is not the server on port 8000; see $S/uvicorn.log"; false; }
 ```
 
