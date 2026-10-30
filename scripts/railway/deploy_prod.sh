@@ -13,7 +13,8 @@
 #
 #   1. refuse to run with a dirty working tree
 #   2. write `git rev-parse HEAD` into build-sha.txt
-#   3. `railway up --ci` against the linked Railway service
+#   3. `railway up --ci` against the production project, environment and
+#      service, named explicitly so a stray `railway link` cannot redirect it
 #   4. restore the placeholder (also on failure, via trap)
 #   5. poll /health until build.commit_sha equals the stamped SHA
 #
@@ -22,16 +23,20 @@
 #   scripts/railway/deploy_prod.sh --dry-run  # everything except railway up
 #                                             # and the health poll
 #
-# Environment (all optional):
+# Environment (all optional; the defaults are production):
 #   BACKEND_URL           health base URL   (default https://api.regengine.co)
-#   RAILWAY_SERVICE       passed as `railway up --service` when set
-#   RAILWAY_ENVIRONMENT   passed as `railway up --environment` when set
+#   RAILWAY_PROJECT       `railway up --project`      (default RegEngine-Prod id)
+#   RAILWAY_SERVICE       `railway up --service`      (default RegEngine)
+#   RAILWAY_ENVIRONMENT   `railway up --environment`  (default production)
 #   DEPLOY_TIMEOUT_SECS   health poll budget (default 900, mirrors deploy.yml)
 set -euo pipefail
 
 PLACEHOLDER="unknown"
 STAMP_FILE="build-sha.txt"
 BACKEND_URL="${BACKEND_URL:-https://api.regengine.co}"
+RAILWAY_PROJECT="${RAILWAY_PROJECT:-4e1d16d9-0d88-4b88-8eb9-5c0ae38e2b51}"
+RAILWAY_SERVICE="${RAILWAY_SERVICE:-RegEngine}"
+RAILWAY_ENVIRONMENT="${RAILWAY_ENVIRONMENT:-production}"
 DEPLOY_TIMEOUT_SECS="${DEPLOY_TIMEOUT_SECS:-900}"
 DRY_RUN=0
 
@@ -96,6 +101,7 @@ branch="$(git rev-parse --abbrev-ref HEAD)"
 echo "checkout:  $repo_root"
 echo "branch:    $branch"
 echo "commit:    $sha"
+echo "target:    project=$RAILWAY_PROJECT service=$RAILWAY_SERVICE environment=$RAILWAY_ENVIRONMENT"
 if [ "$branch" != "main" ]; then
     echo "warning: HEAD is not on main. Production normally ships main; continuing because you asked." >&2
 fi
@@ -115,9 +121,10 @@ echo "stamped:   $STAMP_FILE = $(cat "$STAMP_FILE")"
 
 # --- Deploy. -----------------------------------------------------------------
 
-up_args=(up --ci)
-[ -n "${RAILWAY_SERVICE:-}" ] && up_args+=(--service "$RAILWAY_SERVICE")
-[ -n "${RAILWAY_ENVIRONMENT:-}" ] && up_args+=(--environment "$RAILWAY_ENVIRONMENT")
+# Always name the target. `railway up` otherwise uploads to whatever this
+# directory was last linked to, which may be staging or another project,
+# while the health poll below would still watch production.
+up_args=(up --ci --project "$RAILWAY_PROJECT" --service "$RAILWAY_SERVICE" --environment "$RAILWAY_ENVIRONMENT")
 
 if [ "$DRY_RUN" -eq 1 ]; then
     echo "dry run:   would run: railway ${up_args[*]}"
@@ -131,8 +138,7 @@ if [ "$DRY_RUN" -eq 1 ]; then
     exit 0
 fi
 
-echo "target:"
-railway status || die "railway status failed. Run \`railway login\` and \`railway link\` first."
+railway whoami >/dev/null 2>&1 || die "not logged in to Railway. Run \`railway login\` first."
 
 railway "${up_args[@]}"
 
