@@ -938,6 +938,61 @@ body.barcode-scanner-active .barcode-scanner-ui {
     }
 }
 
+/* Live dot on the public workbench surfaces (landing hero, /demo). */
+@keyframes rePulse {
+    0%,
+    100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.35;
+    }
+}
+
+.re-pulse-dot {
+    /* The global prefers-reduced-motion block below stops the pulse. */
+    animation: rePulse 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* The two dark-only public screens (landing, /demo) set display type in
+   Outfit. Scoped to a class so the rest of the site keeps Inter. */
+.re-display-outfit {
+    --re-font-display: "Outfit", "Inter", system-ui, -apple-system, sans-serif;
+}
+
+/* /demo shell: 200px sidebar beside the main column; a top row under 800px. */
+.re-demo-shell {
+    display: grid;
+    grid-template-columns: 200px minmax(0, 1fr);
+    min-height: 100vh;
+}
+
+.re-demo-shell > aside {
+    position: sticky;
+    top: 0;
+    max-height: 100vh;
+}
+
+@media (max-width: 799px) {
+    .re-demo-shell {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .re-demo-shell > aside {
+        position: static;
+        max-height: none;
+    }
+
+    .re-demo-shell [data-demo-nav] {
+        flex-direction: row;
+        flex-wrap: wrap;
+    }
+
+    .re-demo-shell [data-demo-aside-foot] {
+        display: none;
+    }
+}
+
 @media (prefers-reduced-motion: reduce) {
     *,
     *::before,

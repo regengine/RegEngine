@@ -6,6 +6,7 @@ import {
   isInternalAnalyticsSession,
   setConversionAnalyticsEnabled,
   trackConversionEvent,
+  trackRowClick,
   trackToolRunStarted,
 } from '@/lib/conversion-events';
 
@@ -201,5 +202,20 @@ describe('conversion events reach PostHog', () => {
     document.cookie = 're_cookie_consent=; max-age=0; path=/';
     trackToolRunStarted('ftl-checker');
     expect(captureEvent).not.toHaveBeenCalled();
+  });
+});
+
+describe('public workbench events', () => {
+  it('keeps the surface, scenario, CTE and gap flag and nothing else', () => {
+    window.history.replaceState({}, '', '/demo');
+    trackRowClick('workspace', 'peppers', 'Initial packing', true);
+    expect(track).toHaveBeenLastCalledWith('row_click', {
+      path: '/demo', surface: 'workspace', scenario: 'peppers', cte: 'initial_packing', gap: true,
+    });
+
+    trackConversionEvent('send_correction_link', {
+      surface: 'elsewhere', scenario: 'Rancho Las Lomas', cte: 'Receiving', gap: 'yes', email: 'person@example.com',
+    });
+    expect(track).toHaveBeenLastCalledWith('send_correction_link', { path: '/demo', cte: 'receiving' });
   });
 });

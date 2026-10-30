@@ -1,0 +1,99 @@
+{
+  "_about": "Synthetic FSMA 204 traceability scenarios for RegEngine demos and tests. Each scenario is modelled on a real FDA Major Product Recall (source cited) but every firm, location, lot code, date and gap below is invented. Nothing here describes the records of any real company.",
+  "_sources": [
+    "https://www.fda.gov/safety/recalls-market-withdrawals-safety-alerts/major-product-recalls",
+    "https://www.fda.gov/food/food-safety-modernization-act-fsma/food-traceability-list"
+  ],
+  "ctes": ["Harvesting", "Cooling", "Initial packing", "Shipping", "Receiving", "Transformation", "Shipping"],
+  "scenarios": [
+    {
+      "id": "peppers",
+      "food": "Jalapeño peppers",
+      "ftlCategory": "Peppers (fresh)",
+      "hue": "#2fb344",
+      "source": { "title": "2026 recalls associated with fresh jalapeños from Sinaloa, Mexico", "agent": "Salmonella Javiana", "firstRecall": "2026-07-22", "pattern": "Bulk generic packaging; downstream firms used the peppers as an ingredient in salsa, pico de gallo and dressings, so the lot code was lost at transformation." },
+      "request": "FDA asks a salsa maker for all receiving and transformation records for jalapeños received 2026-06-20 to 2026-07-22.",
+      "lot": "PEP-SIN-260628-07",
+      "chain": [
+        { "cte": "Harvesting", "firm": "Rancho Las Lomas (grower)", "place": "Sinaloa, MX", "date": "2026-06-28", "kdes": { "lot": "PEP-SIN-260628-07", "qty": "1,200 kg", "location": "GLN 7540…0012" } },
+        { "cte": "Cooling", "firm": "Rancho Las Lomas cooler", "place": "Sinaloa, MX", "date": "2026-06-28", "kdes": { "lot": "PEP-SIN-260628-07", "qty": "1,200 kg", "location": "GLN 7540…0012" } },
+        { "cte": "Initial packing", "firm": "Culiacán Packing S.A.", "place": "Culiacán, MX", "date": "2026-06-29", "kdes": { "lot": "PEP-SIN-260628-07", "qty": "120 × 10 kg bulk", "location": "GLN 7540…0031" } },
+        { "cte": "Shipping", "firm": "Culiacán Packing S.A.", "place": "to Nogales, AZ", "date": "2026-06-30", "kdes": { "lot": "PEP-SIN-260628-07", "qty": "120 × 10 kg", "location": "GLN 0614…0208" } },
+        { "cte": "Receiving", "firm": "Border Produce Distributors", "place": "Nogales, AZ", "date": "2026-07-01", "kdes": { "lot": "PEP-SIN-260628-07", "qty": "120 × 10 kg", "location": "GLN 0614…0208" } },
+        { "cte": "Transformation", "firm": "Casa Verde Salsa Co.", "place": "San Antonio, TX", "date": "2026-07-03", "kdes": { "lot": "—", "qty": "480 × 16 oz salsa", "location": "GLN 0614…0455" }, "gap": { "field": "Traceability lot code of the input peppers", "cfr": "21 CFR § 1.1350(a)(1)", "reason": "Receiving log recorded the pepper lot as 'bulk, generic'. New product lot SAL-260703-A was assigned with no link to the input lot.", "owner": "Salsa QA lead", "recovery": "Supplier correction link to Border Produce; match by ship date and quantity." } },
+        { "cte": "Shipping", "firm": "Casa Verde Salsa Co.", "place": "to retail DC, Dallas, TX", "date": "2026-07-05", "kdes": { "lot": "SAL-260703-A", "qty": "480 × 16 oz", "location": "GLN 0614…0812" } }
+      ]
+    },
+    {
+      "id": "cucumbers",
+      "food": "Whole cucumbers",
+      "ftlCategory": "Cucumbers (fresh)",
+      "hue": "#84cc16",
+      "source": { "title": "2025 recalls of cucumbers associated with a grower in Boynton Beach, Florida", "agent": "Salmonella", "firstRecall": "2025-05-19", "pattern": "Sold direct to consumers and to one wholesale distributor; nine downstream recalls of salads, subs, sushi and fresh-cut slices within nine days." },
+      "request": "FDA asks a deli-salad maker for receiving records for whole cucumbers received 2025-04-29 to 2025-05-19.",
+      "lot": "CUC-FLA-250505-3B",
+      "chain": [
+        { "cte": "Harvesting", "firm": "Palmetto Ridge Farm (grower)", "place": "Palm Beach County, FL", "date": "2025-05-05", "kdes": { "lot": "CUC-FLA-250505-3B", "qty": "640 bu", "location": "GLN 0614…1101" } },
+        { "cte": "Cooling", "firm": "Palmetto Ridge hydrocooler", "place": "Palm Beach County, FL", "date": "2025-05-05", "kdes": { "lot": "CUC-FLA-250505-3B", "qty": "640 bu", "location": "GLN 0614…1101" } },
+        { "cte": "Initial packing", "firm": "Palmetto Ridge packhouse", "place": "Palm Beach County, FL", "date": "2025-05-06", "kdes": { "lot": "CUC-FLA-250505-3B", "qty": "580 ctn", "location": "GLN 0614…1101" } },
+        { "cte": "Shipping", "firm": "Palmetto Ridge Farm", "place": "to Jessup, MD", "date": "2025-05-06", "kdes": { "lot": "CUC-FLA-250505-3B", "qty": "580 ctn", "location": "GLN 0614…2290" } },
+        { "cte": "Receiving", "firm": "Chesapeake Fresh Wholesale", "place": "Jessup, MD", "date": "2025-05-08", "kdes": { "lot": "CUC-FLA-250505-3B", "qty": "580 ctn", "location": "GLN 0614…2290" }, "gap": { "field": "Ship-from location (traceability lot code source)", "cfr": "21 CFR § 1.1345(a)(3)", "reason": "Receiving spreadsheet lists the vendor as 'FL cukes' with no location description or GLN.", "owner": "Receiving supervisor", "recovery": "Pull the bill of lading; populate location from the shipper's record." } },
+        { "cte": "Transformation", "firm": "Harbor Deli Kitchens", "place": "Baltimore, MD", "date": "2025-05-10", "kdes": { "lot": "GRK-250510-02", "qty": "1,900 × 12 oz Greek salad", "location": "GLN 0614…2377" } },
+        { "cte": "Shipping", "firm": "Harbor Deli Kitchens", "place": "to grocery DC, Carlisle, PA", "date": "2025-05-11", "kdes": { "lot": "GRK-250510-02", "qty": "1,900 × 12 oz", "location": "GLN 0614…3002" } }
+      ]
+    },
+    {
+      "id": "shrimp",
+      "food": "Frozen raw shrimp",
+      "ftlCategory": "Crustaceans (fresh, frozen, previously frozen)",
+      "hue": "#fb7185",
+      "source": { "title": "2025 recalls of frozen shrimp associated with Cesium-137 contamination, Indonesian processor", "agent": "Cesium-137", "firstRecall": "2025-08-21", "pattern": "One foreign processor; a dozen U.S. importers and store brands recalled over four months as container-level traceback widened." },
+      "request": "FDA asks an importer for first land-based receiving records for every container from one processor, 2025-06-01 to 2025-09-30.",
+      "lot": "SHR-IDN-250612-C4",
+      "chain": [
+        { "cte": "Harvesting", "firm": "Teluk Biru aquaculture pond (farm)", "place": "Lampung, ID", "date": "2025-06-10", "kdes": { "lot": "SHR-IDN-250612-C4", "qty": "18,000 kg", "location": "GLN 8990…0107" } },
+        { "cte": "Initial packing", "firm": "Teluk Biru Processing (peel, freeze, pack)", "place": "Lampung, ID", "date": "2025-06-12", "kdes": { "lot": "SHR-IDN-250612-C4", "qty": "1,600 × 10 lb", "location": "GLN 8990…0107" } },
+        { "cte": "Shipping", "firm": "Teluk Biru Processing", "place": "container MSKU 48…21 to Los Angeles", "date": "2025-06-15", "kdes": { "lot": "SHR-IDN-250612-C4", "qty": "1,600 × 10 lb", "location": "GLN 0614…4410" } },
+        { "cte": "Receiving", "firm": "Pacific Gate Seafood Imports (first land-based receiver)", "place": "Los Angeles, CA", "date": "2025-07-09", "kdes": { "lot": "—", "qty": "1,600 × 10 lb", "location": "GLN 0614…4410" }, "gap": { "field": "Traceability lot code and harvest-date range", "cfr": "21 CFR § 1.1335 / § 1.1345(b)", "reason": "Importer keyed the container number as the lot. Processor lot and harvest dates sit in a PDF packing list that was never transcribed.", "owner": "Import compliance", "recovery": "Attach packing list; map container → processor lot; add harvest-date range." } },
+        { "cte": "Transformation", "firm": "Pacific Gate repack line", "place": "Vernon, CA", "date": "2025-07-14", "kdes": { "lot": "PGS-250714-16", "qty": "8,000 × 2 lb bags", "location": "GLN 0614…4432" } },
+        { "cte": "Shipping", "firm": "Pacific Gate Seafood Imports", "place": "to grocery DCs, 4 states", "date": "2025-07-16", "kdes": { "lot": "PGS-250714-16", "qty": "8,000 × 2 lb", "location": "GLN 0614…5120" } }
+      ]
+    },
+    {
+      "id": "cantaloupe",
+      "food": "Whole and fresh-cut cantaloupe",
+      "ftlCategory": "Melons (fresh) · Fruits (fresh-cut)",
+      "hue": "#f59e0b",
+      "source": { "title": "2023 recalls of food products associated with cantaloupes", "agent": "Salmonella Sundsvall", "firstRecall": "2023-11-09", "pattern": "Two brand names across three importers; fresh-cut processors recalled fruit cups and trays for a month after the whole-melon recall." },
+      "request": "FDA asks a fresh-cut processor for transformation records tying each fruit-cup lot to its whole-melon lots, 2023-10-15 to 2023-11-24.",
+      "lot": "MEL-SON-231018-R2",
+      "chain": [
+        { "cte": "Harvesting", "firm": "Valle Seco Melons (grower)", "place": "Sonora, MX", "date": "2023-10-18", "kdes": { "lot": "MEL-SON-231018-R2", "qty": "2,100 ctn", "location": "GLN 7540…0920" } },
+        { "cte": "Cooling", "firm": "Valle Seco forced-air cooler", "place": "Sonora, MX", "date": "2023-10-18", "kdes": { "lot": "MEL-SON-231018-R2", "qty": "2,100 ctn", "location": "GLN 7540…0920" } },
+        { "cte": "Initial packing", "firm": "Valle Seco packhouse", "place": "Sonora, MX", "date": "2023-10-19", "kdes": { "lot": "MEL-SON-231018-R2", "qty": "2,100 ctn", "location": "GLN 7540…0920" } },
+        { "cte": "Shipping", "firm": "Valle Seco Melons", "place": "to Nogales, AZ", "date": "2023-10-19", "kdes": { "lot": "MEL-SON-231018-R2", "qty": "2,100 ctn", "location": "GLN 0614…0633" } },
+        { "cte": "Receiving", "firm": "Desert Gate Produce (first land-based receiver)", "place": "Nogales, AZ", "date": "2023-10-20", "kdes": { "lot": "MEL-SON-231018-R2", "qty": "2,100 ctn", "location": "GLN 0614…0633" } },
+        { "cte": "Transformation", "firm": "Lone Star Fresh-Cut", "place": "Dallas, TX", "date": "2023-10-24", "kdes": { "lot": "FC-231024-11", "qty": "6,400 × 10 oz cups", "location": "GLN 0614…0718" }, "gap": { "field": "Input lot quantity and unit", "cfr": "21 CFR § 1.1350(a)(2)", "reason": "Transformation record lists output cups but not how many cartons of MEL-SON-231018-R2 went in. Two melon lots were cut the same shift.", "owner": "Plant records clerk", "recovery": "Reconcile against the day's cut sheet; split quantity across the two input lots." } },
+        { "cte": "Shipping", "firm": "Lone Star Fresh-Cut", "place": "to convenience-store DC, Tulsa, OK", "date": "2023-10-25", "kdes": { "lot": "FC-231024-11", "qty": "6,400 × 10 oz", "location": "GLN 0614…0901" } }
+      ]
+    },
+    {
+      "id": "cheese",
+      "food": "Queso fresco and cotija",
+      "ftlCategory": "Cheese (pasteurized milk), fresh soft or soft unripened",
+      "hue": "#60a5fa",
+      "source": { "title": "2024 recalls of dairy products associated with a California soft-cheese maker", "agent": "Listeria monocytogenes", "firstRecall": "2024-02-05", "pattern": "One dairy's cheese appeared under many store brands and inside prepared foods; downstream recalls ran for weeks as retailers found it in kits and salads." },
+      "request": "FDA asks a meal-kit assembler for receiving and transformation records for soft cheese received 2024-01-01 to 2024-02-05.",
+      "lot": "QF-MOD-240115-04",
+      "chain": [
+        { "cte": "Transformation", "firm": "Arroyo Creamery (cheese make)", "place": "Modesto, CA", "date": "2024-01-15", "kdes": { "lot": "QF-MOD-240115-04", "qty": "3,200 × 12 oz", "location": "GLN 0614…6100" } },
+        { "cte": "Shipping", "firm": "Arroyo Creamery", "place": "to Fontana, CA", "date": "2024-01-16", "kdes": { "lot": "QF-MOD-240115-04", "qty": "3,200 × 12 oz", "location": "GLN 0614…6255" } },
+        { "cte": "Receiving", "firm": "Inland Cold Storage", "place": "Fontana, CA", "date": "2024-01-17", "kdes": { "lot": "QF-MOD-240115-04", "qty": "3,200 × 12 oz", "location": "GLN 0614…6255" } },
+        { "cte": "Shipping", "firm": "Inland Cold Storage", "place": "to Phoenix, AZ", "date": "2024-01-22", "kdes": { "lot": "QF-MOD-240115-04", "qty": "800 × 12 oz", "location": "GLN 0614…7010" } },
+        { "cte": "Receiving", "firm": "Sol Kitchens (meal-kit assembler)", "place": "Phoenix, AZ", "date": "2024-01-23", "kdes": { "lot": "QF-MOD-240115-04", "qty": "800 × 12 oz", "location": "GLN 0614…7010" }, "gap": { "field": "Reference document type and number", "cfr": "21 CFR § 1.1345(a)(7)", "reason": "Receipt was logged from a phone photo of the pallet tag. No PO, BOL or invoice number recorded.", "owner": "Purchasing", "recovery": "Attach PO 48811 from the ERP; link to the cold-storage BOL." } },
+        { "cte": "Transformation", "firm": "Sol Kitchens", "place": "Phoenix, AZ", "date": "2024-01-24", "kdes": { "lot": "KIT-240124-TACO", "qty": "2,400 taco kits", "location": "GLN 0614…7010" } },
+        { "cte": "Shipping", "firm": "Sol Kitchens", "place": "to grocery stores, AZ & NM", "date": "2024-01-25", "kdes": { "lot": "KIT-240124-TACO", "qty": "2,400 kits", "location": "GLN 0614…7388" } }
+      ]
+    }
+  ]
+}
