@@ -1183,6 +1183,18 @@ jobs:
           script: |
             const owner = context.repo.owner;
             const repo = context.repo.repo;
+
+            // issue_comment events run in the default-branch context, so a failed job
+            // there is attributed to main even though it evaluated a PR head. The PR
+            // verdict is carried by the commit status posted on the PR head SHA; only
+            // fail the job itself for events that run in the pull request's context.
+            const failRun = (msg) => {
+              if (context.eventName === 'pull_request' || context.eventName === 'pull_request_review') {
+                core.setFailed(msg);
+              } else {
+                core.warning(`${msg} (reported via commit status; not failing ${context.eventName} run on default branch)`);
+              }
+            };
             let pr = context.payload.pull_request;
 
             if (!pr) {
@@ -1199,13 +1211,13 @@ jobs:
             }
 
             if (!pr) {
-              core.setFailed('Could not determine pull request from event payload.');
+              failRun('Could not determine pull request from event payload.');
               return;
             }
 
             const headSha = pr.head?.sha;
             if (!headSha) {
-              core.setFailed('Could not determine head SHA from pull request.');
+              failRun('Could not determine head SHA from pull request.');
               return;
             }
 
@@ -1258,7 +1270,7 @@ jobs:
               if (!ALLOWED_ENGINES.has(authorEngine)) {
                 const msg = 'Invalid author engine. Please use an engine branch prefix such as gemini/ or claude/.';
                 await setCommitStatus('failure', msg);
-                core.setFailed(msg);
+                failRun(msg);
                 return;
               }
 
@@ -1379,14 +1391,14 @@ jobs:
                 const blockedEngines = blockedMarkers.map((m) => m.engine).join(', ');
                 const msg = `Blocked by ${blockedEngines}`;
                 await setCommitStatus('failure', msg);
-                core.setFailed(`Engine Review Pass blocked: ${msg}`);
+                failRun(`Engine Review Pass blocked: ${msg}`);
                 return;
               }
 
               if (nonAuthorPassMarkers.length === 0) {
                 const msg = 'No passing review from a non-author engine for current head SHA';
                 await setCommitStatus('failure', msg);
-                core.setFailed(`Engine Review Pass failed: ${msg}`);
+                failRun(`Engine Review Pass failed: ${msg}`);
                 return;
               }
 
@@ -1397,5 +1409,5 @@ jobs:
             } catch (err) {
               core.error(`Unexpected error: ${err.message}`);
               await setCommitStatus('failure', `Error: ${err.message}`.slice(0, 140));
-              core.setFailed(err.message);
+              failRun(err.message);
             }
