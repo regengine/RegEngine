@@ -329,12 +329,13 @@ async def get_current_tenant_id(request: Request) -> uuid.UUID:
     """
     middleware_tenant = getattr(request.state, "tenant_id", None)
     api_key = getattr(request.state, "api_key", None)
-    raw_principal_tenant = getattr(api_key, "tenant_id", None) if api_key is not None else None
     principal_tenant = _tenant_id_from_authenticated_principal(request)
 
-    if raw_principal_tenant and principal_tenant is None:
-        # The principal carries a tenant that does not parse: a malformed
-        # credential, never a reason to fall back to the middleware tenant.
+    if api_key is not None and principal_tenant is None:
+        # An authenticated principal with no usable tenant (missing, empty or
+        # unparseable) is a malformed credential, never a reason to fall back
+        # to the middleware tenant: that would let a header or claim pick the
+        # tenant with no principal authority behind it.
         raise HTTPException(status_code=401, detail="Tenant ID not found in authentication context")
 
     # Compare parsed UUIDs, so equivalent spellings (case, braces, no hyphens)

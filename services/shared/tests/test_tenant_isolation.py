@@ -175,18 +175,20 @@ class TestTenantDependencies:
         assert exc_info.value.detail == "E_TENANT_MISMATCH"
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("bad_principal", ["not-a-uuid", " {mw} "])
-    async def test_unparseable_principal_tenant_with_middleware_tenant_fails_closed(self, bad_principal):
-        """A principal whose tenant does not parse is a malformed credential:
-        401, never a fall-through that resolves the middleware tenant — even
-        when the middleware tenant is the same UUID with surrounding spaces."""
+    @pytest.mark.parametrize("bad_principal", ["not-a-uuid", " {mw} ", "", None])
+    async def test_unusable_principal_tenant_with_middleware_tenant_fails_closed(self, bad_principal):
+        """A principal whose tenant is unparseable, empty or missing is a
+        malformed credential: 401, never a fall-through that resolves the
+        middleware tenant — even when that tenant is the same UUID with
+        surrounding spaces."""
         from shared.middleware import get_current_tenant_id
 
         mw_tenant = uuid.uuid4()
+        principal_tenant = bad_principal.format(mw=mw_tenant) if isinstance(bad_principal, str) else bad_principal
         request = SimpleNamespace(
             state=SimpleNamespace(
                 tenant_id=mw_tenant,
-                api_key=SimpleNamespace(key_id="k", tenant_id=bad_principal.format(mw=mw_tenant)),
+                api_key=SimpleNamespace(key_id="k", tenant_id=principal_tenant),
             )
         )
 

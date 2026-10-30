@@ -151,17 +151,21 @@ def _neo4j_stub(seen: list[str | None]) -> MagicMock:
         ("GET", "/api/v1/fsma/traceability/timeline/LOT-1", None, TRACE_NEO4J),
         ("GET", "/api/v1/lineage/LOT-1/history", None, LINEAGE_NEO4J),
         ("POST", "/api/v1/labels/batch/init", LABEL_BATCH, LABELS_NEO4J),
+        # The science handlers answer 501 themselves; the 409 must still come first.
+        ("GET", "/api/v1/fsma/science/mass-balance/LOT-1", None, None),
     ],
 )
 def test_middleware_tenant_that_differs_from_key_tenant_is_rejected(_env, method, url, body, data_layer):
     """Key tenant A + authenticated internal header for tenant B: 409, handler never reached."""
     client = TestClient(_app(), raise_server_exceptions=False)
-    with patch(data_layer) as entry:
+    with ExitStack() as stack:
+        entry = stack.enter_context(patch(data_layer)) if data_layer else None
         resp = client.request(method, url, json=body, headers=_with_middleware_tenant(TENANT_B))
 
     assert resp.status_code == 409, resp.text
     assert resp.json()["detail"] == "E_TENANT_MISMATCH"
-    assert entry.mock_calls == [], f"{method} {url} reached its data layer with a divergent tenant"
+    if entry is not None:
+        assert entry.mock_calls == [], f"{method} {url} reached its data layer with a divergent tenant"
 
 
 def test_jwt_claim_tenant_that_differs_from_key_tenant_is_rejected(_env):
@@ -197,6 +201,17 @@ def test_middleware_tenant_that_matches_key_tenant_is_accepted(_env):
     client = TestClient(_app(), raise_server_exceptions=False)
     with patch(RECALL_ENGINE, return_value=_recall_engine_stub(seen)):
         resp = client.get("/api/v1/fsma/recall/sla", headers=_with_middleware_tenant(TENANT_A))
+
+    assert resp.status_code == 200, resp.text
+    assert seen == [(TENANT_A, TENANT_A)]
+
+
+def test_jwt_claim_tenant_that_matches_key_tenant_is_accepted(_env):
+    """A JWT claim naming the key's own tenant is agreement, not a mismatch."""
+    seen: list[tuple[str, str | None]] = []
+    client = TestClient(_app(jwt_tenant=TENANT_A), raise_server_exceptions=False)
+    with patch(RECALL_ENGINE, return_value=_recall_engine_stub(seen)):
+        resp = client.get("/api/v1/fsma/recall/sla", headers=KEY_ONLY)
 
     assert resp.status_code == 200, resp.text
     assert seen == [(TENANT_A, TENANT_A)]
