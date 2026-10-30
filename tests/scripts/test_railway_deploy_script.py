@@ -41,7 +41,7 @@ case "${1:-}" in
     cat <<STATUS
 Workspace:       Example Workspace
 
-Project:         RegEngine-Prod
+Project:         ${FAKE_RAILWAY_PROJECT_NAME:-RegEngine-Prod}
 Project ID:      00000000-0000-0000-0000-000000000001
 
 Environment:     ${FAKE_RAILWAY_ENV_NAME:-production}
@@ -49,7 +49,7 @@ Environment ID:  env-from-status
 
 Linked service
 
-RegEngine
+${FAKE_RAILWAY_SERVICE_NAME:-RegEngine}
     status:        Online
     deployment ID: 00000000-0000-0000-0000-000000000002
     service ID:    svc-from-status
@@ -59,6 +59,25 @@ STATUS
     cp build-sha.txt "$FAKE_RAILWAY_LOG_DIR/$n.stamp"
     ;;
 esac
+"""
+
+# Stands in for curl on the default-URL path only: records the URL it was
+# asked for, writes a /health body to the -o file, and prints the status code
+# the way `-w '%{http_code}'` does.
+_FAKE_CURL = """#!/usr/bin/env bash
+set -euo pipefail
+out=""
+url=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -o|-w|--max-time) out_or_opt="$1"; [ "$out_or_opt" = "-o" ] && out="$2"; shift 2 ;;
+    -*) shift ;;
+    *) url="$1"; shift ;;
+  esac
+done
+printf '%s\\n' "$url" >> "$FAKE_CURL_LOG"
+printf '{"build": {"commit_sha": "%s"}}' "$FAKE_CURL_SHA" > "$out"
+printf '200'
 """
 
 
@@ -313,20 +332,48 @@ def test_requires_backend_url_when_the_environment_is_chosen_by_hand(harness: _H
     assert harness.stamp_file() == _PLACEHOLDER
 
 
-def test_refuses_a_non_production_linked_environment_without_backend_url(harness: _Harness) -> None:
+@pytest.mark.parametrize(
+    ("variable", "value", "expected"),
+    [
+        ("FAKE_RAILWAY_ENV_NAME", "staging", "environment 'staging'"),
+        ("FAKE_RAILWAY_PROJECT_NAME", "Other-Project", "project 'Other-Project'"),
+        ("FAKE_RAILWAY_SERVICE_NAME", "Worker", "service 'Worker'"),
+    ],
+)
+def test_refuses_the_default_url_for_any_other_linked_target(
+    harness: _Harness, variable: str, value: str, expected: str
+) -> None:
+    # The production default URL belongs to one project/environment/service.
+    # A checkout linked anywhere else must say where to verify.
     harness.health.sha = harness.head()
+
+    result = harness.run(RAILWAY_SERVICE_ID=None, RAILWAY_ENVIRONMENT_ID=None, BACKEND_URL=None, **{variable: value})
+
+    assert result.returncode != 0
+    assert expected in result.stderr
+    assert "default BACKEND_URL belongs to RegEngine-Prod / production / RegEngine" in result.stderr
+    assert harness.calls() == [["status"]]
+    assert harness.stamp_file() == _PLACEHOLDER
+
+
+def test_uses_the_default_url_for_the_linked_production_target(harness: _Harness) -> None:
+    # No network: a fake curl answers for whatever URL the script chooses.
+    fake_curl = harness.bin_dir / "curl"
+    fake_curl.write_text(_FAKE_CURL, encoding="utf-8")
+    fake_curl.chmod(0o755)
+    curl_log = harness.log_dir / "curl.log"
 
     result = harness.run(
         RAILWAY_SERVICE_ID=None,
         RAILWAY_ENVIRONMENT_ID=None,
         BACKEND_URL=None,
-        FAKE_RAILWAY_ENV_NAME="staging",
+        FAKE_CURL_LOG=str(curl_log),
+        FAKE_CURL_SHA=harness.head(),
     )
 
-    assert result.returncode != 0
-    assert "'staging', not production" in result.stderr
-    assert harness.calls() == [["status"]]
-    assert harness.stamp_file() == _PLACEHOLDER
+    assert result.returncode == 0, result.stderr
+    assert [call[0] for call in harness.calls()] == ["status", "up"]
+    assert curl_log.read_text(encoding="utf-8").splitlines() == ["https://regengine-production.up.railway.app/health"]
 
 
 def test_fails_when_health_never_reports_the_shipped_sha(harness: _Harness) -> None:

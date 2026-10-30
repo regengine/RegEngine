@@ -34,11 +34,12 @@
 #       Passed as `railway up --project` when set, as deploy.yml does.
 #       Otherwise the linked project is used.
 #   BACKEND_URL
-#       Where to verify. Default https://regengine-production.up.railway.app,
-#       used only for the production environment: a target chosen by hand
-#       (RAILWAY_ENVIRONMENT_ID) or a linked non-production environment must
-#       set BACKEND_URL explicitly, or the check could pass against production
-#       while the real target never served the upload.
+#       Where to verify. The default, https://regengine-production.up.railway.app,
+#       belongs to one target (project RegEngine-Prod, environment production,
+#       service RegEngine) and is used only when `railway status` reports that
+#       exact linked target. Any id picked by hand, or any other linked target,
+#       must set BACKEND_URL explicitly, or the check could pass against
+#       production while the real target never served the upload.
 #   RAILWAY_DEPLOY_TIMEOUT_SECONDS
 #       Rollout budget for the /health check. Default 900, matching deploy.yml.
 #   RAILWAY_DEPLOY_POLL_SECONDS
@@ -88,9 +89,15 @@ if [ ! -d "$REPO_ROOT/.git" ]; then
   echo "       run this from the primary checkout, whose .git is a directory." >&2
   exit 1
 fi
+# The default URL and the target it belongs to. Changing one means changing
+# the others; the script refuses the default for any other target.
+DEFAULT_BACKEND_URL="https://regengine-production.up.railway.app"
+DEFAULT_TARGET_PROJECT="RegEngine-Prod"
+DEFAULT_TARGET_ENVIRONMENT="production"
+DEFAULT_TARGET_SERVICE="RegEngine"
 BACKEND_URL_SET=1
 [ -n "${BACKEND_URL:-}" ] || BACKEND_URL_SET=0
-BACKEND_URL="${BACKEND_URL:-https://regengine-production.up.railway.app}"
+BACKEND_URL="${BACKEND_URL:-$DEFAULT_BACKEND_URL}"
 TIMEOUT_SECONDS="${RAILWAY_DEPLOY_TIMEOUT_SECONDS:-900}"
 POLL_SECONDS="${RAILWAY_DEPLOY_POLL_SECONDS:-15}"
 
@@ -149,12 +156,6 @@ if [ -z "$SERVICE_ID" ] || [ -z "$ENVIRONMENT_ID" ]; then
   if [ -z "$ENVIRONMENT_ID" ]; then
     ENVIRONMENT_ID="$(printf '%s\n' "$status_text" | sed -n 's/^Environment ID:[[:space:]]*//p' | head -n 1 | tr -d '[:space:]')"
     ENVIRONMENT_SOURCE="railway status"
-    environment_name="$(printf '%s\n' "$status_text" | sed -n 's/^Environment:[[:space:]]*//p' | head -n 1 | tr -d '[:space:]')"
-    if [ "$BACKEND_URL_SET" -eq 0 ] && [ "$environment_name" != "production" ]; then
-      echo "error: the linked environment is '${environment_name:-unknown}', not production, and BACKEND_URL is unset." >&2
-      echo "       Set BACKEND_URL to that environment's public URL so the health check verifies the right deployment." >&2
-      exit 1
-    fi
   fi
   if [ -z "$SERVICE_ID" ]; then
     SERVICE_ID="$(printf '%s\n' "$status_text" | sed -n 's/^[[:space:]]*service ID:[[:space:]]*//p' | head -n 1 | tr -d '[:space:]')"
@@ -166,10 +167,25 @@ if [ -z "$SERVICE_ID" ] || [ -z "$ENVIRONMENT_ID" ]; then
   echo "       Set RAILWAY_SERVICE_ID and RAILWAY_ENVIRONMENT_ID, or link a service with 'railway service'." >&2
   exit 1
 fi
-if [ "$ENVIRONMENT_SOURCE" = "RAILWAY_ENVIRONMENT_ID" ] && [ "$BACKEND_URL_SET" -eq 0 ]; then
-  echo "error: RAILWAY_ENVIRONMENT_ID selects the environment by hand but BACKEND_URL is unset." >&2
-  echo "       Set BACKEND_URL to that environment's public URL so the health check verifies the right deployment." >&2
-  exit 1
+if [ "$BACKEND_URL_SET" -eq 0 ]; then
+  # The default URL is tied to one target. Use it only when `railway status`
+  # reports that exact linked target; a hand-picked id, or another linked
+  # project, environment or service, must say where to verify.
+  if [ "$SERVICE_SOURCE" != "railway status" ] || [ "$ENVIRONMENT_SOURCE" != "railway status" ]; then
+    echo "error: RAILWAY_SERVICE_ID / RAILWAY_ENVIRONMENT_ID pick the target by hand but BACKEND_URL is unset." >&2
+    echo "       Set BACKEND_URL to that target's public URL so the health check verifies the right deployment." >&2
+    exit 1
+  fi
+  project_name="$(printf '%s\n' "$status_text" | sed -n 's/^Project:[[:space:]]*//p' | head -n 1 | sed 's/[[:space:]]*$//')"
+  environment_name="$(printf '%s\n' "$status_text" | sed -n 's/^Environment:[[:space:]]*//p' | head -n 1 | sed 's/[[:space:]]*$//')"
+  # The linked service's name is the first non-empty line after "Linked service".
+  service_name="$(printf '%s\n' "$status_text" | awk '/^Linked service/ { linked = 1; next } linked && NF { print; exit }' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+  if [ "$project_name" != "$DEFAULT_TARGET_PROJECT" ] || [ "$environment_name" != "$DEFAULT_TARGET_ENVIRONMENT" ] || [ "$service_name" != "$DEFAULT_TARGET_SERVICE" ]; then
+    echo "error: the linked target is project '${project_name:-unknown}', environment '${environment_name:-unknown}', service '${service_name:-unknown}'," >&2
+    echo "       but the default BACKEND_URL belongs to ${DEFAULT_TARGET_PROJECT} / ${DEFAULT_TARGET_ENVIRONMENT} / ${DEFAULT_TARGET_SERVICE}." >&2
+    echo "       Set BACKEND_URL to this target's public URL so the health check verifies the right deployment." >&2
+    exit 1
+  fi
 fi
 PROJECT_ARGS=()
 PROJECT_SOURCE="the linked project"
