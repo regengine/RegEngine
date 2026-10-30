@@ -162,6 +162,13 @@ PR can show before and after.
 
 ### WI-01 — Single schema channel and version-row reconciliation kit
 
+**Status 2026-10-30:** requirements 1, 2, 3, 4 and 6 delivered in PR #3699
+(`docs/decisions/2026-10-30-schema-change-channel.md`,
+`sql/prod-apply/PRECHECK_alembic_version_reconcile.sql`,
+`docs/runbooks/ALEMBIC_VERSION_RECONCILE.md`, `docs/MIGRATION_CONSOLIDATION.md`).
+Requirement 5 (the CI guard script and its tests) is open and belongs in a
+code PR. The decisions-needed list is Appendix B of the ADR.
+
 **Problem.** Schema changes reach production three ways: the Alembic chain
 (`alembic/versions/`, 105 revisions, head v137), `supabase/migrations/`
 (45 SQL files, newest 2026-10-26, mentioned by no document), and
@@ -178,7 +185,7 @@ database is touched by the agent.
 
 **Requirements.**
 
-1. Write `docs/decisions/2026-11-01-schema-change-channel.md` (use the
+1. Write `docs/decisions/2026-10-30-schema-change-channel.md` (use the
    date the PR opens; the directory's existing files are named
    `YYYY-MM-DD-topic.md`, follow their format). It must
    state: Alembic is the only authoritative channel; `supabase/migrations/`
@@ -214,9 +221,10 @@ database is touched by the agent.
 - `python3 -m pytest tests/scripts/test_check_schema_channels.py -q` passes,
   including a case for a file without the header and a file naming a
   non-existent revision.
-- `python3 scripts/check_docs_links.py docs/decisions/2026-11-01-schema-change-channel.md docs/runbooks/ALEMBIC_VERSION_RECONCILE.md` passes.
-- The PRECHECK file contains no statement other than `SELECT`, `WITH`, and
-  comments (add a test asserting this).
+- `python3 scripts/check_docs_links.py docs/decisions/2026-10-30-schema-change-channel.md docs/runbooks/ALEMBIC_VERSION_RECONCILE.md` passes.
+- The PRECHECK file contains no statement other than `BEGIN READ ONLY`,
+  `SET LOCAL`, `WITH`, `SELECT`, `ROLLBACK` and comments (add a test
+  asserting this).
 - The "Decision needed" list is in the PR description.
 
 **Out of scope.** Running anything against a database. Writing new Alembic
