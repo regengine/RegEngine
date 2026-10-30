@@ -103,6 +103,9 @@ class TestListUsersHappyPath:
             call_count[0] += 1
             result = MagicMock()
             if call_count[0] == 1:
+                # set_admin_context arm (users FORCE RLS peer visibility)
+                return result
+            if call_count[0] == 2:
                 # Count query
                 result.scalar.return_value = 1
             else:
@@ -141,6 +144,8 @@ class TestListUsersHappyPath:
             call_count[0] += 1
             result = MagicMock()
             if call_count[0] == 1:
+                return result
+            if call_count[0] == 2:
                 result.scalar.return_value = 1
             else:
                 result.all.return_value = [(user, membership, role)]
@@ -169,6 +174,8 @@ class TestListUsersHappyPath:
             call_count[0] += 1
             result = MagicMock()
             if call_count[0] == 1:
+                return result
+            if call_count[0] == 2:
                 result.scalar.return_value = 0
             else:
                 result.all.return_value = []
