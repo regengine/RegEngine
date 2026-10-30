@@ -62,14 +62,15 @@ S=<scratchpad dir>
 } > "$S/verify.env"
 set -a; source "$S/verify.env"; set +a
 venv/bin/alembic upgrade head          # ~107 revisions, under a minute
+# Port 8000 must be free before we start, or curl below would be probing
+# someone else's server while ours is still importing.
+[ -z "$(ss -ltnH 'sport = :8000')" ] || { echo "port 8000 is already in use; stop here"; false; }
 nohup venv/bin/uvicorn server.main:app --host 127.0.0.1 --port 8000 > "$S/uvicorn.log" 2>&1 &
 UVICORN_PID=$!
-# A busy port 8000 makes uvicorn exit on bind; curl would then be probing
-# someone else's server. Require our process to be alive before and after.
-sleep 2 && kill -0 "$UVICORN_PID" \
-  && curl -sS --fail --retry 45 --retry-delay 2 --retry-connrefused --retry-all-errors http://127.0.0.1:8000/health \
+curl -sS --fail --retry 45 --retry-delay 2 --retry-connrefused --retry-all-errors http://127.0.0.1:8000/health \
   && kill -0 "$UVICORN_PID" \
-  || { echo "uvicorn did not come up as PID $UVICORN_PID; see $S/uvicorn.log"; false; }
+  && ss -ltnpH 'sport = :8000' | grep -q "pid=$UVICORN_PID," \
+  || { echo "uvicorn PID $UVICORN_PID is not the server on port 8000; see $S/uvicorn.log"; false; }
 ```
 
 Startup takes about 15 s. `/openapi.json` lists mounted routes; confirm the
