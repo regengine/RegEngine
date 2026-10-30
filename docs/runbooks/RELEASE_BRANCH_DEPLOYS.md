@@ -235,12 +235,17 @@ The 2026-10-29 deploy (Railway deployment `44c0486a`) did exactly that, and
 the live commit could only be identified by hashing files inside the
 container over `railway ssh`.
 
-The script refuses a dirty tree, stamps `git rev-parse HEAD` into
-`build-sha.txt`, runs `railway up --ci` against the production project,
-service and environment named on the command line, restores
-the placeholder (also on failure), then polls `https://api.regengine.co/health`
-until `build.commit_sha` equals the stamped commit, with the same three
-failure diagnoses as `deploy.yml`. `--dry-run` does everything except the
-upload and the poll. `RAILWAY_PROJECT`, `RAILWAY_SERVICE` and
-`RAILWAY_ENVIRONMENT` override the production defaults; `railway link`
-state is ignored so a checkout linked to staging cannot redirect it.
+The script refuses a dirty tree, a git worktree (`railway up` cannot index
+one), and a commit that is not on `main` unless `--allow-non-main` is passed.
+It then requires a `success` **Backend CI Status Gate** check run on the
+commit, as `deploy.yml` did (`--skip-ci-gate` overrides, knowingly), stamps
+`git rev-parse HEAD` into `build-sha.txt`, runs `railway up --ci` against the
+production project, service and environment named on the command line,
+restores the placeholder (also on failure), then polls `BACKEND_URL/health`
+(default `https://api.regengine.co`, the same deployment `deploy.yml` polls
+by its Railway hostname) until `build.commit_sha` equals the stamped commit,
+with the same three failure diagnoses as `deploy.yml`. `--dry-run` does
+everything except the upload and the poll. `RAILWAY_PROJECT`,
+`RAILWAY_SERVICE` and `RAILWAY_ENVIRONMENT` override the production
+defaults; `railway link` state is ignored so a checkout linked to staging
+cannot redirect it.
