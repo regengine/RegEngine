@@ -98,8 +98,19 @@ function removeInviteEmailOutboxRecords(email: string): void {
     fs.writeFileSync(outbox, remaining.length > 0 ? `${remaining.join('\n')}\n` : '', 'utf-8');
 }
 
-function expectAdminAuditLog(tenantId: string, eventType: string, resourceId: string): void {
+// The admin service writes to this same SQLite file while the browser is on
+// /settings/users. Without a busy timeout SQLite answers SQLITE_BUSY at once
+// ("database is locked") instead of waiting for that write to commit.
+const ADMIN_SQLITE_BUSY_TIMEOUT_MS = 5000;
+
+function openAdminDatabase(): DatabaseSync {
     const database = new DatabaseSync(adminSqlitePath());
+    database.exec(`PRAGMA busy_timeout = ${ADMIN_SQLITE_BUSY_TIMEOUT_MS}`);
+    return database;
+}
+
+function expectAdminAuditLog(tenantId: string, eventType: string, resourceId: string): void {
+    const database = openAdminDatabase();
     try {
         const row = database
             .prepare('SELECT event_type, resource_type, resource_id FROM audit_logs WHERE tenant_id = ? AND event_type = ? AND resource_id = ? LIMIT 1')
@@ -114,7 +125,7 @@ function cleanupInviteFixture(tenantId: string | null, email: string, userId?: s
     removeInviteEmailOutboxRecords(email);
     if (!tenantId || !isLocalE2E()) return;
 
-    const database = new DatabaseSync(adminSqlitePath());
+    const database = openAdminDatabase();
     try {
         if (userId) {
             database.prepare('DELETE FROM memberships WHERE tenant_id = ? AND user_id = ?').run(tenantId, userId);
