@@ -175,7 +175,9 @@ def _expect_rejected(engine: Engine, sql: str, params: dict) -> None:
             conn.execute(text(sql), params)
     message = str(exc.value)
     assert "append-only" in message or "status may only move" in message, message
-    assert getattr(exc.value.orig, "sqlstate", "23514") == "23514", message  # check_violation
+    # psycopg 3 (rls_db forces it) exposes the server SQLSTATE directly;
+    # no fallback, so a driver that lacks it fails loudly.
+    assert exc.value.orig.sqlstate == "23514", message  # check_violation
 
 
 def test_triggers_installed_at_head(upgraded_engine: Engine) -> None:
@@ -276,7 +278,7 @@ def test_null_status_rejected_on_nullable_catalogs(seeded) -> None:
             conn.execute(drop_not_null)
             conn.execute(set_status, {"status": None, "eid": event_id})
     assert "status may only move" in str(exc.value), str(exc.value)
-    assert getattr(exc.value.orig, "sqlstate", "23514") == "23514"
+    assert exc.value.orig.sqlstate == "23514"
 
     # NULL -> active (the row got its NULL through break-glass)
     with pytest.raises(DBAPIError) as exc:
@@ -287,7 +289,7 @@ def test_null_status_rejected_on_nullable_catalogs(seeded) -> None:
             conn.execute(text("SET LOCAL fsma.allow_mutation = 'false'"))
             conn.execute(set_status, {"status": "active", "eid": event_id})
     assert "status may only move" in str(exc.value), str(exc.value)
-    assert getattr(exc.value.orig, "sqlstate", "23514") == "23514"
+    assert exc.value.orig.sqlstate == "23514"
 
     with engine.connect() as conn:
         nullable = conn.execute(

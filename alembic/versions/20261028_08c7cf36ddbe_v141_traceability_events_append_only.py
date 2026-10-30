@@ -178,11 +178,21 @@ DROP FUNCTION IF EXISTS {TRUNCATE_FUNCTION}();
 """
 
 
+# CREATE/DROP TRIGGER takes SHARE ROW EXCLUSIVE on the table and would queue
+# behind a long ingest or export transaction, holding every later writer
+# behind it. Bound the wait (same 10s as v134) so the migration fails fast
+# and can be retried instead of stalling production. Alembic runs each
+# path in one transaction, so SET LOCAL covers every statement below.
+_LOCK_TIMEOUT_SQL = "SET LOCAL lock_timeout = '10s'"
+
+
 def upgrade() -> None:
+    op.execute(_LOCK_TIMEOUT_SQL)
     op.execute(_ROW_FUNCTION_SQL)
     op.execute(_TRUNCATE_FUNCTION_SQL)
     op.execute(_TRIGGERS_SQL)
 
 
 def downgrade() -> None:
+    op.execute(_LOCK_TIMEOUT_SQL)
     op.execute(_DOWNGRADE_SQL)
