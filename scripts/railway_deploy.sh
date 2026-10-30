@@ -3,8 +3,10 @@
 # Deploy the RegEngine backend to Railway by CLI, carrying commit identity.
 #
 # Why this exists: the Railway service has no GitHub source and the GitHub
-# Actions deploy workflow (.github/workflows/deploy.yml) is disabled, so
-# production is deployed by running `railway up` from a checkout. A bare
+# Actions deploy workflow (.github/workflows/deploy.yml) is disabled in the
+# Actions UI (its YAML still declares a push trigger, but a disabled workflow
+# never runs), so production is deployed by running `railway up` from a
+# checkout. A bare
 # `railway up` ships an image that cannot say which commit it is: the upload
 # carries no RAILWAY_GIT_COMMIT_SHA, and build-sha.txt (the stamp that
 # services/shared/build_info.py reads) still holds its tracked placeholder.
@@ -28,8 +30,15 @@
 #   RAILWAY_SERVICE_ID, RAILWAY_ENVIRONMENT_ID
 #       Deploy target. When either is unset it is read from `railway status`,
 #       which needs a linked project (`railway link`, `railway service`).
+#   RAILWAY_PROJECT_ID
+#       Passed as `railway up --project` when set, as deploy.yml does.
+#       Otherwise the linked project is used.
 #   BACKEND_URL
-#       Where to verify. Default https://regengine-production.up.railway.app
+#       Where to verify. Default https://regengine-production.up.railway.app,
+#       used only for the production environment: a target chosen by hand
+#       (RAILWAY_ENVIRONMENT_ID) or a linked non-production environment must
+#       set BACKEND_URL explicitly, or the check could pass against production
+#       while the real target never served the upload.
 #   RAILWAY_DEPLOY_TIMEOUT_SECONDS
 #       Rollout budget for the /health check. Default 900, matching deploy.yml.
 #   RAILWAY_DEPLOY_POLL_SECONDS
@@ -70,6 +79,17 @@ done
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
 STAMP_FILE="build-sha.txt"
+
+# `railway up` indexes the upload relative to the git toplevel and fails with
+# "Indexing... prefix not found" when .git is a worktree pointer file rather
+# than a directory (observed 2026-10-29). Refuse before touching anything.
+if [ ! -d "$REPO_ROOT/.git" ]; then
+  echo "error: ${REPO_ROOT} is a git worktree (.git is a file). railway up cannot index a worktree;" >&2
+  echo "       run this from the primary checkout, whose .git is a directory." >&2
+  exit 1
+fi
+BACKEND_URL_SET=1
+[ -n "${BACKEND_URL:-}" ] || BACKEND_URL_SET=0
 BACKEND_URL="${BACKEND_URL:-https://regengine-production.up.railway.app}"
 TIMEOUT_SECONDS="${RAILWAY_DEPLOY_TIMEOUT_SECONDS:-900}"
 POLL_SECONDS="${RAILWAY_DEPLOY_POLL_SECONDS:-15}"
@@ -80,10 +100,16 @@ if ! git ls-files --error-unmatch "$STAMP_FILE" >/dev/null 2>&1; then
   exit 1
 fi
 
-if [ -n "$(git status --porcelain)" ]; then
+# A failed inspection must not read as a clean tree, so check the exit
+# status before the output.
+dirty="$(git status --porcelain)" || {
+  echo "error: 'git status' failed; refusing to treat the checkout as clean." >&2
+  exit 1
+}
+if [ -n "$dirty" ]; then
   echo "error: working tree is dirty. Commit or discard these changes before deploying;" >&2
   echo "       railway up uploads the directory as it is, not the last commit." >&2
-  git status --short >&2
+  printf '%s\n' "$dirty" >&2
   exit 1
 fi
 
@@ -123,6 +149,12 @@ if [ -z "$SERVICE_ID" ] || [ -z "$ENVIRONMENT_ID" ]; then
   if [ -z "$ENVIRONMENT_ID" ]; then
     ENVIRONMENT_ID="$(printf '%s\n' "$status_text" | sed -n 's/^Environment ID:[[:space:]]*//p' | head -n 1 | tr -d '[:space:]')"
     ENVIRONMENT_SOURCE="railway status"
+    environment_name="$(printf '%s\n' "$status_text" | sed -n 's/^Environment:[[:space:]]*//p' | head -n 1 | tr -d '[:space:]')"
+    if [ "$BACKEND_URL_SET" -eq 0 ] && [ "$environment_name" != "production" ]; then
+      echo "error: the linked environment is '${environment_name:-unknown}', not production, and BACKEND_URL is unset." >&2
+      echo "       Set BACKEND_URL to that environment's public URL so the health check verifies the right deployment." >&2
+      exit 1
+    fi
   fi
   if [ -z "$SERVICE_ID" ]; then
     SERVICE_ID="$(printf '%s\n' "$status_text" | sed -n 's/^[[:space:]]*service ID:[[:space:]]*//p' | head -n 1 | tr -d '[:space:]')"
@@ -134,7 +166,18 @@ if [ -z "$SERVICE_ID" ] || [ -z "$ENVIRONMENT_ID" ]; then
   echo "       Set RAILWAY_SERVICE_ID and RAILWAY_ENVIRONMENT_ID, or link a service with 'railway service'." >&2
   exit 1
 fi
-echo "target: service from ${SERVICE_SOURCE}, environment from ${ENVIRONMENT_SOURCE}"
+if [ "$ENVIRONMENT_SOURCE" = "RAILWAY_ENVIRONMENT_ID" ] && [ "$BACKEND_URL_SET" -eq 0 ]; then
+  echo "error: RAILWAY_ENVIRONMENT_ID selects the environment by hand but BACKEND_URL is unset." >&2
+  echo "       Set BACKEND_URL to that environment's public URL so the health check verifies the right deployment." >&2
+  exit 1
+fi
+PROJECT_ARGS=()
+PROJECT_SOURCE="the linked project"
+if [ -n "${RAILWAY_PROJECT_ID:-}" ]; then
+  PROJECT_ARGS=(--project "$RAILWAY_PROJECT_ID")
+  PROJECT_SOURCE="RAILWAY_PROJECT_ID"
+fi
+echo "target: service from ${SERVICE_SOURCE}, environment from ${ENVIRONMENT_SOURCE}, project from ${PROJECT_SOURCE}"
 
 # ── 3. Stamp and upload ──────────────────────────────────────────────────────
 # The stamp is for the upload only. The tracked file keeps its placeholder so
@@ -154,7 +197,9 @@ echo "stamped ${STAMP_FILE} with ${HEAD_SHA}"
 
 MESSAGE="${SUBJECT} @${SHORT_SHA}"
 echo "uploading: railway up --ci --message '${MESSAGE}'"
-railway up --ci --service "$SERVICE_ID" --environment "$ENVIRONMENT_ID" --message "$MESSAGE"
+# ${arr[@]+"${arr[@]}"} expands to nothing when the array is empty and stays
+# safe under `set -u` on every bash, including macOS /bin/bash 3.2.
+railway up --ci ${PROJECT_ARGS[@]+"${PROJECT_ARGS[@]}"} --service "$SERVICE_ID" --environment "$ENVIRONMENT_ID" --message "$MESSAGE"
 
 git checkout --quiet -- "$STAMP_FILE"
 echo "restored ${STAMP_FILE} to its tracked placeholder"

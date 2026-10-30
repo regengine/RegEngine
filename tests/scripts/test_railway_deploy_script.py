@@ -38,13 +38,13 @@ n=$(find "$FAKE_RAILWAY_LOG_DIR" -name '*.args' | wc -l | tr -d ' ')
 printf '%s\\n' "$@" > "$FAKE_RAILWAY_LOG_DIR/$n.args"
 case "${1:-}" in
   status)
-    cat <<'STATUS'
+    cat <<STATUS
 Workspace:       Example Workspace
 
 Project:         RegEngine-Prod
 Project ID:      00000000-0000-0000-0000-000000000001
 
-Environment:     production
+Environment:     ${FAKE_RAILWAY_ENV_NAME:-production}
 Environment ID:  env-from-status
 
 Linked service
@@ -101,7 +101,7 @@ class _Harness:
     def short_head(self) -> str:
         return _git(self.repo, "rev-parse", "--short", "HEAD")
 
-    def run(self, *args: str, **overrides: str | None) -> subprocess.CompletedProcess[str]:
+    def run(self, *args: str, cwd: Path | None = None, **overrides: str | None) -> subprocess.CompletedProcess[str]:
         env = _hermetic_git_env()
         for key in [k for k in env if k.startswith("RAILWAY_")]:
             env.pop(key)
@@ -126,7 +126,7 @@ class _Harness:
                 env[key] = value
         return subprocess.run(
             ["bash", str(_SCRIPT), *args],
-            cwd=self.repo,
+            cwd=cwd or self.repo,
             env=env,
             capture_output=True,
             text=True,
@@ -220,6 +220,21 @@ def test_refuses_a_dirty_working_tree(harness: _Harness) -> None:
     assert harness.stamp_file() == _PLACEHOLDER
 
 
+def test_refuses_to_run_from_a_git_worktree(harness: _Harness) -> None:
+    # `railway up` fails with "Indexing... prefix not found" when .git is a
+    # worktree pointer file, which is where most agent sessions run.
+    worktree = harness.repo.parent / "worktree"
+    _git(harness.repo, "worktree", "add", "-q", str(worktree), "-b", "deploy-from-worktree")
+    harness.health.sha = harness.head()
+
+    result = harness.run(cwd=worktree)
+
+    assert result.returncode != 0
+    assert "git worktree" in result.stderr
+    assert harness.calls() == []
+    assert (worktree / "build-sha.txt").read_text(encoding="utf-8") == _PLACEHOLDER
+
+
 def test_refuses_a_head_that_is_not_on_origin_main(harness: _Harness) -> None:
     _commit_unpushed_change(harness)
 
@@ -246,13 +261,15 @@ def test_stamps_head_sha_for_the_upload_and_restores_the_placeholder(harness: _H
     head = harness.head()
     harness.health.sha = head
 
-    result = harness.run()
+    result = harness.run(RAILWAY_PROJECT_ID="proj-from-env")
 
     assert result.returncode == 0, result.stderr
     (up,) = harness.calls()
     assert up == [
         "up",
         "--ci",
+        "--project",
+        "proj-from-env",
         "--service",
         "svc-from-env",
         "--environment",
@@ -267,6 +284,7 @@ def test_stamps_head_sha_for_the_upload_and_restores_the_placeholder(harness: _H
     output = result.stdout + result.stderr
     assert "fake-token-must-not-be-printed" not in output
     assert "svc-from-env" not in output and "env-from-env" not in output
+    assert "proj-from-env" not in output
 
 
 def test_reads_service_and_environment_from_railway_status_when_unset(harness: _Harness) -> None:
@@ -278,7 +296,37 @@ def test_reads_service_and_environment_from_railway_status_when_unset(harness: _
     status, up = harness.calls()
     assert status == ["status"]
     assert up[:6] == ["up", "--ci", "--service", "svc-from-status", "--environment", "env-from-status"]
+    assert "--project" not in up
     assert "svc-from-status" not in result.stdout + result.stderr
+
+
+def test_requires_backend_url_when_the_environment_is_chosen_by_hand(harness: _Harness) -> None:
+    # RAILWAY_ENVIRONMENT_ID may point at staging; the production default URL
+    # would then verify the wrong deployment and could pass by accident.
+    harness.health.sha = harness.head()
+
+    result = harness.run(BACKEND_URL=None)
+
+    assert result.returncode != 0
+    assert "BACKEND_URL is unset" in result.stderr
+    assert harness.calls() == []
+    assert harness.stamp_file() == _PLACEHOLDER
+
+
+def test_refuses_a_non_production_linked_environment_without_backend_url(harness: _Harness) -> None:
+    harness.health.sha = harness.head()
+
+    result = harness.run(
+        RAILWAY_SERVICE_ID=None,
+        RAILWAY_ENVIRONMENT_ID=None,
+        BACKEND_URL=None,
+        FAKE_RAILWAY_ENV_NAME="staging",
+    )
+
+    assert result.returncode != 0
+    assert "'staging', not production" in result.stderr
+    assert harness.calls() == [["status"]]
+    assert harness.stamp_file() == _PLACEHOLDER
 
 
 def test_fails_when_health_never_reports_the_shipped_sha(harness: _Harness) -> None:
