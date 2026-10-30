@@ -235,7 +235,7 @@ class IngestEvent(BaseModel):
             strict = os.getenv("STRICT_GLN_VALIDATION", "true").lower() == "true"
             if strict:
                 raise ValueError(f"Invalid GLN: {error_msg}")
-            _gln_logger.warning("invalid_gln value=%s error=%s (strict mode disabled)", v, error_msg)
+            _gln_logger.warning("invalid_gln accepted_as_is=true (strict mode disabled)")
             return clean if len(clean) == 13 else v
         return clean
 
@@ -255,9 +255,7 @@ class IngestEvent(BaseModel):
             import logging as _logging
 
             _logging.getLogger("uom-validation").warning(
-                "unknown_unit value=%s accepted_as_is=true valid=%s",
-                v,
-                ",".join(sorted(VALID_UNITS_OF_MEASURE)),
+                "unknown_unit accepted_as_is=true",
             )
             # Accept it — KDE completeness checks will flag it to the user
             return normalized
@@ -332,6 +330,38 @@ class IngestResponse(BaseModel):
             "fsma.ingestion_runs id when the upload was retained as an ingestion run (file uploads): "
             "the receipt that ties every accepted event back to the verbatim source file and its SHA-256."
         ),
+    )
+
+
+class CsvRowDispositionEntry(BaseModel):
+    """One accounted-for CSV input row or header/field decision (SEL-549).
+
+    Every physical data row the partner file presented must appear here as
+    accepted, rejected, flagged, or skipped — never silently dropped.
+    ``guessed_value`` is omitted on purpose: partner cell values must not
+    leave the ingest path via logs or API responses.
+    """
+
+    row_number: int = Field(
+        ...,
+        description="CSV line number (header is 1; data starts at 2). 0 means a file-level header decision.",
+    )
+    disposition: str = Field(
+        ...,
+        description="accepted | rejected | flagged | skipped",
+    )
+    reason: str = Field(..., description="Machine-readable reason code for this decision.")
+    field: Optional[str] = Field(
+        default=None,
+        description="Column or field name involved, when the decision is field-scoped.",
+    )
+    detail: Optional[str] = Field(
+        default=None,
+        description="Human-readable detail. Never includes cell values or secrets.",
+    )
+    guessed_as: Optional[str] = Field(
+        default=None,
+        description="Canonical field a partner column was mapped/guessed into, when applicable.",
     )
 
 
@@ -437,6 +467,21 @@ class CsvIngestResponse(IngestResponse):
     cte_type_suggestion: Optional[CteTypeSuggestionResult] = Field(
         default=None,
         description="Jev's suggested CTE for a file that declares none; null when not asked.",
+    )
+
+    # SEL-549: every input row accounted for. Defaults keep cached idempotent
+    # bodies valid against the schema after this ships.
+    row_disposition_log: List[CsvRowDispositionEntry] = Field(
+        default_factory=list,
+        description="Per-row (and file-level) accept/reject/flag/skip decisions; never silent drops.",
+    )
+    missing_columns: List[str] = Field(
+        default_factory=list,
+        description="Required partner columns that were absent (canonical names); empty when the header was usable.",
+    )
+    unrecognized_columns: List[str] = Field(
+        default_factory=list,
+        description="Partner columns the parser does not recognise (may still pass through into KDEs).",
     )
 
 

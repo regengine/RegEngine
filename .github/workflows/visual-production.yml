@@ -53,6 +53,7 @@ jobs:
         if: always()
         with:
           name: visual-report-production
+          retention-days: 7
           path: |
             frontend/playwright-visual-report
             frontend/test-results-visual

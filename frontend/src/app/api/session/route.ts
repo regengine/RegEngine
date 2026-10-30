@@ -259,19 +259,65 @@ function parseAuthMeResponse(payload: unknown): AuthMeResponse | null {
     };
 }
 
-async function getOpaqueSessionInfo(request: NextRequest): Promise<{
+type OpaqueSessionSuccess = {
     tenant_id: string | null;
     auth_method: AuthMethod;
     user: SessionUser;
-} | null> {
+};
+
+type OpaqueSessionCheck =
+    | { outcome: 'authenticated'; session: OpaqueSessionSuccess }
+    | { outcome: 'unauthenticated' }
+    | { outcome: 'unknown' }
+    | { outcome: 'none' };
+
+const OPAQUE_AUTH_ME_PER_TARGET_TIMEOUT_MS = 5000;
+const OPAQUE_AUTH_ME_OVERALL_TIMEOUT_MS = 8000;
+
+function combineAbortSignals(signals: Array<AbortSignal | undefined | null>): AbortSignal {
+    const usable = signals.filter((signal): signal is AbortSignal => signal instanceof AbortSignal);
+    if (typeof AbortSignal.any === 'function') {
+        return AbortSignal.any(usable);
+    }
+    // Older runtimes without AbortSignal.any: wire the follower manually.
+    const controller = new AbortController();
+    for (const signal of usable) {
+        if (signal.aborted) {
+            controller.abort(signal.reason);
+            break;
+        }
+        signal.addEventListener('abort', () => controller.abort(signal.reason), { once: true });
+    }
+    return controller.signal;
+}
+
+async function getOpaqueSessionInfo(request: NextRequest): Promise<OpaqueSessionCheck> {
     const sessionToken = request.cookies.get(AUTH_SESSION_COOKIE)?.value;
-    if (!isUsableCredential(sessionToken)) return null;
+    if (!isUsableCredential(sessionToken)) return { outcome: 'none' };
 
     const cookieHeader = `${AUTH_SESSION_COOKIE}=${sessionToken}`;
 
+    // One overall deadline for the WHOLE fallback loop: per-target timeouts
+    // alone serialize into N x 5s when every admin target is slow or cold,
+    // holding GET /api/session (and the dashboard shell skeleton on /ingest
+    // and /dashboard/integrations) past the client's 10s abort. Firing the
+    // overall deadline falls through to the existing 'unknown' result below.
+    const overallDeadline = AbortSignal.timeout(OPAQUE_AUTH_ME_OVERALL_TIMEOUT_MS);
+
     for (const target of getAdminTargets()) {
+        if (overallDeadline.aborted) {
+            break;
+        }
         const baseUrl = target.replace(/\/+$/, '');
         try {
+            // Bound each target: a slow or cold admin backend previously held
+            // GET /api/session indefinitely. Fail fast per target AND under
+            // the overall lookup deadline; a client disconnect aborts too.
+            const signal = combineAbortSignals([
+                request.signal,
+                overallDeadline,
+                AbortSignal.timeout(OPAQUE_AUTH_ME_PER_TARGET_TIMEOUT_MS),
+            ]);
             const response = await fetch(`${baseUrl}/auth/me`, {
                 method: 'GET',
                 headers: {
@@ -280,6 +326,7 @@ async function getOpaqueSessionInfo(request: NextRequest): Promise<{
                 },
                 cache: 'no-store',
                 redirect: 'manual',
+                signal,
             });
 
             if (response.status >= 300 && response.status < 400) {
@@ -288,8 +335,10 @@ async function getOpaqueSessionInfo(request: NextRequest): Promise<{
             if (shouldRetryAdminProxyResponse(response, 'auth/me')) {
                 continue;
             }
+            // Only 401/403 prove the session is dead. Every other failure
+            // (timeout/abort/network/5xx/parse) is indeterminate.
             if (response.status === 401 || response.status === 403) {
-                return null;
+                return { outcome: 'unauthenticated' };
             }
             if (!response.ok) {
                 continue;
@@ -297,32 +346,40 @@ async function getOpaqueSessionInfo(request: NextRequest): Promise<{
 
             const profile = parseAuthMeResponse(await response.json().catch(() => null));
             if (!profile) {
-                return null;
+                continue;
             }
 
             return {
-                // Prefer the real tenant_id; fall back to organization_id only
-                // for backward compatibility during rollout (older backends
-                // that predate the tenant_id field on /auth/me).
-                tenant_id: profile.tenant_id ?? profile.organization_id,
-                auth_method: profile.auth_method,
-                user: {
-                    id: profile.user_id,
-                    email: profile.email,
-                    is_sysadmin: profile.is_sysadmin,
-                    status: 'active',
-                    role_name: profile.role || undefined,
-                    organization_id: profile.organization_id,
+                outcome: 'authenticated',
+                session: {
+                    // Prefer the real tenant_id; fall back to organization_id only
+                    // for backward compatibility during rollout (older backends
+                    // that predate the tenant_id field on /auth/me).
+                    tenant_id: profile.tenant_id ?? profile.organization_id,
                     auth_method: profile.auth_method,
-                    permissions: profile.permissions,
+                    user: {
+                        id: profile.user_id,
+                        email: profile.email,
+                        is_sysadmin: profile.is_sysadmin,
+                        status: 'active',
+                        role_name: profile.role || undefined,
+                        organization_id: profile.organization_id,
+                        auth_method: profile.auth_method,
+                        permissions: profile.permissions,
+                    },
                 },
             };
         } catch {
-            // Try the next configured admin target.
+            // Overall deadline (or client disconnect) fired: stop trying
+            // further targets and fall through to 'unknown'. Any other
+            // failure tries the next configured admin target.
+            if (overallDeadline.aborted || request.signal?.aborted) {
+                break;
+            }
         }
     }
 
-    return null;
+    return { outcome: 'unknown' };
 }
 
 export async function GET(request: NextRequest) {
@@ -340,8 +397,42 @@ export async function GET(request: NextRequest) {
         }
     }
 
-    const opaqueSession = access_token ? null : await getOpaqueSessionInfo(request);
-    const supabaseSession = access_token || opaqueSession ? null : await getSupabaseSessionInfo(request);
+    const opaqueCheck: OpaqueSessionCheck = access_token
+        ? { outcome: 'none' }
+        : await getOpaqueSessionInfo(request);
+    const opaqueSession = opaqueCheck.outcome === 'authenticated' ? opaqueCheck.session : null;
+    const supabaseSession =
+        access_token || opaqueSession ? null : await getSupabaseSessionInfo(request);
+
+    // Indeterminate: the opaque cookie exists but /auth/me could not prove it
+    // dead (401/403) or alive (200 + valid profile) — timeout, abort, network
+    // error, or any other non-OK status on every admin target. Do NOT report
+    // authenticated:false; the client must keep its stored profile.
+    if (opaqueCheck.outcome === 'unknown' && !access_token && !supabaseSession) {
+        const unknownResponse = NextResponse.json(
+            {
+                authenticated: null,
+                status: 'unknown',
+                has_api_key: !!api_key,
+                has_credentials: null,
+                tenant_id: tenant_id || null,
+                auth_method: null,
+                user: user || null,
+            },
+            { status: 503 },
+        );
+        if (!request.cookies.get(CSRF_COOKIE)?.value || !request.cookies.get(CSRF_SIG_COOKIE)?.value) {
+            const csrfToken = generateCsrfToken();
+            const csrfSig = await signCsrfToken(csrfToken);
+            unknownResponse.cookies.set(CSRF_COOKIE, csrfToken, {
+                ...cookieOptionsFor(true),
+                httpOnly: false,
+            });
+            unknownResponse.cookies.set(CSRF_SIG_COOKIE, csrfSig, cookieOptionsFor(true));
+        }
+        return unknownResponse;
+    }
+
     const resolvedTenantId = opaqueSession ? opaqueSession.tenant_id : tenant_id || supabaseSession?.tenant_id || null;
     const resolvedUser = opaqueSession ? opaqueSession.user : user || supabaseSession?.user || null;
     const resolvedAuthMethod = opaqueSession?.auth_method || null;

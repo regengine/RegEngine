@@ -17,7 +17,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from threading import BoundedSemaphore
 
-os.environ.setdefault("USER_AGENT", "RegEngine/1.0 (+https://regengine.com)")
+os.environ.setdefault("USER_AGENT", "RegEngine/1.0 (+https://regengine.co)")
 
 # ── Path bootstrap ───────────────────────────────────────────────
 # Ensure services/ and services/shared are importable
@@ -1064,8 +1064,12 @@ def _readiness_checks(request: Request):
     """Run synchronous drivers off the event loop with driver-level bounds.
 
     Postgres is required everywhere. Redis is required in strict deployed
-    runtimes, matching auth and checkout enforcement. Neo4j and background
-    runners remain optional: their failures report degraded with HTTP 200.
+    runtimes, matching auth and checkout enforcement. Essential background
+    units (ingestion worker; embedded scheduler when SCHEDULER_EMBEDDED is
+    on) fail readiness with HTTP 503 so a broken deploy cannot promote
+    (diligence E07). Neo4j and the rate limiter stay non-blocking: they
+    report in the payload but never alone flip the status code. /health
+    remains a separate liveness probe and does not consult these units.
     """
     from fastapi.responses import JSONResponse
 
@@ -1165,14 +1169,16 @@ def _readiness_checks(request: Request):
         except Exception as exc:
             checks["neo4j"] = {"status": "error", "error": type(exc).__name__}
 
-    # --- Background runners (#2518) ---
+    # --- Background runners (#2518 / E07) ---
     # The ingestion worker and embedded scheduler start in the lifespan inside
     # best-effort try/except blocks. Before #2518 a swallowed start failure left
     # app.state.* = None while /readiness stayed green, so stuck ingestion /
     # disabled recall alerting was invisible to deploy health checks. Report
-    # their start outcome here. These are non-fatal (degraded, never 503):
-    # mirror the optional-dependency pattern so a background failure surfaces in
-    # the payload without blocking a deploy.
+    # their start outcome and thread liveness here. Diligence E07 makes the
+    # essential units fail readiness (HTTP 503): the ingestion worker always,
+    # and the embedded scheduler only when SCHEDULER_EMBEDDED enables it.
+    # disabled / not_configured stay non-blocking. Neo4j and rate_limiter
+    # remain informational (never alone 503). /health stays separate.
     state = getattr(request.app, "state", None)
 
     # --- Ingestion worker ---
@@ -1200,18 +1206,20 @@ def _readiness_checks(request: Request):
     elif getattr(state, "embedded_scheduler", None) is None:
         checks["scheduler"] = {"status": "disabled"}
     elif not getattr(state.embedded_scheduler, "thread_alive", True):
-        # #2697: the daemon thread can die after a successful start (init
-        # failure inside the thread) — "started ok" alone must not report
-        # ok forever. Degrades the payload; never 503 (documented contract).
+        # #2697 / E07: the daemon thread can die after a successful start
+        # (init failure inside the thread) — "started ok" alone must not
+        # report ok forever. When the scheduler is essential this fails
+        # readiness (503); otherwise it only degrades the payload.
         checks["scheduler"] = {"status": "error", "error": "embedded scheduler thread is not alive"}
     else:
         checks["scheduler"] = {"status": "ok"}
 
-    # --- Rate-limiter storage (#2711) ---
+    # --- Rate-limiter storage (#2711 / E07) ---
     # slowapi decorators (1/day GDPR export, 10/min proof-verify, …) bind to
     # whatever storage existed at import. README asserts Redis-backed rate
     # limiting; production running on memory:// means every such budget is
-    # per-process (× workers × replicas). Degrades the payload; never 503.
+    # per-process (× workers × replicas). Reported in the payload; never
+    # alone flips readiness to 503 (diligence E07: rate limiter non-blocking).
     try:
         from shared.env import is_production as _is_prod_env
         from shared.rate_limit import slowapi_storage_backend
@@ -1232,14 +1240,21 @@ def _readiness_checks(request: Request):
     # Postgres is required for the consolidated API to serve production traffic.
     # Missing DATABASE_URL must fail readiness so deploy health checks do not
     # route requests to an instance that can only satisfy liveness.
+    # Diligence E07: essential background units also fail readiness so a
+    # release cannot promote while ingestion or (when embedded) scheduled
+    # compliance work is unavailable. Liveness (/health) stays separate.
     from shared.env import requires_strict_auth_runtime
+
+    from server.workers.embedded_scheduler import embedded_scheduler_enabled
 
     pg_ok = checks.get("postgres", {}).get("status") == "ok"
     redis_ok = checks.get("redis", {}).get("status") == "ok"
     redis_required = requires_strict_auth_runtime()
+    worker_essential_error = checks.get("worker", {}).get("status") == "error"
+    scheduler_essential_error = checks.get("scheduler", {}).get("status") == "error" and embedded_scheduler_enabled()
     all_ok = all(c.get("status") != "error" for c in checks.values())
 
-    if not pg_ok or (redis_required and not redis_ok):
+    if not pg_ok or (redis_required and not redis_ok) or worker_essential_error or scheduler_essential_error:
         return JSONResponse(
             status_code=503,
             content={

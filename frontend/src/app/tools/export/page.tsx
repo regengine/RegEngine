@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef } from 'react';
 import { trackToolRunCompleted, trackToolRunStarted } from '@/lib/conversion-events';
+import { usePostHog } from '@/lib/posthog-provider';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FileText, Shield, FileCheck, Upload, Download, CheckCircle2, Loader2 } from 'lucide-react';
 import { FreeToolPageShell } from '@/components/layout/FreeToolPageShell';
@@ -41,7 +42,7 @@ const PACKAGE_PARTS = [
   {
     icon: FileText,
     title: 'FDA Sortable Spreadsheet',
-    body: 'FDA-oriented sortable CSV organized around requested FSMA 204 records. Column mapping should be reviewed against the specific FDA request.',
+    body: 'Headline FDA-oriented sortable CSV organized around requested FSMA 204 records (§1.1455). Column mapping should be reviewed against the specific FDA request.',
   },
   {
     icon: Shield,
@@ -225,6 +226,7 @@ async function generatePackage(records: CteRecord[]): Promise<GeneratedPackage> 
 }
 
 export default function ExportPage() {
+  const posthog = usePostHog();
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [generationStep, setGenerationStep] = useState<string | null>(null);
   const [generatedPackage, setGeneratedPackage] = useState<GeneratedPackage | null>(null);
@@ -236,6 +238,7 @@ export default function ExportPage() {
       if (!file) return;
 
       trackToolRunStarted('export');
+      posthog?.capture('tool_started', { tool_id: 'export' });
       setIsGenerating(true);
       setGenerationStep(null);
 
@@ -282,7 +285,7 @@ export default function ExportPage() {
 
       setIsGenerating(false);
     },
-    []
+    [posthog]
   );
 
   const downloadPackage = useCallback((): void => {
@@ -317,7 +320,7 @@ export default function ExportPage() {
     <EmailGate toolName="export">
       <FreeToolPageShell
         title="FDA Export Package Generator"
-        subtitle="Generate a verifiable FSMA 204 records package to support 21 CFR 1.1455 record-availability workflows."
+        subtitle="Generate a verifiable FSMA 204 sortable spreadsheet package to support 21 CFR 1.1455 record-availability workflows."
         relatedToolIds={['drill-simulator', 'cte-mapper', 'kde-checker']}
       >
         {/* Section 1: Package Overview */}

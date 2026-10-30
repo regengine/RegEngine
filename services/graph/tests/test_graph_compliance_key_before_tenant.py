@@ -51,17 +51,17 @@ BYPASS_TOKEN = "graph-key-before-tenant-test"  # noqa: S105 — test-only env by
 
 
 @pytest.fixture(autouse=True)
-def _clean_slowapi_bucket():
-    """Keep this file's GETs out of the shared 10/min export quota."""
+def _rate_limiter_off(monkeypatch):
+    """Keep this file's GETs out of the shared 10/min export quota.
+
+    The limiter's storage follows ``REDIS_URL`` when it is set, so resetting
+    ``limiter._storage`` from a test would flush rate-limit keys in whatever
+    Redis the environment points at. Disabling the limiter for the duration
+    of each test touches nothing shared.
+    """
     from shared.rate_limit import limiter
 
-    reset = getattr(limiter._storage, "reset", None)
-    if callable(reset):
-        reset()
-    yield
-    reset = getattr(limiter._storage, "reset", None)
-    if callable(reset):
-        reset()
+    monkeypatch.setattr(limiter, "enabled", False)
 
 
 @pytest.fixture
@@ -126,6 +126,23 @@ def test_missing_key_fails_on_the_key_not_the_tenant(_env_bypass):
     assert "Tenant ID not found" not in resp.text
 
 
+def test_invalid_key_fails_on_the_key_not_the_tenant(_env_bypass):
+    """An unknown key is rejected by the key check; the handler is never reached."""
+    client = TestClient(_bare_app(), raise_server_exceptions=False)
+    with ExitStack() as stack:
+        stack.enter_context(patch("services.graph.app.routers.fsma.compliance.Neo4jClient", _neo4j_stub()))
+        query = _patched_range_query(stack, events=[])
+        resp = client.get(
+            "/v1/fsma/compliance/export/fda-request",
+            params={"start_date": "2026-01-01", "end_date": "2026-12-31"},
+            headers={"X-RegEngine-API-Key": "not-" + BYPASS_TOKEN},
+        )
+    assert resp.status_code == 401
+    assert "Invalid API key" in resp.text
+    assert "Tenant ID not found" not in resp.text
+    assert query.await_count == 0
+
+
 def _resolution_order(route: APIRoute) -> list:
     """Dependency callables in the order FastAPI resolves them (depth-first)."""
     order: list = []
@@ -181,19 +198,24 @@ def test_every_graph_route_checks_key_before_tenant():
     offenders: list[str] = []
     for route in routes:
         order = _resolution_order(route)
-        if require_api_key not in order or get_current_tenant_id not in order:
+        if get_current_tenant_id not in order:
             continue  # open route (health), metrics-key route, or key-only route
         checked.append(route.path)
-        if order.index(require_api_key) > order.index(get_current_tenant_id):
+        if require_api_key not in order:
+            # Graph routes are API-key only: a tenant-bound route with no key
+            # dependency has no principal to resolve the tenant from.
+            offenders.append(f"{sorted(route.methods)} {route.path}: no API-key dependency")
+        elif order.index(require_api_key) > order.index(get_current_tenant_id):
             offenders.append(f"{sorted(route.methods)} {route.path}")
 
     # The walk must reach the sub-routers, not just the operational routes in routes.py.
     for expected in (
         "/api/v1/fsma/compliance/export/fda-request",
         "/api/v1/fsma/recall/history",
+        "/api/v1/fsma/traceability/search/events",
         "/api/v1/labels/batch/init",
         "/api/v1/provisions/by-request",
     ):
         assert expected in checked, f"{expected} not reached from routes.router"
 
-    assert not offenders, "tenant resolution runs before API-key validation on:\n  " + "\n  ".join(offenders)
+    assert not offenders, "tenant-bound routes without a leading API-key check:\n  " + "\n  ".join(offenders)
