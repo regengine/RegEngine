@@ -24,7 +24,7 @@ below is tracked there yet.
 
 | # | Item | Category | Impact | Risk | Effort | Priority | Status |
 |--:|---|---|:-:|:-:|:-:|--:|---|
-| 1 | Three schema-change channels and a stale production `alembic_version` row | Infrastructure | 4 | 5 | 3 | **27** | partial, PR #3699 (ADR, inventory, precheck, runbook; CI guard open) |
+| 1 | Three schema-change channels and a stale production `alembic_version` row | Infrastructure | 4 | 5 | 3 | **27** | delivered in PR #3699 (ADR, inventory, precheck, runbook, CI guard); Appendix B decisions open |
 | 2 | Six `app` packages collide; bare `from app.` imports; 347-line `sys.path` conftest | Architecture | 4 | 4 | 3 | **24** | open |
 | 3 | Lint and type gates are near-empty (ruff selects 4 rule groups, mypy not a gate) | Code | 3 | 3 | 2 | **24** | open |
 | 4 | 33 CI workflows, four of them over 850 lines, plus a workflow that exists to re-run flaky gates | Infrastructure | 4 | 3 | 3 | **21** | open |

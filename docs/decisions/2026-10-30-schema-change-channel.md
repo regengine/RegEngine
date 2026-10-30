@@ -38,11 +38,11 @@ this date starts with:
 
 ```sql
 -- alembic-revision: <12-hex revision id>
--- rendered-from: alembic/versions/<file>.py (<upgrade|downgrade>)
+-- rendered-from: alembic/versions/<file>.py (<upgrade|downgrade|precheck>)
 ```
 
-A CI guard (scripts/check_schema_channels.py, WI-01 requirement 5, not yet
-written) fails a PR that adds or changes a file in those directories without
+A CI guard (`scripts/check_schema_channels.py`, run by the backend CI
+"Alembic revision ID guard" job) fails a PR that adds or changes a file in those directories without
 the header or with a revision id that does not exist.
 
 ## Context
@@ -151,19 +151,19 @@ decision in Appendix B applies.
 | `20261016073057_b_drop_duplicate_indexes.sql` | none | Decision B4. Drops `fsma.ux_cte_events_tenant_idempotency_key`, which v072 creates; the chain will recreate it unless back-ported. |
 | `20261016073107_c_rls_initplan_select_wrap.sql` | none | Decision B4. Rewrites 73 policy expressions that v128/v134 later replace; order matters. |
 | `20261016073122_d_index_unindexed_foreign_keys.sql` | none | Decision B4. |
-| `20261016234347_v128_fsma_rls_policy_repair.sql` | v128 (`a5e7c9b2d341`) | Render. Add header. |
-| `20261016234352_v128_consolidate_permissive_policies.sql` | v128 (`93eb33f262a1`) | Render. Add header. |
+| `20261016234347_v128_fsma_rls_policy_repair.sql` | v128 (`a5e7c9b2d341`) | Render. Header added 2026-10-30. |
+| `20261016234352_v128_consolidate_permissive_policies.sql` | v128 (`93eb33f262a1`) | Render. Header added 2026-10-30. |
 | `20261017021229_e_wrap_get_tenant_context.sql` | none | Decision B4. 86 policies rewritten; v134 assumes the v096 `CASE` form. |
 | `20261017021244_f_tenant_id_indexes.sql` | partial: v055 | Decision B4. |
 | `20261020072328_assessment_lead_abuse_guard.sql` | none | Auxiliary. Decision B1. |
-| `20261020085506_sel314_ftl_read_only_drop_sysadmin_overlap.sql` | v134 (`1faec7148e78`) | Render. Add header. |
-| `20261020094817_sel314_drop_fallback_tenant_policies.sql` | v134 | Render. Add header. |
+| `20261020085506_sel314_ftl_read_only_drop_sysadmin_overlap.sql` | v134 (`1faec7148e78`) | Render. Header added 2026-10-30. |
+| `20261020094817_sel314_drop_fallback_tenant_policies.sql` | v134 | Render. Header added 2026-10-30. |
 | `20261022101703_lock_down_submit_assessment_lead.sql` | none | Auxiliary. Decision B1. |
 | `20261022103548_enable_rls_internal_tables.sql` | partial: v056 / v111 | Decision B3. |
 | `20261023050348_sel401_notify_new_lead_secret.sql` | none | Auxiliary. Decision B1. |
-| `20261025033803_data_gap_time_to_fix.sql` | v135 (`41f96588d87c`) | Render. Add header. |
-| `20261025090000_supplier_agreed_sending_hours.sql` | v136 (`b005ddbf1dba`) | Render. Add header. |
-| `20261025090100_epcis_document_receipts.sql` | v137 (`a3f7ce361b0e`) | Render. Add header. |
+| `20261025033803_data_gap_time_to_fix.sql` | v135 (`41f96588d87c`) | Render. Header added 2026-10-30. |
+| `20261025090000_supplier_agreed_sending_hours.sql` | v136 (`b005ddbf1dba`) | Render. Header added 2026-10-30. |
+| `20261025090100_epcis_document_receipts.sql` | v137 (`a3f7ce361b0e`) | Render. Header added 2026-10-30. |
 | `20261025100000_fix_obligation_1455_regulation_refs.sql` | none | Decision B5: data correction; needs a data revision or a seed update. |
 | `20261025100100_waitlist_leads_drop_authenticated_read.sql` | none | Auxiliary. Decision B1. |
 | `20261025100200_task_queue_fail_closed_tenant_policy.sql` | none; **conflicts** with v090 `a128f7f95db8` and v096 `c3a51e2f7b90`, which define `tenant_isolation_tasks` differently | Decision B6: back-port as v138 so the chain's last word matches production. |
@@ -174,10 +174,10 @@ decision in Appendix B applies.
 
 | File | Counterpart | Disposition |
 |---|---|---|
-| `PRECHECK_v128_fsma_rls.sql`, `apply_v128_fsma_rls.sql`, `rollback_v128_fsma_rls.sql` | v128 (`a5e7c9b2d341`) | Render. Add header. |
-| `PRECHECK_v128_policy_merges.sql`, `apply_v128_policy_merges.sql`, `rollback_v128_policy_merges.sql` | v128 (`93eb33f262a1`) | Render. Add header. |
-| `PRECHECK_v131_tool_leads_utm.sql`, `apply_v131_tool_leads_utm.sql`, `rollback_v131_tool_leads_utm.sql` | v131 (`0a329588b824`) | Render. Add header. |
-| `apply_sel314_rls_dedupe.sql`, `rollback_sel314_rls_dedupe.sql` | v134 (`1faec7148e78`) | Render. Add header. |
+| `PRECHECK_v128_fsma_rls.sql`, `apply_v128_fsma_rls.sql`, `rollback_v128_fsma_rls.sql` | v128 (`a5e7c9b2d341`) | Render. Header added 2026-10-30. |
+| `PRECHECK_v128_policy_merges.sql`, `apply_v128_policy_merges.sql`, `rollback_v128_policy_merges.sql` | v128 (`93eb33f262a1`) | Render. Header added 2026-10-30. |
+| `PRECHECK_v131_tool_leads_utm.sql`, `apply_v131_tool_leads_utm.sql`, `rollback_v131_tool_leads_utm.sql` | v131 (`0a329588b824`) | Render. Header added 2026-10-30. |
+| `apply_sel314_rls_dedupe.sql`, `rollback_sel314_rls_dedupe.sql` | v134 (`1faec7148e78`) | Render. Header added 2026-10-30. |
 | `rollback_sel399_rls_split_api_keys_sessions_users.sql` | none (pairs with the Supabase file above) | Decision B7. |
 | `PRECHECK_alembic_version_reconcile.sql` | all revisions after v079 | Read-only; owned by the reconcile runbook. |
 

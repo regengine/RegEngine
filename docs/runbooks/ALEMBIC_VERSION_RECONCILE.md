@@ -148,6 +148,6 @@ before and after outputs in `DEVOPS_NOTES.md` with the date.
 The signature table inside the precheck names one object per revision.
 When a revision is added to `alembic/versions/`, add one line to the
 `VALUES` list in `sql/prod-apply/PRECHECK_alembic_version_reconcile.sql`
-in the same PR. scripts/check_schema_channels.py (WI-01 requirement 5)
-is the intended guard for that; until it exists, the PR template's
-documentation checkbox covers it.
+in the same PR. `scripts/check_schema_channels.py` guards the two channel directories but
+not this file's table; adding the line is part of the PR checklist for a new
+revision.

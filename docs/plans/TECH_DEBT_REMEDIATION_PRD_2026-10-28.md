@@ -166,8 +166,9 @@ PR can show before and after.
 (`docs/decisions/2026-10-30-schema-change-channel.md`,
 `sql/prod-apply/PRECHECK_alembic_version_reconcile.sql`,
 `docs/runbooks/ALEMBIC_VERSION_RECONCILE.md`, `docs/MIGRATION_CONSOLIDATION.md`).
-Requirement 5 (the CI guard script and its tests) is open and belongs in a
-code PR. The decisions-needed list is Appendix B of the ADR.
+Requirement 5 (`scripts/check_schema_channels.py`, its tests, and the step in
+`backend-ci.yml`) landed in the same PR on 2026-10-30, so WI-01 is complete
+except for the decisions in Appendix B of the ADR.
 
 **Problem.** Schema changes reach production three ways: the Alembic chain
 (`alembic/versions/`, 105 revisions, head v137), `supabase/migrations/`
