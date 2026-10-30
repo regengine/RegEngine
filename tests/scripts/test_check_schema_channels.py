@@ -50,7 +50,8 @@ _GOOD_HEADER = f"-- alembic-revision: {_REV}\n-- rendered-from: alembic/versions
 
 def test_headered_render_passes(tmp_path):
     repo = _fake_repo(tmp_path)
-    _write(repo, "sql/prod-apply/apply_v131_tool_leads_utm.sql", _GOOD_HEADER + "ALTER TABLE public.tool_leads ADD COLUMN utm_source VARCHAR(100);\n")
+    body = _GOOD_HEADER + "ALTER TABLE public.tool_leads ADD COLUMN utm_source VARCHAR(100);\n"
+    _write(repo, "sql/prod-apply/apply_v131_tool_leads_utm.sql", body)
     problems, scanned = _mod.scan(repo)
     assert scanned == 1
     assert problems == []
@@ -70,7 +71,8 @@ def test_unknown_revision_fails(tmp_path):
     _write(
         repo,
         "sql/prod-apply/apply_mystery.sql",
-        "-- alembic-revision: ffffffffffff\n-- rendered-from: alembic/versions/" + _REV_FILE + " (upgrade)\nSELECT 1;\n",
+        "-- alembic-revision: ffffffffffff\n"
+        + f"-- rendered-from: alembic/versions/{_REV_FILE} (upgrade)\nSELECT 1;\n",
     )
     problems, _ = _mod.scan(repo)
     assert any("does not exist in alembic/versions" in p for p in problems)
