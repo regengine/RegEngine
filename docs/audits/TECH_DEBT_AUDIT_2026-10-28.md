@@ -31,14 +31,14 @@ below is tracked there yet.
 | 5 | Legacy Kafka backbone still in tree and in the production image | Architecture | 2 | 3 | 2 | **20** | open |
 | 6 | Production image carries test and optional AI dependencies | Infrastructure | 2 | 3 | 2 | **20** | open |
 | 7 | Orientation docs disagree with the tree; duplicate doc directories; one-off reports at repo root | Documentation | 3 | 2 | 2 | **20** | open |
-| 8 | 31 of 87 top-level scripts are referenced by nothing | Code | 2 | 2 | 1 | **20** | open |
+| 8 | 31 of 87 top-level scripts are referenced by nothing | Code | 2 | 2 | 1 | **20** | delivered in PR #3699 (registry `scripts/README.md`, guard `scripts/check_scripts_registered.py` in backend-ci); 16 archive candidates await Christopher's approval by name |
 | 9 | Retired six-service topology still has entrypoints, k8s manifests, a PR-time CI job, and legacy runbooks | Infrastructure | 2 | 2 | 1 | **20** | open |
 | 10 | DB-dependent tests skip vacuously without a migrated Postgres | Test | 3 | 3 | 3 | **18** | open |
 | 11 | Frontend API access split three ways; 8 hand-rolled proxy routes | Code | 3 | 2 | 3 | **15** | open |
 | 12 | Legacy `cte_events` dual-write still live, with 12 non-legacy readers | Architecture | 3 | 4 | 4 | **14** | open |
-| 13 | Blocked major upgrades and Node version drift across CI | Dependency | 2 | 2 | 3 | **12** | open |
+| 13 | Blocked major upgrades and Node version drift across CI | Dependency | 2 | 2 | 3 | **12** | delivered in PR #3699 (copy-gate reads `.nvmrc`; jsdom/jest-dom Dependabot ignores lifted) |
 | 14 | 25 source modules over 1,000 lines (20 under `services/` and `server/`) | Code | 3 | 2 | 4 | **10** | open |
-| 15 | `graph_update` task type declared, never enqueued, never handled | Code | 1 | 1 | 1 | **10** | open |
+| 15 | `graph_update` task type declared, never enqueued, never handled | Code | 1 | 1 | 1 | **10** | delivered in PR #3699 |
 | 16 | Frontend type looseness: 192 `any`, 14 eslint suppressions | Code | 1 | 1 | 2 | **8** | open |
 
 What is **not** debt here, and should stay as is:

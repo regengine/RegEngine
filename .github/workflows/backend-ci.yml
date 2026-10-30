@@ -363,6 +363,10 @@ jobs:
             --extend-exclude __pycache__,.venv,venv,build,dist,services \
             --statistics
 
+      # Every top-level entry in scripts/ has a row in scripts/README.md (WI-08).
+      - name: Guard the scripts/ registry
+        run: python scripts/check_scripts_registered.py
+
   # ── RLS fallback-UUID guard (hard gate) ──────────────────
   # Scans migrations for the fail-open RLS pattern that #1091 fixed.
   # Any new migration that reintroduces `COALESCE(..., <fallback-UUID>)`
