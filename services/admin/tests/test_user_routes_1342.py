@@ -99,7 +99,7 @@ class TestListUsersHappyPath:
         db = MagicMock()
         call_count = [0]
 
-        def _execute_side_effect(stmt):
+        def _execute_side_effect(*args, **kwargs):
             call_count[0] += 1
             result = MagicMock()
             if call_count[0] == 1:
@@ -140,7 +140,7 @@ class TestListUsersHappyPath:
         db = MagicMock()
         call_count = [0]
 
-        def _execute_side_effect(stmt):
+        def _execute_side_effect(*args, **kwargs):
             call_count[0] += 1
             result = MagicMock()
             if call_count[0] == 1:
@@ -170,7 +170,7 @@ class TestListUsersHappyPath:
         db = MagicMock()
         call_count = [0]
 
-        def _execute_side_effect(stmt):
+        def _execute_side_effect(*args, **kwargs):
             call_count[0] += 1
             result = MagicMock()
             if call_count[0] == 1:
@@ -211,7 +211,7 @@ class TestListRolesHappyPath:
         db = MagicMock()
         call_count = [0]
 
-        def _execute_side_effect(stmt):
+        def _execute_side_effect(*args, **kwargs):
             call_count[0] += 1
             result = MagicMock()
             if call_count[0] == 1:
@@ -244,7 +244,7 @@ class TestListRolesHappyPath:
         db = MagicMock()
         call_count = [0]
 
-        def _execute_side_effect(stmt):
+        def _execute_side_effect(*args, **kwargs):
             call_count[0] += 1
             result = MagicMock()
             if call_count[0] == 1:
@@ -272,7 +272,7 @@ class TestListRolesHappyPath:
         db = MagicMock()
         call_count = [0]
 
-        def _execute_side_effect(stmt):
+        def _execute_side_effect(*args, **kwargs):
             call_count[0] += 1
             result = MagicMock()
             if call_count[0] == 1:
