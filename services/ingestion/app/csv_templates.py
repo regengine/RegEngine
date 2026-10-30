@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import csv
 import dataclasses
+import difflib
 import io
 import itertools
 import logging
@@ -326,11 +327,14 @@ _DATE_FIELDS = [
 _CTE_TYPE_COLUMNS = ["cte_type", "event_type", "type", "cte"]
 
 # Data rows parse_csv_rows reads: the first MAX_CSV_ROWS rows csv.DictReader
-# yields after the header. DictReader skips completely blank lines, so they
-# do not count; comment rows and all-empty rows do. The next row is an error
-# and parsing stops; rows past it are counted (not stored) and reported as
-# skipped so the caller knows exactly what was dropped.
-# _file_cte_type_for_jev scans exactly these rows.
+# yields after the header. ``csv.DictReader`` omits completely blank physical
+# lines; parse_csv_rows recovers them via ``_physical_data_line_layout`` and
+# logs each as skipped/``blank_physical_line`` so partners never see a silent
+# drop (SEL-549 / first-file dry run). Comment rows and all-empty comma rows
+# are still yielded by DictReader and logged as ``comment_row`` / ``blank_row``.
+# The next row past the cap is an error and parsing stops; rows past it are
+# counted (not stored) and reported as skipped so the caller knows exactly
+# what was dropped. ``_file_cte_type_for_jev`` scans exactly these rows.
 MAX_CSV_ROWS = 500
 
 # Fallback chains: when several columns can supply the same field, the first
@@ -586,6 +590,58 @@ def _normalize_location(raw: str) -> str:
 # ── Flexible date parsing ────────────────────────────────────────────────────
 
 
+
+# ── SEL-549 clearer reject reasons (delimiter / TLC / ambiguous date) ────────
+
+_AMBIGUOUS_NUMERIC_DATE = re.compile(
+    r"^\s*(\d{1,2})([/-])(\d{1,2})\2(\d{2}|\d{4})\s*$"
+)
+
+
+def _is_ambiguous_numeric_date(raw: str) -> bool:
+    """True when a numeric date could be MDY or DMY (both parts ≤ 12).
+
+    ISO ``YYYY-MM-DD`` and dates with a day > 12 are unambiguous. Equal
+    month/day values (``05-05-2026``) resolve the same either way, so they
+    are not flagged.
+    """
+    match = _AMBIGUOUS_NUMERIC_DATE.match(raw or "")
+    if not match:
+        return False
+    first, _sep, second, _year = match.groups()
+    a, b = int(first), int(second)
+    if a < 1 or b < 1 or a > 31 or b > 31:
+        return False
+    return a <= 12 and b <= 12 and a != b
+
+
+def _sniff_non_comma_delimiter(text: str) -> Optional[str]:
+    """Return ``';``, ``\\t``, or ``|`` when that separator clearly dominates the header line.
+
+    Partner CSV ingest is comma-only (``csv.DictReader`` default). Spreadsheet
+    exports that use semicolon, tab, or pipe otherwise collapse into one
+    column and surface as opaque ``missing_required_columns``.
+    """
+    first: Optional[str] = None
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        first = line
+        break
+    if first is None:
+        return None
+    commas = first.count(",")
+    for sep, label in ((";", ";"), ("\t", "\\t"), ("|", "|")):
+        count = first.count(sep)
+        if count > commas and count >= 1:
+            return sep
+    return None
+
+
+def _delimiter_display(sep: str) -> str:
+    return {";": "semicolon (;)", "\t": "tab", "|": "pipe (|)"}.get(sep, repr(sep))
+
 def _parse_date_flexible(raw: str, event_time: str = "") -> tuple[str | None, str | None]:
     """Parse a date string in *any* common format into an ISO 8601 UTC timestamp.
 
@@ -602,6 +658,14 @@ def _parse_date_flexible(raw: str, event_time: str = "") -> tuple[str | None, st
         return None, "date field was empty"
 
     raw = raw.strip()
+
+    # SEL-549: numeric dates where both parts are ≤ 12 are MDY/DMY-ambiguous.
+    # Refuse them rather than guessing with dateutil (dayfirst=False).
+    if _is_ambiguous_numeric_date(raw):
+        return (
+            None,
+            f"AMBIGUOUS_DATE: '{raw}' could be month-day or day-month; use YYYY-MM-DD",
+        )
 
     # Fast-path: already an ISO timestamp
     try:
@@ -822,19 +886,69 @@ def _unrecognized_partner_columns(
     return unknown
 
 
+def _bounded_edit_distance(a: str, b: str, limit: int = 2) -> int:
+    """Levenshtein distance, capped — returns limit+1 once known to exceed ``limit``."""
+    if a == b:
+        return 0
+    if abs(len(a) - len(b)) > limit:
+        return limit + 1
+    # Classic DP; early exit when every cell in a row exceeds limit.
+    prev = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        cur = [i]
+        row_min = i
+        for j, cb in enumerate(b, 1):
+            ins = cur[-1] + 1
+            delete = prev[j] + 1
+            sub = prev[j - 1] + (0 if ca == cb else 1)
+            val = min(ins, delete, sub)
+            cur.append(val)
+            if val < row_min:
+                row_min = val
+        if row_min > limit:
+            return limit + 1
+        prev = cur
+    return prev[-1]
+
+
 def _format_missing_columns_error(
     missing: Sequence[str],
     header: Optional[Sequence[Optional[str]]],
 ) -> str:
-    """Clear, actionable error naming each missing required column and aliases."""
+    """Clear, actionable error naming each missing required column and aliases.
+
+    When a present header is a near miss for a required field, append a
+    closest-match suggestion so misspellings are actionable.
+
+    Near-miss gate (Hermes SEL-549): SequenceMatcher ratio >= 0.85 AND
+    edit distance <= 2. The prior 0.6 cutoff false-matched unrelated present
+    headers (quality→quantity, code→lot_code, uom_code→lot_code).
+    """
     alias_by_canonical = {canonical: aliases for canonical, aliases in _REQUIRED_PARTNER_FIELD_GROUPS}
     alias_by_canonical["cte_type"] = tuple(_CTE_TYPE_COLUMNS)
+    present_names = list(_normalized_header_names(header))
     parts: list[str] = []
     for name in missing:
         aliases = alias_by_canonical.get(name, (name,))
         alias_list = ", ".join(aliases)
-        parts.append(f"{name} (accepted column names: {alias_list})")
-    present = ", ".join(_normalized_header_names(header)) or "(none)"
+        suggestion = ""
+        if present_names:
+            # Score present headers against every accepted alias; keep best.
+            best: tuple[float, str, str] | None = None
+            for present in present_names:
+                for alias in aliases:
+                    ratio = difflib.SequenceMatcher(None, present, alias).ratio()
+                    if ratio < 0.85:
+                        continue
+                    if _bounded_edit_distance(present, alias, limit=2) > 2:
+                        continue
+                    if best is None or ratio > best[0]:
+                        best = (ratio, present, alias)
+            if best is not None:
+                _ratio, present_hit, alias_hit = best
+                suggestion = f"; did you mean {present_hit!r} → {alias_hit!r}?"
+        parts.append(f"{name} (accepted column names: {alias_list}){suggestion}")
+    present = ", ".join(present_names) or "(none)"
     return "Missing required columns for partner CSV ingest: " + "; ".join(parts) + f". Present columns: {present}"
 
 
@@ -848,6 +962,63 @@ def _unknown_row_cte_value(row: Mapping[str, Optional[str]]) -> tuple[Optional[s
             return None, None
         return raw, col
     return None, None
+
+
+class _PhysicalDataLineLayout(NamedTuple):
+    """Physical 1-based line numbers for DictReader records vs omitted blanks.
+
+    ``csv.DictReader`` silently drops completely blank lines. ``record_lines[i]``
+    is the physical file line of the i-th yielded data record; ``blank_lines``
+    are the omitted blanks (leading or between data rows) that must still be
+    accounted for as skipped dispositions (SEL-549).
+    """
+
+    header_line: int  # 0 when the file has no non-blank header line
+    record_lines: tuple[int, ...]
+    blank_lines: tuple[int, ...]
+
+
+def _physical_data_line_layout(text: str) -> _PhysicalDataLineLayout:
+    """Map DictReader data records to physical lines; list blank lines it omits."""
+    lines = text.splitlines()
+    if not lines:
+        return _PhysicalDataLineLayout(0, (), ())
+    header_line = 0
+    record_lines: list[int] = []
+    blank_lines: list[int] = []
+    for index, line in enumerate(lines):
+        physical = index + 1
+        if not line.strip():
+            # Leading blanks before the header are also omitted by DictReader,
+            # but partner files put the header on line 1; only blanks after the
+            # header are recovered here so disposition row numbers stay aligned
+            # with physical data lines (SEL-549 first-file dry run).
+            if header_line != 0:
+                blank_lines.append(physical)
+            continue
+        if header_line == 0:
+            header_line = physical
+            continue
+        record_lines.append(physical)
+    return _PhysicalDataLineLayout(header_line, tuple(record_lines), tuple(blank_lines))
+
+
+def _log_blank_physical_lines(
+    row_log: Optional[list[CsvRowDispositionEntry]],
+    blank_lines: Sequence[int],
+) -> None:
+    """Emit skipped/blank_physical_line for each DictReader-omitted blank line."""
+    for physical in blank_lines:
+        _append_row_log(
+            row_log,
+            row_number=physical,
+            disposition="skipped",
+            reason="blank_physical_line",
+            detail=(
+                f"Row {physical}: completely blank physical line was omitted by "
+                "the CSV reader and was not ingested"
+            ),
+        )
 
 
 def _is_data_record(record: Mapping[Optional[str], object]) -> bool:
@@ -998,11 +1169,30 @@ def parse_csv_rows(
 
     Returns ``(events, parse_errors, kde_warnings)``.
     """
-    reader = csv.DictReader(io.StringIO(text))
-
     events: list[IngestEvent] = []
     parse_errors: list[str] = []
     kde_warnings: list[str] = []
+
+    # SEL-549: reject non-comma delimiters with a specific reason before
+    # DictReader collapses the header into a single opaque column.
+    non_comma = _sniff_non_comma_delimiter(text)
+    if non_comma is not None:
+        detail = (
+            f"CSV uses {_delimiter_display(non_comma)} as the field delimiter; "
+            "partner ingest requires comma-separated values. Re-export as CSV (comma) "
+            "or replace the delimiter with commas."
+        )
+        _append_row_log(
+            row_log,
+            row_number=1,
+            disposition="rejected",
+            reason="wrong_delimiter",
+            detail=detail,
+        )
+        return ([], [detail], [])
+
+    reader = csv.DictReader(io.StringIO(text))
+    line_layout = _physical_data_line_layout(text)
 
     # Read the header and every record the loop below can reach before
     # touching any row: a file the csv module cannot read (CR-only line
@@ -1081,6 +1271,11 @@ def parse_csv_rows(
         )
         return ([], [detail], [])
 
+    # SEL-549 / first-file dry run: DictReader-omitted blank physical lines
+    # must still appear in the disposition log (skipped), or partners who pad
+    # CSVs with empty lines see under-counted row totals relative to what they sent.
+    _log_blank_physical_lines(row_log, line_layout.blank_lines)
+
     # SEL-549: fail fast with a clear error naming each missing required column
     # (and the aliases we accept) rather than emitting one opaque per-row error.
     # Only a file with data rows is checked; empty and header-only files keep
@@ -1109,7 +1304,12 @@ def parse_csv_rows(
             )
         # Every physical data row still needs an exclusive outcome so
         # accepted + rejected + skipped equals rows sent (SEL-549).
-        for row_num, record in enumerate(records, start=2):
+        for idx, record in enumerate(records):
+            row_num = (
+                line_layout.record_lines[idx]
+                if idx < len(line_layout.record_lines)
+                else idx + 2
+            )
             if not _is_data_record(record):
                 values = [str(v or "").strip() for k, v in record.items() if k is not None]
                 if values and values[0].startswith("#"):
@@ -1136,15 +1336,24 @@ def parse_csv_rows(
                 reason="missing_required_columns",
                 detail=detail,
             )
-        # Unread rows past the buffer still exist physically; every one must
-        # land in an exclusive bucket so accepted+rejected+skipped equals the
-        # file's data-row count (SEL-549 / Codex review). Overflow rows here
+        # Unread content lines past the buffer still exist physically; every one
+        # must land in an exclusive bucket so accepted+rejected+skipped equals
+        # the file's data-row count (SEL-549 / Codex review). Overflow rows here
         # are rejected with missing_required_columns (not skipped): the whole
-        # file failed the header check.
+        # file failed the header check. Use physical line numbers from the layout.
         if skipped_overflow:
-            base = 1 + len(records)
-            for offset in range(1, skipped_overflow + 1):
-                overflow_row = base + offset
+            overflow_lines = line_layout.record_lines[len(records) : len(records) + skipped_overflow]
+            for overflow_row in overflow_lines:
+                _append_row_log(
+                    row_log,
+                    row_number=overflow_row,
+                    disposition="rejected",
+                    reason="missing_required_columns",
+                    detail=detail,
+                )
+            # If layout was short (malformed / CR-only edge), fall back to synthetic numbers.
+            for offset in range(len(overflow_lines) + 1, skipped_overflow + 1):
+                overflow_row = (line_layout.record_lines[-1] if line_layout.record_lines else 1) + offset
                 _append_row_log(
                     row_log,
                     row_number=overflow_row,
@@ -1153,8 +1362,12 @@ def parse_csv_rows(
                     detail=detail,
                 )
         if overflow_tail_unreadable:
-            base = 1 + len(records) + skipped_overflow
-            tail_row = base + 1
+            tail_pos = len(records) + skipped_overflow
+            tail_row = (
+                line_layout.record_lines[tail_pos]
+                if tail_pos < len(line_layout.record_lines)
+                else 1 + len(records) + skipped_overflow + 1
+            )
             tail_detail = (
                 f"Row {tail_row}: unread CSV overflow tail could not be fully "
                 f"counted (malformed after {skipped_overflow} row(s) past the limit)"
@@ -1185,12 +1398,17 @@ def parse_csv_rows(
             ),
         )
 
-    for row_num, row in enumerate(records, start=2):
+    for idx, row in enumerate(records):
+        row_num = (
+            line_layout.record_lines[idx]
+            if idx < len(line_layout.record_lines)
+            else idx + 2
+        )
         # _file_cte_type_for_jev reads exactly the rows before this cut-off.
-        if row_num - 1 > MAX_CSV_ROWS:
+        if idx >= MAX_CSV_ROWS:
             # First over-limit row is rejected once. Further unread rows are
-            # each skipped under their own row numbers so counts balance and
-            # this row is never both skipped and rejected (SEL-549).
+            # each skipped under their own physical row numbers so counts
+            # balance and this row is never both skipped and rejected (SEL-549).
             if skipped_overflow:
                 overflow_detail = (
                     f"Row {row_num}: {skipped_overflow} more row(s) after this one were skipped and not ingested"
@@ -1201,7 +1419,12 @@ def parse_csv_rows(
                     # by membership here, not by scanning error substrings.
                     overflow_aggregates.append(overflow_detail)
                 for offset in range(1, skipped_overflow + 1):
-                    overflow_row = row_num + offset
+                    pos = idx + offset
+                    overflow_row = (
+                        line_layout.record_lines[pos]
+                        if pos < len(line_layout.record_lines)
+                        else row_num + offset
+                    )
                     _append_row_log(
                         row_log,
                         row_number=overflow_row,
@@ -1212,15 +1435,21 @@ def parse_csv_rows(
             if overflow_tail_unreadable:
                 # Partial count kept above; name the remainder explicitly so it
                 # is not silently dropped when csv.Error fires mid-tail.
+                tail_pos = idx + skipped_overflow + 1
+                tail_row = (
+                    line_layout.record_lines[tail_pos]
+                    if tail_pos < len(line_layout.record_lines)
+                    else row_num + skipped_overflow + 1
+                )
                 tail_detail = (
-                    f"Row {row_num + skipped_overflow + 1}: unread CSV overflow tail "
+                    f"Row {tail_row}: unread CSV overflow tail "
                     f"could not be fully counted (malformed after {skipped_overflow} "
                     f"row(s) past the limit)"
                 )
                 parse_errors.append(tail_detail)
                 _append_row_log(
                     row_log,
-                    row_number=row_num + skipped_overflow + 1,
+                    row_number=tail_row,
                     disposition="rejected",
                     reason="unreadable_overflow_tail",
                     detail=tail_detail,
@@ -1354,7 +1583,12 @@ def parse_csv_rows(
             event_time_raw = (row.get("event_time") or "").strip()
             ts, date_warning = _parse_date_flexible(raw_date, event_time_raw)
             if ts is None:
-                _reject("bad_date", f"Row {row_num}: {date_warning}")
+                date_reason = (
+                    "ambiguous_date"
+                    if date_warning and date_warning.startswith("AMBIGUOUS_DATE:")
+                    else "bad_date"
+                )
+                _reject(date_reason, f"Row {row_num}: {date_warning}")
                 continue
             if date_warning:
                 _append_row_log(
@@ -1425,8 +1659,16 @@ def parse_csv_rows(
                 )
                 continue
 
-            # Lot code: extract and run integrity checks
+            # Lot code: extract, reject short/empty TLC with bad_tlc (not parse_exception),
+            # then run advisory integrity checks.
             lot_code = _first_present(row, _LOT_CODE_COLUMNS)
+            if len((lot_code or "").strip()) < 3:
+                _reject(
+                    "bad_tlc",
+                    f"Row {row_num}: traceability_lot_code must be at least 3 characters "
+                    f"(got {lot_code!r})",
+                )
+                continue
             for integrity_warn in _check_lot_code_integrity(lot_code, row_log=row_log, row_number=row_num):
                 kde_warnings.append(f"Row {row_num}: {integrity_warn}")
 
