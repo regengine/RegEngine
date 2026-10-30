@@ -64,7 +64,12 @@ set -a; source "$S/verify.env"; set +a
 venv/bin/alembic upgrade head          # ~107 revisions, under a minute
 nohup venv/bin/uvicorn server.main:app --host 127.0.0.1 --port 8000 > "$S/uvicorn.log" 2>&1 &
 UVICORN_PID=$!
-curl -sS --fail --retry 45 --retry-delay 2 --retry-connrefused --retry-all-errors http://127.0.0.1:8000/health
+# A busy port 8000 makes uvicorn exit on bind; curl would then be probing
+# someone else's server. Require our process to be alive before and after.
+sleep 2 && kill -0 "$UVICORN_PID" \
+  && curl -sS --fail --retry 45 --retry-delay 2 --retry-connrefused --retry-all-errors http://127.0.0.1:8000/health \
+  && kill -0 "$UVICORN_PID" \
+  || { echo "uvicorn did not come up as PID $UVICORN_PID; see $S/uvicorn.log"; false; }
 ```
 
 Startup takes about 15 s. `/openapi.json` lists mounted routes; confirm the
