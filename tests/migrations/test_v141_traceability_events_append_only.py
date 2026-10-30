@@ -321,6 +321,54 @@ def test_payload_column_update_rejected(seeded, assignment) -> None:
     )
 
 
+@pytest.mark.parametrize(
+    "assignment",
+    [
+        "sha256_hash = NULL",
+        "chain_hash = NULL, status = 'superseded', amended_at = NOW()",
+        "product_reference = NULL, evaluation_verdict = 'pass', evaluated_at = NOW()",
+        "from_facility_reference = NULL",
+    ],
+)
+def test_clearing_populated_column_to_null_rejected(seeded, assignment) -> None:
+    """Clearing a protected column to NULL is a change the diff must see.
+
+    ``to_jsonb(NEW)`` keeps a NULL column as a ``null``-valued key rather
+    than dropping it, so the key-join branch of the diff compares
+    ``null`` against the old value and reports the column. This pins that,
+    including when the clear hides behind a sanctioned status or verdict
+    update. The seeded row leaves these columns NULL, so they are populated
+    through break-glass first; a NULL -> NULL assignment is a no-op and is
+    not what this test is about.
+    """
+    engine, event_id = seeded
+    with engine.begin() as conn:
+        conn.execute(text("SET LOCAL fsma.allow_mutation = 'true'"))
+        conn.execute(
+            text(
+                "UPDATE fsma.traceability_events"
+                " SET sha256_hash = repeat('a', 64), chain_hash = repeat('b', 64),"
+                " product_reference = 'PROD-1', from_facility_reference = 'FAC-1'"
+                " WHERE event_id = CAST(:eid AS uuid)"
+            ),
+            {"eid": event_id},
+        )
+    _expect_rejected(
+        engine,
+        f"UPDATE fsma.traceability_events SET {assignment} WHERE event_id = CAST(:eid AS uuid)",
+        {"eid": event_id},
+    )
+    with engine.connect() as conn:
+        row = conn.execute(
+            text(
+                "SELECT sha256_hash, chain_hash, product_reference, from_facility_reference"
+                " FROM fsma.traceability_events WHERE event_id = CAST(:eid AS uuid)"
+            ),
+            {"eid": event_id},
+        ).one()
+    assert None not in tuple(row)
+
+
 def test_allowlisted_and_payload_change_in_one_statement_rejected(seeded) -> None:
     """Hiding a payload change behind a sanctioned marker update does not work."""
     engine, event_id = seeded
