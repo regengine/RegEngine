@@ -485,7 +485,8 @@ class ExportRequest(BaseModel):
     description=(
         "Generates a GS1 EPCIS 2.0 JSON-LD document containing traceability "
         "events (Preview). Validate with your trading partner before relying "
-        "on it for compliance."
+        "on it for compliance. Stored event hashes are included without "
+        "cryptographic verification."
     ),
 )
 async def export_epcis(
@@ -526,10 +527,7 @@ async def export_epcis(
                 _skip(r, "missing_timestamp")
                 continue
             event_kind = r.get("epcis_event_type")
-            is_transformation = (
-                r.get("event_type") == "transformation"
-                or event_kind == "TransformationEvent"
-            )
+            is_transformation = r.get("event_type") == "transformation" or event_kind == "TransformationEvent"
             if event_kind not in (None, "ObjectEvent", "TransformationEvent"):
                 _skip(r, "unsupported_epcis_event_type")
                 continue
@@ -647,8 +645,9 @@ async def export_epcis(
             "skippedEventsByReason": skipped_by_reason,
             "skippedEvents": skipped_evidence,
             "dataSource": data_source,
-            "integrityVerified": data_source == "tenant",
-            "chainHashVerified": data_source == "tenant",
+            # Loading stored hashes does not verify event content or chain integrity.
+            "integrityVerified": False,
+            "chainHashVerified": False,
             "preview": True,
             "previewNotice": (
                 "EPCIS export is in Preview. Validate with your trading partner "
@@ -687,7 +686,7 @@ async def export_epcis(
         ),
         "X-RegEngine-Events-Count": str(len(event_list)),
         "X-RegEngine-Skipped-Events-Count": str(skipped),
-        "X-RegEngine-Integrity-Verified": "true" if data_source == "tenant" else "false",
+        "X-RegEngine-Integrity-Verified": "false",
         "X-RegEngine-Data-Source": data_source,
         "X-RegEngine-Preview": "true",
     }
