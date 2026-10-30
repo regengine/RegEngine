@@ -548,6 +548,17 @@ paths.
 
 ### WI-08 — Register or archive orphan scripts
 
+**Status 2026-10-30:** delivered in PR #3699 with two deviations.
+`scripts/README.md` registers all 99 top-level files and 11 subdirectories
+(60 used, 4 data, 21 manual/one-time/retire-with-WI-12, 14 archive
+candidates). `scripts/check_scripts_registered.py` (10 tests) runs in
+`backend-ci.yml` job `lint-repo-roots` instead of `pr-guards.yml`, because
+backend-ci already triggers on `scripts/**` and has Python set up. The 14
+archive candidates are listed in the README but not moved: the owner's
+"never delete files" rule makes any move a decision for Christopher by
+name, so the move is a one-commit follow-up once approved.
+
+
 **Problem.** 31 of 87 top-level files in `scripts/` are referenced by no
 workflow, `Dockerfile`, `railway.toml`, runbook, other script, README,
 CONTRIBUTING or DEVOPS_NOTES. Largest:
@@ -790,6 +801,12 @@ in the same module): keep it, move it to a non-legacy module in PR C.
 
 ### WI-13 — One Node version across CI
 
+**Status 2026-10-30:** delivered in PR #3699. `copy-gate.yml` reads
+`.nvmrc`; the Node 24 pin in `frontend-ci.yml` stays for the job that needs
+`node:sqlite` and says so in a comment. The jsdom 30 and jest-dom 7
+Dependabot ignores were removed; CI now judges those majors.
+
+
 **Problem.** `.nvmrc` says 22. `copy-gate.yml` pins Node 20; one
 `frontend-ci.yml` job pins 24; `package.json` `engines` says 22 or 24.
 `dependabot.yml` ignores jsdom 30 and jest-dom 7 with the note "CI runs
@@ -851,6 +868,10 @@ only when a feature touches them.
 **Rollback.** Revert.
 
 ### WI-15 — Retire the dead `graph_update` task type
+
+**Status 2026-10-30:** delivered in PR #3699 (`services/shared/task_types.py`,
+`server/workers/task_processor.py`, two test files, `ASYNC_PROCESSES.md`).
+
 
 **Problem.** `graph_update` is declared in `services/shared/task_types.py`
 and given a 120-second timeout in `server/workers/task_processor.py`, but
