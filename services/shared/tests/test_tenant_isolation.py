@@ -175,26 +175,31 @@ class TestTenantDependencies:
         assert exc_info.value.detail == "E_TENANT_MISMATCH"
 
     @pytest.mark.asyncio
-    async def test_unparseable_principal_tenant_with_middleware_tenant_fails_closed(self):
-        """A key tenant that is not a UUID can never match the middleware's UUID:
-        409, never a fall-through that lets the middleware tenant win."""
+    @pytest.mark.parametrize("bad_principal", ["not-a-uuid", " {mw} "])
+    async def test_unparseable_principal_tenant_with_middleware_tenant_fails_closed(self, bad_principal):
+        """A principal whose tenant does not parse is a malformed credential:
+        401, never a fall-through that resolves the middleware tenant — even
+        when the middleware tenant is the same UUID with surrounding spaces."""
         from shared.middleware import get_current_tenant_id
 
+        mw_tenant = uuid.uuid4()
         request = SimpleNamespace(
             state=SimpleNamespace(
-                tenant_id=uuid.uuid4(),
-                api_key=SimpleNamespace(key_id="k", tenant_id="not-a-uuid"),
+                tenant_id=mw_tenant,
+                api_key=SimpleNamespace(key_id="k", tenant_id=bad_principal.format(mw=mw_tenant)),
             )
         )
 
         with pytest.raises(HTTPException) as exc_info:
             await get_current_tenant_id(request)
-        assert exc_info.value.status_code == 409
+        assert exc_info.value.status_code == 401
+        assert "Tenant ID not found" in str(exc_info.value.detail)
 
     @pytest.mark.asyncio
     async def test_matching_middleware_and_principal_tenant_resolves(self):
-        """Agreement between the two sources (case-insensitively) resolves to
-        that tenant and seeds the RLS contextvar with it — never a 409."""
+        """Agreement between the two sources resolves to that tenant and seeds
+        the RLS contextvar with it — never a 409, whatever the spelling (the
+        principal here is upper-case with no hyphens)."""
         from shared.middleware import get_current_tenant_id
         from shared.tenant_context import get_rls_tenant_id
 
@@ -202,7 +207,7 @@ class TestTenantDependencies:
         request = SimpleNamespace(
             state=SimpleNamespace(
                 tenant_id=tenant,
-                api_key=SimpleNamespace(key_id="k", tenant_id=str(tenant).upper()),
+                api_key=SimpleNamespace(key_id="k", tenant_id=str(tenant).upper().replace("-", "")),
             )
         )
 

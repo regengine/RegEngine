@@ -202,6 +202,21 @@ def test_middleware_tenant_that_matches_key_tenant_is_accepted(_env):
     assert seen == [(TENANT_A, TENANT_A)]
 
 
+def test_rejected_divergent_request_does_not_taint_the_next_request(_env):
+    """Same client, two requests: a 409 for a tenant-B assertion leaves nothing behind for the key-only request that follows."""
+    seen: list[tuple[str, str | None]] = []
+    client = TestClient(_app(), raise_server_exceptions=False)
+    with patch(RECALL_ENGINE, return_value=_recall_engine_stub(seen)):
+        rejected = client.get("/api/v1/fsma/recall/sla", headers=_with_middleware_tenant(TENANT_B))
+        accepted = client.get("/api/v1/fsma/recall/sla", headers=KEY_ONLY)
+
+    assert rejected.status_code == 409, rejected.text
+    assert accepted.status_code == 200, accepted.text
+    assert accepted.json()["tenant_id"] == TENANT_A
+    # Only the second request reached the engine, and it ran as A with RLS seeded A.
+    assert seen == [(TENANT_A, TENANT_A)]
+
+
 def test_key_only_traceability_request_runs_as_the_key_tenant(_env):
     seen: list[str | None] = []
     client = TestClient(_app(), raise_server_exceptions=False)

@@ -290,6 +290,14 @@ def _tenant_id_from_authenticated_principal(request: Request) -> Optional[uuid.U
         return None
 
 
+def _as_uuid(value: object) -> Optional[uuid.UUID]:
+    """Parse ``value`` as a UUID; None when it is not one."""
+    try:
+        return uuid.UUID(str(value).strip())
+    except (ValueError, AttributeError, TypeError):
+        return None
+
+
 async def get_current_tenant_id(request: Request) -> uuid.UUID:
     """
     FastAPI dependency to get the current request's tenant_id.
@@ -320,22 +328,26 @@ async def get_current_tenant_id(request: Request) -> uuid.UUID:
             return await fetch_reports(tenant_id)
     """
     middleware_tenant = getattr(request.state, "tenant_id", None)
-    principal_tenant = _tenant_id_from_authenticated_principal(request)
-
-    # Compare the principal's tenant as stored, not only its parsed form: a
-    # key tenant that is not a UUID can never equal the middleware's UUID, and
-    # must not let the middleware tenant win by falling through to None.
     api_key = getattr(request.state, "api_key", None)
     raw_principal_tenant = getattr(api_key, "tenant_id", None) if api_key is not None else None
+    principal_tenant = _tenant_id_from_authenticated_principal(request)
+
+    if raw_principal_tenant and principal_tenant is None:
+        # The principal carries a tenant that does not parse: a malformed
+        # credential, never a reason to fall back to the middleware tenant.
+        raise HTTPException(status_code=401, detail="Tenant ID not found in authentication context")
+
+    # Compare parsed UUIDs, so equivalent spellings (case, braces, no hyphens)
+    # never 409 and a middleware value that is not a UUID never matches.
     if (
-        raw_principal_tenant
+        principal_tenant is not None
         and middleware_tenant is not None
-        and str(middleware_tenant).strip().lower() != str(raw_principal_tenant).strip().lower()
+        and _as_uuid(middleware_tenant) != principal_tenant
     ):
         logger.warning(
             "graph_tenant_scope_mismatch: middleware tenant differs from the authenticated API key's tenant",
             extra={
-                "authenticated_tenant": str(raw_principal_tenant),
+                "authenticated_tenant": str(principal_tenant),
                 "middleware_tenant": str(middleware_tenant),
                 "key_id": getattr(api_key, "key_id", None),
                 "path": request.url.path if getattr(request, "url", None) is not None else None,
