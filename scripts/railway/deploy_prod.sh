@@ -61,6 +61,13 @@ command -v git >/dev/null 2>&1 || die "git is required but not found in PATH"
 repo_root="$(git rev-parse --show-toplevel 2>/dev/null)" || die "not inside a git checkout"
 cd "$repo_root"
 
+# `railway up` indexes the upload relative to the git toplevel and fails with
+# "Indexing... prefix not found" when `.git` is a worktree pointer file instead
+# of a directory (observed 2026-10-29). Refuse here rather than after stamping.
+if [ ! -d "$repo_root/.git" ]; then
+    die "$repo_root is a git worktree (.git is a file). \`railway up\` cannot index a worktree; run this from the primary checkout."
+fi
+
 # --- Preconditions. Nothing is touched until all of these pass. -------------
 
 dirty="$(git status --porcelain --untracked-files=all)"
