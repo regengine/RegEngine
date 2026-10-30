@@ -16,8 +16,13 @@ traverse the scratchpad, so put the data dir under `/var/lib/postgresql`.
 
 ```bash
 PGBIN=/usr/lib/postgresql/16/bin; D=/var/lib/postgresql/verify-data
-su postgres -s /bin/bash -c "$PGBIN/initdb -D $D -U postgres --auth=trust -E UTF8 >/dev/null; $PGBIN/pg_ctl -D $D -l /var/lib/postgresql/pg.log -o '-p 5432 -k /var/lib/postgresql -c listen_addresses=127.0.0.1' start"
-redis-server --port 6379 --bind 127.0.0.1 --daemonize yes
+# Fail closed: a leftover data dir or an occupied port 5432 must stop the
+# recipe here, never fall through to some other PostgreSQL.
+su postgres -s /bin/bash -c "$PGBIN/initdb -D $D -U postgres --auth=trust -E UTF8 >/dev/null && $PGBIN/pg_ctl -D $D -l /var/lib/postgresql/pg.log -o '-p 5432 -k /var/lib/postgresql -c listen_addresses=127.0.0.1' start" \
+  && pg_isready -h 127.0.0.1 -p 5432 \
+  && redis-server --port 6379 --bind 127.0.0.1 --daemonize yes --pidfile /var/lib/postgresql/verify-redis.pid \
+  && redis-cli -p 6379 ping \
+  || { echo "local service setup failed; stop here"; false; }
 ```
 
 Roles must mirror `scripts/init-postgres.sh`: migrations run as a superuser
@@ -58,7 +63,8 @@ S=<scratchpad dir>
 set -a; source "$S/verify.env"; set +a
 venv/bin/alembic upgrade head          # ~107 revisions, under a minute
 nohup venv/bin/uvicorn server.main:app --host 127.0.0.1 --port 8000 > "$S/uvicorn.log" 2>&1 &
-curl -s --retry 45 --retry-delay 2 --retry-connrefused --retry-all-errors http://127.0.0.1:8000/health
+UVICORN_PID=$!
+curl -sS --fail --retry 45 --retry-delay 2 --retry-connrefused --retry-all-errors http://127.0.0.1:8000/health
 ```
 
 Startup takes about 15 s. `/openapi.json` lists mounted routes; confirm the
@@ -78,7 +84,8 @@ route under test is there (`ENABLED_ROUTERS` gates routers).
   with `openpyxl`; to test understated-dimension handling, rewrite the
   `<dimension ref="...">` tag in `xl/worksheets/sheet1.xml` and re-zip.
 - No-persistence check: count rows in `supplier_cte_events`, `audit_logs` and
-  `funnel_events` before and after via `psql -U regengine_owner`.
+  `funnel_events` before and after via
+  `psql -h 127.0.0.1 -U regengine_owner -d regengine`.
 
 ## Gotchas
 
@@ -88,5 +95,6 @@ route under test is there (`ENABLED_ROUTERS` gates routers).
 - The strict Jev review validator rejects some provider answers
   non-deterministically; re-run a semantic-review probe before calling it a
   regression.
-- Stop: `pkill -f "uvicorn server.main"`, `redis-cli shutdown nosave`,
+- Stop only what this recipe started: `kill "$UVICORN_PID"`,
+  `kill "$(cat /var/lib/postgresql/verify-redis.pid)"`,
   `su postgres -s /bin/bash -c "$PGBIN/pg_ctl -D $D stop"`.
