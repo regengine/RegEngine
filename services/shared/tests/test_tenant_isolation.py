@@ -151,9 +151,13 @@ class TestTenantDependencies:
         assert tenant_a != tenant_b
 
     @pytest.mark.asyncio
-    async def test_middleware_tenant_wins_over_principal(self):
-        """When the middleware already resolved a tenant (JWT/internal-header/
-        env key), it is authoritative and the principal fallback is not used."""
+    async def test_middleware_tenant_must_match_principal(self):
+        """When the middleware resolved a tenant (JWT/internal header) and the
+        authenticated API key carries a different one, fail closed with 409
+        ``E_TENANT_MISMATCH`` (the ``reconcile_tenant_scope`` contract, #2511).
+        The middleware tenant never overrides the principal: #3698 made it the
+        last writer of the RLS contextvar on the graph routers, so letting it
+        win meant key tenant A operated on tenant B's rows."""
         from shared.middleware import get_current_tenant_id
 
         mw_tenant = uuid.uuid4()
@@ -165,7 +169,45 @@ class TestTenantDependencies:
             )
         )
 
-        assert await get_current_tenant_id(request) == mw_tenant
+        with pytest.raises(HTTPException) as exc_info:
+            await get_current_tenant_id(request)
+        assert exc_info.value.status_code == 409
+        assert exc_info.value.detail == "E_TENANT_MISMATCH"
+
+    @pytest.mark.asyncio
+    async def test_unparseable_principal_tenant_with_middleware_tenant_fails_closed(self):
+        """A key tenant that is not a UUID can never match the middleware's UUID:
+        409, never a fall-through that lets the middleware tenant win."""
+        from shared.middleware import get_current_tenant_id
+
+        request = SimpleNamespace(
+            state=SimpleNamespace(
+                tenant_id=uuid.uuid4(),
+                api_key=SimpleNamespace(key_id="k", tenant_id="not-a-uuid"),
+            )
+        )
+
+        with pytest.raises(HTTPException) as exc_info:
+            await get_current_tenant_id(request)
+        assert exc_info.value.status_code == 409
+
+    @pytest.mark.asyncio
+    async def test_matching_middleware_and_principal_tenant_resolves(self):
+        """Agreement between the two sources (case-insensitively) resolves to
+        that tenant and seeds the RLS contextvar with it — never a 409."""
+        from shared.middleware import get_current_tenant_id
+        from shared.tenant_context import get_rls_tenant_id
+
+        tenant = uuid.uuid4()
+        request = SimpleNamespace(
+            state=SimpleNamespace(
+                tenant_id=tenant,
+                api_key=SimpleNamespace(key_id="k", tenant_id=str(tenant).upper()),
+            )
+        )
+
+        assert await get_current_tenant_id(request) == tenant
+        assert get_rls_tenant_id() == str(tenant)
 
     @pytest.mark.asyncio
     async def test_api_key_without_tenant_fails_closed(self):
