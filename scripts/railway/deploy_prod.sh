@@ -138,8 +138,9 @@ if [ "$DRY_RUN" -eq 1 ]; then
     exit 0
 fi
 
-railway whoami >/dev/null 2>&1 || die "not logged in to Railway. Run \`railway login\` first."
-
+# No identity preflight: a project-scoped RAILWAY_TOKEN can deploy but cannot
+# answer `railway whoami`. `railway up` reports a missing or wrong credential
+# itself, and the trap restores the stamp when it does.
 railway "${up_args[@]}"
 
 # Restore as soon as the upload is accepted; the trap is only the safety net.
