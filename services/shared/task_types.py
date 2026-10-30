@@ -72,7 +72,6 @@ PURGEABLE_TASK_TYPES: FrozenSet[str] = frozenset(
     {
         # server/workers/task_processor.py
         "nlp_extraction",
-        "graph_update",
         "review_item",
         # services/ingestion/app/task_handlers_sources.py
         "federal_register_ingest",

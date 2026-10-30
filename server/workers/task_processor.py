@@ -1,11 +1,15 @@
 """PostgreSQL-backed task processor — replaces Kafka consumers.
 
-Polls the ``fsma.task_queue`` table for new work. Handles three task
+Polls the ``fsma.task_queue`` table for new work. Handles two task
 types that previously required separate Kafka consumers:
 
   1. nlp_extraction — extract entities from ingested documents
-  2. graph_update   — upsert extracted entities into the knowledge graph
-  3. review_item    — record low-confidence extractions for human review
+  2. review_item    — record low-confidence extractions for human review
+
+There is no ``graph_update`` task type on the pg backbone: nothing enqueues
+one and no handler exists (retired 2026-10-30, tech-debt WI-15). High-tier
+extractions are logged (``fsma_high_confidence_no_graph_sink``) until a graph
+sink is built.
 
 Delivery mechanism
 ------------------
@@ -72,7 +76,6 @@ LOCK_TIMEOUT_MINUTES = int(os.getenv("TASK_LOCK_TIMEOUT_MINUTES", "15"))
 # (which costs duplicate LLM calls / duplicate graph upserts).
 TASK_TIMEOUTS_SECONDS: Dict[str, int] = {
     "nlp_extraction": 300,  # up to 5 min for a long document
-    "graph_update": 120,  # Neo4j cluster hiccups
     "review_item": 30,  # near-instant, trivial DB write
 }
 
@@ -156,9 +159,9 @@ def _run_hardened_extraction(
       3. Three-tier confidence routing (#1258): review-tier extractions are
          enqueued as ``review_item`` tasks — the pg replacement for the
          ``nlp.needs_review`` topic. High-tier results auto-approve to
-         ``graph.update`` on the Kafka backbone, but the pg worker registers
-         no ``graph_update`` handler (an enqueued row would sit unclaimed
-         forever), so they are logged loudly instead.
+         ``graph.update`` on the Kafka backbone; the pg backbone has no
+         graph sink and no ``graph_update`` task type, so they are logged
+         loudly instead.
 
     Kafka-only stages (HMAC signing/verification, DLQ topics, offset
     commits, inbound schema validation) have no pg analog: the task queue
@@ -233,8 +236,8 @@ def _run_hardened_extraction(
                 summary["review_items_enqueued"] += 1
         else:
             # High-confidence FSMA result. On the Kafka backbone this is
-            # emitted to graph.update; the pg worker has no graph sink, so
-            # log loudly until a pg graph_update handler exists.
+            # emitted to graph.update; the pg backbone has no graph sink, so
+            # log loudly until one is built.
             logger.warning(
                 "fsma_high_confidence_no_graph_sink",
                 document_id=doc_id,
@@ -906,7 +909,6 @@ def enqueue_task(
     Recommended keys:
 
     * NLP extraction: ``f"nlp_extraction:{document_id}"``
-    * Graph update:   ``f"graph_update:{document_id}"``
     * Review item:    ``f"review_item:{document_id}:{entity_type}"``
     """
     try:

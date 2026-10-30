@@ -21,10 +21,10 @@ trigger was removed in migration v059.
 |-----------|---------|--------------------|----------------------|
 | `nlp_extraction` | `_handle_nlp_extraction` → `services.nlp.app.extractor.extract_entities` | 300s | topic `documents.ingested` |
 | `review_item` | `_handle_review_item` → admin HallucinationTracker | 30s | topic `nlp.needs_review` |
-| `graph_update` | **No handler registered** — a timeout (120s) is configured, but `TASK_HANDLERS` registers only `nlp_extraction` and `review_item`; an enqueued `graph_update` row sits unclaimed | 120s | topic `graph.update` |
 
-(Extraction-path hardening for the pg pipeline, including the `review_item` handler, is
-in flight on a sibling branch — treat the handler details above as the pre-fix baseline.)
+`graph_update` was declared as a task type with a 120 s timeout but nothing enqueued it and
+no handler existed; it was removed on 2026-10-30 (tech-debt WI-15). High-confidence
+extractions are logged as `fsma_high_confidence_no_graph_sink` until a graph sink exists.
 
 Mechanics:
 
