@@ -217,3 +217,27 @@ run the audit-chain integrity check (section 6).
 Approve or reject this model, and pick the cadence: on demand, or at most
 two or three times per weekday. Until then, production keeps deploying
 from `main` through `deploy.yml`.
+
+## 11. Manual deploys today (in effect, not part of the proposal)
+
+Since 2026-10-28 the Railway production service has no GitHub source and
+`deploy.yml` is disabled, so every production deploy is a hand-run
+`railway up` from a local checkout. A hand deploy must go through
+`scripts/railway/deploy_prod.sh`, never a bare `railway up`.
+
+Reason: the image has no `.git` (`.dockerignore` excludes it), so the only
+commit identity it carries is `build-sha.txt`, which the `Dockerfile` copies
+to `/app/build-sha.txt`. The tracked file is the placeholder `unknown`.
+`deploy.yml` overwrites it with the commit before `railway up`; a bare
+`railway up` ships the placeholder and `/health` reports `commit_sha: null`.
+The 2026-10-29 deploy (Railway deployment `44c0486a`) did exactly that, and
+the live commit could only be identified by hashing files inside the
+container over `railway ssh`.
+
+The script refuses a dirty tree, stamps `git rev-parse HEAD` into
+`build-sha.txt`, runs `railway up --ci` against the linked service, restores
+the placeholder (also on failure), then polls `https://api.regengine.co/health`
+until `build.commit_sha` equals the stamped commit, with the same three
+failure diagnoses as `deploy.yml`. `--dry-run` does everything except the
+upload and the poll. Set `RAILWAY_SERVICE` or `RAILWAY_ENVIRONMENT` to
+override what `railway link` chose.
