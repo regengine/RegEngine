@@ -2,21 +2,11 @@
   "frontend/src/app/auth/verify/page.tsx": {
     "empty-render": 2
   },
-  "frontend/src/app/blog/fda-food-traceability-requirements/page.tsx": {
-    "epcis-unlabeled": 1
-  },
   "frontend/src/app/blog/food-traceability-software/page.tsx": {
-    "epcis-unlabeled": 1,
     "sample-demo": 2
   },
   "frontend/src/app/blog/fsma-204-compliance-checklist-2026/page.tsx": {
     "invented-entity": 2
-  },
-  "frontend/src/app/blog/fsma-204-compliance-guide/page.tsx": {
-    "epcis-unlabeled": 2
-  },
-  "frontend/src/app/blog/fsma-204-cte-kde-guide/page.tsx": {
-    "epcis-unlabeled": 5
   },
   "frontend/src/app/contact/layout.tsx": {
     "sample-demo": 2
@@ -38,7 +28,6 @@
     "empty-render": 1
   },
   "frontend/src/app/design-system/page.tsx": {
-    "invented-entity": 1,
     "sample-demo": 1,
     "sandbox": 1
   },
@@ -58,9 +47,6 @@
     "dash-placeholder": 3,
     "empty-render": 2
   },
-  "frontend/src/app/fsma-204/[cte]/page.tsx": {
-    "invented-entity": 1
-  },
   "frontend/src/app/identity/page.tsx": {
     "dash-placeholder": 2,
     "empty-render": 1
@@ -77,9 +63,6 @@
   },
   "frontend/src/app/legal/vulnerability-disclosure/page.tsx": {
     "sample-demo": 1
-  },
-  "frontend/src/app/product/page.tsx": {
-    "sandbox": 2
   },
   "frontend/src/app/records/page.tsx": {
     "dash-placeholder": 3,
@@ -99,9 +82,6 @@
   },
   "frontend/src/app/tools/tlc-validator/components/TLCValidatorClient.tsx": {
     "sample-demo": 1
-  },
-  "frontend/src/app/why-regengine/page.tsx": {
-    "epcis-unlabeled": 1
   },
   "frontend/src/components/dashboard/compliance-status-widget.tsx": {
     "empty-render": 1
@@ -133,9 +113,6 @@
   "frontend/src/lib/dev-compliance-snapshots.ts": {
     "dash-placeholder": 2
   },
-  "frontend/src/lib/epcis-upload.ts": {
-    "epcis-unlabeled": 4
-  },
   "frontend/src/lib/mock-tenants.ts": {
     "sample-demo": 1
   },
@@ -144,8 +121,5 @@
   },
   "frontend/src/lib/trust-subprocessors.ts": {
     "sample-demo": 1
-  },
-  "frontend/src/lib/utils.ts": {
-    "dash-placeholder": 1
   }
 }
