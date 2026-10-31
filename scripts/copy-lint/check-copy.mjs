@@ -94,12 +94,22 @@ export function parseCapabilities(src) {
   const seen = new Set();
   for (const name of ['live', 'preview', 'planned', 'off']) {
     const match = src.match(new RegExp(`\\b${name}\\s*:\\s*\\[([^\\]]*)\\]`));
-    if (!match) throw new Error(`Missing ${name} capability registry`);
+    // Empty or omitted `off` means nothing is disabled — do not throw.
+    if (!match) {
+      if (name === 'off') {
+        groups[name] = [];
+        continue;
+      }
+      throw new Error(`Missing ${name} capability registry`);
+    }
     if (match[1].replace(/'[^']+'/g, '').replace(/,/g, '').trim()) {
       throw new Error(`Unparseable ${name} capability registry`);
     }
     groups[name] = [...match[1].matchAll(/'([^']+)'/g)].map(m => m[1]);
-    if (name !== 'planned' && !groups[name].length) throw new Error(`Empty ${name} capability registry`);
+    // `planned` and `off` may be empty; live/preview must list at least one feature.
+    if (name !== 'planned' && name !== 'off' && !groups[name].length) {
+      throw new Error(`Empty ${name} capability registry`);
+    }
     for (const feature of groups[name]) {
       if (seen.has(feature)) throw new Error(`Duplicate capability status for ${feature}`);
       seen.add(feature);
@@ -140,7 +150,9 @@ export function check(seg, srcLine, cfg, capabilities, copyLine = '') {
   if (copy) {
     const nonLive = [...capabilities.preview, ...capabilities.planned, ...capabilities.off];
     const capability = nonLive.find(name => word(name).test(copy) || (name.startsWith('EPCIS ') && word('EPCIS').test(copy)));
-    if (capability && (/\b(?:Live|Implemented|GA|Available)\b/.test(copyLine || copy) || (/\bstatus\s*:\s*['"]available['"]/.test(srcLine) && /\bavailable\b/.test(copyLine || copy)))) add('live-claim', capability);
+    // A negated GA ("not GA", "not yet GA") is a Preview disclaimer, not a live claim.
+    const claimText = (copyLine || copy).replace(/\bnot\s+(?:yet\s+)?GA\b/g, '');
+    if (capability && (/\b(?:Live|Implemented|GA|Available)\b/.test(claimText) || (/\bstatus\s*:\s*['"]available['"]/.test(srcLine) && /\bavailable\b/.test(copyLine || copy)))) add('live-claim', capability);
     if (copy.trim() === 'Pilot' && /\b(?:badge|status)\b/i.test(srcLine)) add('pilot-status', copy);
     if (/(?:^|[^A-Za-z0-9_/-])(?:sample|demo|simulated|synthetic)(?![A-Za-z0-9_/-])/i.test(copy)) add('sample-demo', copy);
     if (word('sandbox').test(copy)) add('sandbox', copy);
