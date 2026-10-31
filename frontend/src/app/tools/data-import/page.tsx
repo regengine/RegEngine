@@ -9,14 +9,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { filterExperimentalToolLinks } from "@/lib/experimental-features";
 
 export const metadata: Metadata = {
-    title: "FSMA 204 Data Import Hub | Upload CSV, XLSX & JSON Traceability Data | RegEngine",
-    description: "Import FSMA 204 traceability data via CSV or XLSX upload (including Sensitech TempTale temperature logs), or the JSON events API. Supports all Critical Tracking Event (CTE) types with schema checks and field auto-mapping.",
+    title: "FSMA 204 Data Import Hub | Upload CSV & JSON Traceability Data | RegEngine",
+    description: "Import FSMA 204 traceability data via CSV upload or the JSON events API. Supports all Critical Tracking Event (CTE) types with schema checks and field auto-mapping.",
     alternates: {
         canonical: "https://regengine.co/tools/data-import",
     },
     openGraph: {
         title: "FSMA 204 Data Import Hub | RegEngine",
-        description: "Import traceability data via CSV, XLSX, or the JSON events API with FSMA 204 schema checks. Free tool.",
+        description: "Import traceability data via CSV or the JSON events API with FSMA 204 schema checks. Free tool.",
         type: "website",
         url: "https://regengine.co/tools/data-import",
     },
@@ -28,7 +28,7 @@ const jsonLd = {
     "name": "RegEngine Data Import Hub",
     "operatingSystem": "All",
     "applicationCategory": "BusinessApplication",
-    "description": "Import traceability data via CSV, XLSX, or the JSON events API for FSMA 204 compliance.",
+    "description": "Import traceability data via CSV or the JSON events API; helps with FSMA 204 recordkeeping.",
 };
 
 function DataImportFallback() {
@@ -37,7 +37,7 @@ function DataImportFallback() {
             <Container width="tool">
                 <div className="mx-auto max-w-2xl text-center">
                     <h1 className="text-title text-re-text-primary">Data Import Hub</h1>
-                    <p className="mx-auto mt-3 max-w-[70ch] text-ui text-re-text-secondary">Import your traceability data into RegEngine via CSV upload, XLSX spreadsheets (including IoT temperature logs), or the JSON events API. Supports all FSMA 204 Critical Tracking Event (CTE) types with automatic validation and auto-cleaning of common formatting issues.</p>
+                    <p className="mx-auto mt-3 max-w-[70ch] text-ui text-re-text-secondary">Import your traceability data into RegEngine via CSV upload or the JSON events API. Supports all FSMA 204 Critical Tracking Event (CTE) types with automatic validation and auto-cleaning of common formatting issues.</p>
                 </div>
                 <div className="mt-8 space-y-4">
                     <Skeleton className="h-10 w-1/3 rounded-md" />

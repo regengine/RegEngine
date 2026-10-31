@@ -57,8 +57,8 @@ const inflowEffects = [
 
 const engineResults = [
   {
-    title: "Blocked or corrected",
-    detail: "Bad supplier data is routed back through the fix queue instead of polluting the evidence ledger.",
+    title: "Flagged for fix",
+    detail: "Incomplete or inconsistent supplier rows are surfaced in the fix queue so operators can correct them before treating them as production evidence. Rule blocking is advisory in production today; rejection is not assured.",
     icon: PackageX,
   },
   {
@@ -67,8 +67,8 @@ const engineResults = [
     icon: Lock,
   },
   {
-    title: "Export-ready package",
-    detail: "Coverage and completeness checklist results, recall posture, and FDA/retailer exports use checked records only.",
+    title: "Export package from stored records",
+    detail: "Coverage and completeness checklist results, recall posture, and export packages are built from records stored for the tenant. RegEngine helps with recordkeeping. How those packages are used stays with the operator.",
     icon: FileOutput,
   },
 ];
@@ -105,7 +105,7 @@ function InflowImpactDiagram() {
             <div>
               <p className="font-mono text-label uppercase text-re-text-muted">Raw supplier feed</p>
               <p className="mt-1 text-subheading text-re-text-primary">
-                CSV/XLSX upload or supplier portal, the JSON events API, or EPCIS-shaped records (EPCIS in Preview)
+                CSV upload or the JSON events API (Live). EPCIS-shaped records are Preview. Other feeds are Beta.
               </p>
             </div>
           </div>
@@ -161,7 +161,7 @@ function InflowImpactDiagram() {
               <p className="font-mono text-label uppercase text-re-text-muted">Commit gate says yes</p>
               <h3 className="mt-3 text-subheading text-re-text-primary">Persist and prove</h3>
               <p className="mt-2 text-ui text-re-text-secondary">
-                RegEngine promotes checked records into tenant-scoped evidence, then uses that evidence for scores and exports.
+                RegEngine can promote records that passed the commit gate into tenant-scoped evidence and use that stored evidence for scores and export packages. Enforcement remains advisory unless RULES_ENGINE_ENFORCE is explicitly set and the route opts in.
               </p>
             </div>
           </div>
