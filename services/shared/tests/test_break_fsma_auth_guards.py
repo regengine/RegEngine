@@ -169,8 +169,13 @@ def test_validate_gln_gtin_sscc_mistyped_fail_closed() -> None:
 def test_tlc_strict_boundary() -> None:
     from shared.fsma_validation import validate_tlc
 
-    assert validate_tlc("00012345678901", strict=True).is_valid is False
-    assert validate_tlc("00012345678901-LotA", strict=True).is_valid is True
+    result = validate_tlc("0" * 14, strict=True)
+    assert result.is_valid is True
+    assert result.errors == []
+    assert any("production pattern" in w for w in result.warnings)
+    matched = validate_tlc("0" * 14 + "A", strict=True)
+    assert matched.is_valid is True
+    assert not any("production pattern" in w for w in matched.warnings)
 
 
 # --- auth key stores fail closed on non-string credentials -----------------
