@@ -1,23 +1,63 @@
 {
   "harvesting": {
-    "top_level": ["location_name"],
-    "kdes": ["harvest_date", "reference_document"]
+    "top_level": [
+      "location_name"
+    ],
+    "kdes": [
+      "harvest_date",
+      "immediate_subsequent_recipient",
+      "reference_document"
+    ]
   },
   "cooling": {
-    "top_level": ["location_name"],
-    "kdes": ["cooling_date", "reference_document"]
+    "top_level": [
+      "location_name"
+    ],
+    "kdes": [
+      "cooling_date",
+      "immediate_subsequent_recipient",
+      "harvest_location_name",
+      "reference_document"
+    ]
   },
   "initial_packing": {
-    "top_level": ["location_name"],
-    "kdes": ["packing_date", "reference_document", "harvester_business_name", "harvester_business_phone"]
+    "top_level": [
+      "location_name"
+    ],
+    "kdes": [
+      "packing_date",
+      "reference_document",
+      "harvester_business_name",
+      "harvester_business_phone",
+      "harvest_date",
+      "harvest_location_name",
+      "received_date",
+      "received_quantity",
+      "harvest_location_phone",
+      "harvest_location_address",
+      "growing_area_name_or_field_name",
+      "cooled",
+      "cooling_location_name_when_cooled_yes",
+      "cooling_date_when_cooled_yes"
+    ]
   },
   "first_land_based_receiving": {
     "top_level": [],
-    "kdes": ["landing_date", "receiving_location", "reference_document"]
+    "kdes": [
+      "landing_date",
+      "receiving_location",
+      "reference_document"
+    ]
   },
   "shipping": {
     "top_level": [],
-    "kdes": ["ship_date", "ship_from_location", "ship_to_location", "reference_document", "tlc_source_reference"]
+    "kdes": [
+      "ship_date",
+      "ship_from_location",
+      "ship_to_location",
+      "reference_document",
+      "tlc_source_reference"
+    ]
   },
   "receiving": {
     "top_level": [],
@@ -30,7 +70,16 @@
     ]
   },
   "transformation": {
-    "top_level": ["location_name"],
-    "kdes": ["transformation_date", "reference_document"]
+    "top_level": [
+      "location_name"
+    ],
+    "kdes": [
+      "transformation_date",
+      "reference_document",
+      "input_lot_codes",
+      "input_quantities",
+      "input_units_of_measure",
+      "input_product_descriptions"
+    ]
   }
 }

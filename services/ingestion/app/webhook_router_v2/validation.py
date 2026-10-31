@@ -10,6 +10,7 @@ monkeypatching ``app.webhook_router_v2.<name>`` keeps working.
 from __future__ import annotations
 
 import json
+import re
 import sys
 
 from sqlalchemy.exc import SQLAlchemyError
@@ -47,22 +48,194 @@ def _authoritative_kdes(event: IngestEvent) -> dict[str, object]:
         if isinstance(_val, str) and _val.strip() == "":
             continue
         available[_key] = _val
+    # Contract v3 wire name is input_lot_codes; accept Lab's legacy
+    # input_traceability_lot_codes (kdes or top-level) as a fill-in.
+    def _present(val: object) -> bool:
+        if val is None:
+            return False
+        if isinstance(val, str):
+            return val.strip() != ""
+        if isinstance(val, (list, tuple, set)):
+            return len(val) > 0
+        return True
+
+    if not _present(available.get("input_lot_codes")):
+        legacy = available.get("input_traceability_lot_codes")
+        if not _present(legacy):
+            legacy = getattr(event, "input_traceability_lot_codes", None)
+        if _present(legacy):
+            available["input_lot_codes"] = legacy
     return available
 
 
-def _validate_event_kdes(event: IngestEvent) -> list[str]:
-    """Validate that an event has all required KDEs for its CTE type."""
-    errors: list[str] = []
-    required = _pkg.REQUIRED_KDES_BY_CTE.get(event.cte_type, [])
+def _kde_present(val: object) -> bool:
+    """True when a KDE value is non-empty (string, list, or other scalar)."""
+    if val is None:
+        return False
+    if isinstance(val, str):
+        return val.strip() != ""
+    if isinstance(val, (list, tuple, set)):
+        return any(_kde_present(item) for item in val)
+    if isinstance(val, dict):
+        return any(_kde_present(item) for item in val.values())
+    return True
 
+
+def _event_ftl_payload(event: IngestEvent) -> dict:
+    """Build the dict shape ``is_ftl_food`` expects from an IngestEvent."""
+    payload: dict = {"kdes": dict(event.kdes or {})}
+    # Top-level FTL hints (rare) still count if present on the event object.
+    for key in ("ftl_covered", "ftl_category"):
+        if hasattr(event, key):
+            val = getattr(event, key)
+            if val is not None:
+                payload[key] = val
+    return payload
+
+
+
+def _parse_cooled_flag(val: object) -> bool | None:
+    """Parse explicit cooled yes/no. None means missing / unparseable."""
+    if val is None:
+        return None
+    if isinstance(val, bool):
+        return val
+    if isinstance(val, (int, float)) and val in (0, 1):
+        return bool(val)
+    if isinstance(val, str):
+        normalized = val.strip().lower()
+        if normalized in {"1", "true", "yes", "y"}:
+            return True
+        if normalized in {"0", "false", "no", "n"}:
+            return False
+        if normalized == "":
+            return None
+    return None
+
+
+def _looks_like_internal_id(val: object) -> bool:
+    """True for opaque codes (FIELD-A7, UUID-like) rather than display names."""
+    if not isinstance(val, str):
+        return False
+    s = val.strip()
+    if not s or " " in s:
+        return False
+    # Hyphenated uppercase/digit tokens or UUID-ish strings are internal ids.
+    if re.fullmatch(r"[A-Z0-9]+(?:-[A-Z0-9]+)+", s):
+        return True
+    if re.fullmatch(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}", s):
+        return True
+    if re.fullmatch(r"[A-Z]{1,12}-?[0-9]{1,8}", s):
+        return True
+    return False
+
+
+def _is_human_readable_name(val: object) -> bool:
+    """True when a value looks like a human-readable place/field name."""
+    if not isinstance(val, str):
+        return False
+    s = val.strip()
+    if len(s) < 2:
+        return False
+    if _looks_like_internal_id(s):
+        return False
+    # Must contain a letter; prefer spaces / mixed content over pure codes.
+    if not any(ch.isalpha() for ch in s):
+        return False
+    return True
+
+
+def _validate_event_kdes(event: IngestEvent) -> list[str]:
+    """Validate that an event has all required KDEs for its CTE type.
+
+    A-2190 / contract v3: Subpart S required-KDE gates apply when the product
+    is FTL or FTL status is unknown. Explicit ``ftl_covered=False`` (or a
+    non-FTL category) skips the required-KDE list so non-FTL foods are not
+    scored as gaps. Keep A-2170 location_incomplete behaviour untouched.
+    """
+    errors: list[str] = []
+
+    # FTL gate (fix 5). Import locally so monkeypatches on shared.rules.ftl
+    # and missing optional deps in unit tests stay isolated.
+    try:
+        from shared.rules.ftl import is_ftl_food
+    except ImportError:  # pragma: no cover - shared always present in service
+        is_ftl_food = None  # type: ignore[assignment]
+
+    if is_ftl_food is not None:
+        ftl_status = is_ftl_food(_event_ftl_payload(event))
+        if ftl_status is False:
+            return []
+
+    required = _pkg.REQUIRED_KDES_BY_CTE.get(event.cte_type, [])
     available = _authoritative_kdes(event)
 
     for kde_name in required:
         val = available.get(kde_name)
         if kde_name == "harvester_business_phone" and not isinstance(val, str):
             errors.append("Harvester business phone must be a non-empty string")
-        elif val is None or (isinstance(val, str) and val.strip() == ""):
+        elif not _kde_present(val):
             errors.append(f"Missing required KDE '{kde_name}' for {event.cte_type.value} CTE")
+
+    # Initial packing conditionals (A-2190 fix 2; Food Safety Lens answers):
+    # - farm location description (name + phone + address) separately required
+    # - field/growing area must be a human-readable name (internal id alone
+    #   only when a readable name is also supplied for export)
+    # - explicit cooled yes/no required; cooling_* only when cooled=yes
+    #   (do not infer cooled from cooling field presence)
+    cte_value = getattr(event.cte_type, "value", event.cte_type)
+    if cte_value == "initial_packing":
+        for farm_key in (
+            "harvest_location_name",
+            "harvest_location_phone",
+            "harvest_location_address",
+        ):
+            # harvest_location_name is also in REQUIRED_KDES_BY_CTE; re-check
+            # phone/address here so the farm description is complete as a set.
+            if farm_key == "harvest_location_name":
+                continue
+            if not _kde_present(available.get(farm_key)):
+                errors.append(
+                    f"Missing required KDE '{farm_key}' for initial_packing CTE "
+                    "(farm location description: name, phone, and address)"
+                )
+
+        growing_name = available.get("growing_area_name")
+        field_name = available.get("field_name")
+        field_id = available.get("field_id")
+        has_readable_name = _is_human_readable_name(growing_name) or _is_human_readable_name(
+            field_name
+        )
+        has_readable_field_id = _is_human_readable_name(field_id) and not _looks_like_internal_id(
+            field_id
+        )
+        # Internal id alone is OK only when a human-readable name is also present
+        # (stand-in for "maps to a name in the export" at ingest time).
+        has_mapped_internal_id = _kde_present(field_id) and has_readable_name
+        if not (has_readable_name or has_readable_field_id or has_mapped_internal_id):
+            errors.append(
+                "Missing required human-readable growing area or field name for "
+                "initial_packing CTE (growing_area_name or field_name; field_id "
+                "alone only when paired with a readable name for export)"
+            )
+
+        cooled_parsed = _parse_cooled_flag(available.get("cooled"))
+        if cooled_parsed is None:
+            errors.append(
+                "Missing required KDE 'cooled' for initial_packing CTE "
+                "(explicit yes/no required; do not infer from cooling fields)"
+            )
+        elif cooled_parsed is True:
+            if not _kde_present(available.get("cooling_location_name")):
+                errors.append(
+                    "Missing required KDE 'cooling_location_name' for initial_packing CTE "
+                    "(required when cooled=yes)"
+                )
+            if not _kde_present(available.get("cooling_date")):
+                errors.append(
+                    "Missing required KDE 'cooling_date' for initial_packing CTE "
+                    "(required when cooled=yes)"
+                )
 
     return errors
 

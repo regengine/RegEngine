@@ -86,6 +86,11 @@ CTE_COLUMNS: dict[str, list[tuple[str, str, str]]] = {
         ("growing_coordinates", "36.9107,-121.7569", "GPS coordinates of growing area (optional)"),
         ("grower_name", "Sunrise Organic Farm LLC", "Business name of grower"),
         ("harvest_date", "2026-04-01", "Date of harvest (YYYY-MM-DD) — growing rows ingest as harvesting"),
+        (
+            "immediate_subsequent_recipient",
+            "Sunrise Packhouse",
+            "Immediate subsequent recipient (who receives the harvested food next)",
+        ),
         ("reference_document", "HARV-2026-0401-001", "Harvest record or reference document number"),
     ],
     "harvesting": [
@@ -99,6 +104,11 @@ CTE_COLUMNS: dict[str, list[tuple[str, str, str]]] = {
         ("location_gln", "0614141000005", "GS1 GLN (optional, 13 digits)"),
         ("field_id", "FIELD-A7", "Field or growing area identifier"),
         ("harvester_name", "Valley Fresh Farms LLC", "Business name of harvester"),
+        (
+            "immediate_subsequent_recipient",
+            "Valley Fresh Packhouse",
+            "Immediate subsequent recipient (who receives the harvested food next)",
+        ),
         ("reference_document", "HARV-2026-0226-001", "Harvest record or reference document number"),
     ],
     "cooling": [
@@ -111,6 +121,16 @@ CTE_COLUMNS: dict[str, list[tuple[str, str, str]]] = {
         ("location_name", "Valley Fresh Cooler #2", "Cooling facility name"),
         ("location_gln", "0614141000005", "GS1 GLN (optional)"),
         ("temperature_celsius", "2.1", "Temperature at cooling (optional but recommended)"),
+        (
+            "immediate_subsequent_recipient",
+            "Valley Fresh Packhouse",
+            "Immediate subsequent recipient (who receives the cooled food next)",
+        ),
+        (
+            "harvest_location_name",
+            "Valley Fresh Farms, Salinas CA",
+            "Farm location where the food was harvested",
+        ),
         ("reference_document", "COOL-2026-0226-014", "Cooling record or reference document number"),
     ],
     "initial_packing": [
@@ -132,6 +152,45 @@ CTE_COLUMNS: dict[str, list[tuple[str, str, str]]] = {
         ("reference_document", "PACK-2026-0226-007", "Packing record or reference document number"),
         ("harvester_business_name", "Valley Fresh Farms LLC", "Business name of the harvester"),
         ("harvester_business_phone", "+1-202-555-0100", "Phone number of the harvester; sample number only"),
+        ("harvest_date", "2026-02-26", "Date the food was harvested (YYYY-MM-DD)"),
+        (
+            "harvest_location_name",
+            "Valley Fresh Farms, Salinas CA",
+            "Farm name where the food was harvested (location description)",
+        ),
+        (
+            "harvest_location_phone",
+            "+1-831-555-0147",
+            "Farm business phone for the harvest location description",
+        ),
+        (
+            "harvest_location_address",
+            "100 Farm Rd, Salinas CA 93901",
+            "Farm physical address for the harvest location description",
+        ),
+        (
+            "growing_area_name",
+            "North Field Block A",
+            "Human-readable growing area or field name (required; field_id alone is not enough)",
+        ),
+        (
+            "field_id",
+            "FIELD-A7",
+            "Optional internal field id; only sufficient when paired with growing_area_name / field_name",
+        ),
+        ("received_date", "2026-02-26", "Date the packer received the food (YYYY-MM-DD)"),
+        ("received_quantity", "500", "Quantity received (distinct from packed quantity)"),
+        (
+            "cooled",
+            "yes",
+            "Explicit yes/no: was the food cooled before packing? Required for RAC initial packing",
+        ),
+        (
+            "cooling_location_name",
+            "Valley Fresh Cooler #2",
+            "Cooling location (required when cooled=yes)",
+        ),
+        ("cooling_date", "2026-02-26", "Date of cooling (required when cooled=yes)"),
     ],
     "shipping": [
         ("traceability_lot_code", "TOM-0226-F3-001", "Lot code being shipped"),
@@ -190,6 +249,11 @@ CTE_COLUMNS: dict[str, list[tuple[str, str, str]]] = {
             "input_units_of_measure",
             "cases,cases",
             "Unit for each input lot, comma-separated (one value applies to all)",
+        ),
+        (
+            "input_product_descriptions",
+            "Roma Tomatoes,Romaine Lettuce",
+            "Product description for EACH input lot, comma-separated in input_lot_codes order",
         ),
         ("reference_document", "PROD-2026-0228-003", "Production record or reference document number"),
     ],

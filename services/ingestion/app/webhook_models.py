@@ -93,7 +93,7 @@ VALID_UNITS_OF_MEASURE = {
 # validation semantics. Exposed via /health as inflow_contract_version so
 # deployed instances can detect skew; the Inflow Lab Contract CI asserts
 # cross-repo equality.
-INFLOW_CONTRACT_VERSION = "2"
+INFLOW_CONTRACT_VERSION = "3"  # A-2190: harvest/cool recipient, packing carry-in, transform inputs, FTL gate
 
 
 # Required KDEs per CTE type (§1.1325–§1.1350)
@@ -105,6 +105,7 @@ REQUIRED_KDES_BY_CTE: Dict[WebhookCTEType, List[str]] = {
         "unit_of_measure",
         "harvest_date",
         "location_name",
+        "immediate_subsequent_recipient",  # §1.1325(a)(1); contract v3 / A-2190
         "reference_document",  # §1.1325(a)(1)(viii)
     ],
     WebhookCTEType.COOLING: [
@@ -114,6 +115,8 @@ REQUIRED_KDES_BY_CTE: Dict[WebhookCTEType, List[str]] = {
         "unit_of_measure",
         "cooling_date",
         "location_name",
+        "immediate_subsequent_recipient",  # §1.1325(b)(1); contract v3 / A-2190
+        "harvest_location_name",  # farm where harvested; contract v3 / A-2190
         "reference_document",  # §1.1325(b)(1)(vii)
     ],
     WebhookCTEType.INITIAL_PACKING: [
@@ -126,6 +129,14 @@ REQUIRED_KDES_BY_CTE: Dict[WebhookCTEType, List[str]] = {
         "reference_document",  # §1.1330(a)(16)
         "harvester_business_name",  # §1.1330(a)(7)
         "harvester_business_phone",  # §1.1330(a)(7); contract v2
+        "harvest_date",  # §1.1330(a); contract v3 / A-2190
+        "harvest_location_name",  # farm where harvested; contract v3 / A-2190
+        "received_date",  # date food received; contract v3 / A-2190
+        "received_quantity",  # qty received (distinct from packed); contract v3 / A-2190
+        # Food Safety Lens (A-2190): see validation.py for —
+        #   harvest_location_phone + harvest_location_address (farm description)
+        #   explicit cooled yes/no; cooling_* only when cooled=yes
+        #   human-readable growing_area_name / field_name (field_id alone insufficient)
     ],
     WebhookCTEType.FIRST_LAND_BASED_RECEIVING: [
         "traceability_lot_code",
@@ -166,6 +177,10 @@ REQUIRED_KDES_BY_CTE: Dict[WebhookCTEType, List[str]] = {
         "transformation_date",
         "location_name",
         "reference_document",  # §1.1350(a)(2)(vi)
+        "input_lot_codes",  # §1.1350(a)(1); contract v3 / A-2190
+        "input_quantities",  # §1.1350(a)(1)(iii); contract v3 / A-2190
+        "input_units_of_measure",  # §1.1350(a)(1)(iii); contract v3 / A-2190
+        "input_product_descriptions",  # §1.1350(a)(1); contract v3 / A-2190
     ],
 }
 
