@@ -81,10 +81,10 @@ async def test_create_checkout_uses_stripe_and_normalizes_plan(monkeypatch):
     )
 
     assert response.session_id == "cs_test_123"
-    assert response.plan == "growth"
+    assert response.plan == "list"
     assert captured["line_items"][0]["price"] == "price_growth_monthly"
     assert captured["metadata"]["tenant_id"] == "tenant-1"
-    assert captured["metadata"]["plan_id"] == "growth"
+    assert captured["metadata"]["plan_id"] == "list"
     assert captured["customer_email"] == "ops@example.com"
     assert captured_funnel["tenant_id"] == "tenant-1"
     assert captured_funnel["event_name"] == "checkout_started"
@@ -179,7 +179,7 @@ async def test_checkout_webhook_provisions_tenant_and_stores_mapping(monkeypatch
 
     mapping = fake_redis.hgetall(stripe_billing._tenant_subscription_key("tenant-123"))
     assert mapping["tenant_id"] == "tenant-123"
-    assert mapping["plan_id"] == "growth"
+    assert mapping["plan_id"] == "list"
     assert mapping["subscription_id"] == "sub_1"
     assert mapping["customer_id"] == "cus_1"
     assert fake_redis.get(stripe_billing._subscription_lookup_key("sub_1")) == "tenant-123"
@@ -545,3 +545,43 @@ def test_patching_package_stripe_propagates_to_usage_reporting(monkeypatch: pyte
     sentinel = object()
     monkeypatch.setattr(stripe_billing, "stripe", sentinel)
     assert stripe_billing._usage_reporting_mod.stripe is sentinel
+
+
+@pytest.mark.asyncio
+async def test_list_plans_exposes_pricing_page_compat_amounts() -> None:
+    """The pricing page consumes ga/partner monthly fields on list and base.
+
+    Annual is OPEN (null) until approved; standard/premium have no approved
+    self-serve dollar SKU and must not be emitted as invented tiers.
+    """
+    result = await stripe_billing.list_plans()
+    by_id = {plan["id"]: plan for plan in result["plans"]}
+
+    list_plan = by_id["list"]
+    assert list_plan["price_monthly"] == 999
+    assert list_plan["price_annual"] is None
+    assert list_plan["ga_monthly"] == 999
+    assert list_plan["partner_monthly"] == 499
+    assert list_plan["ga_annual"] is None
+    assert list_plan["partner_annual"] is None
+
+    # Synthetic compatibility entry for the page's historical `base` id.
+    base = by_id["base"]
+    assert base["price_monthly"] == 999
+    assert base["price_annual"] is None
+    assert base["ga_monthly"] == 999
+    assert base["partner_monthly"] == 499
+
+    founding = by_id["founding"]
+    assert founding["price_monthly"] == 499
+    assert founding["price_annual"] is None
+
+    assert "growth" not in by_id
+    assert "scale" not in by_id
+    assert "standard" not in by_id
+    assert "premium" not in by_id
+
+    for plan in result["plans"]:
+        assert plan["product_status"] == "Beta"
+        features = [feature.lower() for feature in plan["features"]]
+        assert any("epcis" in feature and "preview" in feature for feature in features)
