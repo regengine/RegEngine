@@ -10,6 +10,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Callout } from '@/components/ui/callout';
 import { ErrorState } from '@/components/ui/error-state';
+import { BetaUnavailableState } from '@/components/ui/beta-unavailable-state';
+import { isBetaUnavailableError } from '@/lib/dashboard-load-failure';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Field } from '@/components/ui/field';
 import { Input, fieldControlClasses } from '@/components/ui/input';
@@ -33,7 +35,7 @@ import {
 
 import { useAuth } from '@/lib/auth-context';
 import { useTenant } from '@/lib/tenant-context';
-import { getErrorRequestId, withRequestId } from '@/lib/api-error';
+import { apiError, getErrorRequestId, withRequestId } from '@/lib/api-error';
 import { useDashboardRefresh } from '@/hooks/use-dashboard-refresh';
 
 /* ── Types matching ProductCatalogResponse ── */
@@ -79,7 +81,7 @@ async function apiFetchProducts(tenantId: string): Promise<ProductCatalogRespons
     });
     if (!res.ok) {
         console.error(`Products fetch failed: ${res.status} ${res.statusText}`);
-        throw withRequestId(new Error("Couldn't load your product catalog."), res);
+        throw withRequestId(apiError(res.status, res.statusText), res);
     }
     return res.json();
 }
@@ -291,7 +293,7 @@ export default function ProductCatalogPage() {
                     </div>
                 )}
 
-                {error && <ErrorState message="We could not load this page." onRetry={() => loadProducts()} requestId={getErrorRequestId(error)} />}
+                {error && (isBetaUnavailableError(error) ? <BetaUnavailableState feature="Products" /> : <ErrorState message="We could not load this page." onRetry={() => loadProducts()} requestId={getErrorRequestId(error)} />)}
 
                 {isLoggedIn && !error && products.length > 0 && (
                     <>
