@@ -198,5 +198,6 @@ def test_allowlist_uses_only_reviewed_authority_classes():
         "global-human",
         "global-human-or-workload",
         "identity-global-self-service",
+        "tenant-scoped-directory",
         "worker-maintenance",
     }
