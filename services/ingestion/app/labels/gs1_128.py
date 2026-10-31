@@ -11,7 +11,7 @@ import calendar
 from dataclasses import dataclass
 from typing import Any
 
-from app.gs1_identifiers import validate_gln, validate_gtin, validate_sscc
+from ..gs1_identifiers import validate_gln, validate_gtin, validate_sscc
 
 # Code 128 symbol values (ISO/IEC 15417). Not identifier data.
 _START_C = 105
