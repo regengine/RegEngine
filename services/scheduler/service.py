@@ -80,6 +80,12 @@ logger = structlog.get_logger("scheduler")
 # spamming every run).
 _STALE_COVERAGE_ZERO_RUNS = 7
 
+# CTE retention policy (3 years) used by archive_expired_records for both the
+# fsma.arm_retention_purge call and the DELETE predicate, so the trigger's
+# armed minimum age and the sweep's cutoff cannot drift apart. The v142
+# helper refuses anything under the FSMA 204 24-month floor.
+_CTE_RETENTION_MIN_AGE = "1095 days"
+
 
 def _strict_database_role_cutover_enabled() -> bool:
     """Return whether control-plane work must be absent from DATABASE_URL."""
@@ -1317,15 +1323,18 @@ class SchedulerService:
                 # their FSMA retention clock ran.
                 #
                 # cte_events carries the v078 append-only trigger
-                # (prevent_cte_mutation, FDA 21 CFR 1.1455), so each
-                # per-tenant transaction sets the documented
-                # fsma.allow_mutation break-glass GUC transaction-locally
-                # (set_config is_local=true — clears at COMMIT). Retention
-                # purge past the 1095-day policy is an authorized
-                # mutation; the 24-month FSMA floor is guarded separately
-                # by enforce_kde_retention. Deletes cascade to cte_kdes
-                # and compliance_alerts (ON DELETE CASCADE, no append-only
-                # triggers there).
+                # (prevent_cte_mutation, FDA 21 CFR 1.1455). Since v142 the
+                # fsma.allow_mutation GUC no longer authorizes the runtime
+                # role on its own, so each per-tenant transaction arms the
+                # narrow retention path instead: fsma.arm_retention_purge
+                # (SECURITY DEFINER) records this transaction, tenant and
+                # minimum age, and the trigger then permits a DELETE only
+                # for that tenant's rows older than that age (floor: the
+                # FSMA 204 24-month retention). The arm cannot widen into
+                # an UPDATE, another table or a younger row. The 24-month
+                # floor is also guarded separately by enforce_kde_retention.
+                # Deletes cascade to cte_kdes and compliance_alerts (ON
+                # DELETE CASCADE, no append-only triggers there).
                 deleted_ctes = 0
                 from shared.maintenance_tenants import list_maintenance_tenant_ids  # noqa: PLC0415
 
@@ -1333,14 +1342,24 @@ class SchedulerService:
                 for tenant_id in tenant_ids:
                     with tenant_scope(tenant_id):
                         db.execute(
-                            __import__("sqlalchemy").text("SELECT set_config('fsma.allow_mutation', 'true', true)")
+                            __import__("sqlalchemy").text(
+                                "SELECT fsma.arm_retention_purge(CAST(:tid AS uuid), CAST(:min_age AS interval))"
+                            ),
+                            {"tid": str(tenant_id), "min_age": _CTE_RETENTION_MIN_AGE},
                         )
+                        # The tenant predicate is explicit, not left to RLS:
+                        # a BYPASSRLS session (the CI databases, a scratch
+                        # superuser) would otherwise sweep every tenant's
+                        # rows under the first tenant's arm and be refused
+                        # by the trigger for the others.
                         result = db.execute(
                             __import__("sqlalchemy").text("""
                                 DELETE FROM fsma.cte_events
-                                WHERE ingested_at < NOW() - INTERVAL '1095 days'
+                                WHERE tenant_id = CAST(:tid AS uuid)
+                                  AND ingested_at < NOW() - CAST(:min_age AS interval)
                                 RETURNING id
-                            """)
+                            """),
+                            {"tid": str(tenant_id), "min_age": _CTE_RETENTION_MIN_AGE},
                         )
                         deleted_ctes += len(result.fetchall())
                         db.commit()

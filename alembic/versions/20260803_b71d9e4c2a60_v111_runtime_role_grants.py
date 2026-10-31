@@ -1311,6 +1311,30 @@ BEGIN
         END IF;
     END LOOP;
 
+    -- v142 (17fc5f9d1e69) break-glass authorization. Absent on the first
+    -- pass, present when the supported runner reapplies this cutover at
+    -- head. The append-only triggers on fsma.cte_events, fsma.hash_chain,
+    -- fsma.correction_patches and fsma.traceability_events call the two
+    -- read-only helpers as the invoking role, so every runtime role that
+    -- performs sanctioned DML on those tables needs EXECUTE on them; neither
+    -- can arm anything (one reads the GUC and the caller's own role
+    -- membership, the other reads owner-only arm rows for the current
+    -- transaction). arm_retention_purge is the scheduler's narrow path: it
+    -- permits DELETE of one tenant's fsma.cte_events rows older than the
+    -- FSMA floor inside the arming transaction and nothing else.
+    FOREACH function_signature IN ARRAY ARRAY[
+        'fsma.break_glass_authorized(oid)',
+        'fsma.retention_purge_permits(oid, uuid, timestamptz)',
+        'fsma.arm_retention_purge(uuid, interval)'
+    ] LOOP
+        IF to_regprocedure(function_signature) IS NOT NULL THEN
+            EXECUTE format(
+                'GRANT EXECUTE ON FUNCTION %s TO regengine, regengine_sysadmin',
+                function_signature
+            );
+        END IF;
+    END LOOP;
+
     -- Admin sessions still use tenant context for tenant-scoped operations,
     -- but only the exact sysadmin role may arm the global policy branch.
     GRANT EXECUTE ON FUNCTION public.get_tenant_context() TO regengine_sysadmin;
