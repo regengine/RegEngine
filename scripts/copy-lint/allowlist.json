@@ -1,6 +1,77 @@
 {
   "comment": "Justified exceptions only. Each entry needs file, rule, match (substring of the flagged text) and reason. Optional line pins it to one line. Review every entry in PR.",
   "entries": [
-    { "file": "frontend/src/lib/api-proxy.ts", "rule": "nan-undefined", "match": "bearer undefined", "reason": "Auth header guard that rejects a malformed token. Never rendered." }
+    {
+      "file": "frontend/src/lib/api-proxy.ts",
+      "rule": "nan-undefined",
+      "match": "bearer undefined",
+      "reason": "Auth header guard that rejects a malformed token. Never rendered."
+    },
+    {
+      "file": "frontend/src/components/layout/marketing-nav.ts",
+      "rule": "sample-demo",
+      "match": "Demo workspace",
+      "reason": "Approved copy for the public demo workspace and landing hero (design handoff 2026-10-28). The surface is labelled as a demo on synthetic data on purpose."
+    },
+    {
+      "file": "frontend/src/app/page.tsx",
+      "rule": "sample-demo",
+      "match": "Open the demo workspace",
+      "reason": "Approved copy for the public demo workspace and landing hero (design handoff 2026-10-28). The surface is labelled as a demo on synthetic data on purpose."
+    },
+    {
+      "file": "frontend/src/components/marketing/HeroWorkbench.tsx",
+      "rule": "sample-demo",
+      "match": "demo workspace",
+      "reason": "Approved copy for the public demo workspace and landing hero (design handoff 2026-10-28). The surface is labelled as a demo on synthetic data on purpose."
+    },
+    {
+      "file": "frontend/src/components/marketing/HeroWorkbench.tsx",
+      "rule": "sample-demo",
+      "match": "Synthetic data",
+      "reason": "Approved copy for the public demo workspace and landing hero (design handoff 2026-10-28). The surface is labelled as a demo on synthetic data on purpose."
+    },
+    {
+      "file": "frontend/src/components/demo-workspace/DemoShell.tsx",
+      "rule": "sample-demo",
+      "match": "Demo workspace",
+      "reason": "Approved copy for the public demo workspace and landing hero (design handoff 2026-10-28). The surface is labelled as a demo on synthetic data on purpose."
+    },
+    {
+      "file": "frontend/src/components/demo-workspace/DemoShell.tsx",
+      "rule": "sample-demo",
+      "match": "Reset demo",
+      "reason": "Approved copy for the public demo workspace and landing hero (design handoff 2026-10-28). The surface is labelled as a demo on synthetic data on purpose."
+    },
+    {
+      "file": "frontend/src/components/demo-workspace/DemoShell.tsx",
+      "rule": "sample-demo",
+      "match": "synthetic data",
+      "reason": "Approved copy for the public demo workspace and landing hero (design handoff 2026-10-28). The surface is labelled as a demo on synthetic data on purpose."
+    },
+    {
+      "file": "frontend/src/components/demo-workspace/RecordDetail.tsx",
+      "rule": "sample-demo",
+      "match": "Reset demo",
+      "reason": "Approved copy for the public demo workspace and landing hero (design handoff 2026-10-28). The surface is labelled as a demo on synthetic data on purpose."
+    },
+    {
+      "file": "frontend/src/app/demo/layout.tsx",
+      "rule": "sample-demo",
+      "match": "Demo workspace",
+      "reason": "Approved copy for the public demo workspace and landing hero (design handoff 2026-10-28). The surface is labelled as a demo on synthetic data on purpose."
+    },
+    {
+      "file": "frontend/src/app/demo/layout.tsx",
+      "rule": "sample-demo",
+      "match": "synthetic data",
+      "reason": "Approved copy for the public demo workspace and landing hero (design handoff 2026-10-28). The surface is labelled as a demo on synthetic data on purpose."
+    },
+    {
+      "file": "frontend/src/app/demo/layout.tsx",
+      "rule": "sample-demo",
+      "match": "demo workspace",
+      "reason": "Approved copy for the public demo workspace and landing hero (design handoff 2026-10-28). The surface is labelled as a demo on synthetic data on purpose."
+    }
   ]
 }

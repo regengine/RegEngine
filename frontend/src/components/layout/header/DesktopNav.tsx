@@ -5,6 +5,7 @@ import { LayoutGrid } from 'lucide-react';
 import { MARKETING_PRIMARY_NAV } from '@/components/layout/marketing-nav';
 import { ThemeToggle } from '@/components/layout/theme-toggle';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { NavDropdown } from './NavDropdown';
 import type { DesktopNavProps } from './types';
 
@@ -53,7 +54,14 @@ export function DesktopNav({
     return (
         <div className="marketing-desktop-nav hidden xl:flex items-center gap-3">
             {(showLoggedIn ? LOGGED_IN_NAV : MARKETING_PRIMARY_NAV).map((item) => (
-                <Link key={item.label} href={item.href} className={NAV_LINK}>
+                <Link
+                    key={item.label}
+                    href={item.href}
+                    className={cn(
+                        NAV_LINK,
+                        'emphasis' in item && item.emphasis === 'brand' && 'text-re-brand hover:text-re-brand-dark'
+                    )}
+                >
                     {item.label}
                 </Link>
             ))}

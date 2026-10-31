@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isAuthenticatedAppRoute, shouldHideMarketingChrome } from '@/lib/app-routes';
+import { isAuthenticatedAppRoute, isForcedDarkRoute, shouldHideMarketingChrome } from '@/lib/app-routes';
 
 describe('app route ownership', () => {
     it('treats operational root routes as authenticated app routes', () => {
@@ -32,5 +32,14 @@ describe('app route ownership', () => {
         expect(shouldHideMarketingChrome('/developers/compliance-verticals')).toBe(false);
         // Portal routes carry their own chrome but are NOT middleware-auth routes.
         expect(isAuthenticatedAppRoute('/developer/portal')).toBe(false);
+    });
+
+    it('gives the public demo workspace its own chrome without an auth gate, and forces dark on it and the landing page', () => {
+        expect(shouldHideMarketingChrome('/demo')).toBe(true);
+        expect(isAuthenticatedAppRoute('/demo')).toBe(false);
+        expect(isForcedDarkRoute('/')).toBe(true);
+        expect(isForcedDarkRoute('/demo')).toBe(true);
+        expect(isForcedDarkRoute('/pricing')).toBe(false);
+        expect(isForcedDarkRoute('/demo/anything')).toBe(false);
     });
 });

@@ -1,28 +1,14 @@
 import Link from "next/link";
-import { BookCallLink } from "@/components/conversion/BookCallLink";
 import type { Metadata } from "next";
-import {
-  ArrowRight,
-  Boxes,
-  CalendarClock,
-  CheckCircle2,
-  ClipboardCheck,
-  Database,
-  FileCheck2,
-  FileSpreadsheet,
-  Gauge,
-  GitBranch,
-  PackageCheck,
-  ScanLine,
-  ShieldCheck,
-} from "lucide-react";
-import { EvidenceCard } from "@/components/compliance";
+import { ArrowRight, CheckCircle2 } from "lucide-react";
+import { BookCallLink } from "@/components/conversion/BookCallLink";
+import { LiveDot } from "@/components/demo-workspace/HueDot";
 import { Container } from "@/components/layout/container";
-import { Section } from "@/components/layout/section";
+import { HeroWorkbench } from "@/components/marketing/HeroWorkbench";
 import { Button } from "@/components/ui/button";
-import { Callout } from "@/components/ui/callout";
 import { Card } from "@/components/ui/card";
 import { capabilities } from "@/lib/capabilities";
+import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
   title: "FSMA 204 Recordkeeping Software | RegEngine",
@@ -38,84 +24,59 @@ export const metadata: Metadata = {
   },
 };
 
-const problem = [
+const ruleStats = [
   {
-    title: "The request",
+    value: "24 hrs",
     detail:
-      "Under 21 CFR 1.1455(c)(3)(ii), FDA can ask a covered firm for an electronic sortable spreadsheet of traceability records during an outbreak, a recall, or another threat to public health. It is due within 24 hours unless FDA agrees to more time.",
-    icon: FileSpreadsheet,
+      "Time the FDA gives you to produce an electronic sortable spreadsheet under 21 CFR 1.1455(c)(3)(ii), unless it agrees to more.",
   },
   {
-    title: "The records",
+    value: "7 CTEs",
     detail:
-      "Dates, quantities, locations, and the traceability lot code once one is assigned, for every Critical Tracking Event: harvesting, cooling, initial packing, first land-based receiving, shipping, receiving, and transformation. Which fields apply varies by event. Most of it comes from suppliers, in whatever shape they keep it.",
-    icon: Boxes,
+      "Harvesting, cooling, initial packing, first land-based receiving, shipping, receiving, transformation. Each has its own Key Data Elements.",
   },
   {
-    title: "The date",
+    value: "2028",
     detail:
-      "FDA has said it will not enforce the Food Traceability Rule before July 20, 2028, following a Congressional directive. The requirements did not change. Buyer programs run on their own calendars.",
-    icon: CalendarClock,
+      "The FDA says it will not enforce before July 20, 2028. The requirements did not change, and buyer programs run on their own calendars.",
   },
 ];
 
-const evidenceCards = [
+const steps = [
+  { label: "Ingest", detail: "CSV upload, or events over the JSON API. EPCIS 2.0 intake is in preview." },
+  { label: "Check", detail: "Each record is tested for the CTEs and KDEs its event type requires." },
+  { label: "Fix", detail: "Every gap gets a reason, an owner, and a correction link the supplier can answer." },
   {
-    title: "Ingest workspace",
-    description: "CTE/KDE records arrive through CSV upload or the JSON events API and enter the inflow workbench for coverage checking.",
-    state: "needs-correction" as const,
-    meta: "Inflow workbench",
-    icon: Gauge,
+    label: "Commit",
+    detail: "Accepted records enter a hash-chained, append-only ledger. A commit is a record, not a certification.",
+    filled: true,
   },
-  {
-    title: "Commit ledger",
-    description: "After checks you configure, accepted records enter the append-only evidence ledger with provenance and workspace scope.",
-    state: "committed" as const,
-    meta: "Evidence ledger",
-    icon: GitBranch,
-  },
-  {
-    title: "Export package state",
-    description: "Drafted, blocked on checklist, or exported. §1.1455 is the FDA records-request rule. This card does not claim we meet that clock.",
-    state: "needs-correction" as const,
-    meta: "Package state",
-    icon: PackageCheck,
-  },
+  { label: "Export", detail: "FDA-shaped, buyer-shaped, or internal packets, each with a SHA-256 manifest." },
 ];
 
-const workflow = [
-  { label: "Ingest", detail: "CSV uploads and JSON events API submissions enter the workbench.", icon: ScanLine },
-  { label: "Check", detail: "CTE/KDE coverage and completeness are flagged in the inflow workbench.", icon: Database },
-  { label: "Fix", detail: "Every gap gets a reason, owner, and recovery path.", icon: ClipboardCheck },
-  { label: "Commit", detail: "Commit is our append-only step. After the checks you configure, accepted records enter the evidence ledger. Commit is not a certification, not an FDA gate, and not a retailer gate.", icon: ShieldCheck },
-  { label: "Export", detail: "FDA-oriented, buyer-oriented, or internal packets with a hash manifest where enabled.", icon: PackageCheck },
-];
+const EYEBROW = "font-mono text-small font-medium uppercase tracking-[0.14em]";
+const H2 = "font-display text-heading-lg text-re-text-primary";
+const TOOL_CARD =
+  "group flex items-center justify-between gap-4 rounded-lg border border-re-border-subtle bg-re-surface-base px-5 py-4 no-underline transition-colors duration-120 hover:border-re-brand motion-reduce:transition-none";
 
-const destinations = [
-  { label: "Product", href: "/product", icon: Database, note: "Command Center workflows" },
-  { label: "Tools", href: "/tools", icon: Gauge, note: "Compliance instruments" },
-  { label: "Security", href: "/security", icon: FileCheck2, note: "Evidence Ledger controls" },
-  { label: "Trust", href: "/trust", icon: CheckCircle2, note: "Verification posture" },
-];
-
-function IngestPathsCard() {
+function IngestPathsToday() {
   return (
-    <Card padding="spacious" className="flex flex-col gap-5">
-      <h2 className="font-mono text-label uppercase text-re-text-muted">Ingest paths today</h2>
+    <Card padding="compact" className="mt-5 grid gap-5 sm:grid-cols-[auto_1fr_1fr] sm:items-start">
+      <p className={cn(EYEBROW, "text-re-text-muted")}>Ingest paths today</p>
       <div>
-        <h3 className="text-heading text-re-text-primary">Live</h3>
-        <ul className="mt-3 grid gap-2">
+        <h3 className="text-subheading text-re-text-primary">Live</h3>
+        <ul className="mt-2 grid gap-1.5">
           {capabilities.live.map((name) => (
             <li key={name} className="flex items-center gap-2 text-ui text-re-text-secondary">
-              <CheckCircle2 className="h-4 w-4 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+              <CheckCircle2 className="h-4 w-4 shrink-0 text-re-success" strokeWidth={1.75} aria-hidden="true" />
               <span>{name}</span>
             </li>
           ))}
         </ul>
       </div>
       <div>
-        <h3 className="text-heading text-re-text-primary">Preview</h3>
-        <ul className="mt-3 grid gap-2">
+        <h3 className="text-subheading text-re-text-primary">Preview</h3>
+        <ul className="mt-2 grid gap-1.5">
           {capabilities.preview.map((name) => (
             <li key={name} className="flex items-center justify-between gap-3 text-ui text-re-text-secondary">
               <span>{name}</span>
@@ -123,185 +84,155 @@ function IngestPathsCard() {
             </li>
           ))}
         </ul>
-        <p className="mt-3 text-small text-re-text-tertiary">Preview paths are in active development.</p>
       </div>
-      <Link href="/verify" className="group inline-flex items-center gap-2 text-ui text-re-text-primary no-underline">
-        Verify an evidence bundle
-        <ArrowRight className="h-4 w-4 transition-transform duration-120 group-hover:translate-x-1 motion-reduce:transition-none" strokeWidth={1.75} aria-hidden="true" />
-      </Link>
     </Card>
   );
 }
 
 export default function HomePage() {
   return (
-    <div className="re-compliance-os min-h-screen">
-      <Container as="section" width="marketing" className="grid items-start gap-10 py-12 lg:grid-cols-[1.1fr_0.9fr] lg:py-16">
-        <div>
-          <p className="mb-4 font-mono text-label uppercase text-re-text-muted">
-            FSMA 204 · 21 CFR Part 1 Subpart S
-          </p>
-          <h1 className="max-w-[760px] font-display text-display text-re-text-primary">
-            In an outbreak or recall, the Food Traceability Rule lets the FDA ask for a sortable spreadsheet due within 24 hours. Supplier data does not arrive that way.
-          </h1>
-          <p className="mt-6 max-w-[68ch] text-body text-re-text-secondary">
-            RegEngine checks supplier records for CTE and KDE gaps before they become evidence, routes each gap to an owner, and keeps accepted records in an append-only ledger you can export to support your response to a request.
-          </p>
-          <p className="mt-3 max-w-[68ch] text-body text-re-text-secondary">
-            Send records by CSV upload or the JSON events API. EPCIS 2.0 is in Preview.
-          </p>
-          <Callout tone="neutral" className="mt-6 max-w-[68ch]">
-            <p>
-              FDA has said it will not enforce the Food Traceability Rule before <strong className="font-medium text-re-text-primary">July 20, 2028</strong>, following a Congressional directive. Buyer programs are separate and must be confirmed with your buyer.
+    <div className="re-display-outfit min-h-screen bg-re-surface-base text-re-text-primary">
+      <Container as="section" width="docs" className="relative overflow-hidden pb-14 pt-12">
+        <div className="grid items-center gap-8 lg:grid-cols-2 lg:gap-10">
+          <div className="min-w-0">
+            <p className="mb-4 inline-flex items-center gap-2 rounded-full border border-re-brand-muted bg-re-brand-muted px-3.5 py-1.5">
+              <LiveDot />
+              <span className="font-mono text-label font-medium tracking-[0.06em] text-re-brand">
+                FSMA 204 · 21 CFR PART 1 SUBPART S
+              </span>
             </p>
-          </Callout>
-          <div className="mt-8 flex flex-wrap gap-3">
-            <Button asChild size="lg">
-              <Link href="/tools/kde-checker">
-                See the fields your records need
-                <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
-              </Link>
-            </Button>
-            <Button asChild variant="secondary" size="lg">
-              <BookCallLink href="/contact" placement="home_page">Book a 30-min call</BookCallLink>
-            </Button>
+            <p className="mb-4 max-w-[480px] text-[1.0625rem] leading-relaxed text-re-text-primary">
+              <span className="block">
+                The FDA can ask for your traceability records on{" "}
+                <span className="font-semibold text-re-warning">24 hours&apos; notice</span>.
+              </span>
+              <span className="block">They come from suppliers, in forty different shapes.</span>
+            </p>
+            <h1 className="font-display text-display text-re-text-primary [text-wrap:balance]">
+              Find the gaps before the FDA does.
+            </h1>
+            <p className="mt-3.5 max-w-[460px] text-[0.9375rem] leading-relaxed text-re-text-tertiary">
+              RegEngine checks each supplier record against the fields the rule requires, routes every gap to an owner,
+              and exports the sortable spreadsheet with a hash manifest.
+            </p>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <Button asChild size="lg">
+                <Link href="/tools/kde-checker">
+                  See the fields your records need
+                  <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                </Link>
+              </Button>
+              <Button asChild variant="secondary" size="lg">
+                <Link href="/demo">Open the demo workspace</Link>
+              </Button>
+            </div>
           </div>
-          <p className="mt-3 text-small text-re-text-tertiary">
-            The checklist is free. No account, no API key, no email required. Print or download the result.
-          </p>
-        </div>
 
-        <IngestPathsCard />
+          <HeroWorkbench />
+        </div>
       </Container>
 
-      <Section width="marketing" tone="inset">
-        <h2 className="max-w-[24ch] font-display text-heading-lg text-re-text-primary">
-          What the rule asks for, and what you actually have.
-        </h2>
-        <div className="mt-8 grid gap-4 md:grid-cols-3">
-          {problem.map((item) => (
-            <Card key={item.title} padding="compact">
-              <item.icon className="h-5 w-5 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
-              <h3 className="mt-4 text-heading text-re-text-primary">{item.title}</h3>
-              <p className="mt-2 text-ui text-re-text-secondary">{item.detail}</p>
-            </Card>
-          ))}
-        </div>
-      </Section>
-
-      <section className="border-y border-re-border-subtle">
-        <Container width="marketing">
-          <h2 className="pt-10 font-display text-heading-lg text-re-text-primary">How RegEngine works</h2>
-          <ol className="grid md:grid-cols-5">
-            {workflow.map((step, index) => (
-              <li key={step.label} className="border-b border-re-border-subtle py-5 md:border-b-0 md:border-r md:px-5 md:first:pl-0 md:last:border-r-0 md:last:pr-0">
-                <div className="flex items-center justify-between gap-3">
-                  <step.icon className="h-4 w-4 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
-                  <span className="font-mono text-label tabular-nums text-re-text-muted">{String(index + 1).padStart(2, "0")}</span>
-                </div>
-                <h3 className="mt-5 text-heading text-re-text-primary">{step.label}</h3>
-                <p className="mt-2 text-ui text-re-text-secondary">{step.detail}</p>
-              </li>
+      <section className="border-y border-re-border-subtle bg-re-surface-card">
+        <Container width="docs" className="py-16">
+          <div className="mb-10 text-center">
+            <p className={cn(EYEBROW, "text-re-warning")}>What the rule asks for</p>
+            <h2 className={cn(H2, "mx-auto mt-3 max-w-[720px] [text-wrap:balance]")}>
+              A sortable spreadsheet, built from records your suppliers keep.
+            </h2>
+          </div>
+          <div className="grid gap-5 md:grid-cols-3">
+            {ruleStats.map((stat) => (
+              <div key={stat.value} className="rounded-lg border border-re-border-subtle bg-re-surface-base px-6 py-7">
+                <p className="mb-3 font-display text-[2.625rem] font-bold leading-none tracking-[-0.02em] text-re-brand">
+                  {stat.value}
+                </p>
+                <p className="text-ui leading-relaxed text-re-text-tertiary">{stat.detail}</p>
+              </div>
             ))}
-          </ol>
+          </div>
+          <IngestPathsToday />
         </Container>
       </section>
 
-      <Section width="marketing" flush>
-        <div className="grid gap-10 lg:grid-cols-[0.72fr_1fr]">
-          <div>
-            <h2 className="max-w-[20ch] font-display text-heading-lg text-re-text-primary">
-              Make every compliance object show its state.
-            </h2>
-            <p className="mt-5 max-w-[68ch] text-body text-re-text-secondary">
-              Teams can see blocked, needs correction, corrected, committed, or exported. These statuses do not establish readiness for a recall, a retailer, or an FDA request.
-            </p>
-          </div>
-          <div className="grid gap-4 md:grid-cols-3">
-            {evidenceCards.map((card) => (
-              <EvidenceCard key={card.title} {...card}>
-                <p className="text-small text-re-text-tertiary">Object state drives badge, border, copy, and next action.</p>
-              </EvidenceCard>
-            ))}
-          </div>
+      <Container as="section" width="docs" id="how" className="py-20">
+        <div className="mb-10">
+          <p className={cn(EYEBROW, "text-re-brand")}>How RegEngine works</p>
+          <h2 className={cn(H2, "mt-3 max-w-[640px]")}>Five steps. Every record shows which one it is on.</h2>
         </div>
-      </Section>
-
-      <Section id="next-steps" width="marketing" tone="inset">
-        <h2 className="font-display text-heading-lg text-re-text-primary">Next steps</h2>
-        <div className="mt-8 grid gap-4 md:grid-cols-3">
-          <Card padding="compact" className="flex flex-col">
-            <ClipboardCheck className="h-5 w-5 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
-            <h3 className="mt-4 text-heading text-re-text-primary">See the fields your records need</h3>
-            <p className="mt-2 flex-1 text-ui text-re-text-secondary">
-              Pick a food on the Food Traceability List and an event. Get the starting list of Key Data Elements the record needs. Free. No account or email required; print or download the result.
-            </p>
-            <Button asChild className="mt-5 self-start">
-              <Link href="/tools/kde-checker">
-                See the fields your records need
-                <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
-              </Link>
-            </Button>
-          </Card>
-          <Card padding="compact" className="flex flex-col">
-            <ShieldCheck className="h-5 w-5 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
-            <h3 className="mt-4 text-heading text-re-text-primary">Verify an evidence bundle</h3>
-            <p className="mt-2 flex-1 text-ui text-re-text-secondary">
-              Download the verification script and check the file hashes of a bundle yourself, on your own machine.
-            </p>
-            <Button asChild variant="secondary" className="mt-5 self-start">
-              <Link href="/verify">
-                Verify an evidence bundle
-                <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
-              </Link>
-            </Button>
-          </Card>
-          <Card padding="compact" className="flex flex-col">
-            <ScanLine className="h-5 w-5 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
-            <h3 className="mt-4 text-heading text-re-text-primary">Talk it through</h3>
-            <p className="mt-2 flex-1 text-ui text-re-text-secondary">
-              Thirty minutes with the founder on your supplier data and the records you need to hold. Bring one supplier file if you have it.
-            </p>
-            <Button asChild variant="secondary" className="mt-5 self-start">
-              <BookCallLink href="/contact" placement="home_next_steps">
-                Book a 30-min call
-                <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
-              </BookCallLink>
-            </Button>
-          </Card>
-        </div>
-        <Callout tone="neutral" className="mt-8 max-w-[80ch]">
-          <p>
-            RegEngine does not imply FDA endorsement or certification, is not a readiness score, does not claim that any workspace meets the 24-hour request, is not a recall clock product, shows no live customer metrics, and is not legal advice.
-          </p>
-        </Callout>
-      </Section>
-
-      <Section width="marketing" className="pb-20 sm:pb-24">
-        <div className="grid gap-5 md:grid-cols-4">
-          {destinations.map(({ label, href, icon: Icon, note }) => (
-            <Link key={label} href={href} className="group border-t border-re-border-strong pt-4 no-underline">
-              <div className="flex items-center justify-between">
-                <Icon className="h-4 w-4 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
-                <ArrowRight className="h-4 w-4 text-re-text-tertiary transition-transform duration-120 group-hover:translate-x-1 motion-reduce:transition-none" strokeWidth={1.75} aria-hidden="true" />
-              </div>
-              <span className="mt-10 block text-heading text-re-text-primary">{label}</span>
-              <span className="mt-2 block text-ui text-re-text-secondary">{note}</span>
-            </Link>
+        <ol className="relative grid gap-5 sm:grid-cols-[repeat(auto-fit,minmax(150px,1fr))]">
+          <span
+            aria-hidden="true"
+            className="absolute left-3.5 right-[calc(20%-44px)] top-3.5 hidden border-t border-dashed border-re-border-subtle sm:block"
+          />
+          {steps.map((step, index) => (
+            <li key={step.label} className="relative">
+              <span
+                className={cn(
+                  "mb-4 flex h-7 w-7 items-center justify-center rounded-full border border-re-brand font-mono text-label font-semibold",
+                  step.filled ? "bg-re-brand text-re-brand-foreground" : "bg-re-surface-base text-re-brand",
+                )}
+              >
+                {String(index + 1).padStart(2, "0")}
+              </span>
+              <h3 className="font-display text-heading text-re-text-primary">{step.label}</h3>
+              <p className="mt-2 text-ui leading-relaxed text-re-text-tertiary">{step.detail}</p>
+            </li>
           ))}
-        </div>
-      </Section>
+        </ol>
+      </Container>
 
-      <footer className="border-t border-re-border-subtle py-8">
-        <Container width="marketing">
-          <p className="text-ui text-re-text-secondary">
-            RegEngine · Pasadena, CA · early-stage
-          </p>
-          <p className="mt-2 text-small text-re-text-muted">
-            FDA has said it will not enforce the Food Traceability Rule before July 20, 2028, following a Congressional directive. Buyer programs are not FDA. No seals, certifications, or FDA logo.
-          </p>
+      <section id="tools" className="border-t border-re-border-subtle bg-re-surface-card">
+        <Container width="docs" className="py-20">
+          <div className="grid items-start gap-10 md:grid-cols-2">
+            <div>
+              <p className={cn(EYEBROW, "mb-3 text-re-brand")}>Free tools · no signup required</p>
+              <h2 className={cn(H2, "mb-4")}>Start with the records you already have.</h2>
+              <p className="max-w-[440px] text-body text-re-text-tertiary">
+                Three ways in. None needs an account, and nothing you paste is stored.
+              </p>
+            </div>
+            <div className="flex flex-col gap-3.5">
+              <Link href="/tools/kde-checker" className={TOOL_CARD}>
+                <span>
+                  <span className="mb-1 block text-subheading text-re-text-primary">See the fields your records need</span>
+                  <span className="block text-[0.8125rem] text-re-text-tertiary">
+                    Pick a food on the FTL and an event. Get the fields the record needs. Print or download.
+                  </span>
+                </span>
+                <span aria-hidden="true" className="text-heading text-re-brand">→</span>
+              </Link>
+              <Link href="/verify" className={TOOL_CARD}>
+                <span>
+                  <span className="mb-1 block text-subheading text-re-text-primary">Verify an evidence bundle</span>
+                  <span className="block text-[0.8125rem] text-re-text-tertiary">
+                    Download <span className="font-mono">verify_chain.py</span> and check a bundle&apos;s hashes on your own machine.
+                  </span>
+                </span>
+                <span aria-hidden="true" className="text-heading text-re-brand">→</span>
+              </Link>
+              <BookCallLink href="/contact" placement="home_free_tools" className={TOOL_CARD}>
+                <span>
+                  <span className="mb-1 block text-subheading text-re-text-primary">Book a 30-min call</span>
+                  <span className="block text-[0.8125rem] text-re-text-tertiary">
+                    Thirty minutes with the founder. Bring one supplier file.
+                  </span>
+                </span>
+                <span aria-hidden="true" className="text-heading text-re-brand">→</span>
+              </BookCallLink>
+            </div>
+          </div>
         </Container>
-      </footer>
+      </section>
+
+      <Container as="section" width="docs" className="pb-12 pt-10">
+        <p className="max-w-[960px] text-small leading-relaxed text-re-text-muted">
+          RegEngine does not imply FDA endorsement or certification, is not a readiness score, does not claim that any
+          workspace meets the 24-hour request, is not a recall clock product, shows no live customer metrics, and is not
+          legal advice. Buyer programs are separate from the FDA; confirm them with your buyer.{" "}
+          <span>Live today: {capabilities.live.join(" and ")}.</span>{" "}
+          <span>In preview: EPCIS 2.0 intake and export.</span>
+        </p>
+      </Container>
     </div>
   );
 }

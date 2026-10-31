@@ -74,11 +74,14 @@ export function MobileMenu({ user, showLoggedIn, pathname, mobileOpen, setMobile
                             href={item.href}
                             onClick={() => setMobileOpen(false)}
                             aria-current={pathname === item.href ? 'page' : undefined}
-                            className={`relative flex min-h-[48px] items-center rounded-md px-3 py-3.5 text-ui no-underline ${
+                            className={cn(
+                                'relative flex min-h-[48px] items-center rounded-md px-3 py-3.5 text-ui no-underline transition-colors duration-120 hover:bg-re-surface-inset motion-reduce:transition-none',
                                 pathname === item.href
                                     ? 'bg-re-surface-inset font-medium text-re-text-primary'
-                                    : 'text-re-text-secondary'
-                            } transition-colors duration-120 hover:bg-re-surface-inset motion-reduce:transition-none`}
+                                    : 'emphasis' in item && item.emphasis === 'brand'
+                                        ? 'font-medium text-re-brand'
+                                        : 'text-re-text-secondary'
+                            )}
                         >
                             {pathname === item.href && (
                                 <span

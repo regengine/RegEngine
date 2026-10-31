@@ -35,7 +35,18 @@ export const AUTHENTICATED_APP_ROUTE_PREFIXES = [
  * Note "/developer" does not prefix-match "/developers" (the public marketing
  * page), which keeps its marketing header.
  */
-export const SELF_CHROMED_ROUTE_PREFIXES = ["/developer"] as const;
+export const SELF_CHROMED_ROUTE_PREFIXES = ["/developer", "/demo"] as const;
+
+/**
+ * Public routes that always render the dark token set, header and footer
+ * included, because their design is dark-only. next-themes gets this as
+ * `forcedTheme`; every other route keeps the visitor's toggle.
+ */
+export const FORCED_DARK_ROUTES = ["/", "/demo"] as const;
+
+export function isForcedDarkRoute(pathname: string): boolean {
+  return (FORCED_DARK_ROUTES as readonly string[]).includes(pathname);
+}
 
 const CHROMELESS_EXACT_ROUTES = new Set([
   "/mobile/capture",
