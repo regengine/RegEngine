@@ -21,6 +21,13 @@ their key+tenant handlers were reordered instead. ``regulations`` and the
 ``provisions`` route in ``routes.py`` already declared the key first.
 ``test_every_graph_route_checks_key_before_tenant`` walks every route served
 under ``services.graph.app.routes.router`` so none of them can regress.
+
+The order is also what makes the tenant funnel sound. ``get_current_tenant_id``
+reconciles the middleware tenant against the principal ``require_api_key`` stores
+on ``request.state`` (409 ``E_TENANT_MISMATCH`` on divergence). A route that
+resolves the tenant with no key dependency, or before the key, has no principal
+to compare with, and the middleware tenant silently wins. Such routes fail the
+walk unless their path is in ``TENANT_ONLY_ROUTE_ALLOWLIST``.
 """
 
 from __future__ import annotations
@@ -32,7 +39,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from fastapi import FastAPI
+from fastapi import APIRouter, Depends, FastAPI
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
@@ -48,6 +55,13 @@ from services.graph.tests.test_fda_request_export_header import _neo4j_stub  # n
 
 TENANT = "11111111-1111-1111-1111-111111111111"
 BYPASS_TOKEN = "graph-key-before-tenant-test"  # noqa: S105 — test-only env bypass value
+
+# Effective paths (prefix applied) of graph routes allowed to depend on
+# ``get_current_tenant_id`` without ``require_api_key``. Keep this empty: the
+# monolith-wide walk found zero such routes, and adding one is a reviewed
+# decision that the route has some other authenticated principal, not a
+# convenience to make the walk pass.
+TENANT_ONLY_ROUTE_ALLOWLIST: frozenset[str] = frozenset()
 
 
 @pytest.fixture(autouse=True)
@@ -188,12 +202,14 @@ def _effective_api_routes(router) -> list:
     return [ctx for ctx in iter_route_contexts(app.routes) if isinstance(ctx.route, APIRoute)]
 
 
-def test_every_graph_route_checks_key_before_tenant():
-    from services.graph.app import routes as graph_routes
+def _key_before_tenant_offenders(routes, allowlist: frozenset[str]) -> tuple[list[str], list[str]]:
+    """Split the tenant-bound routes in ``routes`` into (checked paths, offenders).
 
-    routes = _effective_api_routes(graph_routes.router)
-    assert routes, "graph router has no routes"
-
+    An offender depends on ``get_current_tenant_id`` without ``require_api_key``
+    (unless its effective path is in ``allowlist``) or resolves the tenant before
+    the key. Either way the funnel has no principal to reconcile against when it
+    runs, so the middleware tenant would silently win.
+    """
     checked: list[str] = []
     offenders: list[str] = []
     for route in routes:
@@ -202,11 +218,49 @@ def test_every_graph_route_checks_key_before_tenant():
             continue  # open route (health), metrics-key route, or key-only route
         checked.append(route.path)
         if require_api_key not in order:
-            # Graph routes are API-key only: a tenant-bound route with no key
-            # dependency has no principal to resolve the tenant from.
+            if route.path in allowlist:
+                continue
             offenders.append(f"{sorted(route.methods)} {route.path}: no API-key dependency")
         elif order.index(require_api_key) > order.index(get_current_tenant_id):
             offenders.append(f"{sorted(route.methods)} {route.path}")
+    return checked, offenders
+
+
+def test_tenant_only_route_is_reported_unless_allowlisted():
+    """The guard itself fires: no real graph route trips it, so prove it on a synthetic router."""
+    synthetic = APIRouter()
+
+    @synthetic.get("/tenant-only")
+    async def _tenant_only(tenant_id: uuid.UUID = Depends(get_current_tenant_id)):
+        return {"tenant_id": str(tenant_id)}
+
+    @synthetic.get("/tenant-before-key")
+    async def _tenant_before_key(
+        tenant_id: uuid.UUID = Depends(get_current_tenant_id),
+        api_key=Depends(require_api_key),
+    ):
+        return {"tenant_id": str(tenant_id)}
+
+    routes = _effective_api_routes(synthetic)
+    checked, offenders = _key_before_tenant_offenders(routes, allowlist=frozenset())
+    assert checked == ["/api/v1/tenant-only", "/api/v1/tenant-before-key"]
+    assert offenders == [
+        "['GET'] /api/v1/tenant-only: no API-key dependency",
+        "['GET'] /api/v1/tenant-before-key",
+    ]
+
+    # The allowlist excuses only the tenant-only route, never a wrong order.
+    _, allowed = _key_before_tenant_offenders(routes, allowlist=frozenset({"/api/v1/tenant-only"}))
+    assert allowed == ["['GET'] /api/v1/tenant-before-key"]
+
+
+def test_every_graph_route_checks_key_before_tenant():
+    from services.graph.app import routes as graph_routes
+
+    routes = _effective_api_routes(graph_routes.router)
+    assert routes, "graph router has no routes"
+
+    checked, offenders = _key_before_tenant_offenders(routes, allowlist=TENANT_ONLY_ROUTE_ALLOWLIST)
 
     # The walk must reach the sub-routers, not just the operational routes in routes.py.
     for expected in (

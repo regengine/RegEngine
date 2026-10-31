@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID, uuid4
@@ -26,6 +27,26 @@ from shared.canonical_persistence.verification import CanonicalChainVerification
 from shared.cte_persistence import compute_chain_hash
 from sqlalchemy import bindparam, text
 from sqlalchemy.orm import Session
+
+
+@dataclass(frozen=True)
+class TraceWalk:
+    """Result of one breadth-first walk over ``fsma.transformation_links``.
+
+    ``truncated`` means the walk stopped because ``max_results`` links were
+    collected (#1282). ``depth_exhausted`` means at least one lot was
+    reached at ``max_depth`` and therefore never expanded: the graph may
+    continue beyond the returned links. The two limits are reported
+    separately so a caller can tell "the cap bit" from "the depth bit";
+    both mean the link list is a valid prefix, not a complete trace.
+    """
+
+    links: List[Dict[str, Any]]
+    truncated: bool
+    depth_exhausted: bool
+    direction: str
+    max_depth: int
+    max_results: int
 
 logger = logging.getLogger("canonical-persistence")
 
@@ -824,6 +845,145 @@ class CanonicalEventStore(CanonicalChainVerificationMixin):
     # exists to prevent OOM under adversarial inputs — see #1282.
     _TRACE_DEFAULT_MAX_RESULTS = 10_000
 
+    _TRACE_FORWARD_SQL = text("""
+        SELECT output_tlc, transformation_event_id, process_type,
+               output_quantity, output_unit, confidence_score
+        FROM fsma.transformation_links
+        WHERE tenant_id = :tid AND input_tlc = :tlc
+    """)
+    _TRACE_BACKWARD_SQL = text("""
+        SELECT input_tlc, transformation_event_id, process_type,
+               input_quantity, input_unit, confidence_score
+        FROM fsma.transformation_links
+        WHERE tenant_id = :tid AND output_tlc = :tlc
+    """)
+
+    def trace_walk(
+        self,
+        tenant_id: str,
+        tlc: str,
+        direction: str,
+        max_depth: int = 5,
+        max_results: int = _TRACE_DEFAULT_MAX_RESULTS,
+    ) -> TraceWalk:
+        """Breadth-first walk over ``fsma.transformation_links`` in one direction.
+
+        ``direction`` is ``"forward"`` (input lot to the output lots it went
+        into) or ``"backward"`` (output lot to the input lots it came from).
+
+        The walk stops on two independent limits and reports each one:
+
+        * ``truncated``: ``max_results`` links were collected (#1282). The
+          remaining BFS frontier is dropped without further queries.
+        * ``depth_exhausted``: at least one lot was reached at ``max_depth``
+          and was therefore never expanded. It is a conservative flag: the
+          unexpanded lot may have no further links. It never costs an extra
+          query. Callers that need certainty can re-run with a higher
+          ``max_depth``.
+
+        Both flags mean the link list is a valid prefix, not a complete
+        trace. Callers MUST surface them, or fail closed when completeness
+        is required (regulator traceback export).
+
+        #1282: without a cap, ``results`` could grow to O(depth × fan-out)
+        with no ceiling, letting a malicious or misconfigured tenant OOM
+        the worker with a wide transformation tree. ``visited`` prevents
+        cycles but does not bound result size, so we add an explicit
+        ``max_results`` gate distinct from ``max_depth``.
+        """
+        if direction == "forward":
+            stmt = self._TRACE_FORWARD_SQL
+        elif direction == "backward":
+            stmt = self._TRACE_BACKWARD_SQL
+        else:
+            raise ValueError(f"direction must be 'forward' or 'backward', got {direction!r}")
+        if max_depth < 1:
+            raise ValueError(f"max_depth must be >= 1, got {max_depth}")
+
+        results: List[Dict[str, Any]] = []
+        visited: set[str] = set()
+        queue: List[Tuple[str, int]] = [(tlc, 0)]
+        truncated = False
+        depth_exhausted = False
+
+        while queue:
+            current_tlc, depth = queue.pop(0)
+            if current_tlc in visited:
+                continue
+            if depth >= max_depth:
+                # A lot we have not expanded sits at the depth limit. We
+                # do not know whether it has further links, so report the
+                # limit as reached rather than silently returning a trace
+                # that reads as complete.
+                depth_exhausted = True
+                continue
+            visited.add(current_tlc)
+
+            rows = self.session.execute(stmt, {"tid": tenant_id, "tlc": current_tlc}).fetchall()
+
+            for row in rows:
+                if len(results) >= max_results:
+                    truncated = True
+                    break
+                neighbour = row[0]
+                link: Dict[str, Any] = {
+                    "transformation_event_id": str(row[1]),
+                    "process_type": row[2],
+                    "confidence_score": float(row[5]) if row[5] else 1.0,
+                    "depth": depth + 1,
+                }
+                if direction == "forward":
+                    link.update(
+                        {
+                            "input_tlc": current_tlc,
+                            "output_tlc": neighbour,
+                            "output_quantity": float(row[3]) if row[3] else None,
+                            "output_unit": row[4],
+                        }
+                    )
+                else:
+                    link.update(
+                        {
+                            "input_tlc": neighbour,
+                            "output_tlc": current_tlc,
+                            "input_quantity": float(row[3]) if row[3] else None,
+                            "input_unit": row[4],
+                        }
+                    )
+                results.append(link)
+                if neighbour not in visited:
+                    queue.append((neighbour, depth + 1))
+
+            if truncated:
+                # Drop remaining BFS frontier — we've already accepted we
+                # can't complete this trace, so further DB round-trips
+                # just burn budget without adding surfaced rows.
+                break
+
+        if truncated or depth_exhausted:
+            logger.warning(
+                f"trace_{direction}_incomplete",
+                extra={
+                    "tenant_id": tenant_id,
+                    "tlc": tlc,
+                    "direction": direction,
+                    "truncated": truncated,
+                    "depth_exhausted": depth_exhausted,
+                    "max_results": max_results,
+                    "max_depth": max_depth,
+                    "returned": len(results),
+                },
+            )
+
+        return TraceWalk(
+            links=results,
+            truncated=truncated,
+            depth_exhausted=depth_exhausted,
+            direction=direction,
+            max_depth=max_depth,
+            max_results=max_results,
+        )
+
     def trace_forward(
         self,
         tenant_id: str,
@@ -833,78 +993,12 @@ class CanonicalEventStore(CanonicalChainVerificationMixin):
     ) -> Tuple[List[Dict[str, Any]], bool]:
         """Forward trace: find all output TLCs an input TLC contributed to.
 
-        Returns ``(links, truncated)``. ``truncated=True`` means the BFS
-        stopped at ``max_results`` — the link list is still valid data,
-        just incomplete. Callers MUST check the flag and either surface
-        truncation to the end user or fail-closed if completeness is
-        required (e.g. regulator traceback export).
-
-        #1282: without a cap, ``results`` could grow to O(depth × fan-out)
-        with no ceiling, letting a malicious or misconfigured tenant OOM
-        the worker with a wide transformation tree. ``visited`` prevents
-        cycles but does not bound result size, so we add an explicit
-        ``max_results`` gate distinct from ``max_depth``.
+        Returns ``(links, truncated)`` for callers on the #1282 contract.
+        ``truncated`` covers the result cap only; use :meth:`trace_walk`
+        to also learn whether ``max_depth`` cut the walk short.
         """
-        results: List[Dict[str, Any]] = []
-        visited: set[str] = set()
-        queue: List[Tuple[str, int]] = [(tlc, 0)]
-        truncated = False
-
-        while queue:
-            current_tlc, depth = queue.pop(0)
-            if depth >= max_depth or current_tlc in visited:
-                continue
-            visited.add(current_tlc)
-
-            rows = self.session.execute(
-                text("""
-                    SELECT output_tlc, transformation_event_id, process_type,
-                           output_quantity, output_unit, confidence_score
-                    FROM fsma.transformation_links
-                    WHERE tenant_id = :tid AND input_tlc = :tlc
-                """),
-                {"tid": tenant_id, "tlc": current_tlc},
-            ).fetchall()
-
-            for row in rows:
-                if len(results) >= max_results:
-                    truncated = True
-                    break
-                output_tlc = row[0]
-                results.append(
-                    {
-                        "input_tlc": current_tlc,
-                        "output_tlc": output_tlc,
-                        "transformation_event_id": str(row[1]),
-                        "process_type": row[2],
-                        "output_quantity": float(row[3]) if row[3] else None,
-                        "output_unit": row[4],
-                        "confidence_score": float(row[5]) if row[5] else 1.0,
-                        "depth": depth + 1,
-                    }
-                )
-                if output_tlc not in visited:
-                    queue.append((output_tlc, depth + 1))
-
-            if truncated:
-                # Drop remaining BFS frontier — we've already accepted we
-                # can't complete this trace, so further DB round-trips
-                # just burn budget without adding surfaced rows.
-                break
-
-        if truncated:
-            logger.warning(
-                "trace_forward_truncated",
-                extra={
-                    "tenant_id": tenant_id,
-                    "tlc": tlc,
-                    "max_results": max_results,
-                    "max_depth": max_depth,
-                    "returned": len(results),
-                },
-            )
-
-        return results, truncated
+        walk = self.trace_walk(tenant_id, tlc, "forward", max_depth=max_depth, max_results=max_results)
+        return walk.links, walk.truncated
 
     def trace_backward(
         self,
@@ -915,66 +1009,10 @@ class CanonicalEventStore(CanonicalChainVerificationMixin):
     ) -> Tuple[List[Dict[str, Any]], bool]:
         """Backward trace: find all input TLCs that contributed to an output TLC.
 
-        Returns ``(links, truncated)``. See ``trace_forward`` for the
-        cap rationale (#1282).
+        Returns ``(links, truncated)``; see :meth:`trace_forward`.
         """
-        results: List[Dict[str, Any]] = []
-        visited: set[str] = set()
-        queue: List[Tuple[str, int]] = [(tlc, 0)]
-        truncated = False
-
-        while queue:
-            current_tlc, depth = queue.pop(0)
-            if depth >= max_depth or current_tlc in visited:
-                continue
-            visited.add(current_tlc)
-
-            rows = self.session.execute(
-                text("""
-                    SELECT input_tlc, transformation_event_id, process_type,
-                           input_quantity, input_unit, confidence_score
-                    FROM fsma.transformation_links
-                    WHERE tenant_id = :tid AND output_tlc = :tlc
-                """),
-                {"tid": tenant_id, "tlc": current_tlc},
-            ).fetchall()
-
-            for row in rows:
-                if len(results) >= max_results:
-                    truncated = True
-                    break
-                input_tlc = row[0]
-                results.append(
-                    {
-                        "input_tlc": input_tlc,
-                        "output_tlc": current_tlc,
-                        "transformation_event_id": str(row[1]),
-                        "process_type": row[2],
-                        "input_quantity": float(row[3]) if row[3] else None,
-                        "input_unit": row[4],
-                        "confidence_score": float(row[5]) if row[5] else 1.0,
-                        "depth": depth + 1,
-                    }
-                )
-                if input_tlc not in visited:
-                    queue.append((input_tlc, depth + 1))
-
-            if truncated:
-                break
-
-        if truncated:
-            logger.warning(
-                "trace_backward_truncated",
-                extra={
-                    "tenant_id": tenant_id,
-                    "tlc": tlc,
-                    "max_results": max_results,
-                    "max_depth": max_depth,
-                    "returned": len(results),
-                },
-            )
-
-        return results, truncated
+        walk = self.trace_walk(tenant_id, tlc, "backward", max_depth=max_depth, max_results=max_results)
+        return walk.links, walk.truncated
 
     # ------------------------------------------------------------------
     # Read Path
