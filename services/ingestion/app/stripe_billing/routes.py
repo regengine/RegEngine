@@ -57,6 +57,12 @@ router = APIRouter(prefix="/api/v1/billing", tags=["Billing & Subscriptions"])
 # used by ``canonical_router.py`` / ``webhook_router_v2.py``.
 _get_db_session = get_db_session
 
+# List/founding are billed per facility, with the facility count carried as
+# the subscription quantity. Cap the self-serve checkout quantity so a typo
+# (or a compromised client) cannot open a five-figure monthly subscription;
+# product can raise this later.
+MAX_CHECKOUT_FACILITY_QUANTITY = 100
+
 
 def _allow_subscription_read_fallback() -> bool:
     """Allow local/test callers to treat a missing billing state store as empty.
@@ -76,20 +82,56 @@ def _allow_subscription_read_fallback() -> bool:
     description="Returns all available subscription plans with features and pricing.",
 )
 async def list_plans() -> dict[str, list[dict[str, Any]]]:
-    """List all subscription plans."""
-    return {
-        "plans": [
-            {
-                "id": plan["id"],
-                "name": plan["name"],
-                "price_monthly": plan["price_monthly"],
-                "price_annual": plan["price_annual"],
-                "features": plan["features"],
-                "limits": plan["limits"],
-            }
-            for plan in PLANS.values()
-        ]
+    """List all subscription plans.
+
+    Compatibility contract for the pricing page: the ``list`` plan carries
+    ``ga_monthly`` / ``partner_monthly`` so the page can render the approved
+    A-2155 amounts without a backend change. Annual fields are null until
+    C.Lee approves annual pricing (OPEN) — do not invent annual amounts.
+    Claude owns the pricing-page follow-up to consume the new ids/fields.
+    """
+    list_plan = PLANS["list"]
+    compat_amounts = {
+        "ga_monthly": list_plan["price_monthly"],
+        "partner_monthly": PLANS["founding"]["price_monthly"],
+        "ga_annual": None,
+        "partner_annual": None,
     }
+
+    plans: list[dict[str, Any]] = []
+    for plan in PLANS.values():
+        payload = {
+            "id": plan["id"],
+            "name": plan["name"],
+            "price_monthly": plan["price_monthly"],
+            "price_annual": plan["price_annual"],
+            "features": plan["features"],
+            "limits": plan["limits"],
+            "product_status": "Beta",
+        }
+        if plan["id"] == "list":
+            payload.update(compat_amounts)
+        plans.append(payload)
+
+    # Synthetic compatibility entry for the page's historical ``base`` tier
+    # id. It mirrors the list plan's monthly amounts until Claude updates the
+    # page. ``standard``/``premium`` are intentionally omitted: there is no
+    # approved self-serve Standard/Premium dollar SKU, and null-priced
+    # placeholders would be skipped by the page anyway.
+    plans.append(
+        {
+            "id": "base",
+            "name": list_plan["name"],
+            "price_monthly": list_plan["price_monthly"],
+            "price_annual": list_plan["price_annual"],
+            "features": list_plan["features"],
+            "limits": list_plan["limits"],
+            "product_status": "Beta",
+            **compat_amounts,
+        }
+    )
+
+    return {"plans": plans}
 
 
 @router.post(
@@ -121,6 +163,27 @@ async def create_checkout(
 
     billing_period = _plans_mod._normalize_billing_period(request.billing_period)
     plan, price_id, amount = _plans_mod._resolve_price_id(request.plan_id, billing_period)
+
+    # List/founding are billed per facility: the facility count is the
+    # subscription quantity. There is no server-side facility-inventory helper
+    # in this package yet, so the only supported sources are an explicit
+    # ``facility_count`` on the request (validated below) or the default of 1.
+    # Never trust a client-supplied tenant inventory for billing quantity.
+    facility_quantity = 1
+    if plan["id"] in {"list", "founding"}:
+        if request.facility_count is not None:
+            facility_quantity = request.facility_count
+        if facility_quantity < 1:
+            raise HTTPException(status_code=400, detail="facility_count must be at least 1")
+        if facility_quantity > MAX_CHECKOUT_FACILITY_QUANTITY:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"facility_count must be at most {MAX_CHECKOUT_FACILITY_QUANTITY}. "
+                    "Contact sales@regengine.co for more facilities."
+                ),
+            )
+
     existing_customer_id: Optional[str] = None
 
     # Resolve tenant ONLY from authenticated context — ignore request body and
@@ -150,6 +213,9 @@ async def create_checkout(
     metadata = {
         "plan_id": plan["id"],
         "billing_period": billing_period,
+        # Stripe metadata values must be strings. The webhook/PR3 credit path
+        # reads this to reconcile the subscription quantity with facilities.
+        "facility_quantity": str(facility_quantity),
     }
     if authenticated_tenant_id:
         # Outbound assignment: stamp the authenticated principal's tenant_id
@@ -184,7 +250,7 @@ async def create_checkout(
 
     checkout_kwargs: dict[str, Any] = {
         "mode": "subscription",
-        "line_items": [{"price": price_id, "quantity": 1}],
+        "line_items": [{"price": price_id, "quantity": facility_quantity}],
         "success_url": safe_success_url,
         "cancel_url": safe_cancel_url,
         "allow_promotion_codes": True,
@@ -237,6 +303,7 @@ async def create_checkout(
         tenant_id=authenticated_tenant_id,
         plan=plan["id"],
         amount=amount,
+        facility_quantity=facility_quantity,
         billing_period=billing_period,
         session_id=session.id,
     )
@@ -247,6 +314,7 @@ async def create_checkout(
         plan=plan["id"],
         billing_period=billing_period,
         amount=amount,
+        facility_quantity=facility_quantity,
     )
 
 
@@ -343,6 +411,12 @@ async def get_subscription(
 
     limits = PLANS.get(plan_id, {}).get("limits", {})
 
+    # Per-facility plans store the billed facility count as the subscription
+    # quantity. Prefer it over the plan's static limit (which is -1 /
+    # "quantity-driven" for list and founding).
+    facility_quantity = _coerce_int(mapping.get("facility_quantity"), 0)
+    facilities_limit = facility_quantity if facility_quantity > 0 else limits.get("facilities", 0)
+
     return SubscriptionStatus(
         tenant_id=resolved_tenant_id,
         plan=plan_id,
@@ -352,7 +426,7 @@ async def get_subscription(
         events_used=0,
         events_limit=limits.get("events_per_month", 0),
         facilities_used=0,
-        facilities_limit=limits.get("facilities", 0),
+        facilities_limit=facilities_limit,
     )
 
 

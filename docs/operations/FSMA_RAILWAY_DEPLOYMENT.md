@@ -57,8 +57,11 @@ Use [`docs/ENV_SETUP_CHECKLIST.md`] for full inventory. This section is only the
 - `REDIS_URL`
 - `STRIPE_SECRET_KEY`
 - `STRIPE_WEBHOOK_SECRET`
-- `STRIPE_PRICE_GROWTH_MONTHLY`
-- `STRIPE_PRICE_SCALE_MONTHLY`
+- `STRIPE_PRICE_LIST_MONTHLY` (per-facility list price; annual is OPEN, so no annual var yet)
+- `STRIPE_PRICE_FOUNDING_MONTHLY` (per-facility founding design partner price)
+- `STRIPE_PRICE_PILOT_STANDARD` (one-time pilot fee)
+- `STRIPE_PRICE_PILOT_CONVERT_30` (one-time pilot convert fee)
+- `STRIPE_PRICE_METERED_LABEL_EVENTS` (per-label metered add-on)
 - `ADMIN_SERVICE_URL` (public URL of `admin-service`)
 - `CORS_ORIGINS` (include `https://regengine.co`)
 - `REGENGINE_INFLOW_WORKBENCH_PATH` (optional fallback only; Alembic v073 stores production workbench data in Postgres)

@@ -21,6 +21,7 @@ from services.ingestion.app.stripe_billing import (
     _handle_stripe_event,
     _normalize_billing_period,
     _normalize_plan_id,
+    _plan_for_stripe_price,
     _process_stripe_webhook,
     _resolve_price_id,
 )
@@ -61,19 +62,42 @@ class TestPlanDefinitions:
             assert "facilities" in limits, f"Plan '{plan_id}' limits missing 'facilities'"
             assert "events_per_month" in limits, f"Plan '{plan_id}' limits missing 'events_per_month'"
 
-    def test_growth_plan_values(self):
-        """Verify growth plan has expected pricing tiers."""
-        growth = PLANS["growth"]
-        assert growth["name"] == "Growth"
-        assert growth["price_monthly"] == 999
-        assert growth["price_annual"] == 832
+    def test_list_plan_values(self):
+        """List is A-2155 $999/mo per facility; annual is OPEN (null)."""
+        plan = PLANS["list"]
+        assert plan["name"] == "RegEngine List"
+        assert plan["price_monthly"] == 999
+        assert plan["price_annual"] is None
+        assert plan["stripe_price_env_monthly"] == "STRIPE_PRICE_LIST_MONTHLY"
+        assert plan["stripe_price_env_annual"] is None
 
-    def test_scale_plan_values(self):
-        """Verify scale plan has expected pricing tiers."""
-        scale = PLANS["scale"]
-        assert scale["name"] == "Scale"
-        assert scale["price_monthly"] == 1999
-        assert scale["price_annual"] == 1666
+    def test_founding_plan_values(self):
+        """Founding design partner is $499/mo per facility; annual is OPEN."""
+        plan = PLANS["founding"]
+        assert plan["name"] == "RegEngine Founding Design Partner"
+        assert plan["price_monthly"] == 499
+        assert plan["price_annual"] is None
+        assert plan["stripe_price_env_monthly"] == "STRIPE_PRICE_FOUNDING_MONTHLY"
+        assert plan["stripe_price_env_annual"] is None
+
+    def test_removed_tiers_are_not_canonical_plans(self):
+        """Growth/Scale were replaced by per-facility List pricing."""
+        assert set(PLANS) == {"list", "founding", "enterprise"}
+
+    def test_list_and_founding_facilities_are_quantity_driven(self):
+        """Facilities are subscription quantity later, not a hardcoded tier."""
+        for plan_id in ("list", "founding"):
+            assert PLANS[plan_id]["limits"]["facilities"] == -1
+            # Prior growth cap — CTE caps are OPEN per A-2155.
+            assert PLANS[plan_id]["limits"]["events_per_month"] == 50000
+
+    def test_every_plan_advertises_epcis_export_preview(self):
+        """Every plan's features must include an EPCIS export Preview line."""
+        for plan_id, plan in PLANS.items():
+            features = [feature.lower() for feature in plan["features"]]
+            assert any("epcis" in feature and "preview" in feature for feature in features), (
+                f"Plan '{plan_id}' is missing the EPCIS export Preview line"
+            )
 
     def test_enterprise_plan_has_no_self_serve_pricing(self):
         """Enterprise plan prices should be None (sales-driven)."""
@@ -88,11 +112,10 @@ class TestPlanDefinitions:
         assert enterprise["limits"]["events_per_month"] == -1
 
     def test_plan_aliases_resolve_correctly(self):
-        """Plan aliases should map to canonical plan IDs."""
-        assert PLAN_ALIASES["starter"] == "growth"
-        assert PLAN_ALIASES["professional"] == "scale"
-        assert PLAN_ALIASES["base"] == "growth"
-        assert PLAN_ALIASES["standard"] == "scale"
+        """Legacy aliases collapse to List; premium goes to sales."""
+        for alias in ("growth", "base", "starter", "scale", "standard", "professional"):
+            assert PLAN_ALIASES[alias] == "list"
+        assert PLAN_ALIASES["premium"] == "enterprise"
 
 
 # ── Normalization Helpers ────────────────────────────────────────
@@ -102,14 +125,18 @@ class TestNormalizationHelpers:
     """Tests for plan ID and billing period normalization."""
 
     def test_normalize_plan_id_with_alias(self):
-        """Aliases should resolve to canonical plan IDs."""
-        assert _normalize_plan_id("starter") == "growth"
-        assert _normalize_plan_id("professional") == "scale"
+        """Aliases should resolve to the new canonical plan IDs."""
+        assert _normalize_plan_id("starter") == "list"
+        assert _normalize_plan_id("professional") == "list"
+        assert _normalize_plan_id("growth") == "list"
+        assert _normalize_plan_id("scale") == "list"
+        assert _normalize_plan_id("premium") == "enterprise"
 
     def test_normalize_plan_id_passthrough(self):
         """Canonical IDs should pass through unchanged."""
-        assert _normalize_plan_id("growth") == "growth"
-        assert _normalize_plan_id("scale") == "scale"
+        assert _normalize_plan_id("list") == "list"
+        assert _normalize_plan_id("founding") == "founding"
+        assert _normalize_plan_id("enterprise") == "enterprise"
 
     def test_normalize_billing_period_valid(self):
         """Valid billing periods should normalize correctly."""
@@ -155,32 +182,48 @@ class TestConfigureStripe:
 class TestResolvePriceId:
     """Tests for _resolve_price_id."""
 
+    @patch.dict("os.environ", {"STRIPE_PRICE_LIST_MONTHLY": "price_list_m"})
+    def test_resolve_list_monthly(self):
+        """Should return the list plan, price ID, and $999 monthly amount."""
+        plan, price_id, amount = _resolve_price_id("list", "monthly")
+        assert plan["id"] == "list"
+        assert price_id == "price_list_m"
+        assert amount == 999
+
+    @patch.dict("os.environ", {"STRIPE_PRICE_FOUNDING_MONTHLY": "price_founding_m"})
+    def test_resolve_founding_monthly(self):
+        """Should return the founding plan, price ID, and $499 amount."""
+        plan, price_id, amount = _resolve_price_id("founding", "monthly")
+        assert plan["id"] == "founding"
+        assert price_id == "price_founding_m"
+        assert amount == 499
+
     @patch.dict("os.environ", {"STRIPE_PRICE_GROWTH_MONTHLY": "price_growth_m"})
-    def test_resolve_growth_monthly(self):
-        """Should return the growth plan, price ID, and monthly amount."""
+    def test_resolve_growth_monthly_still_works_alias_period(self):
+        """Deprecated growth monthly env resolves to list during the alias
+        period, until Railway carries STRIPE_PRICE_LIST_MONTHLY."""
         plan, price_id, amount = _resolve_price_id("growth", "monthly")
-        assert plan["id"] == "growth"
+        assert plan["id"] == "list"
         assert price_id == "price_growth_m"
         assert amount == 999
 
-    @patch.dict("os.environ", {"STRIPE_PRICE_SCALE_ANNUAL": "price_scale_a"})
-    def test_resolve_scale_annual(self):
-        """Should return scale plan with annual pricing."""
-        plan, price_id, amount = _resolve_price_id("scale", "annual")
-        assert plan["id"] == "scale"
-        assert price_id == "price_scale_a"
-        assert amount == 1666
-
     @patch.dict("os.environ", {"STRIPE_PRICE_GROWTH_MONTHLY": "price_growth_m"})
     def test_resolve_alias_redirects(self):
-        """Alias plan IDs should resolve to the canonical plan."""
+        """Alias plan IDs should resolve to the canonical list plan."""
         plan, price_id, amount = _resolve_price_id("starter", "monthly")
-        assert plan["id"] == "growth"
+        assert plan["id"] == "list"
 
     def test_resolve_enterprise_raises(self):
         """Enterprise plans should reject self-serve checkout."""
         with pytest.raises(HTTPException) as exc_info:
             _resolve_price_id("enterprise", "monthly")
+        assert exc_info.value.status_code == 400
+        assert "sales" in exc_info.value.detail.lower()
+
+    def test_resolve_premium_routes_to_sales(self):
+        """Premium has no self-serve dollar SKU; it maps to enterprise."""
+        with pytest.raises(HTTPException) as exc_info:
+            _resolve_price_id("premium", "monthly")
         assert exc_info.value.status_code == 400
         assert "sales" in exc_info.value.detail.lower()
 
@@ -190,18 +233,53 @@ class TestResolvePriceId:
             _resolve_price_id("nonexistent", "monthly")
         assert exc_info.value.status_code == 400
 
-    @patch.dict("os.environ", {"STRIPE_PRICE_GROWTH_MONTHLY": "price_growth_m"})
-    def test_annual_without_annual_price_raises_500(self):
-        """#2928: an unconfigured annual price must 500, not silently bill
-        the monthly price ID while reporting the annual amount."""
-        import os
-
-        # Only monthly env is set; annual is not (patch.dict restores it).
-        os.environ.pop("STRIPE_PRICE_GROWTH_ANNUAL", None)
+    @patch.dict("os.environ", {"STRIPE_PRICE_LIST_MONTHLY": "price_list_m"})
+    def test_list_annual_not_configured_raises_400(self):
+        """Annual is OPEN: list must 400, never fall back to monthly."""
         with pytest.raises(HTTPException) as exc_info:
-            _resolve_price_id("growth", "annual")
+            _resolve_price_id("list", "annual")
+        assert exc_info.value.status_code == 400
+        assert "annual" in exc_info.value.detail.lower()
+        assert "not configured" in exc_info.value.detail.lower()
+
+    @patch.dict("os.environ", {"STRIPE_PRICE_FOUNDING_MONTHLY": "price_founding_m"})
+    def test_founding_annual_not_configured_raises_400(self):
+        """Annual is OPEN: founding must 400, never fall back to monthly."""
+        with pytest.raises(HTTPException) as exc_info:
+            _resolve_price_id("founding", "annual")
+        assert exc_info.value.status_code == 400
+        assert "annual" in exc_info.value.detail.lower()
+
+    @patch.dict("os.environ", {}, clear=True)
+    def test_missing_list_monthly_env_raises_500_naming_new_var(self):
+        """A missing LIST env names the new var and the deprecated fallback."""
+        with pytest.raises(HTTPException) as exc_info:
+            _resolve_price_id("list", "monthly")
         assert exc_info.value.status_code == 500
-        assert "STRIPE_PRICE_GROWTH_ANNUAL" in exc_info.value.detail
+        assert "STRIPE_PRICE_LIST_MONTHLY" in exc_info.value.detail
+        assert "STRIPE_PRICE_GROWTH_MONTHLY" in exc_info.value.detail
+
+
+class TestPlanForStripePrice:
+    """Reverse mapping must follow Stripe-side truth, not metadata claims."""
+
+    @pytest.mark.parametrize(
+        "env_var,price_id,expected",
+        [
+            ("STRIPE_PRICE_LIST_MONTHLY", "price_list_m", ("list", "monthly")),
+            ("STRIPE_PRICE_FOUNDING_MONTHLY", "price_founding_m", ("founding", "monthly")),
+            ("STRIPE_PRICE_PILOT_STANDARD", "price_pilot_std", ("pilot", "one_time")),
+            ("STRIPE_PRICE_PILOT_CONVERT_30", "price_pilot_conv", ("pilot", "one_time")),
+            ("STRIPE_PRICE_GROWTH_MONTHLY", "price_growth_m", ("list", "monthly")),
+        ],
+    )
+    def test_reverse_maps_configured_prices(self, env_var, price_id, expected):
+        with patch.dict("os.environ", {env_var: price_id}, clear=True):
+            assert _plan_for_stripe_price(price_id) == expected
+
+    def test_old_annual_envs_do_not_invent_annual(self):
+        with patch.dict("os.environ", {"STRIPE_PRICE_GROWTH_ANNUAL": "price_growth_a"}, clear=True):
+            assert _plan_for_stripe_price("price_growth_a") is None
 
 
 # ── Checkout Session Creation ────────────────────────────────────
@@ -242,7 +320,7 @@ class TestCheckoutCreation:
 
         assert response.session_id == "cs_test_abc"
         assert response.checkout_url == "https://checkout.stripe.com/pay/cs_test_abc"
-        assert response.plan == "growth"
+        assert response.plan == "list"
         assert response.billing_period == "monthly"
         assert response.amount == 999
         mock_stripe.checkout.Session.create.assert_called_once()
@@ -496,7 +574,7 @@ class TestHandleCheckoutCompleted:
         call_args = mock_store.call_args
         assert call_args[0][0] == "tenant-abc"  # tenant_id
         payload = call_args[0][1]
-        assert payload["plan_id"] == "growth"
+        assert payload["plan_id"] == "list"
         assert payload["status"] == "active"
         assert payload["subscription_id"] == "sub_test_456"
         assert payload["customer_id"] == "cus_test_789"
@@ -574,7 +652,7 @@ class TestHandleCheckoutCompleted:
 
         mock_store.assert_called_once()
         payload = mock_store.call_args[0][1]
-        assert payload["plan_id"] == "growth"  # Stripe truth, not the claim
+        assert payload["plan_id"] == "list"  # Stripe truth, not the claim
         assert payload["status"] == "active"
 
     @pytest.mark.asyncio
