@@ -44,6 +44,8 @@ def _inventory(workflows: list[str], contexts: list[str]) -> str:
 _GOOD_WORKFLOW = """\
 name: gate
 on:
+  merge_group:
+    types: [checks_requested]
   pull_request:
 jobs:
   gate:
@@ -56,6 +58,8 @@ jobs:
 _FILTERED_WORKFLOW = """\
 name: gate
 on:
+  merge_group:
+    types: [checks_requested]
   pull_request:
     paths-ignore:
       - 'docs/**'
@@ -173,7 +177,7 @@ class TestRequiredContextContract:
         _write_workflow(
             workflow_dir,
             "gate.yml",
-            "name: gate\non:\n  pull_request:\njobs:\n  ci-status-gate:\n"
+            "name: gate\non:\n  merge_group:\n  pull_request:\njobs:\n  ci-status-gate:\n"
             "    runs-on: ubuntu-latest\n    steps:\n      - run: echo ok\n",
         )
         inventory.write_text(_inventory(["gate.yml"], ["ci-status-gate"]))
@@ -189,6 +193,50 @@ class TestRequiredContextContract:
         inventory.write_text(_inventory(["gate.yml", "gate-filtered.yml"], ["CI Status Gate"]))
 
         assert _mod.main() == 0
+
+
+class TestMergeQueueContract:
+    def test_required_emitter_without_merge_group_fails(self, sandbox, capsys):
+        workflow_dir, inventory = sandbox
+        _write_workflow(
+            workflow_dir,
+            "gate.yml",
+            _GOOD_WORKFLOW.replace("  merge_group:\n    types: [checks_requested]\n", ""),
+        )
+        inventory.write_text(_inventory(["gate.yml"], ["CI Status Gate"]))
+
+        assert _mod.main() == 1
+        out = capsys.readouterr().out
+        assert "MERGE QUEUE" in out
+        assert "deadlock" in out
+
+    def test_every_required_emitter_needs_merge_group(self, sandbox, capsys):
+        workflow_dir, inventory = sandbox
+        _write_workflow(workflow_dir, "gate.yml", _GOOD_WORKFLOW)
+        _write_workflow(
+            workflow_dir,
+            "other-gate.yml",
+            _GOOD_WORKFLOW.replace("  merge_group:\n    types: [checks_requested]\n", ""),
+        )
+        inventory.write_text(_inventory(["gate.yml", "other-gate.yml"], ["CI Status Gate"]))
+
+        assert _mod.main() == 1
+        assert "other-gate.yml" in capsys.readouterr().out
+
+    @pytest.mark.parametrize("filename", ["backend-ci.yml", "frontend-ci.yml"])
+    @pytest.mark.parametrize("merge_group", [True, False])
+    def test_mirrored_gate_requires_merge_group(self, sandbox, capsys, filename, merge_group):
+        workflow_dir, inventory = sandbox
+        _write_workflow(workflow_dir, "gate.yml", _GOOD_WORKFLOW)
+        body = _GOOD_WORKFLOW.replace("CI Status Gate", "Mirrored gate")
+        if not merge_group:
+            body = body.replace("  merge_group:\n    types: [checks_requested]\n", "")
+        _write_workflow(workflow_dir, filename, body)
+        inventory.write_text(_inventory(["gate.yml", filename], ["CI Status Gate"]))
+
+        assert _mod.main() == (0 if merge_group else 1)
+        out = capsys.readouterr().out
+        assert ("MERGE QUEUE" in out) == (not merge_group)
 
 
 class TestRealRepositoryContract:

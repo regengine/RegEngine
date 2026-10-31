@@ -9,6 +9,11 @@
 # exactly what happened between #2551 and 2026-07-31: the required context
 # "CI Status Gate" was emitted by nothing at all.
 #
+# Merge queue: configure a repository ruleset on main after these changes land
+# (squash, ALLGREEN, check timeout 180 min). Required-context workflows and
+# mirrored backend/frontend CI need merge_group triggers or the queue deadlocks.
+# gh pr merge --squash --auto enqueues; disable/delete the ruleset to turn it off.
+#
 # Two sections, both enforced:
 #
 #   [workflows]        every .github/workflows/*.yml file, one per line.
