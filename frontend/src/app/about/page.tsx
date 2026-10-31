@@ -64,7 +64,7 @@ const PRINCIPLES = [
     Icon: Target,
     title: "Accessible by default",
     description:
-      "Mid-market food companies deserve modern compliance tooling. RegEngine starts at $425/mo (billed annually).",
+      "Mid-market food companies deserve modern compliance tooling. List price is $999/mo per facility; founding design partner pricing is $499/mo.",
   },
   {
     Icon: Shield,
