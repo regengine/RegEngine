@@ -246,7 +246,7 @@ async def export_fda_request_sheet(
 
 
 # ============================================================================
-# GS1 EPCIS 2.0 EXPORT (Walmart/Kroger Automation)
+# GS1 EPCIS 2.0 EXPORT (Preview)
 # ============================================================================
 
 
@@ -264,8 +264,9 @@ async def export_epcis(
     """
     Export traceability data in GS1 EPCIS 2.0 format.
 
-    This enables automated data exchange with major retailers (Walmart, Kroger)
-    who mandate GS1 standards for supply chain visibility.
+    This endpoint is in Preview; validate exports with your trading partner
+    before relying on them for compliance. This endpoint states no dates or
+    deadlines, including retailer program dates or enforcement deadlines.
 
     Formats:
     - json-ld: EPCIS 2.0 JSON-LD (recommended)
@@ -273,6 +274,7 @@ async def export_epcis(
 
     Event Types Mapped:
     - CREATION → epcis:ObjectEvent (bizStep: commissioning)
+    - HARVESTING → epcis:ObjectEvent (bizStep: creating_class_instance)
     - RECEIVING → epcis:ObjectEvent (bizStep: receiving)
     - SHIPPING → epcis:ObjectEvent (bizStep: shipping)
     - TRANSFORMATION → epcis:TransformationEvent
@@ -345,13 +347,13 @@ async def export_epcis(
                 return f"https://id.gs1.org/414/{value}"
             return epc_id(value, "sgln")
 
-        # Phase A: harvesting maps to CBV collecting (kept intentionally).
+        # GS1 US R2.0 Harvest KDE Mapping: creating a new class instance.
         BIZ_STEP_MAP = {
             "CREATION": "commissioning",
             "RECEIVING": "receiving",
             "SHIPPING": "shipping",
             "TRANSFORMATION": "commissioning",
-            "HARVESTING": "collecting",
+            "HARVESTING": "creating_class_instance",
             "COOLING": "storing",
             "INITIAL_PACKING": "packing",
             "FIRST_LAND_BASED_RECEIVING": "receiving",
@@ -465,12 +467,32 @@ async def export_epcis(
 
         # Build full EPCIS document
         epcis_document = {
-            "@context": ["https://ref.gs1.org/standards/epcis/2.0.0/epcis-context.jsonld"],
+            "@context": [
+                "https://ref.gs1.org/standards/epcis/2.0.0/epcis-context.jsonld",
+                {
+                    "regengine": "https://regengine.co/ns/",
+                    **{
+                        key: f"regengine:{key}"
+                        for key in (
+                            "eventsCount",
+                            "skippedEventsCount",
+                            "skippedEventsByReason",
+                            "preview",
+                            "previewNotice",
+                        )
+                    },
+                },
+            ],
             "type": "EPCISDocument",
             "schemaVersion": "2.0",
             "creationDate": datetime.now(timezone.utc).isoformat(),
             "epcisBody": {"eventList": epcis_events},
             "regengine:exportMetadata": {
+                "preview": True,
+                "previewNotice": (
+                    "EPCIS export is in Preview. "
+                    "Validate with your trading partner before relying on it for compliance."
+                ),
                 "eventsCount": len(epcis_events),
                 "skippedEventsCount": skipped_total,
                 "skippedEventsByReason": skipped_by_reason,
@@ -493,6 +515,7 @@ async def export_epcis(
                     "Content-Disposition": f"attachment; filename={filename}",
                     "X-RegEngine-Events-Count": str(len(epcis_events)),
                     "X-RegEngine-Skipped-Events-Count": skip_header,
+                    "X-RegEngine-Preview": "true",
                 },
             )
         else:
@@ -508,6 +531,7 @@ async def export_epcis(
                     "Content-Disposition": f"attachment; filename={filename}",
                     "X-RegEngine-Events-Count": str(len(epcis_events)),
                     "X-RegEngine-Skipped-Events-Count": skip_header,
+                    "X-RegEngine-Preview": "true",
                 },
             )
 
@@ -569,7 +593,7 @@ def _epcis_to_xml(epcis_doc: dict) -> str:
                 continue
             add(node, f"{{{key[: separator + 1]}}}{key[separator + 1 :]}", value)
 
-    _CBV_BIZSTEPS = {"shipping", "receiving", "commissioning", "collecting", "storing", "packing"}
+    _CBV_BIZSTEPS = {"shipping", "receiving", "commissioning", "collecting", "creating_class_instance", "storing", "packing"}
     _CBV_DISPOSITIONS = {"in_transit", "in_progress"}
 
     def cbv_value(field, value):
