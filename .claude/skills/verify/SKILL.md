@@ -16,13 +16,17 @@ traverse the scratchpad, so put the data dir under `/var/lib/postgresql`.
 
 ```bash
 PGBIN=/usr/lib/postgresql/16/bin; D=/var/lib/postgresql/verify-data
-# Fail closed: a leftover data dir or an occupied port 5432 must stop the
-# recipe here, never fall through to some other PostgreSQL.
-su postgres -s /bin/bash -c "$PGBIN/initdb -D $D -U postgres --auth=trust -E UTF8 >/dev/null && $PGBIN/pg_ctl -D $D -l /var/lib/postgresql/pg.log -o '-p 5432 -k /var/lib/postgresql -c listen_addresses=127.0.0.1' start" \
+# Fail closed, as one chained command: ports 5432 and 6379 must be free before
+# anything starts, a leftover data dir stops initdb, and the Redis holding
+# port 6379 afterwards must be the one this recipe launched (its pidfile).
+RPID=/var/lib/postgresql/verify-redis.pid; rm -f "$RPID"
+! fuser 5432/tcp >/dev/null 2>&1 && ! fuser 6379/tcp >/dev/null 2>&1 \
+  && su postgres -s /bin/bash -c "$PGBIN/initdb -D $D -U postgres --auth=trust -E UTF8 >/dev/null && $PGBIN/pg_ctl -D $D -l /var/lib/postgresql/pg.log -o '-p 5432 -k /var/lib/postgresql -c listen_addresses=127.0.0.1' start" \
   && pg_isready -h 127.0.0.1 -p 5432 \
-  && redis-server --port 6379 --bind 127.0.0.1 --daemonize yes --pidfile /var/lib/postgresql/verify-redis.pid \
+  && redis-server --port 6379 --bind 127.0.0.1 --daemonize yes --pidfile "$RPID" \
   && redis-cli -p 6379 ping \
-  || { echo "local service setup failed; stop here"; false; }
+  && [ "$(fuser 6379/tcp 2>/dev/null | tr -d ' ')" = "$(cat "$RPID" 2>/dev/null)" ] \
+  || { echo "local service setup failed, or port 5432/6379 is held by something else; stop here"; false; }
 ```
 
 Roles must mirror `scripts/init-postgres.sh`: migrations run as a superuser
@@ -62,14 +66,14 @@ S=<scratchpad dir>
 } > "$S/verify.env"
 set -a; source "$S/verify.env"; set +a
 venv/bin/alembic upgrade head          # ~107 revisions, under a minute
-# Port 8000 must be free before we start, or curl below would be probing
-# someone else's server while ours is still importing.
-! fuser 8000/tcp >/dev/null 2>&1 || { echo "port 8000 is already in use; stop here"; false; }
-nohup venv/bin/uvicorn server.main:app --host 127.0.0.1 --port 8000 > "$S/uvicorn.log" 2>&1 &
-UVICORN_PID=$!
-curl -sS --fail --retry 45 --retry-delay 2 --retry-connrefused --retry-all-errors http://127.0.0.1:8000/health \
+# One chained command: port 8000 must be free before uvicorn starts (or curl
+# would probe someone else's server while ours is still importing), and the
+# process holding the port after the probe must be the one we launched.
+! fuser 8000/tcp >/dev/null 2>&1 \
+  && { nohup venv/bin/uvicorn server.main:app --host 127.0.0.1 --port 8000 > "$S/uvicorn.log" 2>&1 & UVICORN_PID=$!; } \
+  && curl -sS --fail --connect-timeout 5 --max-time 20 --retry 45 --retry-delay 2 --retry-max-time 180 --retry-connrefused --retry-all-errors http://127.0.0.1:8000/health \
   && [ "$(fuser 8000/tcp 2>/dev/null | tr -d ' ')" = "$UVICORN_PID" ] \
-  || { echo "uvicorn PID $UVICORN_PID is not the server on port 8000; see $S/uvicorn.log"; false; }
+  || { echo "port 8000 was busy, or PID ${UVICORN_PID:-none} is not the server on it; see $S/uvicorn.log"; false; }
 ```
 
 Startup takes about 15 s. `/openapi.json` lists mounted routes; confirm the
@@ -100,6 +104,8 @@ route under test is there (`ENABLED_ROUTERS` gates routers).
 - The strict Jev review validator rejects some provider answers
   non-deterministically; re-run a semantic-review probe before calling it a
   regression.
-- Stop only what this recipe started: `kill "$UVICORN_PID"`,
-  `kill "$(cat /var/lib/postgresql/verify-redis.pid)"`,
-  `su postgres -s /bin/bash -c "$PGBIN/pg_ctl -D $D stop"`.
+- Stop only what this recipe started: `kill "$UVICORN_PID"`, then Redis only
+  if the recorded PID is still a redis-server (a stale pidfile must never
+  signal a reused PID):
+  `R=$(cat "$RPID" 2>/dev/null); [ "$(ps -o comm= -p "$R" 2>/dev/null)" = redis-server ] && kill "$R"`,
+  then `su postgres -s /bin/bash -c "$PGBIN/pg_ctl -D $D stop"`.
