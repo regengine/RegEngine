@@ -89,6 +89,37 @@ Engineering must implement. Reviewers must enforce.
 | Every verdict records `rule_version_id`, `fact_version_ids`, `authority_pointer_ids` | NOT NULL + FK constraints |
 | Missing data → `INDETERMINATE` | Application-level (never NULL verdicts) |
 | Corrections are new versions | No UPDATE on verdict tables (trigger-enforced) |
+| `fsma.traceability_events` is append-only | v141 trigger (`traceability_events_mutation_policy`, `traceability_events_no_truncate`); see 5.1 |
+| Legacy CTE tables are read-only retention | No new writers, columns or indexes on `fsma.cte_events` and `fsma.critical_tracking_events`; see 5.2 |
+
+### 5.1 Sanctioned mutations of `fsma.traceability_events`
+
+The canonical evidence table rejects every UPDATE, DELETE and TRUNCATE at the database (migration
+v141, `08c7cf36ddbe`) except the two writers the application already relies on:
+
+| Writer | Columns it may change | Constraint |
+|--------|-----------------------|------------|
+| Amendment (`services/shared/canonical_persistence/writer.py`) | `status`, `amended_at` | `status` may only move `active -> superseded` |
+| Rules engine (`services/shared/rules/engine.py`) | `evaluation_verdict`, `no_verdict_reason`, `evaluation_error`, `evaluated_at` | none |
+
+Any statement that changes another column, moves `status` anywhere else, deletes or truncates
+raises `check_violation`. A correction is a new event that supersedes the old one, never an edit.
+The break-glass is `SET LOCAL fsma.allow_mutation = 'true'` inside one transaction (the same GUC
+as `fsma.cte_events` and `fsma.correction_patches`); the runtime resets it per transaction and per
+pooled connection, and the retention purge is its only production user. Adding a column to the
+allowlist is a schema change under this policy: update the trigger in a new migration, this table,
+and `tests/migrations/test_v141_traceability_events_append_only.py` together.
+
+### 5.2 Read freeze on the legacy CTE tables (SEL-589)
+
+`fsma.traceability_events` is the committed canonical contract for all new FSMA evidence (product
+decision 2026-10-27, `docs/product/PRODUCT_PRD_2026-10.md`). `fsma.cte_events` and
+`fsma.critical_tracking_events` are read-only retention: no new writers, columns or indexes. Their
+reads are not frozen yet: the v1 FDA export and recall readers still default to `fsma.cte_events`
+behind `FDA_EXPORT_V1_READ_CANONICAL` (default off, `services/ingestion/app/fda_export/queries.py`).
+Each export, recall, trace and verification reader is cut over one at a time, only after its
+historical-row and canonical coverage is documented. A migration that adds to either legacy table
+is rejected under section 7.
 
 ---
 
@@ -115,6 +146,6 @@ Engineering must implement. Reviewers must enforce.
 
 ## Appendix: Current Schema Version
 
-- **Version:** 1.1.2
-- **Last Updated:** 2026-01-22
+- **Version:** 1.2.0
+- **Last Updated:** 2026-10-28 (v141 mutation policy on `fsma.traceability_events`; SEL-589 read freeze)
 - **Git SHA:** (auto-populated by migration)
