@@ -94,6 +94,16 @@ async def _seed_api_key(tenant_id: str, email: str) -> None:
 def main() -> int:
     _require_e2e_mode()
 
+    # Admin SessionLocal reads ADMIN_DATABASE_URL. CI points that at the
+    # NOSUPERUSER regengine_sysadmin role for the running app (api-key RLS).
+    # Fixture seeding must insert orgs/users as the postgres superuser on
+    # DATABASE_URL so RLS does not block bootstrap rows. Mutating env here
+    # only affects this seed process (Playwright execFileSync), not the app.
+    database_url = os.environ.get("DATABASE_URL", "").strip()
+    if not database_url:
+        raise SystemExit("DATABASE_URL is required to seed passwordless E2E users")
+    os.environ["ADMIN_DATABASE_URL"] = database_url
+
     from services.admin.app.auth_crypto import AuthCryptoService
     from services.admin.app.database import SessionLocal, init_db
     from services.admin.app.sqlalchemy_models import (
