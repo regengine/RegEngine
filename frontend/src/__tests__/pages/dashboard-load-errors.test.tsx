@@ -53,7 +53,11 @@ vi.mock('@/hooks/use-agent-reviews', () => ({
 vi.mock('@/hooks/use-dashboard-refresh', () => ({ useDashboardRefresh: vi.fn() }));
 vi.mock('next/link', () => ({ default: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a> }));
 vi.mock('framer-motion', () => ({
-    motion: { div: ({ children, ...props }: React.PropsWithChildren<Record<string, unknown>>) => <div>{children}</div> },
+    motion: {
+        div: ({ children }: React.PropsWithChildren<Record<string, unknown>>) => <div>{children}</div>,
+        li: ({ children }: React.PropsWithChildren<Record<string, unknown>>) => <li>{children}</li>,
+        circle: () => <circle />,
+    },
     AnimatePresence: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
 
@@ -240,6 +244,28 @@ describe('shared dashboard load errors', () => {
         expect(screen.getByText(/Import readiness is unavailable right now/i)).toBeInTheDocument();
         expect(screen.queryByText('We could not load this page.')).not.toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Retry import readiness' })).toBeInTheDocument();
+    });
+
+    it('rejects a 401 on readiness without showing placeholder readiness data (SEL-616)', async () => {
+        fetchComplianceScoreMock.mockResolvedValue({
+            tenant_id: 't',
+            overall_score: 82,
+            grade: 'B',
+            breakdown: {},
+            next_actions: [],
+            events_analyzed: 10,
+            last_chain_hash: null,
+        });
+        fetchWorkbenchSummaryMock.mockRejectedValue(apiError(401, 'Unauthorized', crypto.randomUUID()));
+        renderWithQuery(<CompliancePage />);
+
+        expect(await screen.findByText(/Import readiness is unavailable right now/i)).toBeInTheDocument();
+        // An unauthorized readiness request must not render as an empty-but-healthy workspace.
+        expect(screen.queryByText('No saved preflight run yet')).not.toBeInTheDocument();
+        expect(screen.queryByText(/open fix/)).not.toBeInTheDocument();
+        expect(screen.queryByText('We could not load this page.')).not.toBeInTheDocument();
+        expect(screen.queryByText('We could not load the compliance score.')).not.toBeInTheDocument();
+        expect(fetchWorkbenchSummaryMock).toHaveBeenCalledTimes(1);
     });
 
     it('lets recall report retry a failed request in place', async () => {

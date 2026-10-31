@@ -75,6 +75,25 @@ describe('internal api hooks', () => {
         expect(new Headers(scoreInit.headers).get('X-RegEngine-API-Key')).toBeNull();
     });
 
+    it('rejects a 401 on workbench readiness once, with a machine-readable auth status (SEL-616)', async () => {
+        fetchWithCsrfMock.mockResolvedValue({
+            ok: false,
+            status: 401,
+            statusText: 'Unauthorized',
+            headers: new Headers(),
+        });
+
+        const { fetchWorkbenchReadinessSummary } = await import('@/lib/api-hooks');
+        const { getErrorStatus, isAuthError } = await import('@/lib/api-error');
+        const error = await fetchWorkbenchReadinessSummary('tenant-123').catch((err: unknown) => err);
+
+        expect(error).toBeInstanceOf(Error);
+        expect(getErrorStatus(error)).toBe(401);
+        expect(isAuthError(error)).toBe(true);
+        // 401 is final: no retry/backoff on the readiness path.
+        expect(fetchWithCsrfMock).toHaveBeenCalledTimes(1);
+    });
+
     it('throws client errors immediately without retrying them', async () => {
         fetchWithCsrfMock.mockResolvedValue({
             ok: false,
