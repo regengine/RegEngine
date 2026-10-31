@@ -47,7 +47,7 @@ def _isolated_checkout_security_state(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.fixture
 def checkout_client(monkeypatch: pytest.MonkeyPatch) -> tuple[TestClient, list[dict[str, Any]]]:
     monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_checkout_contract")
-    monkeypatch.setenv("STRIPE_PRICE_GROWTH_MONTHLY", "price_growth_monthly")
+    monkeypatch.setenv("STRIPE_PRICE_LIST_MONTHLY", "price_list_monthly")
 
     stripe_calls: list[dict[str, Any]] = []
 

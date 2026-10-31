@@ -13,8 +13,28 @@ DEFAULT_CANCEL_URL = "https://regengine.co/pricing?checkout=cancelled"
 class CheckoutRequest(BaseModel):
     """Request to create a Stripe checkout session."""
 
-    plan_id: str = Field(..., description="Plan: growth or scale")
-    billing_period: str = Field("monthly", description="monthly or annual")
+    plan_id: str = Field(
+        ...,
+        description=(
+            "list, founding (aliases growth/base/scale/standard → list), pilot "
+            "(one-time payment), or enterprise (sales)"
+        ),
+    )
+    billing_period: str = Field("monthly", description="monthly or annual (ignored for pilot)")
+    pilot_variant: Optional[str] = Field(
+        default="standard",
+        description=(
+            "Pilot flavor when plan_id=pilot: 'standard' ($2000 one-time) or "
+            "'convert_30' ($1500 one-time, 30-day conversion window). Ignored for subscriptions."
+        ),
+    )
+    facility_count: Optional[int] = Field(
+        default=None,
+        description=(
+            "Number of facilities to bill; defaults to 1 for list/founding. "
+            "Ignored for pilot (quantity is always 1)."
+        ),
+    )
     tenant_id: Optional[str] = Field(default=None, description="Existing tenant ID if already provisioned")
     tenant_name: Optional[str] = Field(default=None, description="Tenant name for post-payment provisioning")
     customer_email: Optional[str] = Field(default=None, description="Payer email")
@@ -30,6 +50,10 @@ class CheckoutResponse(BaseModel):
     plan: str
     billing_period: str
     amount: int
+    # Subscription quantity billed per facility (default 1). ``amount``
+    # stays the *unit* monthly amount so it matches Stripe's price
+    # ``unit_amount`` display; clients multiply by this for the total.
+    facility_quantity: int = 1
     currency: str = "usd"
 
 
