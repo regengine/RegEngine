@@ -50,19 +50,93 @@ def _authoritative_kdes(event: IngestEvent) -> dict[str, object]:
     return available
 
 
-def _validate_event_kdes(event: IngestEvent) -> list[str]:
-    """Validate that an event has all required KDEs for its CTE type."""
-    errors: list[str] = []
-    required = _pkg.REQUIRED_KDES_BY_CTE.get(event.cte_type, [])
+def _kde_present(val: object) -> bool:
+    """True when a KDE value is non-empty (string, list, or other scalar)."""
+    if val is None:
+        return False
+    if isinstance(val, str):
+        return val.strip() != ""
+    if isinstance(val, (list, tuple, set)):
+        return any(_kde_present(item) for item in val)
+    if isinstance(val, dict):
+        return any(_kde_present(item) for item in val.values())
+    return True
 
+
+def _event_ftl_payload(event: IngestEvent) -> dict:
+    """Build the dict shape ``is_ftl_food`` expects from an IngestEvent."""
+    payload: dict = {"kdes": dict(event.kdes or {})}
+    # Top-level FTL hints (rare) still count if present on the event object.
+    for key in ("ftl_covered", "ftl_category"):
+        if hasattr(event, key):
+            val = getattr(event, key)
+            if val is not None:
+                payload[key] = val
+    return payload
+
+
+def _validate_event_kdes(event: IngestEvent) -> list[str]:
+    """Validate that an event has all required KDEs for its CTE type.
+
+    A-2190 / contract v3: Subpart S required-KDE gates apply when the product
+    is FTL or FTL status is unknown. Explicit ``ftl_covered=False`` (or a
+    non-FTL category) skips the required-KDE list so non-FTL foods are not
+    scored as gaps. Keep A-2170 location_incomplete behaviour untouched.
+    """
+    errors: list[str] = []
+
+    # FTL gate (fix 5). Import locally so monkeypatches on shared.rules.ftl
+    # and missing optional deps in unit tests stay isolated.
+    try:
+        from shared.rules.ftl import is_ftl_food
+    except ImportError:  # pragma: no cover - shared always present in service
+        is_ftl_food = None  # type: ignore[assignment]
+
+    if is_ftl_food is not None:
+        ftl_status = is_ftl_food(_event_ftl_payload(event))
+        if ftl_status is False:
+            return []
+
+    required = _pkg.REQUIRED_KDES_BY_CTE.get(event.cte_type, [])
     available = _authoritative_kdes(event)
 
     for kde_name in required:
         val = available.get(kde_name)
         if kde_name == "harvester_business_phone" and not isinstance(val, str):
             errors.append("Harvester business phone must be a non-empty string")
-        elif val is None or (isinstance(val, str) and val.strip() == ""):
+        elif not _kde_present(val):
             errors.append(f"Missing required KDE '{kde_name}' for {event.cte_type.value} CTE")
+
+    # Initial packing conditionals (A-2190 fix 2): field/growing area, and
+    # cooling location+date only when the food was cooled.
+    cte_value = getattr(event.cte_type, "value", event.cte_type)
+    if cte_value == "initial_packing":
+        has_field = _kde_present(available.get("growing_area_name")) or _kde_present(
+            available.get("field_id")
+        )
+        if not has_field:
+            errors.append(
+                "Missing required KDE 'growing_area_name' or 'field_id' for initial_packing CTE"
+            )
+
+        cooled_flag = available.get("cooled")
+        cooled = cooled_flag is True or (
+            isinstance(cooled_flag, str) and cooled_flag.strip().lower() in {"1", "true", "yes"}
+        )
+        cooling_hint = _kde_present(available.get("cooling_date")) or _kde_present(
+            available.get("cooling_location_name")
+        )
+        if cooled or cooling_hint:
+            if not _kde_present(available.get("cooling_location_name")):
+                errors.append(
+                    "Missing required KDE 'cooling_location_name' for initial_packing CTE "
+                    "(required when cooled)"
+                )
+            if not _kde_present(available.get("cooling_date")):
+                errors.append(
+                    "Missing required KDE 'cooling_date' for initial_packing CTE "
+                    "(required when cooled)"
+                )
 
     return errors
 

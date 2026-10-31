@@ -141,12 +141,12 @@ class TestExportReadinessChainVerificationFailed:
 
 class TestRequiredKdeCoverageDenominator:
     def test_denominator_is_per_cte_type_not_flat(self):
-        """Harvesting requires 7 KDEs, shipping 9. A single flat required
+        """Harvesting requires 8 KDEs (contract v3), shipping 9. A single flat required
         list for every CTE type would be a different bug."""
         harvesting = cs._required_kde_coverage({"harvesting": 1}, {})
         shipping = cs._required_kde_coverage({"shipping": 1}, {})
 
-        assert harvesting["required_kde_checks_total"] == len(REQUIRED_KDES_BY_CTE[WebhookCTEType.HARVESTING]) == 7
+        assert harvesting["required_kde_checks_total"] == len(REQUIRED_KDES_BY_CTE[WebhookCTEType.HARVESTING]) == 8
         assert shipping["required_kde_checks_total"] == len(REQUIRED_KDES_BY_CTE[WebhookCTEType.SHIPPING]) == 9
 
     def test_two_of_seven_required_present(self):
@@ -154,13 +154,13 @@ class TestRequiredKdeCoverageDenominator:
             {"harvesting": 1},
             {("harvesting", "traceability_lot_code"): 1, ("harvesting", "quantity"): 1},
         )
-        assert cov["required_kde_checks_total"] == 7
+        assert cov["required_kde_checks_total"] == 8
         assert cov["required_kde_checks_passed"] == 2
         assert cov["events_unchecked_type"] == 0
 
     def test_denominator_scales_with_event_count(self):
         cov = cs._required_kde_coverage({"harvesting": 4}, {("harvesting", "quantity"): 3})
-        assert cov["required_kde_checks_total"] == 28  # 4 events x 7 required
+        assert cov["required_kde_checks_total"] == 32  # 4 events x 8 required
         assert cov["required_kde_checks_passed"] == 3
 
     def test_unknown_cte_type_is_unchecked_not_fully_covered(self):
@@ -179,13 +179,13 @@ class TestRequiredKdeCoverageDenominator:
 
     def test_event_type_matching_is_case_insensitive(self):
         cov = cs._required_kde_coverage({"HARVESTING": 1}, {("HARVESTING", "quantity"): 1})
-        assert cov["required_kde_checks_total"] == 7
+        assert cov["required_kde_checks_total"] == 8
         assert cov["required_kde_checks_passed"] == 1
 
 
 class TestKdeCompletenessScoredAgainstRequiredSet:
     def test_partial_required_set_scores_materially_below_100(self):
-        """A shipping/harvesting tenant recording 2 of 7 required KDEs must
+        """A shipping/harvesting tenant recording 2 of 8 required KDEs must
         not read 100%, and the export KDE credit must be < 30."""
         scores = _compute_scores(
             _data(
@@ -302,7 +302,7 @@ def _base_routes(**extra):
 
 class TestQueryScoringDataRequiredKdes:
     def test_query_derives_required_totals_from_the_checklist(self, monkeypatch):
-        """One harvesting event with 2 of its 7 required KDEs present."""
+        """One harvesting event with 2 of its 8 required KDEs present."""
         _fake_chain(monkeypatch)
         session = _RouteSession(route=_base_routes())
         # One harvesting event; traceability_lot_code + quantity present.
@@ -316,7 +316,7 @@ class TestQueryScoringDataRequiredKdes:
 
         data = _query_scoring_data(session, "t1")
 
-        assert data["required_kde_checks_total"] == 7
+        assert data["required_kde_checks_total"] == 8
         assert data["required_kde_checks_passed"] == 2
         assert data.get("required_kde_data_error") is not True
 
