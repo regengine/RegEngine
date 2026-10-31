@@ -1,0 +1,289 @@
+#!/usr/bin/env bash
+#
+# Deploy the RegEngine backend to Railway by CLI, carrying commit identity.
+#
+# Why this exists: the Railway service has no GitHub source and the GitHub
+# Actions deploy workflow (.github/workflows/deploy.yml) is disabled in the
+# Actions UI (its YAML still declares a push trigger, but a disabled workflow
+# never runs), so production is deployed by running `railway up` from a
+# checkout. A bare
+# `railway up` ships an image that cannot say which commit it is: the upload
+# carries no RAILWAY_GIT_COMMIT_SHA, and build-sha.txt (the stamp that
+# services/shared/build_info.py reads) still holds its tracked placeholder.
+# /health then answers `build.commit_sha: null` and nobody can tell from
+# production which code is serving.
+#
+# This script:
+#   1. refuses a dirty working tree, and refuses a HEAD that is not on
+#      origin/main unless --allow-unmerged is passed;
+#   2. stamps the full HEAD SHA into build-sha.txt for the upload only, and
+#      restores the tracked placeholder afterwards, also on failure;
+#   3. runs `railway up --ci` with an explicit service and environment and a
+#      deployment message of the form "<commit subject> @<short sha>";
+#   4. polls ${BACKEND_URL}/health until .build.commit_sha equals the SHA it
+#      shipped, and exits non-zero if that does not happen within the budget.
+#
+# Usage:
+#   scripts/railway_deploy.sh [--allow-unmerged]
+#
+# Environment:
+#   RAILWAY_SERVICE_ID, RAILWAY_ENVIRONMENT_ID
+#       Deploy target. When either is unset it is read from `railway status`,
+#       which needs a linked project (`railway link`, `railway service`).
+#   RAILWAY_PROJECT_ID
+#       Passed as `railway up --project` when set, as deploy.yml does.
+#       Otherwise the linked project is used.
+#   BACKEND_URL
+#       Where to verify. The default, https://regengine-production.up.railway.app,
+#       belongs to one target (project RegEngine-Prod, environment production,
+#       service RegEngine) and is used only when `railway status` reports that
+#       exact linked target. Any id picked by hand, or any other linked target,
+#       must set BACKEND_URL explicitly, or the check could pass against
+#       production while the real target never served the upload. It must be
+#       an https:// URL; plain http:// is accepted for loopback only, because
+#       the /health body is what this script trusts for the shipped SHA.
+#   RAILWAY_DEPLOY_TIMEOUT_SECONDS
+#       Rollout budget for the /health check. Default 900, matching deploy.yml.
+#   RAILWAY_DEPLOY_POLL_SECONDS
+#       Seconds between /health polls. Default 15, matching deploy.yml.
+#
+# Nothing here prints a token or the value of a Railway variable.
+
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+usage: scripts/railway_deploy.sh [--allow-unmerged]
+
+Deploy the current checkout to Railway with its commit SHA stamped into
+build-sha.txt, then wait until /health reports that commit.
+
+  --allow-unmerged   deploy a HEAD that is not on origin/main
+  -h, --help         show this help
+EOF
+}
+
+ALLOW_UNMERGED=0
+for arg in "$@"; do
+  case "$arg" in
+    --allow-unmerged) ALLOW_UNMERGED=1 ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "error: unknown argument '$arg'" >&2; usage >&2; exit 2 ;;
+  esac
+done
+
+for tool in git railway curl jq; do
+  if ! command -v "$tool" >/dev/null 2>&1; then
+    echo "error: '$tool' is required but not on PATH" >&2
+    exit 1
+  fi
+done
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+STAMP_FILE="build-sha.txt"
+
+# `railway up` indexes the upload relative to the git toplevel and fails with
+# "Indexing... prefix not found" when .git is a worktree pointer file rather
+# than a directory (observed 2026-10-29). Refuse before touching anything.
+if [ ! -d "$REPO_ROOT/.git" ]; then
+  echo "error: ${REPO_ROOT} is a git worktree (.git is a file). railway up cannot index a worktree;" >&2
+  echo "       run this from the primary checkout, whose .git is a directory." >&2
+  exit 1
+fi
+# The default URL and the target it belongs to. Changing one means changing
+# the others; the script refuses the default for any other target.
+DEFAULT_BACKEND_URL="https://regengine-production.up.railway.app"
+DEFAULT_TARGET_PROJECT="RegEngine-Prod"
+DEFAULT_TARGET_ENVIRONMENT="production"
+DEFAULT_TARGET_SERVICE="RegEngine"
+BACKEND_URL_SET=1
+[ -n "${BACKEND_URL:-}" ] || BACKEND_URL_SET=0
+BACKEND_URL="${BACKEND_URL:-$DEFAULT_BACKEND_URL}"
+# The /health body is trusted for the shipped SHA, so it has to arrive over
+# TLS. Plain http is allowed only to loopback (what the tests use). The
+# loopback host may be followed only by a decimal port and then the end of
+# the URL or a path: a glob such as `http://127.0.0.1:*` would also accept
+# `http://127.0.0.1:80@attacker.example`, where the loopback text is user
+# information and the real host is the attacker's.
+LOOPBACK_HTTP_RE='^http://(127\.0\.0\.1|localhost|\[::1\])(:[0-9]+)?(/.*)?$'
+if [[ "$BACKEND_URL" != https://* ]] && [[ ! "$BACKEND_URL" =~ $LOOPBACK_HTTP_RE ]]; then
+  echo "error: BACKEND_URL must be an https:// URL (plain http:// is accepted for loopback only)." >&2
+  exit 1
+fi
+# A proxy named by http_proxy or ALL_PROXY must not sit between this script
+# and a loopback health endpoint, or it could forge the body. TLS protects the
+# https case end to end, so a corporate proxy stays usable there.
+CURL_PROXY_ARGS=()
+if [[ "$BACKEND_URL" =~ $LOOPBACK_HTTP_RE ]]; then
+  CURL_PROXY_ARGS=(--noproxy '*')
+fi
+TIMEOUT_SECONDS="${RAILWAY_DEPLOY_TIMEOUT_SECONDS:-900}"
+POLL_SECONDS="${RAILWAY_DEPLOY_POLL_SECONDS:-15}"
+
+# ── 1. Preconditions ─────────────────────────────────────────────────────────
+if ! git ls-files --error-unmatch "$STAMP_FILE" >/dev/null 2>&1; then
+  echo "error: ${STAMP_FILE} is not tracked. The Dockerfile copies it and build_info.py reads it." >&2
+  exit 1
+fi
+
+# A failed inspection must not read as a clean tree, so check the exit
+# status before the output.
+dirty="$(git status --porcelain)" || {
+  echo "error: 'git status' failed; refusing to treat the checkout as clean." >&2
+  exit 1
+}
+if [ -n "$dirty" ]; then
+  echo "error: working tree is dirty. Commit or discard these changes before deploying;" >&2
+  echo "       railway up uploads the directory as it is, not the last commit." >&2
+  printf '%s\n' "$dirty" >&2
+  exit 1
+fi
+
+HEAD_SHA="$(git rev-parse --verify HEAD)"
+SHORT_SHA="$(git rev-parse --short HEAD)"
+SUBJECT="$(git log -1 --format=%s HEAD)"
+
+if [ "$ALLOW_UNMERGED" -eq 0 ]; then
+  if ! git fetch --quiet origin main; then
+    echo "error: could not fetch origin/main to confirm HEAD is merged (pass --allow-unmerged to skip this check)." >&2
+    exit 1
+  fi
+  if ! git merge-base --is-ancestor "$HEAD_SHA" origin/main; then
+    echo "error: HEAD ${SHORT_SHA} is not on origin/main." >&2
+    echo "       Merge first, or pass --allow-unmerged to deploy an unmerged commit on purpose." >&2
+    exit 1
+  fi
+  if [ "$HEAD_SHA" != "$(git rev-parse origin/main)" ]; then
+    echo "note: HEAD ${SHORT_SHA} is on origin/main but behind its tip; deploying the older commit."
+  fi
+else
+  echo "note: --allow-unmerged set; not checking HEAD against origin/main."
+fi
+
+# ── 2. Deploy target ─────────────────────────────────────────────────────────
+SERVICE_ID="${RAILWAY_SERVICE_ID:-}"
+ENVIRONMENT_ID="${RAILWAY_ENVIRONMENT_ID:-}"
+SERVICE_SOURCE="RAILWAY_SERVICE_ID"
+ENVIRONMENT_SOURCE="RAILWAY_ENVIRONMENT_ID"
+if [ -z "$SERVICE_ID" ] || [ -z "$ENVIRONMENT_ID" ]; then
+  status_text="$(railway status)" || {
+    echo "error: 'railway status' failed. Link the project (railway link) or set RAILWAY_SERVICE_ID and RAILWAY_ENVIRONMENT_ID." >&2
+    exit 1
+  }
+  # `railway status` prints "Environment ID:  <id>" for the linked environment
+  # and, under "Linked service", "    service ID:    <id>".
+  if [ -z "$ENVIRONMENT_ID" ]; then
+    ENVIRONMENT_ID="$(printf '%s\n' "$status_text" | sed -n 's/^Environment ID:[[:space:]]*//p' | head -n 1 | tr -d '[:space:]')"
+    ENVIRONMENT_SOURCE="railway status"
+  fi
+  if [ -z "$SERVICE_ID" ]; then
+    SERVICE_ID="$(printf '%s\n' "$status_text" | sed -n 's/^[[:space:]]*service ID:[[:space:]]*//p' | head -n 1 | tr -d '[:space:]')"
+    SERVICE_SOURCE="railway status"
+  fi
+fi
+if [ -z "$SERVICE_ID" ] || [ -z "$ENVIRONMENT_ID" ]; then
+  echo "error: could not determine the Railway service and environment." >&2
+  echo "       Set RAILWAY_SERVICE_ID and RAILWAY_ENVIRONMENT_ID, or link a service with 'railway service'." >&2
+  exit 1
+fi
+if [ "$BACKEND_URL_SET" -eq 0 ]; then
+  # The default URL is tied to one target. Use it only when `railway status`
+  # reports that exact linked target; a hand-picked id, or another linked
+  # project, environment or service, must say where to verify.
+  if [ "$SERVICE_SOURCE" != "railway status" ] || [ "$ENVIRONMENT_SOURCE" != "railway status" ]; then
+    echo "error: RAILWAY_SERVICE_ID / RAILWAY_ENVIRONMENT_ID pick the target by hand but BACKEND_URL is unset." >&2
+    echo "       Set BACKEND_URL to that target's public URL so the health check verifies the right deployment." >&2
+    exit 1
+  fi
+  project_name="$(printf '%s\n' "$status_text" | sed -n 's/^Project:[[:space:]]*//p' | head -n 1 | sed 's/[[:space:]]*$//')"
+  environment_name="$(printf '%s\n' "$status_text" | sed -n 's/^Environment:[[:space:]]*//p' | head -n 1 | sed 's/[[:space:]]*$//')"
+  # The linked service's name is the first non-empty line after "Linked service".
+  service_name="$(printf '%s\n' "$status_text" | awk '/^Linked service/ { linked = 1; next } linked && NF { print; exit }' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+  if [ "$project_name" != "$DEFAULT_TARGET_PROJECT" ] || [ "$environment_name" != "$DEFAULT_TARGET_ENVIRONMENT" ] || [ "$service_name" != "$DEFAULT_TARGET_SERVICE" ]; then
+    echo "error: the linked target is project '${project_name:-unknown}', environment '${environment_name:-unknown}', service '${service_name:-unknown}'," >&2
+    echo "       but the default BACKEND_URL belongs to ${DEFAULT_TARGET_PROJECT} / ${DEFAULT_TARGET_ENVIRONMENT} / ${DEFAULT_TARGET_SERVICE}." >&2
+    echo "       Set BACKEND_URL to this target's public URL so the health check verifies the right deployment." >&2
+    exit 1
+  fi
+fi
+PROJECT_ARGS=()
+PROJECT_SOURCE="the linked project"
+if [ -n "${RAILWAY_PROJECT_ID:-}" ]; then
+  PROJECT_ARGS=(--project "$RAILWAY_PROJECT_ID")
+  PROJECT_SOURCE="RAILWAY_PROJECT_ID"
+fi
+echo "target: service from ${SERVICE_SOURCE}, environment from ${ENVIRONMENT_SOURCE}, project from ${PROJECT_SOURCE}"
+
+# ── 3. Stamp and upload ──────────────────────────────────────────────────────
+# The stamp is for the upload only. The tracked file keeps its placeholder so
+# a real SHA is never committed; the trap restores it on every exit path.
+# shellcheck disable=SC2329  # invoked by the EXIT trap below
+restore_stamp() {
+  local rc=$?
+  if ! git checkout --quiet -- "$STAMP_FILE"; then
+    echo "warning: could not restore ${STAMP_FILE}; run: git checkout -- ${STAMP_FILE}" >&2
+  fi
+  exit "$rc"
+}
+trap restore_stamp EXIT
+
+printf '%s\n' "$HEAD_SHA" > "$STAMP_FILE"
+echo "stamped ${STAMP_FILE} with ${HEAD_SHA}"
+
+MESSAGE="${SUBJECT} @${SHORT_SHA}"
+echo "uploading: railway up --ci --message '${MESSAGE}'"
+# ${arr[@]+"${arr[@]}"} expands to nothing when the array is empty and stays
+# safe under `set -u` on every bash, including macOS /bin/bash 3.2.
+railway up --ci ${PROJECT_ARGS[@]+"${PROJECT_ARGS[@]}"} --service "$SERVICE_ID" --environment "$ENVIRONMENT_ID" --message "$MESSAGE"
+
+git checkout --quiet -- "$STAMP_FILE"
+echo "restored ${STAMP_FILE} to its tracked placeholder"
+
+# ── 4. Verify the deployed commit is the one we shipped ──────────────────────
+# Mirrors the "Verify the deployed commit is the one we shipped" step in
+# .github/workflows/deploy.yml. `railway up --ci` returns once the build is
+# done, not once the new image is serving. railway.toml sets
+# restartPolicyType = "ON_FAILURE" with a /readiness healthcheck, so a rollout
+# that fails its healthcheck reverts to the previous image after the upload
+# already looked fine. Asserting identity (the served commit) instead of
+# behaviour is what closes that hole.
+EXPECTED_SHA="$HEAD_SHA"
+deadline=$(( SECONDS + TIMEOUT_SECONDS ))
+attempt=0
+last_sha=""
+last_code=""
+
+echo "waiting up to ${TIMEOUT_SECONDS}s for ${BACKEND_URL}/health to report ${EXPECTED_SHA}"
+while [ "$SECONDS" -lt "$deadline" ]; do
+  attempt=$(( attempt + 1 ))
+  body=$(mktemp)
+  last_code=$(curl -sS --max-time 20 ${CURL_PROXY_ARGS[@]+"${CURL_PROXY_ARGS[@]}"} -o "$body" -w '%{http_code}' "${BACKEND_URL}/health" || true)
+  last_code="${last_code:-000}"
+
+  if [ "$last_code" = "200" ]; then
+    # `// empty` also covers a payload with no build key at all, which is
+    # what an image predating build stamping returns.
+    last_sha=$(jq -r '.build.commit_sha // empty' "$body" 2>/dev/null || true)
+    if [ "$last_sha" = "$EXPECTED_SHA" ]; then
+      rm -f "$body"
+      echo "Deployed commit matches: ${EXPECTED_SHA}"
+      exit 0
+    fi
+  fi
+  rm -f "$body"
+
+  echo "attempt ${attempt}: status=${last_code} deployed_sha=${last_sha:-(none)} expected=${EXPECTED_SHA}"
+  sleep "$POLL_SECONDS"
+done
+
+echo "error: deploy did not converge within ${TIMEOUT_SECONDS}s. /health last reported status=${last_code} commit_sha=${last_sha:-(none)}, expected ${EXPECTED_SHA}." >&2
+# Three distinct causes, three distinct messages, as in deploy.yml.
+if [ "$last_code" != "200" ]; then
+  echo "error: /health never returned 200 (last status ${last_code}). The service is not serving; check the Railway deploy logs for a crashed or unhealthy rollout." >&2
+elif [ -z "$last_sha" ]; then
+  echo "error: /health answered but carried no commit_sha. Either the rollout reverted to an image predating build stamping, or build-sha.txt did not reach the image." >&2
+else
+  echo "error: a different commit is serving. The rollout reverted (railway.toml restartPolicyType=ON_FAILURE) or another deploy raced this one." >&2
+fi
+exit 1
