@@ -319,6 +319,19 @@ def test_reads_service_and_environment_from_railway_status_when_unset(harness: _
     assert "svc-from-status" not in result.stdout + result.stderr
 
 
+def test_refuses_a_plain_http_backend_url_that_is_not_loopback(harness: _Harness) -> None:
+    # The /health body is trusted for the shipped SHA, so a public URL must be
+    # https; the loopback http URL the other tests use stays allowed.
+    harness.health.sha = harness.head()
+
+    result = harness.run(BACKEND_URL="http://health.example.invalid:8080")
+
+    assert result.returncode != 0
+    assert "BACKEND_URL must be an https:// URL" in result.stderr
+    assert harness.calls() == []
+    assert harness.stamp_file() == _PLACEHOLDER
+
+
 def test_requires_backend_url_when_the_environment_is_chosen_by_hand(harness: _Harness) -> None:
     # RAILWAY_ENVIRONMENT_ID may point at staging; the production default URL
     # would then verify the wrong deployment and could pass by accident.

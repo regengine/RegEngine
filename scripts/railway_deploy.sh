@@ -39,7 +39,9 @@
 #       service RegEngine) and is used only when `railway status` reports that
 #       exact linked target. Any id picked by hand, or any other linked target,
 #       must set BACKEND_URL explicitly, or the check could pass against
-#       production while the real target never served the upload.
+#       production while the real target never served the upload. It must be
+#       an https:// URL; plain http:// is accepted for loopback only, because
+#       the /health body is what this script trusts for the shipped SHA.
 #   RAILWAY_DEPLOY_TIMEOUT_SECONDS
 #       Rollout budget for the /health check. Default 900, matching deploy.yml.
 #   RAILWAY_DEPLOY_POLL_SECONDS
@@ -98,6 +100,18 @@ DEFAULT_TARGET_SERVICE="RegEngine"
 BACKEND_URL_SET=1
 [ -n "${BACKEND_URL:-}" ] || BACKEND_URL_SET=0
 BACKEND_URL="${BACKEND_URL:-$DEFAULT_BACKEND_URL}"
+# The /health body is trusted for the shipped SHA, so it has to arrive over
+# TLS. Plain http is allowed only to loopback (what the tests use).
+case "$BACKEND_URL" in
+  https://*) ;;
+  http://127.0.0.1 | http://127.0.0.1:* | http://127.0.0.1/* | \
+  http://localhost | http://localhost:* | http://localhost/* | \
+  "http://[::1]" | "http://[::1]:"* | "http://[::1]/"*) ;;
+  *)
+    echo "error: BACKEND_URL must be an https:// URL (plain http:// is accepted for loopback only)." >&2
+    exit 1
+    ;;
+esac
 TIMEOUT_SECONDS="${RAILWAY_DEPLOY_TIMEOUT_SECONDS:-900}"
 POLL_SECONDS="${RAILWAY_DEPLOY_POLL_SECONDS:-15}"
 
