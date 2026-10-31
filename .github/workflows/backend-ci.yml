@@ -1019,6 +1019,7 @@ jobs:
             tests/invariants/test_dual_write_parity.py \
             tests/invariants/test_fda_export_v1_golden.py \
             tests/invariants/test_chain_verify_golden.py \
+            tests/invariants/test_no_third_party_regengine_domains.py \
             tests/migrations/test_v097_pin_get_tenant_context.py \
             tests/migrations/test_v099_set_tenant_context.py \
             tests/migrations/test_v120_rule_citations.py \
