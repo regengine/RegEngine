@@ -8,6 +8,8 @@ your trading partner before relying on it for compliance.
 
 from __future__ import annotations
 
+import csv
+import io
 import json
 import logging
 import re
@@ -31,7 +33,8 @@ logger = logging.getLogger("epcis-export")
 FDA_CSV_HEADER = (
     "CTE_Type,Traceability_Lot_Code,Product_Description,Quantity,Unit_of_Measure,"
     "Event_Date,Event_Time,Ship_From_Location,Ship_From_GLN,Ship_To_Location,"
-    "Ship_To_GLN,Carrier,Temperature_C,SHA256_Hash"
+    "Ship_To_GLN,Carrier,Temperature_C,Reference_Document,TLC_Source_Reference,"
+    "Immediate_Previous_Source,SHA256_Hash,Additional_KDEs_JSON"
 )
 
 
@@ -715,38 +718,53 @@ async def export_fda(
     rows = _load_export_rows(tenant_id, request)
     data_source = "tenant" if rows else "empty"
 
-    if rows:
-        # Build CSV from real data
-        lines = [FDA_CSV_HEADER]
-        for r in rows:
-            ts = r["event_timestamp"]
-            date_str = ts.strftime("%Y-%m-%d") if ts else ""
-            time_str = ts.strftime("%H:%M:%SZ") if ts else ""
-            lines.append(
-                ",".join(
-                    [
-                        str(r["event_type"] or "").upper(),
-                        str(r["traceability_lot_code"] or ""),
-                        sanitize_cell(str(r["product_description"] or "")).replace(",", ";"),
-                        str(r["quantity"] or ""),
-                        str(r["unit_of_measure"] or ""),
-                        date_str,
-                        time_str,
-                        sanitize_cell(str(r["ship_from"] or r["location_name"] or "")).replace(",", ";"),
-                        str(r["ship_from_gln"] or r["location_gln"] or ""),
-                        sanitize_cell(str(r["ship_to"] or "")).replace(",", ";"),
-                        str(r["ship_to_gln"] or ""),
-                        sanitize_cell(str(r["carrier"] or "")).replace(",", ";"),
-                        str(r["temperature_c"] or ""),
-                        str(r["sha256_hash"] or ""),
-                    ]
-                )
+    # Use csv.writer so fields with commas (esp. Additional_KDEs_JSON) stay
+    # valid JSON / text; the writer quotes cells as needed (Hermes #3722).
+    buf = io.StringIO()
+    writer = csv.writer(buf, lineterminator="\n")
+    writer.writerow(FDA_CSV_HEADER.split(","))
+    for r in rows:
+        ts = r["event_timestamp"]
+        date_str = ts.strftime("%Y-%m-%d") if ts else ""
+        time_str = ts.strftime("%H:%M:%SZ") if ts else ""
+        additional = {
+            key: r.get(key)
+            for key in (
+                "field_id",
+                "harvester_name",
+                "harvester_business_name",
+                "harvester_business_phone",
             )
-        csv_content = "\n".join(lines) + "\n"
-        event_count = len(rows)
-    else:
-        csv_content = FDA_CSV_HEADER + "\n"
-        event_count = 0
+            if r.get(key)
+        }
+        # Emit valid JSON unchanged — do not replace commas; csv.writer quotes.
+        additional_json = (
+            sanitize_cell(json.dumps(additional, sort_keys=True)) if additional else ""
+        )
+        writer.writerow(
+            [
+                str(r.get("event_type") or "").upper(),
+                str(r.get("traceability_lot_code") or ""),
+                sanitize_cell(str(r.get("product_description") or "")),
+                str(r.get("quantity") or ""),
+                str(r.get("unit_of_measure") or ""),
+                date_str,
+                time_str,
+                sanitize_cell(str(r.get("ship_from") or r.get("location_name") or "")),
+                str(r.get("ship_from_gln") or r.get("location_gln") or ""),
+                sanitize_cell(str(r.get("ship_to") or "")),
+                str(r.get("ship_to_gln") or ""),
+                sanitize_cell(str(r.get("carrier") or "")),
+                str(r.get("temperature_c") or ""),
+                sanitize_cell(str(r.get("reference_document") or "")),
+                sanitize_cell(str(r.get("tlc_source_reference") or "")),
+                sanitize_cell(str(r.get("immediate_previous_source") or "")),
+                str(r.get("sha256_hash") or ""),
+                additional_json,
+            ]
+        )
+    csv_content = buf.getvalue()
+    event_count = len(rows)
 
     # EPIC-L (#1655): route filename through the shared safe_filename
     # builder so tenant_id can't carry CRLF / quotes into the header value.
