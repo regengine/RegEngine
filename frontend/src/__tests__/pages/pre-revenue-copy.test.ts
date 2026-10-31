@@ -47,6 +47,30 @@ describe('pre-revenue public copy', () => {
         }
     });
 
+    it('clears stale $425 from remaining marketing pages (approved $999/$499)', () => {
+        const pages = [
+            'src/app/why-regengine/page.tsx',
+            'src/app/buyer-programs/page.tsx',
+            'src/app/supplier-compliance/page.tsx',
+            'src/app/compare/foodlogiq/page.tsx',
+            'src/app/compare/repositrak/page.tsx',
+            'src/app/compare/tracegains/page.tsx',
+        ];
+        for (const file of pages) {
+            const source = read(file);
+            expect(source, `${file} still contains "$425"`).not.toContain('$425');
+            expect(source, `${file} missing founding $499`).toContain('$499');
+        }
+        // Pages that state both approved figures (not the compare rows that still show $849 list)
+        for (const file of [
+            'src/app/why-regengine/page.tsx',
+            'src/app/buyer-programs/page.tsx',
+            'src/app/supplier-compliance/page.tsx',
+        ]) {
+            expect(read(file), `${file} missing list $999`).toContain('$999/mo per facility');
+        }
+    });
+
     it('shows no hardcoded prices on pricing surfaces', () => {
         const client = read('src/components/pricing/PricingPageClient.tsx');
         expect(client).not.toContain('$425');

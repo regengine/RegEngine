@@ -166,8 +166,8 @@ export default function BuyerProgramsPage() {
           </h2>
           <Card padding="spacious">
             <div className="mb-4 flex flex-wrap items-baseline gap-3">
-              <span className="text-title tabular-nums text-re-text-primary">$425</span>
-              <span className="text-ui text-re-text-tertiary">per month, billed annually</span>
+              <span className="text-title tabular-nums text-re-text-primary">$499</span>
+              <span className="text-ui text-re-text-tertiary">per facility / mo founding design partner (list $999/mo per facility)</span>
             </div>
             <p className="text-ui leading-relaxed text-re-text-secondary">
               No facility/CTE cap. No SLA. No retailer-specific benchmark. No quarterly compliance review. No audit. No readiness score. No FDA/buyer approval. No three-tier ladder or strikethrough list prices.

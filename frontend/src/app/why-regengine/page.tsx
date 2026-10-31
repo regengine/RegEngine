@@ -50,7 +50,7 @@ const COMPARISON_DATA: ComparisonRow[] = [
     },
     {
         feature: 'Transparent, Published Pricing',
-        regengine: 'List price from $849/mo (partner rates from $425/mo)',
+        regengine: 'List price from $849/mo (founding design partner from $499/mo per facility)',
         trustwell: 'Contact sales',
         safetychain: 'Contact sales',
         repositrak: 'Contact sales',
@@ -139,7 +139,7 @@ const DIFFERENTIATORS = [
         icon: DollarSign,
         title: 'Transparent Pricing',
         description:
-            'No hidden sales calls. Founding rate plans start at $425/mo (billed annually). Pricing is published, so you do not need to "contact sales."',
+            'No hidden sales calls. List price is $999/mo per facility; founding design partner pricing is $499/mo per facility. Pricing is published, so you do not need to "contact sales."',
         detail: 'Compare directly to competitors who make you "contact sales." We believe pricing transparency builds trust and moves faster.',
     },
     {
@@ -438,7 +438,7 @@ HTTP 201
                             <div className="space-y-4">
                                 <Card variant="inset" padding="compact">
                                     <p className="mb-1 font-mono text-label uppercase text-re-text-muted">Base Plan</p>
-                                    <p className="text-title tabular-nums text-re-text-primary">$425/mo <span className="text-ui font-normal text-re-text-tertiary line-through">$849/mo</span></p>
+                                    <p className="text-title tabular-nums text-re-text-primary">$499/mo <span className="text-ui font-normal text-re-text-tertiary line-through">$849/mo</span></p>
                                     <p className="mt-2 text-small text-re-text-tertiary">Founding rate, billed annually ($499/mo monthly) • 1 facility • 500 CTEs/mo</p>
                                 </Card>
                                 <Card variant="inset" padding="compact">
@@ -461,7 +461,7 @@ HTTP 201
                                 Open pricing builds trust. We list prices on our website. No "contact sales" gatekeeping. No surprise enterprise minimums.
                             </p>
                             <p className="mb-6 max-w-[68ch] text-ui text-re-text-tertiary">
-                                The Founding rate is preferred pricing for the life of your account. Plans start at $425/mo (billed annually) or $499/mo monthly. Honest pricing for honest work.
+                                The founding design partner price is preferred pricing for the life of your account. List price is $999/mo per facility; founding design partner pricing is $499/mo per facility. Honest pricing for honest work.
                             </p>
                             <ul className="space-y-2">
                                 {[
@@ -719,7 +719,7 @@ HTTP 201
                             {
                                 Icon: Zap,
                                 title: 'Founders & SMBs',
-                                detail: 'You need compliance but can\'t afford enterprise fees. Founding rates from $425/mo (billed annually) get you live. Scale as you grow.',
+                                detail: 'You need compliance but can\'t afford enterprise fees. List price is $999/mo per facility; founding design partner pricing is $499/mo per facility. Scale as you grow.',
                             },
                             {
                                 Icon: Lightbulb,

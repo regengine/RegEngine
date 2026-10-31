@@ -74,7 +74,7 @@ const FAQ = [
     },
     {
         q: 'What does this cost me?',
-        a: 'Submitting data through a portal link is free. Your buyer pays for RegEngine. If you want your own RegEngine account to manage traceability across all your buyers, plans start at $425/mo (billed annually) at the Founding rate.',
+        a: 'Submitting data through a portal link is free. Your buyer pays for RegEngine. If you want your own RegEngine account to manage traceability across all your buyers, list price is $999/mo per facility and founding design partner pricing is $499/mo per facility.',
     },
 ];
 
