@@ -496,3 +496,37 @@ def test_partial_pack_with_forged_hash_fails(tmp_path):
     members = _resign_members(members)
     rebuilt = _write_members(tmp_path, "partial_forged.zip", members)
     assert verifier.verify_pack(str(rebuilt)) is False
+
+
+# ---------------------------------------------------------------------------
+# S7: evidence_context_*.json member
+# ---------------------------------------------------------------------------
+
+
+def _evidence_name(members):
+    names = [n for n in members if n.startswith("evidence_context_") and n.endswith(".json")]
+    assert len(names) == 1, names
+    return names[0]
+
+
+def test_pack_declares_evidence_context_member(tmp_path):
+    pack_path, meta = _make_pack(tmp_path)
+    members = _read_members(pack_path)
+    name = _evidence_name(members)
+    manifest = json.loads(members["manifest.json"])
+    assert name in {entry["name"] for entry in manifest["files"]}
+    assert manifest["evidence_context"]["path"] == name
+    context = json.loads(members[name])
+    assert "rule_versions" in context and "known_gaps" in context
+    assert verifier.verify_pack(str(pack_path)) is True
+
+
+def test_tampered_evidence_context_fails(tmp_path):
+    pack_path, _ = _make_pack(tmp_path)
+    members = _read_members(pack_path)
+    name = _evidence_name(members)
+    context = json.loads(members[name])
+    context["known_gaps"]["coverage_gate_bypassed"] = not context["known_gaps"]["coverage_gate_bypassed"]
+    members[name] = json.dumps(context, indent=2, sort_keys=True).encode("utf-8")
+    tampered = _write_members(tmp_path, "tampered-evidence.zip", members)
+    assert verifier.verify_pack(str(tampered)) is False

@@ -577,6 +577,11 @@ REGENGINE_TABLE_GRANTS = {
     "public.scheduler_seen_items": ("SELECT", "INSERT", "UPDATE", "DELETE"),
     "public.tenant_compliance_status": ("SELECT", "INSERT", "UPDATE"),
     "public.tenant_product_profile": ("SELECT",),
+    # v138 partner-file storage. Hard-delete sweep needs DELETE on the two
+    # soft-delete targets; partner_file_deletion_log stays append-only.
+    "public.partner_files": ("SELECT", "INSERT", "UPDATE", "DELETE"),
+    "public.partner_file_derived": ("SELECT", "INSERT", "UPDATE", "DELETE"),
+    "public.partner_file_deletion_log": ("SELECT", "INSERT"),
 }
 
 # Explicit mutable data-plane inventory for the enabled ingestion/workflow
@@ -649,13 +654,16 @@ REGENGINE_COLUMN_GRANTS = {
     "public.api_keys": {"UPDATE": ("last_used_at", "total_requests")},
     # Runtime validation/background work may test one credential-bound UUID,
     # but tenant names, settings, and webhook configuration remain control-
-    # plane data.
-    "public.tenants": {"SELECT": ("id",)},
+    # plane data. ``status`` lets api_key_store.get_tenant_status (and the
+    # Compliance Dashboard readiness path) fail closed on suspended tenants
+    # without exposing names/settings. v139 applies the same column grant to
+    # databases already past v111; this inventory keeps it across cutover.
+    "public.tenants": {"SELECT": ("id", "status")},
     # v126 -- POST /api/v1/ingest/csv (#3122) retains each upload verbatim
-    # in the ingest transaction (webhook_compat._open_ingestion_run). INSERT
-    # is limited to the columns that statement writes, so storage_url and
-    # created_at cannot be forged; reads, updates and deletes stay denied
-    # (the disabled remediation surface keeps its contract). The composite
+    # in the ingest transaction (webhook_compat._open_ingestion_run).
+    # v138 extends INSERT with storage_url for partner-uploads pointer rows;
+    # created_at stays ungated so timestamps cannot be forged. Reads, updates
+    # and deletes stay denied (disabled remediation surface). The composite
     # (ingestion_run_id, tenant_id) foreign key pins a blob to its own
     # tenant's run.
     "fsma.manifest_blobs": {
@@ -667,6 +675,7 @@ REGENGINE_COLUMN_GRANTS = {
             "original_filename",
             "content_type",
             "uploaded_by",
+            "storage_url",
         )
     },
     # v126 -- the agent-artifact worker (shared.agent_task_bridge) reads only
@@ -751,6 +760,10 @@ REGENGINE_SYSADMIN_TABLE_GRANTS = {
     "public.webauthn_challenges": ("SELECT", "INSERT", "UPDATE", "DELETE"),
     "public.webauthn_credentials": ("SELECT", "INSERT", "UPDATE", "DELETE"),
     "public.webhook_outbox": ("SELECT", "INSERT", "UPDATE"),
+    # v138 partner-file storage — control-plane read only.
+    "public.partner_files": ("SELECT",),
+    "public.partner_file_derived": ("SELECT",),
+    "public.partner_file_deletion_log": ("SELECT",),
 }
 
 REGENGINE_SYSADMIN_COLUMN_GRANTS = {
