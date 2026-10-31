@@ -165,14 +165,19 @@ The ZIP bundle (`_build_fda_package()` in `services/ingestion/app/fda_export_ser
 |------|----------|
 | `fda_spreadsheet_<scope>_<timestamp>.csv` | FDA-oriented spreadsheet, one row per event (`FDA_COLUMNS`) |
 | `chain_verification_<scope>_<timestamp>.json` | Hash chain verification result, row hash coverage, completeness summary, redaction flag |
-| `evidence_context_<scope>_<timestamp>.json` | Rule catalog and the rule versions that evaluated these events, enforcement mode at export time, and a known-gaps section (KDE coverage, unchecked event types, missing hashes, whether the coverage gate was bypassed with `allow_incomplete`) |
-| `VALIDATION_ERRORS_<scope>_<timestamp>.log` | Only when events are missing required KDEs: one line per affected event |
+| `evidence_context_<scope>_<timestamp>.json` | Rule catalog and the rule versions that evaluated these events, enforcement mode at export time, and a known-gaps section (KDE coverage, unchecked event types, missing hashes, whether the coverage gate was bypassed with `allow_incomplete`). Before treating the rule-version evidence as complete, check `rule_versions.catalog_status` and `rule_versions.evaluated_status` (also mirrored as `known_gaps.rules_catalog_status` / `known_gaps.rules_evaluated_status`): `ok` means the read succeeded, `unavailable` means the export could not read that table and the section is empty for that reason, `not_requested` means no evaluations were looked up. |
+| `VALIDATION_ERRORS_<scope>_<timestamp>.log` | Only when events are missing required KDEs: one line per affected event, built from the completeness summary's `missing_required_events` list, which is capped at 250 entries. When more events are affected than the log lists, `known_gaps.missing_required_events_truncated` in the evidence context is `true` and `known_gaps.missing_required_events_listed` gives the count written; `events_with_missing_required_fields` is the full count |
 | `manifest.json` | Package metadata, per-file sizes and SHA-256 digests, Merkle root over the hashed members, pointer to the evidence context file. The manifest is not one of its own Merkle leaves. |
 | `README.txt` | Human-readable description of the package and how to verify it |
 
 The PDF format is a separate response (`format=pdf`), not a member of the ZIP. Every member except
-`manifest.json` is hashed and listed in `manifest.files`, so a change to any of them, the known-gaps
-section included, fails both the browser verifier and `services/admin/scripts/verify_audit_pack.py`.
+`manifest.json` is hashed and listed in `manifest.files`. The browser verifier and
+`services/admin/scripts/verify_audit_pack.py` compare each member against the per-file hashes and the
+Merkle root in `manifest.json`, so a change to any member, the known-gaps section included, without a
+matching manifest update fails both. These checks establish that the package is internally consistent;
+they do not authenticate the issuer, so a package rebuilt with a regenerated manifest passes them. To
+tie a ZIP to the original export, compare it against the `X-Package-Hash` value captured when it was
+downloaded (section 3.4).
 
 ### 3.3 FDA CSV Column Specification
 

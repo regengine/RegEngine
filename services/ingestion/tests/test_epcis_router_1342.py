@@ -339,6 +339,51 @@ class TestExportEpcis:
         assert meta["regengine:limit"] is None
         assert meta["regengine:truncated"] is False
 
+    def test_truncated_db_page_emptied_by_filter_stays_truncated(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A truncated DB page that the product filter emptied is still an incomplete export.
+
+        The fallback branch runs because ``events`` is empty, but when the
+        fallback store has nothing to add it must not reset the DB page's
+        limit/truncated facts to "uncapped, complete".
+        """
+        monkeypatch.setattr(
+            router_mod,
+            "_list_events_from_db_detailed",
+            lambda *a, **kw: _page([], truncated=True),
+        )
+        monkeypatch.setattr(router_mod, "_allow_in_memory_fallback", lambda: True)
+        monkeypatch.setattr(router_mod, "_fallback_store_for", lambda t: {})
+
+        resp = client.get("/api/v1/epcis/export?product_id=prod-rare")
+        assert resp.status_code == 200
+        meta = resp.json()["regengine:metadata"]
+        assert meta["regengine:event_count"] == 0
+        assert meta["regengine:truncated"] is True
+        assert meta["regengine:limit"] == persistence_mod.EXPORT_EVENT_LIMIT
+
+    def test_fallback_events_are_newest_first(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The fallback honours the advertised ``event_timestamp desc`` ordering.
+
+        Records are inserted oldest-first (store iteration order); the
+        response must still be newest-first, with undated records last.
+        """
+        monkeypatch.setattr(router_mod, "_list_events_from_db_detailed", _page)
+        monkeypatch.setattr(router_mod, "_allow_in_memory_fallback", lambda: True)
+
+        early, _, late = _ordered_export_times()
+        fake_store = {
+            "undated": {"normalized_cte": {}, "epcis_document": {"eventID": "undated"}},
+            "older": {"normalized_cte": {"event_time": early}, "epcis_document": {"eventID": "older"}},
+            "newer": {"normalized_cte": {"event_time": late}, "epcis_document": {"eventID": "newer"}},
+        }
+        monkeypatch.setattr(router_mod, "_fallback_store_for", lambda t: fake_store)
+
+        body = client.get("/api/v1/epcis/export").json()
+        assert [e["eventID"] for e in body["epcisBody"]["eventList"]] == ["newer", "older", "undated"]
+        assert body["regengine:metadata"]["regengine:ordering"] == "event_timestamp desc"
+
     def test_db_error_without_fallback_returns_503(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
         """Line 225: DB error + fallback disabled → 503."""
 

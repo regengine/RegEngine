@@ -971,11 +971,17 @@ class TestEvidenceContextMember:
         path.write_bytes(package_bytes)
         assert sdk_verify_bundle(str(path)) == 0
 
-    def test_tampered_known_gaps_fail_both_verifiers(self, client: TestClient, tmp_path: Path):
+    def test_tampered_known_gaps_fail_both_verifiers(self, client: TestClient, tmp_path: Path, capsys):
+        """A same-size edit inside the member is rejected by the hash check, not the size check."""
+
         def _flip(data: bytes) -> bytes:
             context = json.loads(data)
-            context["known_gaps"]["coverage_gate_bypassed"] = True
-            return json.dumps(context, indent=2, sort_keys=True).encode("utf-8")
+            status = context["known_gaps"]["verification_status"]
+            assert isinstance(status, str) and status
+            context["known_gaps"]["verification_status"] = status[:-1] + ("X" if status[-1] != "X" else "Y")
+            mutated = json.dumps(context, indent=2, sort_keys=True).encode("utf-8")
+            assert len(mutated) == len(data), "the mutation must keep the serialized size"
+            return mutated
 
         tampered = self._rewrite(self._package(), "evidence_context_", _flip)
         response = client.post("/api/v1/proof/verify", files={"bundle": ("t.zip", tampered, "application/zip")})
@@ -983,8 +989,14 @@ class TestEvidenceContextMember:
         assert response.json()["verified"] is False
         checks = {check["name"]: check for check in response.json()["checks"]}
         assert checks["file_hashes_match_manifest"]["passed"] is False
+        detail = checks["file_hashes_match_manifest"]["detail"]
+        assert "hash_mismatched=['evidence_context_" in detail
+        assert "size_mismatched=[]" in detail
 
         sdk_verify_bundle = runpy.run_path(str(REPO_ROOT / "frontend/public/sdk/verify_chain.py"))["verify_bundle"]
         path = tmp_path / "t.zip"
         path.write_bytes(tampered)
         assert sdk_verify_bundle(str(path)) == 1
+        output = capsys.readouterr().out
+        assert "sha256 mismatch" in output
+        assert "!= declared" not in output, "the SDK verifier must reject on the hash, not the size"
