@@ -521,12 +521,22 @@ def test_pack_declares_evidence_context_member(tmp_path):
     assert verifier.verify_pack(str(pack_path)) is True
 
 
-def test_tampered_evidence_context_fails(tmp_path):
+def test_tampered_evidence_context_fails(tmp_path, capsys):
+    # Flip one character inside a string value so the member keeps its
+    # serialized size: the rejection must come from the hash comparison,
+    # not from the cheaper size check that runs first.
     pack_path, _ = _make_pack(tmp_path)
     members = _read_members(pack_path)
     name = _evidence_name(members)
     context = json.loads(members[name])
-    context["known_gaps"]["coverage_gate_bypassed"] = not context["known_gaps"]["coverage_gate_bypassed"]
-    members[name] = json.dumps(context, indent=2, sort_keys=True).encode("utf-8")
+    status = context["known_gaps"]["verification_status"]
+    assert isinstance(status, str) and status
+    context["known_gaps"]["verification_status"] = status[:-1] + ("X" if status[-1] != "X" else "Y")
+    mutated = json.dumps(context, indent=2, sort_keys=True).encode("utf-8")
+    assert len(mutated) == len(members[name]), "the mutation must keep the serialized size"
+    members[name] = mutated
     tampered = _write_members(tmp_path, "tampered-evidence.zip", members)
     assert verifier.verify_pack(str(tampered)) is False
+    out = capsys.readouterr().out
+    assert f"hash mismatch for {name}" in out
+    assert "size mismatch" not in out

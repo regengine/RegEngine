@@ -42,6 +42,22 @@ _EVALUATED_SQL = text(
 )
 
 
+def _execute_isolated(db: Any, statement: Any, params: Optional[Dict[str, Any]] = None) -> Any:
+    """Run one read on its own SAVEPOINT when the session supports it.
+
+    On PostgreSQL a failed statement aborts the enclosing transaction
+    (``InFailedSqlTransaction``), so without a savepoint a missing
+    ``fsma.rule_definitions`` would poison the evaluated read below and
+    every later query the caller issues on the same session. Sessions
+    without ``begin_nested`` (unit-test fakes) run the statement directly.
+    """
+    begin_nested = getattr(db, "begin_nested", None)
+    if callable(begin_nested):
+        with begin_nested():
+            return db.execute(statement, params) if params is not None else db.execute(statement)
+    return db.execute(statement, params) if params is not None else db.execute(statement)
+
+
 def snapshot_rule_versions(
     db: Any,
     tenant_id: Optional[str] = None,
@@ -73,7 +89,7 @@ def snapshot_rule_versions(
     }
 
     try:
-        rows = db.execute(_CATALOG_SQL).mappings().fetchall()
+        rows = _execute_isolated(db, _CATALOG_SQL).mappings().fetchall()
         for row in rows:
             snapshot["catalog"][str(row["rule_id"])] = {
                 "version": row.get("rule_version"),
@@ -88,7 +104,9 @@ def snapshot_rule_versions(
     ids = [str(e) for e in (event_ids or []) if e]
     if tenant_id and ids:
         try:
-            rows = db.execute(_EVALUATED_SQL, {"tid": str(tenant_id), "event_ids": ids}).mappings().fetchall()
+            rows = (
+                _execute_isolated(db, _EVALUATED_SQL, {"tid": str(tenant_id), "event_ids": ids}).mappings().fetchall()
+            )
             snapshot["evaluated"] = [
                 {
                     "rule_id": str(row["rule_id"]),

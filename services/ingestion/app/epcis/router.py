@@ -159,6 +159,20 @@ def _parse_stored_event_time(value: object) -> datetime | None:
     return parsed
 
 
+_EPOCH_UTC = datetime(1970, 1, 1, tzinfo=timezone.utc)
+
+
+def _fallback_export_sort_key(entry: dict) -> tuple[bool, datetime]:
+    """Sort key for fallback-store records: event time, unparseable last.
+
+    Mirrors the DB export's ``ORDER BY event_timestamp DESC`` when used
+    with ``reverse=True``: dated records come first, newest to oldest,
+    then the records whose event time is missing or unparseable.
+    """
+    event_dt = _parse_stored_event_time((entry.get("normalized_cte") or {}).get("event_time"))
+    return (event_dt is not None, event_dt or _EPOCH_UTC)
+
+
 @router.post("/events", status_code=201, summary="Ingest EPCIS 2.0 event")
 async def ingest_epcis_event(
     event: dict,
@@ -367,9 +381,19 @@ async def export_epcis_events(
             if product_id and normalized.get("product_id") != product_id:
                 continue
             filtered_records.append(entry)
-        events = [entry["epcis_document"] for entry in filtered_records]
-        limit = None
-        truncated = False
+        if filtered_records:
+            # The DB path orders by event_timestamp DESC; the fallback
+            # store iterates in insertion order, so sort it the same way
+            # to keep ``regengine:ordering`` truthful. Records without a
+            # parseable event time go last.
+            filtered_records.sort(key=_fallback_export_sort_key, reverse=True)
+            events = [entry["epcis_document"] for entry in filtered_records]
+            # Only the fallback's own events are uncapped. When it supplies
+            # nothing, the DB page's limit/truncated still describe what
+            # the caller got: a truncated page that the product filter
+            # emptied must not read as a complete export.
+            limit = None
+            truncated = False
 
     filters = {
         f"regengine:{key}": value

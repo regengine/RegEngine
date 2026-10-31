@@ -40,6 +40,28 @@ class _FakeSession:
         return _Result(nxt)
 
 
+class _SavepointSession(_FakeSession):
+    """Fake session with ``begin_nested``; records every savepoint enter/exit."""
+
+    def __init__(self, *results: Any):
+        super().__init__(*results)
+        self.savepoints: list[str] = []
+
+    def begin_nested(self):
+        session = self
+
+        class _Savepoint:
+            def __enter__(self_inner):
+                session.savepoints.append("enter")
+                return self_inner
+
+            def __exit__(self_inner, exc_type, exc, tb):
+                session.savepoints.append("exit:rollback" if exc_type else "exit:commit")
+                return False
+
+        return _Savepoint()
+
+
 _CATALOG_ROWS = [
     {"rule_id": "rule-a", "rule_version": 3, "title": "A", "severity": "critical", "category": "kde"},
     {"rule_id": "rule-b", "rule_version": 1, "title": "B", "severity": "warning", "category": "cte"},
@@ -99,6 +121,27 @@ def test_catalog_failure_degrades_not_raises() -> None:
     assert snap["catalog_status"] == "unavailable"
     # The evaluated query still runs and succeeds independently.
     assert snap["evaluated_status"] == "ok"
+
+
+def test_each_read_runs_in_its_own_savepoint() -> None:
+    """A failed catalog read is rolled back on its own savepoint.
+
+    On PostgreSQL a failed statement aborts the enclosing transaction, so
+    without the savepoint the evaluated read (and every later query on the
+    caller's session) would fail too. The evaluated read must still run,
+    in a second savepoint, and succeed independently.
+    """
+    sess = _SavepointSession(
+        RuntimeError("relation does not exist"),
+        [{"rule_id": "r", "rule_version": 1, "evaluation_count": 1}],
+    )
+    snap = mod.snapshot_rule_versions(sess, tenant_id="t", event_ids=["e"])
+    assert snap["catalog_status"] == "unavailable"
+    assert snap["catalog"] == {}
+    assert snap["evaluated_status"] == "ok"
+    assert snap["evaluated"] == [{"rule_id": "r", "rule_version": 1, "evaluation_count": 1}]
+    assert len(sess.calls) == 2
+    assert sess.savepoints == ["enter", "exit:rollback", "enter", "exit:commit"]
 
 
 def test_evaluated_failure_degrades_not_raises() -> None:
