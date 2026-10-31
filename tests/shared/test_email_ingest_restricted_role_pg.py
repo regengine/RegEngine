@@ -71,6 +71,8 @@ def email(monkeypatch):
         return connect(sock, address)
 
     monkeypatch.setattr(socket.socket, "connect", unix_only)
+    # Restricted-role email ingest fixture — not 21 CFR 1.1310 location rules.
+    monkeypatch.setattr("app.webhook_models.is_location_description_complete", lambda **kwargs: True)
     monkeypatch.setenv("EMAIL_INBOUND_BASIC_AUTH_USER", BASIC_USER)
     monkeypatch.setenv("EMAIL_INBOUND_BASIC_AUTH_PASSWORD", BASIC_PASSWORD)
     _load("pg_email_ingest_proof", ROOT / "scripts/verify_inflow_to_regengine_e2e.py")._configure_paths()

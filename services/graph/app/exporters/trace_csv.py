@@ -32,6 +32,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Sequence
 
+from shared.fsma_validation import gln_for_export
+
 from .safe_text import csv_safe
 
 __all__ = ["TRACE_CSV_HEADER", "build_trace_csv_rows"]
@@ -70,7 +72,7 @@ def _row(
         csv_safe(event.get("event_date", "")),
         csv_safe(event.get("event_time", "")),
         csv_safe(facility.get("name", "")),
-        csv_safe(facility.get("gln", "")),
+        csv_safe(gln_for_export(facility.get("gln", ""))),
         csv_safe(facility.get("address", "")),
         csv_safe(event.get("confidence", "")),
     ]

@@ -44,6 +44,8 @@ class MockWebhookEvent:
         self.unit_of_measure = kwargs.get("unit_of_measure", "cases")
         self.location_gln = kwargs.get("location_gln", "0061414100001")
         self.location_name = kwargs.get("location_name", "Acme Distribution Center")
+        self.location_phone = kwargs.get("location_phone", None)
+        self.location_address = kwargs.get("location_address", None)
         self.timestamp = kwargs.get("timestamp", "2026-03-25T14:30:00Z")
         self.kdes = kwargs.get(
             "kdes",

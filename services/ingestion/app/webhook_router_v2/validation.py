@@ -41,6 +41,8 @@ def _authoritative_kdes(event: IngestEvent) -> dict[str, object]:
         ("unit_of_measure", event.unit_of_measure),
         ("location_name", event.location_name),
         ("location_gln", event.location_gln),
+        ("location_phone", event.location_phone),
+        ("location_address", event.location_address),
     ):
         if _val is None:
             continue

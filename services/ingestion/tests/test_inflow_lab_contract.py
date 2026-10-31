@@ -6,6 +6,9 @@ import pytest
 from app.webhook_models import IngestEvent
 from app.webhook_router_v2 import _validate_event_kdes
 
+# These tests cover Inflow Lab KDE contracts; location validity is covered elsewhere.
+pytestmark = pytest.mark.usefixtures("location_complete_for_pipeline")
+
 
 def _timestamp() -> str:
     return datetime.now(timezone.utc).isoformat()

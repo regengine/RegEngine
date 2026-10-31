@@ -109,6 +109,31 @@ def _validate_gs1_check(clean: str, field_name: str, id_type: IdentifierType) ->
 # ---------------------------------------------------------------------------
 
 
+def gln_for_export(value: object) -> str:
+    """Emit only verbatim ASCII GLNs with a valid GS1 check digit."""
+    if isinstance(value, str) and len(value) == 13 and value.isascii() and value.isdigit():
+        if verify_gs1_check_digit(value):
+            return value
+    return ""
+
+
+def is_location_description_complete(
+    *,
+    name: Optional[str] = None,
+    phone: Optional[str] = None,
+    address: Optional[str] = None,
+    gln: Optional[str] = None,
+) -> bool:
+    """Require name, phone and address, or a structurally valid GS1 GLN (21 CFR 1.1310)."""
+
+    def present(value: Optional[str]) -> bool:
+        return isinstance(value, str) and bool(value.strip())
+
+    return (present(gln) and len(gln) == 13 and gln.isascii() and gln.isdigit() and validate_gln(gln).is_valid) or all(
+        present(value) for value in (name, phone, address)
+    )
+
+
 def validate_gln(gln: str) -> ValidationResult:
     """Validate GS1 Global Location Number (13 digits with check digit)."""
     if not isinstance(gln, str) or not gln:

@@ -347,6 +347,8 @@ _LOT_CODE_COLUMNS = ("traceability_lot_code", "tlc", "lot_code")
 _PRODUCT_COLUMNS = ("product_description", "product", "description")
 _QUANTITY_COLUMNS = ("quantity", "qty")
 _UNIT_COLUMNS = ("unit_of_measure", "uom")
+_LOCATION_PHONE_COLUMNS = ("location_phone", "ship_from_phone", "receiving_phone", "phone")
+_LOCATION_ADDRESS_COLUMNS = ("location_address", "ship_from_address", "receiving_address", "address")
 _LOCATION_GLN_COLUMNS = ("location_gln", "ship_from_gln", "receiving_gln", "gln")
 _LOCATION_NAME_COLUMNS = (
     "location_name",
@@ -365,6 +367,8 @@ _COLUMN_PRECEDENCE: tuple[tuple[str, ...], ...] = (
     _QUANTITY_COLUMNS,
     _UNIT_COLUMNS,
     _LOCATION_GLN_COLUMNS,
+    _LOCATION_PHONE_COLUMNS,
+    _LOCATION_ADDRESS_COLUMNS,
     _LOCATION_NAME_COLUMNS,
     _SHIP_TO_COLUMNS,
 )
@@ -1602,6 +1606,8 @@ def parse_csv_rows(
 
             # Location: strip whitespace and expand abbreviations
             loc_gln = _first_present(row, _LOCATION_GLN_COLUMNS) or None
+            loc_phone = _first_present(row, _LOCATION_PHONE_COLUMNS) or None
+            loc_address = _first_present(row, _LOCATION_ADDRESS_COLUMNS) or None
             _loc_raw = _first_present(row, _LOCATION_NAME_COLUMNS)
             loc_name = _normalize_location(_loc_raw) if _loc_raw else None
             if _loc_raw and loc_name != _loc_raw:
@@ -1680,6 +1686,8 @@ def parse_csv_rows(
                 "unit_of_measure",
                 "location_gln",
                 "location_name",
+                *_LOCATION_PHONE_COLUMNS,
+                *_LOCATION_ADDRESS_COLUMNS,
                 "cte_type",
                 "event_type",
                 "type",
@@ -1728,6 +1736,8 @@ def parse_csv_rows(
                 unit_of_measure=uom,
                 location_gln=loc_gln,
                 location_name=loc_name,
+                location_phone=loc_phone,
+                location_address=loc_address,
                 timestamp=ts,
                 kdes=kdes,
             )

@@ -397,11 +397,12 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
     },
     {
         "title": "Location Identifier Required",
-        "description": "Every CTE must identify at least one facility location (GLN or description)",
+        "description": "Every CTE requires a GLN or a complete location description (name AND phone AND address) per 21 CFR 1.1310",
         "severity": "critical",
         "category": "kde_presence",
         "applicability_conditions": {"cte_types": [], "ftl_scope": ["ALL"]},
         "citation_reference": "21 CFR §§1.1325(a)(1)(iv), 1.1325(b)(1)(iv), 1.1330(a)(14), 1.1335(e), 1.1340(a)(5), 1.1345(a)(5), 1.1350(a)(2)(ii)",
+        # Presence screening only; webhook validation enforces description completeness.
         "evaluation_logic": {
             "type": "multi_field_presence",
             "field": "from_facility_reference",
@@ -414,8 +415,8 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
                 ]
             },
         },
-        "failure_reason_template": "Event missing facility location identifier ({citation})",
-        "remediation_suggestion": "Provide at least one location identifier: GLN (preferred) or location description",
+        "failure_reason_template": "Event requires GLN OR (name AND phone AND address) per 21 CFR 1.1310 ({citation})",
+        "remediation_suggestion": "Provide a GLN OR all three location description fields: name AND phone AND address (21 CFR 1.1310)",
     },
     # --- Identifier Format Rules ---
     {

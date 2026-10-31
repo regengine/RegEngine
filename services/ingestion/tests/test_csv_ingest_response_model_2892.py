@@ -169,9 +169,7 @@ class TestWireShape:
 class TestResponseModelIsEnforced:
     def test_declared_response_model_carries_the_warning_fields(self):
         """``response_model`` is the single source of truth for the shape."""
-        route = next(
-            r for r in router.routes if str(getattr(r, "path", "")).endswith("/ingest/csv")
-        )
+        route = next(r for r in router.routes if str(getattr(r, "path", "")).endswith("/ingest/csv"))
         model = route.response_model
         assert model is not None
         assert "kde_warnings" in model.model_fields
@@ -179,3 +177,8 @@ class TestResponseModelIsEnforced:
         # Still a superset of the shared ingest response.
         for field in IngestResponse.model_fields:
             assert field in model.model_fields
+
+
+# These tests cover parsing and pipeline flow; location validity is covered by
+# test_location_description_complete.py and test_webhook_models.py.
+pytestmark = pytest.mark.usefixtures("location_complete_for_pipeline")

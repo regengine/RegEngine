@@ -19,8 +19,6 @@ from pathlib import Path
 from typing import List, Optional
 from urllib.parse import quote
 
-from shared.fsma_validation import normalize_gtin, verify_gs1_check_digit
-
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Path as PathParam, Query, Request
 from fastapi.responses import StreamingResponse
@@ -36,6 +34,7 @@ from shared.fsma_plan_builder import (
     export_plan_json,
     export_plan_markdown,
 )
+from shared.fsma_validation import gln_for_export, normalize_gtin, verify_gs1_check_digit
 
 # Add shared utilities (portable path resolution)
 from shared.middleware import get_current_tenant_id
@@ -217,7 +216,7 @@ async def export_fda_request_sheet(
                     csv_safe(event.get("quantity", "")),
                     csv_safe(event.get("unit_of_measure", "")),
                     csv_safe(event.get("location_description", "")),
-                    csv_safe(event.get("location_gln", "")),
+                    csv_safe(gln_for_export(event.get("location_gln", ""))),
                     csv_safe(event.get("event_date", "")),
                     csv_safe(event.get("event_time", "")),
                     csv_safe(event.get("reference_doc_type", "")),
@@ -404,7 +403,11 @@ async def export_epcis(
                     _skip("transformation_incomplete")
                     continue
                 if not valid_transformation_id and transformation_id:
-                    transformation_id = f"urn:uuid:{transformation_id}" if not str(transformation_id).startswith("urn:") else transformation_id
+                    transformation_id = (
+                        f"urn:uuid:{transformation_id}"
+                        if not str(transformation_id).startswith("urn:")
+                        else transformation_id
+                    )
                     valid_transformation_id = True
                 epcis_event = {"type": "TransformationEvent", **common, "bizStep": BIZ_STEP_MAP[event_type]}
                 if input_epc:
@@ -429,7 +432,9 @@ async def export_epcis(
                 epcis_event = {
                     "type": "ObjectEvent",
                     **common,
-                    "action": "ADD" if event_type in ("CREATION", "RECEIVING", "HARVESTING", "INITIAL_PACKING") else "OBSERVE",
+                    "action": "ADD"
+                    if event_type in ("CREATION", "RECEIVING", "HARVESTING", "INITIAL_PACKING")
+                    else "OBSERVE",
                     "bizStep": BIZ_STEP_MAP[event_type],
                     "disposition": "in_transit" if event_type == "SHIPPING" else "in_progress",
                 }
@@ -592,7 +597,11 @@ def _epcis_to_xml(epcis_doc: dict) -> str:
                     sub_element(container, member, {"type": kind_uri}).text = str(item[member])
 
     def add_common_tail(parent, event, *, include_action: bool = True):
-        fields = ("transformationID", "action", "bizStep", "disposition") if include_action else ("transformationID", "bizStep", "disposition")
+        fields = (
+            ("transformationID", "action", "bizStep", "disposition")
+            if include_action
+            else ("transformationID", "bizStep", "disposition")
+        )
         for field in fields:
             if field == "action" and event.get("type") != "ObjectEvent" and include_action:
                 # TransformationEvent has no action; still allow explicit passthrough when present

@@ -1139,3 +1139,8 @@ class TestParseCsvRowsRequiredFields:
         assert events[0].quantity == 10.0
         assert events[0].unit_of_measure == "lbs"
         assert events[0].timestamp.startswith("2026-04-17")
+
+
+# These tests cover parsing and pipeline flow; location validity is covered by
+# test_location_description_complete.py and test_webhook_models.py.
+pytestmark = pytest.mark.usefixtures("location_complete_for_pipeline")

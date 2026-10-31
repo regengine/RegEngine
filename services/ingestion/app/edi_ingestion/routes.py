@@ -30,7 +30,8 @@ from collections.abc import Callable
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, UploadFile
-from pydantic import ValidationError
+from pydantic import PrivateAttr, ValidationError
+from shared.fsma_validation import is_location_description_complete
 
 from ..authz import IngestionPrincipal, require_permission
 from ..format_extractors import is_edi_content
@@ -342,6 +343,15 @@ def _preflight_event_date(
         detail["needs_review"] = True
         detail["rejection_id"] = record["rejection_id"]
         raise HTTPException(status_code=400, detail=detail) from exc
+
+
+class _EDIIngestEvent(IngestEvent):
+    """Internal EDI model; the private permission is never accepted from payloads.
+
+    Inherited field validators still enforce every non-location constraint.
+    """
+
+    _edi_allow_incomplete_location: bool = PrivateAttr(default=True)
 
 
 router = APIRouter(prefix="/api/v1/ingest/edi", tags=["EDI Import"])
@@ -673,30 +683,36 @@ async def ingest_edi_856(
         extracted.get("ship_time_raw"),
     )
 
-    ship_from_name = ship_from_location_override or extracted.get("ship_from_name") or "Unknown ship-from"
-    ship_to_name = ship_to_location_override or extracted.get("ship_to_name") or "Unknown ship-to"
+    ship_from_name = (
+        ship_from_location_override if ship_from_location_override is not None else extracted.get("ship_from_name")
+    )
+    ship_to_name = ship_to_location_override if ship_to_location_override is not None else extracted.get("ship_to_name")
 
     ship_from_gln_raw = extracted.get("ship_from_gln")
     ship_to_gln_raw = extracted.get("ship_to_gln")
     ship_from_gln = _valid_gln_or_none(ship_from_gln_raw)
-    ship_to_gln = _valid_gln_or_none(ship_to_gln_raw)
 
     if not lines:
         lines = [{}]
     events: list[IngestEvent] = []
     for line_index, line in enumerate(lines, start=1):
         quantity = quantity_override if quantity_override is not None else line.get("quantity")
-        resolved_quantity = _safe_float(str(quantity) if quantity is not None else None, fallback=1.0)
+        resolved_quantity = _safe_float(
+            str(quantity) if quantity is not None else None, fallback=0.0 if quantity is not None else 1.0
+        )
         resolved_unit = _normalize_unit(unit_of_measure_override or line.get("unit_of_measure"))
         product_name = product_description or line.get("product_description") or "EDI 856 Shipment"
         lot = line.get("lot_number")
         line_tlc = lot.strip() if isinstance(lot, str) and lot.strip() else traceability_lot_code
         kdes: dict[str, Any] = {
+            "location_incomplete": not is_location_description_complete(name=ship_from_name, gln=ship_from_gln_raw),
             "ship_date": ship_date,
+            "ship_from_name": extracted.get("ship_from_name"),
+            "ship_to_name": extracted.get("ship_to_name"),
             "ship_from_location": ship_from_name,
             "ship_to_location": ship_to_name,
-            "ship_from_gln": ship_from_gln or ship_from_gln_raw,
-            "ship_to_gln": ship_to_gln or ship_to_gln_raw,
+            "ship_from_gln": ship_from_gln_raw,
+            "ship_to_gln": ship_to_gln_raw,
             "reference_document_number": extracted.get("reference_document_number"),
             "carrier": extracted.get("carrier"),
             "asn_number": extracted.get("asn_number"),
@@ -716,16 +732,21 @@ async def ingest_edi_856(
             "immediate_previous_source": ship_from_name,
         }
         events.append(
-            IngestEvent(
+            _EDIIngestEvent(
                 cte_type=WebhookCTEType.SHIPPING,
                 traceability_lot_code=line_tlc,
                 product_description=product_name,
                 quantity=resolved_quantity,
                 unit_of_measure=resolved_unit,
+                # A-2170: accept and flag incomplete EDI locations; preserve raw KDEs.
                 location_gln=ship_from_gln,
                 location_name=ship_from_name,
                 timestamp=timestamp,
-                kdes={k: v for k, v in kdes.items() if v is not None and v != ""},
+                kdes={
+                    k: v
+                    for k, v in kdes.items()
+                    if k.endswith(("_gln", "_name", "_location")) or (v is not None and v != "")
+                },
             )
         )
 
@@ -814,7 +835,9 @@ def _build_ingest_event_for_set(
             },
         )
 
-    resolved_quantity = _safe_float(str(quantity) if quantity is not None else None, fallback=1.0)
+    resolved_quantity = _safe_float(
+        str(quantity) if quantity is not None else None, fallback=0.0 if quantity is not None else 1.0
+    )
 
     # #2978: an X12 unit that is PRESENT but unrecognized must not be
     # coerced to "units" — that persists a numerically-correct,
@@ -848,16 +871,29 @@ def _build_ingest_event_for_set(
 
     # Resolve location (varies by document type)
     location_name = location_override
-    location_gln = None
+    location_gln_raw = None
     if transaction_set in ("856", "850", "945"):
-        location_name = location_name or extracted.get("ship_from_name") or extracted.get("seller_name") or "Unknown"
-        location_gln = _valid_gln_or_none(extracted.get("ship_from_gln") or extracted.get("seller_gln"))
+        location_name = next(
+            (
+                value
+                for value in (location_name, extracted.get("ship_from_name"), extracted.get("seller_name"))
+                if value is not None
+            ),
+            None,
+        )
+        location_gln_raw = (
+            extracted.get("ship_from_gln")
+            if extracted.get("ship_from_gln") is not None
+            else extracted.get("seller_gln")
+        )
     elif transaction_set == "810":
-        location_name = location_name or extracted.get("seller_name") or "Unknown"
-        location_gln = _valid_gln_or_none(extracted.get("seller_gln"))
+        location_name = location_name if location_name is not None else extracted.get("seller_name")
+        location_gln_raw = extracted.get("seller_gln")
     elif transaction_set in ("861", "944"):
-        location_name = location_name or extracted.get("receiving_location_name") or "Unknown"
-        location_gln = _valid_gln_or_none(extracted.get("receiving_location_gln"))
+        location_name = location_name if location_name is not None else extracted.get("receiving_location_name")
+        location_gln_raw = extracted.get("receiving_location_gln")
+
+    location_gln = _valid_gln_or_none(location_gln_raw)
 
     # Resolve timestamp
     date_field, time_field = _EVENT_DATE_FIELDS.get(transaction_set, (None, None))
@@ -1007,16 +1043,23 @@ def _build_ingest_event_for_set(
         if extracted.get("depositor_gln"):
             kdes["depositor_gln"] = extracted["depositor_gln"]
 
-    return IngestEvent(
+    kdes["location_incomplete"] = not is_location_description_complete(name=location_name, gln=location_gln_raw)
+    # Retain even empty raw location values for audit evidence.
+    kdes.update({key: value for key, value in extracted.items() if key.endswith(("_gln", "_name"))})
+
+    return _EDIIngestEvent(
         cte_type=cte_type,
         traceability_lot_code=traceability_lot_code,
         product_description=product_name,
         quantity=resolved_quantity,
         unit_of_measure=resolved_unit,
+        # A-2170: accept and flag incomplete EDI locations; preserve raw KDEs.
         location_gln=location_gln,
         location_name=location_name,
         timestamp=timestamp,
-        kdes={k: v for k, v in kdes.items() if v is not None and v != ""},
+        kdes={
+            k: v for k, v in kdes.items() if k.endswith(("_gln", "_name", "_location")) or (v is not None and v != "")
+        },
     )
 
 
