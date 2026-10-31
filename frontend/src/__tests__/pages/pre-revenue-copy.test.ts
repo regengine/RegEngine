@@ -53,6 +53,27 @@ describe('pre-revenue public copy', () => {
         expect(source).not.toContain('Sysco');
     });
 
+    it('aligns why-regengine with approved list/founding prices only', () => {
+        const source = read('src/app/why-regengine/page.tsx');
+        for (const banned of [
+            '$425',
+            '$549',
+            '$639',
+            '$649',
+            '$749',
+            '$849',
+            '$1,099',
+            '$1,275',
+            'billed annually',
+        ]) {
+            expect(source, `why-regengine still contains "${banned}"`).not.toContain(banned);
+        }
+        expect(source).toContain('$999/mo per facility');
+        expect(source).toContain('$499/mo');
+        expect(source).not.toContain('Sysco');
+        expect(source).not.toContain('Albertsons');
+    });
+
     it('clears stale $425 from remaining marketing pages (approved $999/$499)', () => {
         const pages = [
             'src/app/why-regengine/page.tsx',

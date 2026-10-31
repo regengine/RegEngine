@@ -50,7 +50,7 @@ const COMPARISON_DATA: ComparisonRow[] = [
     },
     {
         feature: 'Transparent, Published Pricing',
-        regengine: 'List price from $849/mo (founding design partner from $499/mo per facility)',
+        regengine: 'List price from $999/mo per facility (founding design partner from $499/mo per facility)',
         trustwell: 'Contact sales',
         safetychain: 'Contact sales',
         repositrak: 'Contact sales',
@@ -437,19 +437,14 @@ HTTP 201
                         <Card padding="spacious" className="order-2 hidden md:order-1 md:block">
                             <div className="space-y-4">
                                 <Card variant="inset" padding="compact">
-                                    <p className="mb-1 font-mono text-label uppercase text-re-text-muted">Base Plan</p>
-                                    <p className="text-title tabular-nums text-re-text-primary">$499/mo <span className="text-ui font-normal text-re-text-tertiary line-through">$849/mo</span></p>
-                                    <p className="mt-2 text-small text-re-text-tertiary">Founding rate, billed annually ($499/mo monthly) • 1 facility • 500 CTEs/mo</p>
+                                    <p className="mb-1 font-mono text-label uppercase text-re-text-muted">List</p>
+                                    <p className="text-title tabular-nums text-re-text-primary">$999/mo</p>
+                                    <p className="mt-2 text-small text-re-text-tertiary">Per facility</p>
                                 </Card>
                                 <Card variant="inset" padding="compact">
-                                    <p className="mb-1 font-mono text-label uppercase text-re-text-muted">Standard Plan</p>
-                                    <p className="text-title tabular-nums text-re-text-primary">$549/mo <span className="text-ui font-normal text-re-text-tertiary line-through">$1,099/mo</span></p>
-                                    <p className="mt-2 text-small text-re-text-tertiary">Founding rate, billed annually ($649/mo monthly) • 2 to 3 facilities • Unlimited CTEs</p>
-                                </Card>
-                                <Card variant="inset" padding="compact">
-                                    <p className="mb-1 font-mono text-label uppercase text-re-text-muted">Premium Plan</p>
-                                    <p className="text-title tabular-nums text-re-text-primary">$639/mo <span className="text-ui font-normal text-re-text-tertiary line-through">$1,275/mo</span></p>
-                                    <p className="mt-2 text-small text-re-text-tertiary">Founding rate, billed annually ($749/mo monthly) • 4+ facilities • Dedicated support</p>
+                                    <p className="mb-1 font-mono text-label uppercase text-re-text-muted">Founding design partner</p>
+                                    <p className="text-title tabular-nums text-re-text-primary">$499/mo</p>
+                                    <p className="mt-2 text-small text-re-text-tertiary">Per facility</p>
                                 </Card>
                             </div>
                         </Card>
