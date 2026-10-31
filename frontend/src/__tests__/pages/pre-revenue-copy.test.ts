@@ -47,6 +47,12 @@ describe('pre-revenue public copy', () => {
         }
     });
 
+    it('keeps Sysco and Albertsons retailer deadlines out of buyer-programs', () => {
+        const source = read('src/app/buyer-programs/page.tsx');
+        expect(source).not.toContain('Albertsons');
+        expect(source).not.toContain('Sysco');
+    });
+
     it('clears stale $425 from remaining marketing pages (approved $999/$499)', () => {
         const pages = [
             'src/app/why-regengine/page.tsx',

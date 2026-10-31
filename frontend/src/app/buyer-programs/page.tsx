@@ -92,20 +92,6 @@ export default function BuyerProgramsPage() {
 
             <Card padding="spacious">
               <h3 className="mb-3 text-subheading text-re-text-primary">
-                Albertsons Companies
-              </h3>
-              <p className="mb-3 text-ui leading-relaxed text-re-text-secondary">
-                Source: Letter dated 17 September 2025 (PDF at suppliers.safeway.com)
-              </p>
-              <ul className={factList}>
-                <li>• All food and non-alcoholic beverages</li>
-                <li>• Albertsons deadline January 1, 2027</li>
-                <li>• FDA enforcement not before July 20, 2028</li>
-              </ul>
-            </Card>
-
-            <Card padding="spacious">
-              <h3 className="mb-3 text-subheading text-re-text-primary">
                 Kroger Food Traceability Policy
               </h3>
               <p className="mb-3 text-ui leading-relaxed text-re-text-secondary">
