@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import sys
+import uuid
 from types import ModuleType, SimpleNamespace
 
 import pytest
@@ -23,6 +24,10 @@ import pytest
 # Test-path boilerplate mirrors test_webhook_compat_1342.py.
 from services.ingestion.app import webhook_compat as wc
 from services.shared.rules.types import EvaluationSummary, RuleEvaluationResult
+
+# Real CTEPersistence.store_event returns a fsma.cte_events UUID; the
+# compat path reuses it as the canonical event id (one shared ledger row).
+LEGACY_EVENT_ID = "6f1c2a8e-3b4d-4e5f-8a9b-0c1d2e3f4a5b"
 
 # ---------------------------------------------------------------------------
 # Minimal fakes (copy of the bits we need from test_webhook_compat_1342)
@@ -71,7 +76,7 @@ class _FakePersistence:
     def __init__(self, db_session):
         self.db_session = db_session
         self.store_calls: list[dict] = []
-        self.store_result = SimpleNamespace(event_id="ev-1", sha256_hash="sha-1", chain_hash="chain-1")
+        self.store_result = SimpleNamespace(event_id=LEGACY_EVENT_ID, sha256_hash="sha-1", chain_hash="chain-1")
 
     def store_event(self, **kwargs):
         self.store_calls.append(kwargs)
@@ -138,6 +143,7 @@ def _install(monkeypatch, *, summary: EvaluationSummary, canonical_raises=None):
             raise canonical_raises
         return SimpleNamespace(
             event_id="cev-1",
+            prepare_for_persistence=lambda: None,
             event_type=SimpleNamespace(value=event.cte_type.value),
             traceability_lot_code=event.traceability_lot_code,
             product_reference=None,
@@ -156,7 +162,7 @@ def _install(monkeypatch, *, summary: EvaluationSummary, canonical_raises=None):
     cps_mod = ModuleType("shared.canonical_persistence")
 
     class _FakeCanonicalStore:
-        def __init__(self, db_session, dual_write):
+        def __init__(self, db_session, dual_write, skip_chain_write=False):
             pass
 
         def persist_event(self, canonical):

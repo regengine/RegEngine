@@ -276,7 +276,9 @@ async def ingest_events(
 
     tenant_id = principal_tenant_id
 
-    from app.tenant_validation import validate_tenant_id
+    # Relative: in the consolidated server, top-level ``app`` resolves to
+    # another service's package (services/graph/app), not ingestion.
+    from .tenant_validation import validate_tenant_id
 
     validate_tenant_id(tenant_id)
 
@@ -354,6 +356,21 @@ async def ingest_events(
             # never poisons the DB transaction for subsequent events.
             savepoint = db_session.begin_nested()
             try:
+                # One shared ledger entry serves the legacy and canonical rows,
+                # same as webhook_router_v2: the legacy write hashes this
+                # canonical projection, and the canonical write below reuses
+                # its event id without appending a second hash_chain row.
+                # Normalization stays best-effort: a failure is re-raised in
+                # the canonical block below, so enforcement handling is
+                # unchanged and OFF mode still keeps the legacy write.
+                canonical = None
+                canonical_err: Optional[Exception] = None
+                try:
+                    from shared.canonical_event import normalize_webhook_event
+
+                    canonical = normalize_webhook_event(event, tenant_id, ingestion_run_id=run_id)
+                except (ImportError, ValueError, TypeError, RuntimeError) as norm_err:
+                    canonical_err = norm_err
                 store_result = persistence.store_event(
                     tenant_id=tenant_id,
                     event_type=event.cte_type.value,
@@ -367,6 +384,7 @@ async def ingest_events(
                     location_name=event.location_name,
                     kdes=event.kdes,
                     alerts=alerts,
+                    canonical_event=canonical,
                 )
 
                 # Canonical normalization + rule evaluation (best-effort).
@@ -379,17 +397,20 @@ async def ingest_events(
                 summary = None
                 canon_sp = db_session.begin_nested()
                 try:
-                    from shared.canonical_event import normalize_webhook_event
+                    if canonical_err is not None:
+                        raise canonical_err
                     from shared.canonical_persistence import CanonicalEventStore
 
-                    canonical = normalize_webhook_event(event, tenant_id, ingestion_run_id=run_id)
-                    canonical_store = CanonicalEventStore(db_session, dual_write=False)
-                    canonical_store.persist_event(canonical)
+                    canonical.event_id = uuid.UUID(str(store_result.event_id))
+                    canonical.prepare_for_persistence()
+                    canonical_store = CanonicalEventStore(db_session, dual_write=False, skip_chain_write=True)
+                    persist_result = canonical_store.persist_event(canonical)
+                    persisted_event_id = str(getattr(persist_result, "event_id", None) or canonical.event_id)
                     from shared.rules_engine import RulesEngine
 
                     engine = RulesEngine(db_session)
                     event_data = {
-                        "event_id": str(canonical.event_id),
+                        "event_id": persisted_event_id,
                         "event_type": canonical.event_type.value,
                         "traceability_lot_code": canonical.traceability_lot_code,
                         "product_reference": canonical.product_reference,

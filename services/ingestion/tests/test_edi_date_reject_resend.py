@@ -53,6 +53,9 @@ class _NxStore:
     def get(self, key):
         return self.keys.get(key)
 
+    def delete(self, key):
+        return 1 if self.keys.pop(key, None) is not None else 0
+
 
 @pytest.fixture()
 def store(monkeypatch: pytest.MonkeyPatch) -> _NxStore:
@@ -171,3 +174,41 @@ def test_disallowed_sender_with_bad_date_gets_403_and_no_rejection(client, store
     assert rejection_log.list_edi_rejections(TENANT) == []
     assert store.keys == {}
     assert ingested == []
+
+
+@pytest.mark.parametrize("route", ["", "/document"])
+def test_content_rejection_after_reservation_frees_isa13(client, store, ingested, route):
+    """A zero SN1 quantity is rejected after the ISA13 is reserved."""
+    raw = FIXTURE.read_text(encoding="utf-8")
+    assert "SN1**200*CA~" in raw
+    rejected = _post(client, raw.replace("SN1**200*CA~", "SN1**0*CA~").encode(), route)
+    assert 400 <= rejected.status_code < 500 and rejected.status_code != 409, rejected.json()
+    assert store.keys == {}, "a rejected document must not burn its ISA13"
+    assert ingested == []
+
+    resend = _post(client, FIXTURE.read_bytes(), route)
+    assert resend.status_code == 201, resend.json()
+    assert len(ingested) == 1
+
+
+@pytest.mark.parametrize("route", ["", "/document"])
+def test_ingest_failure_frees_isa13_for_retry(client, store, ingested, monkeypatch, route):
+    """A server error during ingest must not turn the partner's retry into a 409."""
+    working = edi_routes.ingest_events
+
+    async def _broken(*args, **kwargs):
+        raise RuntimeError("ingest blew up")
+
+    monkeypatch.setattr(edi_routes, "ingest_events", _broken)
+    with pytest.raises(RuntimeError, match="ingest blew up"):
+        _post(client, FIXTURE.read_bytes(), route)
+    assert store.keys == {}
+
+    monkeypatch.setattr(edi_routes, "ingest_events", working)
+    retry = _post(client, FIXTURE.read_bytes(), route)
+    assert retry.status_code == 201, retry.json()
+    assert len(ingested) == 1
+    assert len(store.keys) == 1
+
+    replay = _post(client, FIXTURE.read_bytes(), route)
+    assert replay.status_code == 409

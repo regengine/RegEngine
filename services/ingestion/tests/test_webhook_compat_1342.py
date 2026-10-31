@@ -28,11 +28,16 @@ from __future__ import annotations
 
 import asyncio
 import sys
+import uuid
 from types import ModuleType, SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
 from app import webhook_compat as wc
+
+# Real CTEPersistence.store_event returns a fsma.cte_events UUID; the
+# compat path reuses it as the canonical event id (one shared ledger row).
+LEGACY_EVENT_ID = "6f1c2a8e-3b4d-4e5f-8a9b-0c1d2e3f4a5b"
 
 # ---------------------------------------------------------------------------
 # Fakes
@@ -85,7 +90,7 @@ class _FakePersistence:
     def __init__(self, db_session):
         self.db_session = db_session
         self.store_calls: list[dict] = []
-        self.store_result = SimpleNamespace(event_id="ev-1", sha256_hash="sha-1", chain_hash="chain-1")
+        self.store_result = SimpleNamespace(event_id=LEGACY_EVENT_ID, sha256_hash="sha-1", chain_hash="chain-1")
         self.store_raises: Exception | None = None
 
     def store_event(self, **kwargs):
@@ -239,6 +244,7 @@ def _install_stubs(
             raise canonical_raises
         return SimpleNamespace(
             event_id="cev-1",
+            prepare_for_persistence=lambda: None,
             event_type=SimpleNamespace(value="harvesting"),
             traceability_lot_code=event.traceability_lot_code,
             product_reference="pref",
@@ -256,7 +262,7 @@ def _install_stubs(
     monkeypatch.setitem(sys.modules, "shared.canonical_event", ce_mod)
 
     class _FakeCanonicalStore:
-        def __init__(self, db_session, dual_write):
+        def __init__(self, db_session, dual_write, skip_chain_write=False):
             self.db_session = db_session
             self.dual_write = dual_write
 
@@ -516,7 +522,7 @@ class TestEventProcessing:
         assert resp.rejected == 0
         assert resp.total == 1
         assert resp.events[0].status == "accepted"
-        assert resp.events[0].event_id == "ev-1"
+        assert resp.events[0].event_id == LEGACY_EVENT_ID
         assert resp.events[0].sha256_hash == "sha-1"
         assert resp.events[0].chain_hash == "chain-1"
         # store_event received all the expected kwargs
@@ -531,9 +537,9 @@ class TestEventProcessing:
         # Gap outcomes recorded once per accepted event, after the ingest commit
         assert cap["gap_record_calls"] == [("t", len(payload.events), sess.commit_count)]
         # Graph sync, canonical path, rules + exc queue all fire in happy path
-        assert cap["publish_graph_calls"] == [("ev-1", "t")]
+        assert cap["publish_graph_calls"] == [(LEGACY_EVENT_ID, "t")]
         assert cap["normalize_calls"] and cap["normalize_calls"][0][1] == "t"
-        assert cap["canonical_store_calls"] == ["cev-1"]
+        assert cap["canonical_store_calls"] == [uuid.UUID(LEGACY_EVENT_ID)]
         assert cap["rules_evaluate_calls"] == ["t"]
         # engine_compliant=True by default → no exception-queue invocation
         assert cap["exc_queue_calls"] == []
@@ -635,7 +641,7 @@ class TestEventProcessing:
         sess = _FakeSession()
 
         class _FailingStore:
-            def __init__(self, db_session, dual_write):
+            def __init__(self, db_session, dual_write, skip_chain_write=False):
                 pass
 
             def persist_event(self, canonical):
@@ -753,7 +759,7 @@ class TestOpenAndCloseIngestionRun:
         created: dict = {}
 
         class _Store:
-            def __init__(self, db_session, dual_write):
+            def __init__(self, db_session, dual_write, skip_chain_write=False):
                 created["store_session"] = db_session
 
             def create_ingestion_run(self, run):
@@ -805,7 +811,7 @@ class TestOpenAndCloseIngestionRun:
         closed: dict = {}
 
         class _Store:
-            def __init__(self, db_session, dual_write):
+            def __init__(self, db_session, dual_write, skip_chain_write=False):
                 pass
 
             def complete_ingestion_run(self, run_id, tenant_id, *, accepted, rejected, errors):
