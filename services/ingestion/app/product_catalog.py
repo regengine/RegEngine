@@ -33,9 +33,37 @@ logger = logging.getLogger("product-catalog")
 # human actions (operators curating the FTL list), so a modest per-client
 # budget is ample while still blocking scripted abuse. GET routes are left
 # unthrottled here.
-_ADD_PRODUCT_RATE_LIMIT = "30/minute"
-_UPDATE_PRODUCT_RATE_LIMIT = "30/minute"
-_DELETE_PRODUCT_RATE_LIMIT = "30/minute"
+#
+# The production default is always ``30/minute``. An elevated budget is used
+# only when ``REGENGINE_E2E_RELAX_PRODUCT_MUTATION_LIMIT`` is explicitly set
+# (the Passwordless Auth E2E job seeds 55 products in one minute). Never arm
+# this from ``REGENGINE_E2E_MODE`` alone — production defaults must not change
+# unless that dedicated env var is set.
+_DEFAULT_PRODUCT_MUTATION_RATE_LIMIT = "30/minute"
+_E2E_RELAXED_PRODUCT_MUTATION_RATE_LIMIT = "10000/minute"
+_E2E_RELAX_PRODUCT_MUTATION_LIMIT_ENV = "REGENGINE_E2E_RELAX_PRODUCT_MUTATION_LIMIT"
+_E2E_RELAX_TRUE_VALUES = frozenset({"1", "true", "yes", "on"})
+
+
+def resolve_product_mutation_rate_limit(
+    environ: dict[str, str] | None = None,
+) -> str:
+    """Return the product-mutation rate-limit string.
+
+    Unset / empty env → production default ``30/minute``. Truthy
+    ``REGENGINE_E2E_RELAX_PRODUCT_MUTATION_LIMIT`` → elevated E2E budget.
+    """
+    env = os.environ if environ is None else environ
+    raw = str(env.get(_E2E_RELAX_PRODUCT_MUTATION_LIMIT_ENV, "")).strip().lower()
+    if raw in _E2E_RELAX_TRUE_VALUES:
+        return _E2E_RELAXED_PRODUCT_MUTATION_RATE_LIMIT
+    return _DEFAULT_PRODUCT_MUTATION_RATE_LIMIT
+
+
+# slowapi accepts a callable that returns the limit string per request.
+_ADD_PRODUCT_RATE_LIMIT = resolve_product_mutation_rate_limit
+_UPDATE_PRODUCT_RATE_LIMIT = resolve_product_mutation_rate_limit
+_DELETE_PRODUCT_RATE_LIMIT = resolve_product_mutation_rate_limit
 
 # Bounded list-item type reused by request models.
 _CatalogListItem = Annotated[str, StringConstraints(max_length=200)]
