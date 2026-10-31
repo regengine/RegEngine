@@ -1,3 +1,5 @@
+-- alembic-revision: 93eb33f262a1
+-- rendered-from: alembic/versions/20261016_93eb33f262a1_v128_consolidate_permissive_policies.py (precheck)
 -- Read-only inventory for apply_v128_policy_merges.sql.
 -- PUBLIC is a PostgreSQL pseudo-role, so it has no pg_roles row.
 -- get_tenant_context() resolves through the session search_path, as APPLY does.

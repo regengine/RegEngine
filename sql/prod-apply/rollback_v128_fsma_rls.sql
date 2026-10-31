@@ -1,3 +1,5 @@
+-- alembic-revision: a5e7c9b2d341
+-- rendered-from: alembic/versions/20261016_a5e7c9b2d341_v128_fsma_rls_policy_repair.py (downgrade)
 -- v128 FSMA RLS policy repair, rendered from downgrade() in
 -- alembic/versions/20261016_a5e7c9b2d341_v128_fsma_rls_policy_repair.py.
 

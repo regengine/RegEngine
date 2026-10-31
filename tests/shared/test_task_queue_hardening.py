@@ -217,7 +217,7 @@ class TestClaimTaskRespectsBackoff:
         dict without ever being assigned in the function body. Every
         call raised NameError which the outer `_worker_loop` try/except
         swallowed — with the net effect that the monolith's task worker
-        for `nlp_extraction` / `graph_update` / `review_item` claimed
+        for `nlp_extraction` / `review_item` claimed
         zero tasks in production. This test ensures the function at
         least reaches the `db.execute` call cleanly.
         """

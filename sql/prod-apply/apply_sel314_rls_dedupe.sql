@@ -1,3 +1,5 @@
+-- alembic-revision: 1faec7148e78
+-- rendered-from: alembic/versions/20261020_1faec7148e78_v134_sel314_rls_policy_dedupe.py (upgrade)
 -- SEL-314: remove duplicate permissive RLS policies (Supabase advisor
 -- "multiple_permissive_policies", 46 warnings across 12 tables).
 --

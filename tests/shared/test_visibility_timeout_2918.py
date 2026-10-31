@@ -268,7 +268,7 @@ class TestSqlAndMemoryAgree:
             return row_value
         return mapping.get(task_type, params["default_timeout"])
 
-    @pytest.mark.parametrize("task_type", ["nlp_extraction", "graph_update", "review_item", "unmapped_type"])
+    @pytest.mark.parametrize("task_type", ["nlp_extraction", "review_item", "unmapped_type"])
     @pytest.mark.parametrize("row_value", [None, 45])
     def test_resolutions_match(self, task_type, row_value):
         row = (1, task_type, {}, 0, 3, row_value, None)

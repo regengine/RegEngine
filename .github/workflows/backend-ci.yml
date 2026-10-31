@@ -21,6 +21,10 @@ on:
       - 'frontend/src/lib/public-openapi.ts'
       - 'frontend/package-lock.json'
       - 'alembic/**'
+      # The two non-Alembic schema channels, guarded by
+      # scripts/check_schema_channels.py in alembic-revision-check.
+      - 'supabase/migrations/**'
+      - 'sql/prod-apply/**'
       - 'server/**'
       - 'services/**'
       - 'shared/**'
@@ -43,6 +47,10 @@ on:
       - 'frontend/src/lib/public-openapi.ts'
       - 'frontend/package-lock.json'
       - 'alembic/**'
+      # The two non-Alembic schema channels, guarded by
+      # scripts/check_schema_channels.py in alembic-revision-check.
+      - 'supabase/migrations/**'
+      - 'sql/prod-apply/**'
       - 'server/**'
       - 'services/**'
       - 'shared/**'
@@ -355,6 +363,10 @@ jobs:
             --extend-exclude __pycache__,.venv,venv,build,dist,services \
             --statistics
 
+      # Every top-level entry in scripts/ has a row in scripts/README.md (WI-08).
+      - name: Guard the scripts/ registry
+        run: python scripts/check_scripts_registered.py
+
   # ── RLS fallback-UUID guard (hard gate) ──────────────────
   # Scans migrations for the fail-open RLS pattern that #1091 fixed.
   # Any new migration that reintroduces `COALESCE(..., <fallback-UUID>)`
@@ -424,6 +436,16 @@ jobs:
       # the allowlist must shrink monotonically — see #1864, #1872.
       - name: Guard against new orphan migrations
         run: python scripts/check_orphan_migrations.py
+
+      # ── Schema channel guard (hard gate) ──────────────────
+      # supabase/migrations/ and sql/prod-apply/ may hold rendered copies of
+      # Alembic revisions and nothing else. A file there must start with
+      # ``-- alembic-revision: <id>`` and ``-- rendered-from: ...`` headers
+      # naming an existing revision. Pre-decision files are grandfathered
+      # by name inside the script; the list only shrinks. See
+      # docs/decisions/2026-10-30-schema-change-channel.md.
+      - name: Guard the non-Alembic schema channels
+        run: python scripts/check_schema_channels.py
 
   # ── Dep version drift guard (hard gate) ─────────────────
   # Scans services/*/requirements*.txt to ensure no per-service file

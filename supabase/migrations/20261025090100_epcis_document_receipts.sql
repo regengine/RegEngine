@@ -1,3 +1,5 @@
+-- alembic-revision: a3f7ce361b0e
+-- rendered-from: alembic/versions/20261024_a3f7ce361b0e_v137_epcis_document_receipts.py (upgrade)
 -- EPCIS document receipts.
 --
 -- One row per EPCIS document the ingest routes receive (POST

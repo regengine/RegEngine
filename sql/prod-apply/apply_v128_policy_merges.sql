@@ -1,3 +1,5 @@
+-- alembic-revision: 93eb33f262a1
+-- rendered-from: alembic/versions/20261016_93eb33f262a1_v128_consolidate_permissive_policies.py (upgrade)
 -- Rendered from revision 93eb33f262a1, upgrade().
 BEGIN;
 
