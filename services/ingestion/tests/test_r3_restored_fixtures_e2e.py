@@ -144,7 +144,9 @@ def test_edi_856_fixture_end_to_end():
     transition, gaps = gaps_by_tlc[tlc]
     assert transition == "open"
     assert {g.gap_kind for g in gaps} == {GAP_KIND_MISSING_KDE}
-    assert {"ship_date", "tlc_source_reference"} <= {g.gap_key for g in gaps}
+    # The 856 carries its ship date (DTM) and BOL; only the TLC source
+    # reference has no X12 home, so it stays a gap unless the caller sends it.
+    assert {g.gap_key for g in gaps} == {"tlc_source_reference"}
 
     headers, rows = _parse_sheet(sheet)
     assert headers == FDA_COLUMNS

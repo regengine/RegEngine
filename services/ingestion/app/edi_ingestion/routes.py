@@ -518,6 +518,9 @@ def _enforce_interchange_structure(
 async def ingest_edi_856(
     file: UploadFile = File(..., description="X12 EDI file (856 ASN)"),
     traceability_lot_code: str = Form(..., description="FSMA Traceability Lot Code"),
+    tlc_source_reference: Optional[str] = Form(
+        None, description="Optional TLC source reference (where the TLC was assigned) copied to each event's KDEs"
+    ),
     tenant_id: Optional[str] = Form(None, description="Optional tenant override"),
     source: str = Form("edi_856_inbound", description="Source system identifier"),
     product_description: Optional[str] = Form(None, description="Optional product description override"),
@@ -698,6 +701,9 @@ async def ingest_edi_856(
             "ship_from_gln": ship_from_gln or ship_from_gln_raw,
             "ship_to_gln": ship_to_gln or ship_to_gln_raw,
             "reference_document_number": extracted.get("reference_document_number"),
+            # Shipping validation requires these exact names (21 CFR 1.1340(a)(7)-(8)).
+            "reference_document": extracted.get("reference_document_number"),
+            "tlc_source_reference": tlc_source_reference.strip() if tlc_source_reference else None,
             "carrier": extracted.get("carrier"),
             "asn_number": extracted.get("asn_number"),
             "edi_transaction_set": "856",
@@ -882,6 +888,10 @@ def _build_ingest_event_for_set(
         "edi_isa13": extracted.get("isa13"),
         "edi_gs_control_number": extracted.get("gs_control_number"),
         "reference_document_number": extracted.get("reference_document_number"),
+        # Shipping/receiving validation requires these exact names
+        # (21 CFR 1.1340(a)(7)-(8), 1.1345(a)(7)-(8)) for every set.
+        "reference_document": extracted.get("reference_document_number"),
+        "tlc_source_reference": extracted.get("tlc_source_reference"),
         "event_date": event_date,
     }
 
@@ -995,17 +1005,18 @@ def _build_ingest_event_for_set(
                 "g62_date_qualifier": extracted.get("g62_date_qualifier"),
                 "receive_date_raw": extracted.get("receive_date_raw"),
                 "ship_date_raw": extracted.get("ship_date_raw"),
-                "reference_document": extracted.get("reference_document_number"),
-                "tlc_source_reference": extracted.get("tlc_source_reference"),
             }
         )
         if transaction_set == "944":
-            kdes["receive_date"] = event_date
             kdes["immediate_previous_source"] = extracted.get("ship_from_name") or extracted.get("ship_from_gln")
-        else:
-            kdes["ship_date"] = event_date
         if extracted.get("depositor_gln"):
             kdes["depositor_gln"] = extracted["depositor_gln"]
+
+    # Every set needs the CTE's date KDE, not only 944/945.
+    if cte_type == WebhookCTEType.RECEIVING:
+        kdes["receive_date"] = event_date
+    else:
+        kdes["ship_date"] = event_date
 
     return IngestEvent(
         cte_type=cte_type,
@@ -1040,7 +1051,7 @@ async def ingest_edi_document(
         description="FSMA Traceability Lot Code for 856/850/810/861; required but ignored for 944/945 event TLCs, which use each line's lot code",
     ),
     tlc_source_reference: Optional[str] = Form(
-        None, description="Optional TLC source reference copied to 944/945 KDEs"
+        None, description="Optional TLC source reference copied to every event's KDEs"
     ),
     tenant_id: Optional[str] = Form(None, description="Optional tenant override"),
     source: str = Form("edi_inbound", description="Source system identifier"),
@@ -1184,12 +1195,13 @@ async def ingest_edi_document(
     # the shared header is copied onto each line.
     event_inputs: list[tuple[str, dict[str, Any], list[list[str]]]] = []
     first_event_indexes: list[int] = []
+    tlc_source_ref = tlc_source_reference.strip() if tlc_source_reference else None
     for slice_set, slice_extracted, slice_segments in zip(slice_sets, extractions, set_slices):
         first_event_indexes.append(len(event_inputs))
         if slice_set in ("856", "861", "944", "945"):
             header = {key: value for key, value in slice_extracted.items() if key != "line_items"}
+            header["tlc_source_reference"] = tlc_source_ref
             if slice_set in ("944", "945"):
-                header["tlc_source_reference"] = tlc_source_reference.strip() if tlc_source_reference else None
                 date_field = "receive_date_raw" if slice_set == "944" else "ship_date_raw"
                 header["_event_timestamp"], header["_event_date"] = _ship_timestamp_and_date(
                     header.get(date_field), None
@@ -1213,7 +1225,8 @@ async def ingest_edi_document(
                     }
                 event_inputs.append((slice_set, merged, slice_segments))
         else:
-            event_inputs.append((slice_set, slice_extracted, slice_segments))
+            with_ref = {**slice_extracted, "tlc_source_reference": tlc_source_ref}
+            event_inputs.append((slice_set, with_ref, slice_segments))
 
     # #1174: FSMA validation is fail-closed by default. A schema failure
     # returns HTTP 422 with per-field errors and nothing is persisted.
