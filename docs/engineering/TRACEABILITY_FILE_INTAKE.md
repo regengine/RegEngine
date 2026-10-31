@@ -17,6 +17,70 @@ assertion and must match that principal.
 `POST /api/v1/ingest/edi` accepts a single 856 transaction set. 861, 944,
 945, 850, and 810 belong on `/document`.
 
+## EDI event time
+
+Both EDI routes store the source date as the event time.
+`_ship_timestamp_and_date` in
+`services/ingestion/app/edi_ingestion/utils.py` parses CCYYMMDD or YYMMDD
+into a UTC timestamp (`YYYY-MM-DDTHH:MM:SS+00:00`). A date with no time
+is midnight UTC. A YYMMDD year uses `EDI_CENTURY_PIVOT` (default 50):
+YY below the pivot is 20YY, and YY at or above it is 19YY.
+
+The preflight runs after the partner allowlist and before the ISA13
+control number is reserved. A date rejection does not reserve that
+control number, so a corrected resend is not refused as a 409 replay.
+Each rejection is written to the EDI rejection log with
+`needs_review: true`, and the HTTP detail includes `rejection_id`.
+
+| Source date | Status | `error` |
+| --- | --- | --- |
+| Missing or blank | 400 | `missing_edi_date` |
+| Not CCYYMMDD or YYMMDD | 400 | `invalid_edi_date` |
+| 856 time (BSN04) has at least four digits and the hour or minute is impossible | 400 | `invalid_edi_time` |
+| More than 24 hours after the current UTC time | 400 | `edi_date_in_future` |
+| A parseable date at or before that cutoff, including a date older than 90 days | accepted | timestamp is that source date |
+
+856 is the only set that reads a time. The first four digits of BSN04
+are the hour and minute. Fewer than four digits leaves the time at
+midnight UTC. Seconds in a longer BSN04 are ignored. 944 and 945 pass
+no time into the parser. A date more than 24 hours ahead is rejected.
+A date exactly 24 hours ahead is kept.
+
+| Set | Date element | Time |
+| --- | --- | --- |
+| 856 | BSN03 | BSN04 |
+| 861 | BRA02 | none |
+| 944 | W1702. A G62 date is used only when W1702 is empty. | none |
+| 945 | W0603. A G62 date is used only when W0603 is empty. | none |
+| 850 | BEG05 | none |
+| 810 | BIG01 | none |
+
+On `POST /api/v1/ingest/edi` a missing BSN date is this 400. The later
+856 placeholder check (`edi_856_missing_required_kdes`) still rejects a
+missing ship-from, ship-to, quantity, unit, or product, and it does not
+get a chance to report the date.
+
+### Accepted TLC shapes
+
+EDI persistence validates the event TLC with `FSMAEvent` in
+`services/shared/schemas.py`. A failure is HTTP 422
+`fsma_validation_failed`. The validator accepts the submitted string
+when it is one of these:
+
+- Fourteen digits followed by a lot suffix of letters, digits, `-`, or
+  `.`. The whole value is at least 15 characters.
+- An LGTIN class URN: `urn:epc:class:lgtin:`, two digit groups whose
+  lengths add up to 13, a dot, then the lot.
+- A GS1 Digital Link: `http://` or `https://`, a host, optional extra
+  path segments, `/01/` and 14 digits, `/10/` and the lot, then an
+  optional further path and query.
+
+On the URN and Digital Link forms the lot, after percent-decoding, is
+1 to 20 characters from GS1 character set 82 (digits, both letter
+cases, and the twenty specials in that set; no space). A character the
+carrier requires to be percent-encoded, or a `%` that is not a `%HH`
+escape, fails the match. The stored TLC is the submitted string.
+
 ## Excel `.xlsx` on `POST /api/v1/ingest/csv`
 
 `services/ingestion/app/shared/xlsx_rows.py` turns the workbook into the CSV
@@ -149,7 +213,9 @@ line, or to the draft when no line is open yet.
 The line lot is the event TLC, copied verbatim. A GTIN or UPC on the line
 does not prefix it. A line with no lot uses the required form field
 `traceability_lot_code`. A lot that fails TLC format is HTTP 422
-`fsma_validation_failed`, including a one-character lot. Two lines that
+`fsma_validation_failed`, including a one-character lot. The shapes
+`FSMAEvent` accepts are listed under
+[Accepted TLC shapes](#accepted-tlc-shapes). Two lines that
 share a lot both persist. `edi_line_index` on the KDEs separates them.
 
 N104 is stored as the location id whether or not N103 is `UL`. The event
@@ -157,10 +223,8 @@ N104 is stored as the location id whether or not N103 is `UL`. The event
 check digit. The 856 event location is the ship-from GLN. The 861 event
 location is the receiving-location GLN.
 
-A missing date uses the ingest time. A date that is present and is not
-CCYYMMDD or YYMMDD is HTTP 400 `invalid_edi_date`. A parsed date older
-than 90 days, or more than 24 hours in the future, keeps that calendar
-date on the event and snaps the ingest timestamp to now.
+The event time is the BSN date (and BSN04 time when present). See
+[EDI event time](#edi-event-time).
 
 ### `POST /api/v1/ingest/edi` (856 only)
 
@@ -170,11 +234,13 @@ and 861, `/document` emits one CTE per item line.
 
 Required segments are ISA, GS, ST, BSN, HL, SE, GE, and IEA. Each line
 must carry a positive quantity, a recognized unit, and a product id or
-description. The set must carry a ship-from name, a ship-to name, and a
-BSN date. A miss is HTTP 422 `edi_856_missing_required_kdes`, the
-rejection is logged, and nothing is persisted. The route does not fill
-quantity `1.0`, unit `units`, product `EDI 856 Shipment`, an unknown
-location, or today's date.
+description. The set must carry a ship-from name and a ship-to name. A
+miss on those fields is HTTP 422 `edi_856_missing_required_kdes`, the
+rejection is logged, and nothing is persisted. A missing BSN date is
+HTTP 400 `missing_edi_date` from the event-time preflight, which runs
+before that placeholder check. The route does not fill quantity `1.0`,
+unit `units`, product `EDI 856 Shipment`, an unknown location, or
+today's date.
 
 `product_description`, `quantity_override`, `unit_of_measure_override`,
 `ship_from_location_override`, and `ship_to_location_override` apply to
@@ -287,11 +353,8 @@ assigned id and the GLN stays empty.
   if none of those appear, the depositor (N1*DE) is the ship-from.
 - 945 ship-from is N1*SF when present, otherwise the warehouse (N1*WH).
 - The event date prefers the header date (W1702 or W0603). A G62 date is
-  used only when that header date is empty. A missing date uses the ingest
-  time. A date that is present and is not CCYYMMDD or YYMMDD is HTTP 400
-  `invalid_edi_date`. A parsed date older than 90 days, or more than 24
-  hours in the future, keeps that calendar date and snaps the ingest
-  timestamp to now.
+  used only when that header date is empty. Parsing, rejection codes, and
+  the stored UTC timestamp are in [EDI event time](#edi-event-time).
 - 944 reference document number is the warehouse receipt number, else the
   shipment id. 945 uses the shipment id, else the depositor order number.
   N9 fills a blank reference (`BM`, `SI`, `PO`, `PK`, `CN`, in that order).
@@ -323,7 +386,9 @@ assigned id and the GLN stays empty.
 python3 -m pytest services/ingestion/tests/test_csv_xlsx_upload.py -q --no-cov
 python3 -m pytest services/ingestion/tests/test_edi_warehouse_944_945.py \
   services/ingestion/tests/test_edi_golden.py \
-  services/ingestion/tests/test_edi_wire_format_2974_2976_2978.py -q --no-cov
+  services/ingestion/tests/test_edi_wire_format_2974_2976_2978.py \
+  services/ingestion/tests/test_edi_preserve_event_time.py \
+  services/ingestion/tests/test_edi_date_reject_resend.py -q --no-cov
 cd frontend && npm run test:run -- src/__tests__/lib/epcis-upload.test.ts \
   src/__tests__/pages/ingest-epcis.test.tsx
 ```
