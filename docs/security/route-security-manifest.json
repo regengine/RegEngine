@@ -925,6 +925,19 @@
       "test_adapter": "tenant_api_key_postgres_rls"
     },
     {
+      "operation": "csv:POST:/api/v1/ingest/csv/diagnostic",
+      "owner": "csv",
+      "method": "POST",
+      "path": "/api/v1/ingest/csv/diagnostic",
+      "classification": "tenant-scoped",
+      "authentication": "x-regengine-api-key",
+      "required_permissions": [
+        "webhooks.ingest"
+      ],
+      "storage_boundary": "none:credential-bound-tenant-preview",
+      "test_adapter": "tenant_api_key_no_persistence"
+    },
+    {
       "operation": "edi:POST:/api/v1/ingest/edi",
       "owner": "edi",
       "method": "POST",
@@ -4957,13 +4970,13 @@
     }
   ],
   "summary": {
-    "enabled_operation_count": 258,
+    "enabled_operation_count": 259,
     "disabled_operation_count": 180,
     "disabled_unique_path_count": 163,
     "enabled_by_classification": {
       "global-sysadmin": 16,
       "public": 30,
-      "tenant-scoped": 205,
+      "tenant-scoped": 206,
       "workload-only": 7
     }
   }

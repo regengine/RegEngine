@@ -307,7 +307,7 @@ export const CAPABILITY_REGISTRY: CapabilityRegistryEntry[] = [
         status: 'preview',
         delivery_mode: 'export_only',
         integration_type: 'one_way_export',
-        customer_copy: 'EPCIS export and ingest are in Preview. Default deployments use PostgreSQL-backed task processing; legacy Kafka-compatible signing is opt-in.',
+        customer_copy: 'EPCIS export and ingest are in Preview. A single export returns at most 2,000 events, newest first, and reports when it was cut off. Default deployments use PostgreSQL-backed task processing; legacy Kafka-compatible signing is opt-in.',
         evidence_url: '/developers',
     },
     {
