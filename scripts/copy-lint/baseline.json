@@ -117,7 +117,7 @@
     "sample-demo": 1
   },
   "frontend/src/lib/roi-calculator-data.ts": {
-    "hyphen-dash": 4
+    "hyphen-dash": 2
   },
   "frontend/src/lib/trust-subprocessors.ts": {
     "sample-demo": 1

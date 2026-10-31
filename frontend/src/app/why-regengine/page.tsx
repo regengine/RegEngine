@@ -20,13 +20,14 @@ import { Badge } from '@/components/ui/badge';
 import { Callout } from '@/components/ui/callout';
 import { Card } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { PRICING_SUMMARY } from '@/lib/pricing-terms';
 
 export const metadata: Metadata = {
-    title: 'Why RegEngine | FSMA 204 Compliance, API-First',
-    description: 'API-first architecture, published pricing, and a self-serve path to your first FSMA 204 export. See how RegEngine compares to Trustwell, SafetyChain, and ReposiTrak.',
+    title: 'Why RegEngine | FSMA 204 Recordkeeping, API-First',
+    description: 'API-first architecture, per-facility pricing, and a self-serve path to your first FSMA 204 export. See how RegEngine compares to Trustwell, SafetyChain, and ReposiTrak.',
     openGraph: {
-        title: 'Why RegEngine | FSMA 204 Compliance Built Different',
-        description: 'API-first, transparent pricing, and a self-serve path to a first FSMA 204 export in days. See how RegEngine outpaces Trustwell, SafetyChain, and legacy competitors.',
+        title: 'Why RegEngine | FSMA 204 Recordkeeping Built Different',
+        description: 'API-first, per-facility pricing, and a self-serve path to a first FSMA 204 export in days. See how RegEngine outpaces Trustwell, SafetyChain, and legacy competitors.',
         url: 'https://regengine.co/why-regengine',
         type: 'website',
     },
@@ -47,13 +48,6 @@ const COMPARISON_DATA: ComparisonRow[] = [
         trustwell: false,
         safetychain: false,
         repositrak: false,
-    },
-    {
-        feature: 'Transparent, Published Pricing',
-        regengine: 'List price from $849/mo (partner rates from $425/mo)',
-        trustwell: 'Contact sales',
-        safetychain: 'Contact sales',
-        repositrak: 'Contact sales',
     },
     {
         feature: 'Time to first export',
@@ -133,14 +127,13 @@ const DIFFERENTIATORS = [
         title: 'API-First Architecture',
         description:
             'CSV upload and the JSON events API. Integrate RegEngine with your existing ERP, WMS, or custom systems through those two live paths. No rip-and-replace required.',
-        detail: 'Technical teams can be live in hours. Sales ops teams use our CSV templates. Everyone gets FSMA 204 compliance their way.',
+        detail: 'Technical teams can be live in hours. Sales ops teams use our CSV templates. Everyone gets FSMA 204 recordkeeping workflows their way.',
     },
     {
         icon: DollarSign,
-        title: 'Transparent Pricing',
-        description:
-            'No hidden sales calls. Founding rate plans start at $425/mo (billed annually). Pricing is published, so you do not need to "contact sales."',
-        detail: 'Compare directly to competitors who make you "contact sales." We believe pricing transparency builds trust and moves faster.',
+        title: 'Per-facility pricing',
+        description: PRICING_SUMMARY,
+        detail: 'We scope facility count, pilot terms and onboarding with you in writing before you sign.',
     },
     {
         icon: Zap,
@@ -168,7 +161,7 @@ const DIFFERENTIATORS = [
         title: 'Built for SMBs',
         description:
             'Not enterprise-only. Small produce distributors, regional suppliers, emerging brands. Self-serve signup, no minimum spend.',
-        detail: 'You don\'t need a 50-person implementation team. You need FSMA 204 compliance fast, cheaply, and without bureaucracy.',
+        detail: 'You don\'t need a 50-person implementation team. You need FSMA 204 records organized fast, cheaply, and without bureaucracy.',
     },
 ];
 
@@ -184,13 +177,13 @@ export default function WhyRegEnginePage() {
                         </Badge>
                     </div>
                     <h1 className="mb-6 max-w-[20ch] font-display text-display text-re-text-primary">
-                        FSMA 204 Compliance,{' '}
+                        FSMA 204 Recordkeeping,{' '}
                         <span>
                             Built for You
                         </span>
                     </h1>
                     <p className="mb-8 max-w-[68ch] text-body text-re-text-secondary">
-                        RegEngine pairs an API-first architecture with published pricing and a self-serve onboarding path designed to get your first FSMA 204 export ready for review in days, not months.
+                        RegEngine pairs an API-first architecture with per-facility pricing and a self-serve onboarding path designed to get your first FSMA 204 export ready for review in days, not months.
                     </p>
                     <div className="flex flex-col gap-3 sm:flex-row">
                         <Button asChild size="lg">
@@ -216,7 +209,7 @@ export default function WhyRegEnginePage() {
                             Six Reasons Teams Choose RegEngine
                         </h2>
                         <p className="text-body text-re-text-secondary">
-                            We built RegEngine for technical teams, ops managers, and founders who need compliance fast without compromise.
+                            We built RegEngine for technical teams, ops managers, and founders who need traceability records organized fast without compromise.
                         </p>
                     </div>
 
@@ -437,37 +430,35 @@ HTTP 201
                         <Card padding="spacious" className="order-2 hidden md:order-1 md:block">
                             <div className="space-y-4">
                                 <Card variant="inset" padding="compact">
-                                    <p className="mb-1 font-mono text-label uppercase text-re-text-muted">Base Plan</p>
-                                    <p className="text-title tabular-nums text-re-text-primary">$425/mo <span className="text-ui font-normal text-re-text-tertiary line-through">$849/mo</span></p>
-                                    <p className="mt-2 text-small text-re-text-tertiary">Founding rate, billed annually ($499/mo monthly) • 1 facility • 500 CTEs/mo</p>
+                                    <p className="mb-1 font-mono text-label uppercase text-re-text-muted">Pricing</p>
+                                    <p className="text-title text-re-text-primary">Contact us for pricing</p>
+                                    <p className="mt-2 text-small text-re-text-tertiary">Priced per facility</p>
                                 </Card>
                                 <Card variant="inset" padding="compact">
-                                    <p className="mb-1 font-mono text-label uppercase text-re-text-muted">Standard Plan</p>
-                                    <p className="text-title tabular-nums text-re-text-primary">$549/mo <span className="text-ui font-normal text-re-text-tertiary line-through">$1,099/mo</span></p>
-                                    <p className="mt-2 text-small text-re-text-tertiary">Founding rate, billed annually ($649/mo monthly) • 2 to 3 facilities • Unlimited CTEs</p>
+                                    <p className="mb-1 font-mono text-label uppercase text-re-text-muted">Founding design partner</p>
+                                    <p className="mt-2 text-small text-re-text-tertiary">Terms set in a written proposal</p>
                                 </Card>
                                 <Card variant="inset" padding="compact">
-                                    <p className="mb-1 font-mono text-label uppercase text-re-text-muted">Premium Plan</p>
-                                    <p className="text-title tabular-nums text-re-text-primary">$639/mo <span className="text-ui font-normal text-re-text-tertiary line-through">$1,275/mo</span></p>
-                                    <p className="mt-2 text-small text-re-text-tertiary">Founding rate, billed annually ($749/mo monthly) • 4+ facilities • Dedicated support</p>
+                                    <p className="mb-1 font-mono text-label uppercase text-re-text-muted">90-day pilot</p>
+                                    <p className="mt-2 text-small text-re-text-tertiary">1 facility. Terms set in a written proposal. Pilot fee credited toward your first subscription invoice.</p>
                                 </Card>
                             </div>
                         </Card>
                         <div className="order-1 md:order-2">
                             <h3 className="mb-4 font-display text-heading-lg text-re-text-primary">
-                                Pricing You Can See Before You Sign
+                                Pricing Scoped to Your Facilities
                             </h3>
                             <p className="mb-4 max-w-[68ch] text-body text-re-text-secondary">
-                                Open pricing builds trust. We list prices on our website. No "contact sales" gatekeeping. No surprise enterprise minimums.
+                                Contact us for pricing. We scope facility count and terms with you in writing before you sign. No surprise enterprise minimums.
                             </p>
                             <p className="mb-6 max-w-[68ch] text-ui text-re-text-tertiary">
-                                The Founding rate is preferred pricing for the life of your account. Plans start at $425/mo (billed annually) or $499/mo monthly. Honest pricing for honest work.
+                                {PRICING_SUMMARY}
                             </p>
                             <ul className="space-y-2">
                                 {[
-                                    'Simple design-partner agreements with no multi-year lock-in',
+                                    'Priced per facility',
                                     'API access for contracted workspaces',
-                                    'Founding Design Partner rate never increases',
+                                    'Pilot fee credited toward your first subscription invoice on conversion',
                                 ].map((item, idx) => (
                                     <li key={idx} className="flex gap-3 text-ui text-re-text-secondary">
                                         <Check className="mt-0.5 h-4 w-4 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
@@ -612,11 +603,11 @@ HTTP 201
                             <p className="mb-4 text-ui text-re-text-tertiary">RegEngine is built for companies like:</p>
                             <ul className="space-y-2">
                                 {[
-                                    'Regional produce distributors ($5M to $50M annual revenue)',
+                                    'Regional produce distributors',
                                     'Specialty food brands and co-packers',
                                     'Organic/specialty retailers and wholesalers',
                                     'Small farms and grower cooperatives',
-                                    'Emerging CPG brands reaching FDA compliance',
+                                    'Emerging CPG brands organizing FSMA 204 records',
                                 ].map((item, idx) => (
                                     <li key={idx} className="flex gap-2 text-ui text-re-text-secondary">
                                         <Check className="mt-0.5 h-4 w-4 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
@@ -630,7 +621,7 @@ HTTP 201
                                 Built for SMBs, Not Enterprises Only
                             </h3>
                             <p className="mb-4 max-w-[68ch] text-body text-re-text-secondary">
-                                Compliance shouldn't require a 50-person implementation team. You need FSMA 204 compliance, fast and cheap. Self-serve signup, no minimums, no sales calls.
+                                Compliance shouldn't require a 50-person implementation team. You need FSMA 204 records organized, fast and cheap. Self-serve signup and no minimums.
                             </p>
                             <p className="mb-6 max-w-[68ch] text-ui text-re-text-tertiary">
                                 Legacy platforms built for 100+ facility enterprises. RegEngine scales from 1 to 1,000 facilities. You start small; you grow without ripping out the platform.
@@ -661,7 +652,7 @@ HTTP 201
                             What RegEngine Is NOT
                         </h2>
                         <p className="mb-8 max-w-[68ch] text-body text-re-text-secondary">
-                            RegEngine is a compliance layer, not a replacement for your ERP or WMS. We work alongside your existing systems, filling the traceability gaps that packaged software doesn't solve.
+                            RegEngine is a recordkeeping layer, not a replacement for your ERP or WMS. We work alongside your existing systems, filling the traceability gaps that packaged software doesn't solve.
                         </p>
                         <div className="space-y-4">
                             {[
@@ -675,7 +666,7 @@ HTTP 201
                                 },
                                 {
                                     title: 'We do NOT promise 100% FDA audit success',
-                                    detail: 'Compliance is a process, not a product. We validate data and generate FDA exports. Audits require auditors.',
+                                    detail: 'RegEngine helps with FSMA 204 recordkeeping. It has no FDA endorsement or certification, and it makes no promise of a compliance outcome. We check data and generate FDA-oriented exports. Audits require auditors.',
                                 },
                                 {
                                     title: 'We do NOT lock you in',
@@ -714,12 +705,12 @@ HTTP 201
                             {
                                 Icon: Workflow,
                                 title: 'Operations Teams',
-                                detail: 'You need FSMA 204 compliance done quickly. CSV upload is fast enough. No custom dev needed.',
+                                detail: 'You need FSMA 204 records organized quickly. CSV upload is fast enough. No custom dev needed.',
                             },
                             {
                                 Icon: Zap,
                                 title: 'Founders & SMBs',
-                                detail: 'You need compliance but can\'t afford enterprise fees. Founding rates from $425/mo (billed annually) get you live. Scale as you grow.',
+                                detail: 'You need traceability records but can\'t afford enterprise fees. Contact us for founding design partner pricing.',
                             },
                             {
                                 Icon: Lightbulb,
@@ -743,7 +734,7 @@ HTTP 201
             <section className="py-16 sm:py-20">
                 <Container width="marketing" className="text-center">
                     <h2 className="mb-3 font-display text-heading-lg text-re-text-primary">
-                        Ready to Get Compliant?
+                        Ready to organize your traceability records?
                     </h2>
                     <p className="mx-auto mb-8 max-w-[68ch] text-body text-re-text-secondary">
                         Request access in minutes. Start with the onboarding path that fits your team. Simple design-partner agreements with no multi-year lock-in.

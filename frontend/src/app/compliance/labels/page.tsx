@@ -168,7 +168,7 @@ export default function LabelsPage() {
     <PageContainer>
       <PageHeader
         title="Traceability Label Generator"
-        description="Generate FSMA 204 compliant labels with QR codes and ZPL for thermal printing"
+        description="Generate FSMA 204 traceability labels with QR codes and ZPL for thermal printing"
       />
 
       {/* Input Form */}

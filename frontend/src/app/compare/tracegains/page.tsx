@@ -8,12 +8,12 @@ import { PageHeader } from "@/components/layout/page-header";
 import { CheckCircle, XCircle, Minus, ArrowRight, Shield, FileText, Zap, Users } from "lucide-react";
 
 export const metadata: Metadata = {
-  title: "RegEngine vs TraceGains: FSMA 204 Compliance Comparison",
+  title: "RegEngine vs TraceGains: FSMA 204 Traceability Comparison",
   description:
-    "Compare RegEngine and TraceGains for FSMA 204 compliance. Supplier document management vs CTE-level traceability rule evaluation.",
+    "Compare RegEngine and TraceGains for FSMA 204 traceability recordkeeping. Supplier document management vs CTE-level traceability rule evaluation.",
   openGraph: {
-    title: 'RegEngine vs TraceGains: FSMA 204 Compliance Comparison',
-    description: 'Compare RegEngine and TraceGains for FSMA 204 compliance. Supplier document management vs CTE-level traceability rule evaluation.',
+    title: 'RegEngine vs TraceGains: FSMA 204 Traceability Comparison',
+    description: 'Compare RegEngine and TraceGains for FSMA 204 traceability recordkeeping. Supplier document management vs CTE-level traceability rule evaluation.',
     url: 'https://regengine.co/compare/tracegains',
     type: 'website',
   },
@@ -28,7 +28,6 @@ const FEATURES = [
   { feature: "CSV upload and JSON events API", regengine: "check", competitor: "partial", note: "Both; verify TraceGains' current ingestion options" },
   { feature: "Supplier document management (COAs, specs)", regengine: "partial", competitor: "check", note: "TraceGains' core strength" },
   { feature: "Supplier onboarding portal", regengine: "check", competitor: "check", note: "Both offer supplier management" },
-  { feature: "Published pricing on website", regengine: "check", competitor: "x", note: "List price from $849/mo (Founding rates from $425/mo, billed annually) vs custom quotes" },
 ];
 
 const WHY_SWITCH = [

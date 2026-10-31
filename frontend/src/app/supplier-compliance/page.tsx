@@ -74,7 +74,7 @@ const FAQ = [
     },
     {
         q: 'What does this cost me?',
-        a: 'Submitting data through a portal link is free. Your buyer pays for RegEngine. If you want your own RegEngine account to manage traceability across all your buyers, plans start at $425/mo (billed annually) at the Founding rate.',
+        a: 'Submitting data through a portal link is free. Your buyer pays for RegEngine. If you want your own RegEngine account to manage traceability across all your buyers, plans are priced per facility. Contact us for pricing.',
     },
 ];
 
@@ -101,7 +101,7 @@ export default function SupplierCompliancePage() {
                 <div className="flex flex-col justify-center gap-3 sm:flex-row">
                     <Button asChild size="lg">
                         <Link href="/retailer-readiness" className="no-underline">
-                            Check Your Readiness Score <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                            Review buyer-program notes <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
                         </Link>
                     </Button>
                     <Button asChild variant="secondary" size="lg">
@@ -198,7 +198,7 @@ export default function SupplierCompliancePage() {
                             {
                                 icon: AlertTriangle,
                                 title: 'What happens if you are not compliant',
-                                body: 'The FDA can issue warning letters, charge re-inspection fees (~$225/hour), mandate product recalls, suspend facility registration (halting operations), and refuse import admission. More immediately, retailers may drop non-compliant suppliers.',
+                                body: 'The FDA can issue warning letters, charge re-inspection fees, mandate product recalls, suspend facility registration (halting operations), and refuse import admission. More immediately, retailers may drop non-compliant suppliers.',
                             },
                         ].map((item) => (
                             <Card key={item.title} padding="default" className="flex gap-4 p-5">

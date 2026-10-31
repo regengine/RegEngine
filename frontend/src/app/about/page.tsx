@@ -20,11 +20,11 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
 export const metadata: Metadata = {
-  title: "About RegEngine | FSMA 204 Compliance Infrastructure",
+  title: "About RegEngine | FSMA 204 Recordkeeping Infrastructure",
   description:
     "RegEngine was built by Christopher Sellers (AmeriCorps alum, former Senate staffer, and solo technical founder) to make FSMA 204 compliance accessible to mid-market food companies without six-figure platforms.",
   openGraph: {
-    title: "About RegEngine | FSMA 204 Compliance Infrastructure",
+    title: "About RegEngine | FSMA 204 Recordkeeping Infrastructure",
     description:
       "RegEngine was built by Christopher Sellers to make FSMA 204 compliance accessible to mid-market food companies without six-figure platforms.",
     url: "https://regengine.co/about",
@@ -64,7 +64,7 @@ const PRINCIPLES = [
     Icon: Target,
     title: "Accessible by default",
     description:
-      "Mid-market food companies deserve modern compliance tooling. RegEngine starts at $425/mo (billed annually).",
+      "Mid-market food companies deserve modern recordkeeping tools for FSMA 204. Plans are priced per facility, and we set terms with you in a written proposal.",
   },
   {
     Icon: Shield,
@@ -76,7 +76,7 @@ const PRINCIPLES = [
     Icon: Lightbulb,
     title: "Transparent operations",
     description:
-      "Published pricing. Public trust center. Open security posture. No enterprise sales gates hiding what you actually get.",
+      "Per-facility pricing set in writing. Public trust center. Open security posture. No enterprise sales gates hiding what you actually get.",
   },
   {
     Icon: Sparkles,
@@ -102,7 +102,7 @@ export default function AboutPage() {
           }
           description={
             <>
-              RegEngine is FSMA 204 compliance infrastructure built for mid-market
+              RegEngine is FSMA 204 recordkeeping infrastructure built for mid-market
               food companies, by someone who saw the gap from inside government,
               enterprise sales, and the regulatory stack itself.
             </>
@@ -253,7 +253,7 @@ export default function AboutPage() {
       <Section width="marketing" className="pb-20 sm:pb-24">
         <div className="mx-auto max-w-[640px] text-center">
           <h2 className="font-display text-heading-lg text-re-text-primary">
-            Ready to talk compliance?
+            Ready to organize your traceability records?
           </h2>
           <p className="mx-auto mt-4 max-w-[48ch] text-body text-re-text-secondary">
             Book a free gap analysis call. We&apos;ll review your current FSMA 204
