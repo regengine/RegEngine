@@ -193,3 +193,37 @@ def test_ftl_known_ftl_category_enforces():
     kdes.pop("immediate_subsequent_recipient")
     errors = _validate_event_kdes(_event(WebhookCTEType.HARVESTING, kdes))
     assert any("immediate_subsequent_recipient" in e for e in errors)
+
+
+def test_authoritative_kdes_tolerates_events_without_legacy_input_lot_attr():
+    """Duck-typed events (SimpleNamespace) often omit typed optional fields.
+
+    ``_authoritative_kdes`` must use getattr for the Lab legacy
+    ``input_traceability_lot_codes`` top-level fill-in so missing attributes
+    do not raise AttributeError during required-KDE checks.
+    """
+    kdes = _fill_required(WebhookCTEType.TRANSFORMATION)
+    kdes.pop("input_lot_codes")
+    # No input_traceability_lot_codes attr on the namespace — must not raise.
+    event = _event(WebhookCTEType.TRANSFORMATION, kdes)
+    assert not hasattr(event, "input_traceability_lot_codes")
+    errors = _validate_event_kdes(event)
+    assert any("input_lot_codes" in e for e in errors)
+
+
+def test_authoritative_kdes_fills_input_lot_codes_from_legacy_top_level():
+    kdes = _fill_required(WebhookCTEType.TRANSFORMATION)
+    kdes.pop("input_lot_codes")
+    event = _event(
+        WebhookCTEType.TRANSFORMATION,
+        kdes,
+        input_traceability_lot_codes=["LOT-LEGACY-A", "LOT-LEGACY-B"],
+    )
+    assert _validate_event_kdes(event) == []
+
+
+def test_authoritative_kdes_fills_input_lot_codes_from_legacy_kde():
+    kdes = _fill_required(WebhookCTEType.TRANSFORMATION)
+    kdes.pop("input_lot_codes")
+    kdes["input_traceability_lot_codes"] = ["LOT-KDE-A"]
+    assert _validate_event_kdes(_event(WebhookCTEType.TRANSFORMATION, kdes)) == []

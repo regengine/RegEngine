@@ -67,7 +67,7 @@ env:
   # Both sides advertise INFLOW_CONTRACT_VERSION "2".
   # Bumped to inflow-lab main 919b5282 (SEL-335) after the Contract Pin Drift
   # check found the pin 18 commits behind; contract version is still 2.
-  INFLOW_LAB_REF: 22467473744963e75c6e460b2a7b7075aedda125  # pragma: allowlist secret
+  INFLOW_LAB_REF: 59ae980d601e599e6679a5376a04dc74fd71f8ae  # pragma: allowlist secret
   CONTRACT_TENANT_ID: 11111111-1111-1111-1111-111111111111
   CONTRACT_API_KEY: ci-inflow-contract-key  # pragma: allowlist secret
   CONTRACT_HMAC_SECRET: ci-inflow-contract-hmac-secret  # pragma: allowlist secret

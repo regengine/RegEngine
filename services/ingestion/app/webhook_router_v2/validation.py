@@ -62,7 +62,7 @@ def _authoritative_kdes(event: IngestEvent) -> dict[str, object]:
     if not _present(available.get("input_lot_codes")):
         legacy = available.get("input_traceability_lot_codes")
         if not _present(legacy):
-            legacy = event.input_traceability_lot_codes
+            legacy = getattr(event, "input_traceability_lot_codes", None)
         if _present(legacy):
             available["input_lot_codes"] = legacy
     return available
