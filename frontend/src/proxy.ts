@@ -484,6 +484,18 @@ function shouldUpgradeInsecureRequests(request: NextRequest): boolean {
     return process.env.NODE_ENV === 'production' && isHttps && !isLocalHost;
 }
 
+// One or more backslashes at the end of a path, raw or percent-encoded.
+// Over-escaped links and crawlers request paths like `/pricing%5C%5C%5C`;
+// Next.js looks for a page module with that name, throws MODULE_NOT_FOUND,
+// and answers 500 instead of serving the page.
+const TRAILING_BACKSLASHES = /(?:%5C|\\)+$/i;
+
+/** The path with trailing backslashes removed, or null when there are none. */
+export function stripTrailingBackslashes(pathname: string): string | null {
+    if (!TRAILING_BACKSLASHES.test(pathname)) return null;
+    return pathname.replace(TRAILING_BACKSLASHES, '') || '/';
+}
+
 function isReleaseDisabledApiSurface(pathname: string): boolean {
     const isGraphSurface = pathname === '/api/graph' || pathname.startsWith('/api/graph/');
     return (
@@ -537,6 +549,18 @@ export async function proxy(request: NextRequest) {
     // exists by returning a middleware-generated 403 instead of exact 404.
     if (isReleaseDisabledApiSurface(pathname)) {
         return withCsp(new NextResponse(null, { status: 404 }));
+    }
+
+    // Send `/pricing\` (and `/pricing%5C%5C%5C`) to `/pricing` instead of
+    // letting the page lookup fail with a 500. Reads only: a redirected write
+    // would be replayed somewhere the caller did not ask for.
+    if (request.method === 'GET' || request.method === 'HEAD') {
+        const cleanPath = stripTrailingBackslashes(pathname);
+        if (cleanPath !== null) {
+            const target = request.nextUrl.clone();
+            target.pathname = cleanPath;
+            return withCsp(NextResponse.redirect(target, 308));
+        }
     }
 
     // -----------------------------------------------------------------------
