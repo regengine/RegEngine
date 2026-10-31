@@ -1409,6 +1409,10 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/live_suite  # pragma: allowlist secret
           ADMIN_DATABASE_URL: postgresql://regengine_sysadmin:admin-runtime-test-password@localhost:5432/live_suite  # pragma: allowlist secret
+          # No object storage in this job. Partner uploads fail closed unless
+          # the explicit non-production bytea fallback is on, so opt in here
+          # and the CSV live tests keep exercising the runtime role.
+          REGENGINE_ALLOW_MANIFEST_BYTEA_FALLBACK: "1"
         run: |
           repo_root="$(pwd)"
           export PYTHONPATH="${repo_root}:${repo_root}/services:${PYTHONPATH}"

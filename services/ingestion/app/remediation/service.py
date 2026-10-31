@@ -109,53 +109,21 @@ def ingest_manifest(
     )
     run_id = store.create_ingestion_run(run)
 
-    db.execute(
-        # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
-        text(
-            """
-            INSERT INTO fsma.manifest_blobs
-                (ingestion_run_id, tenant_id, raw_bytes, sha256,
-                 original_filename, content_type, uploaded_by)
-            VALUES
-                (CAST(:run_id AS uuid), CAST(:tenant_id AS uuid), :raw_bytes,
-                 :sha256, :filename, :content_type, :uploaded_by)
-            """
-        ),
-        {
-            "run_id": run_id,
-            "tenant_id": tenant_id,
-            "raw_bytes": raw_bytes,
-            "sha256": sha256,
-            "filename": filename,
-            "content_type": content_type,
-            "uploaded_by": uploaded_by,
-        },
+    # First-file cutover: prefer private partner-uploads (pointer-only
+    # manifest_blobs + partner_files metadata + audit). Falls back to
+    # bytea when object storage is not configured (local/dev).
+    from ..partner_file_storage import persist_partner_upload
+
+    persist_partner_upload(
+        db,
+        tenant_id=tenant_id,
+        engagement_id=run_id,
+        content=raw_bytes,
+        filename=filename,
+        content_type=content_type,
+        uploaded_by=uploaded_by,
+        ingestion_run_id=run_id,
     )
-
-    # Optional off-box mirror; the bytea row remains the authoritative copy.
-    try:
-        from ..s3_utils import RAW_INGEST_BUCKET, is_object_storage_configured, put_bytes
-
-        if is_object_storage_configured():
-            storage_url = put_bytes(
-                RAW_INGEST_BUCKET,
-                f"remediation/{tenant_id}/{run_id}/{filename}",
-                raw_bytes,
-                content_type or "text/csv",
-            )
-            db.execute(
-                # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
-                text(
-                    """
-                    UPDATE fsma.manifest_blobs SET storage_url = :storage_url
-                    WHERE ingestion_run_id = CAST(:run_id AS uuid)
-                      AND tenant_id = CAST(:tenant_id AS uuid)
-                    """
-                ),
-                {"storage_url": storage_url, "run_id": run_id, "tenant_id": tenant_id},
-            )
-    except Exception as exc:  # pragma: no cover — mirror is best-effort
-        logger.warning("manifest_blob_mirror_failed run=%s error=%s", run_id, exc)
 
     seen_fingerprints: Dict[str, int] = {}
     records: List[Dict[str, Any]] = []
@@ -787,12 +755,14 @@ def release_record(db, *, tenant_id: str, record: Dict[str, Any], source_meta: D
 
 
 def get_run_meta(db, *, tenant_id: str, run_id: str) -> Dict[str, Any]:
+    from ..partner_file_storage import resolve_manifest_raw_bytes
+
     row = db.execute(
         # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
         text(
             """
-            SELECT b.sha256, b.original_filename, b.raw_bytes, r.status,
-                   r.record_count, r.accepted_count, r.rejected_count
+            SELECT b.sha256, b.original_filename, b.raw_bytes, b.storage_url,
+                   r.status, r.record_count, r.accepted_count, r.rejected_count
             FROM fsma.manifest_blobs b
             JOIN fsma.ingestion_runs r ON r.id = b.ingestion_run_id
             WHERE b.ingestion_run_id = CAST(:run_id AS uuid)
@@ -807,11 +777,11 @@ def get_run_meta(db, *, tenant_id: str, run_id: str) -> Dict[str, Any]:
     return {
         "sha256": row[0],
         "filename": row[1],
-        "raw_bytes": bytes(row[2]),
-        "run_status": row[3],
-        "record_count": row[4],
-        "accepted_count": row[5],
-        "rejected_count": row[6],
+        "raw_bytes": resolve_manifest_raw_bytes(raw_bytes=row[2], storage_url=row[3]),
+        "run_status": row[4],
+        "record_count": row[5],
+        "accepted_count": row[6],
+        "rejected_count": row[7],
     }
 
 
