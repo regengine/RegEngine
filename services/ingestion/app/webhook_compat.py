@@ -354,22 +354,46 @@ async def ingest_events(
             # never poisons the DB transaction for subsequent events.
             savepoint = db_session.begin_nested()
             try:
-                store_result = persistence.store_event(
-                    tenant_id=tenant_id,
-                    event_type=event.cte_type.value,
-                    traceability_lot_code=event.traceability_lot_code,
-                    product_description=event.product_description,
-                    quantity=event.quantity,
-                    unit_of_measure=event.unit_of_measure,
-                    event_timestamp=event.timestamp,
-                    source=payload.source,
-                    location_gln=event.location_gln,
-                    location_name=event.location_name,
-                    kdes=event.kdes,
-                    alerts=alerts,
-                )
+                from shared.canonical_event import normalize_webhook_event
 
-                # Canonical normalization + rule evaluation (best-effort).
+                # One shared ledger entry serves the legacy and canonical rows,
+                # same as webhook_router_v2: the legacy write hashes this
+                # canonical projection, and the canonical write below reuses
+                # its event id without appending a second hash_chain row.
+                # Normalize before store_event so hashes match. Finding A
+                # still applies: normalize failures go through
+                # handle_preeval_exception (500 under cte_only/all; under
+                # OFF, fall back to a legacy-only write with no shared link).
+                canonical = None
+                try:
+                    canonical = normalize_webhook_event(
+                        event, tenant_id, ingestion_run_id=run_id
+                    )
+                except (ImportError, ValueError, TypeError, RuntimeError) as canon_err:
+                    from shared.rules.enforcement import handle_preeval_exception  # noqa: PLC0415
+
+                    handle_preeval_exception(canon_err, where="webhook_compat")
+                    canonical = None
+
+                store_kwargs = {
+                    "tenant_id": tenant_id,
+                    "event_type": event.cte_type.value,
+                    "traceability_lot_code": event.traceability_lot_code,
+                    "product_description": event.product_description,
+                    "quantity": event.quantity,
+                    "unit_of_measure": event.unit_of_measure,
+                    "event_timestamp": event.timestamp,
+                    "source": payload.source,
+                    "location_gln": event.location_gln,
+                    "location_name": event.location_name,
+                    "kdes": event.kdes,
+                    "alerts": alerts,
+                }
+                if canonical is not None:
+                    store_kwargs["canonical_event"] = canonical
+                store_result = persistence.store_event(**store_kwargs)
+
+                # Canonical persistence + rule evaluation (best-effort).
                 # Runs BEFORE the primary savepoint commits so a rule
                 # rejection (under RULES_ENGINE_ENFORCE=cte_only|all) can
                 # roll back the primary CTE write along with it.
@@ -377,44 +401,52 @@ async def ingest_events(
                 # primary write still commits, preserving the prior
                 # best-effort behavior for tenants without seeded rules.
                 summary = None
-                canon_sp = db_session.begin_nested()
-                try:
-                    from shared.canonical_event import normalize_webhook_event
-                    from shared.canonical_persistence import CanonicalEventStore
+                if canonical is not None:
+                    canon_sp = db_session.begin_nested()
+                    try:
+                        from shared.canonical_persistence import CanonicalEventStore
 
-                    canonical = normalize_webhook_event(event, tenant_id, ingestion_run_id=run_id)
-                    canonical_store = CanonicalEventStore(db_session, dual_write=False)
-                    canonical_store.persist_event(canonical)
-                    from shared.rules_engine import RulesEngine
+                        canonical.event_id = uuid.UUID(str(store_result.event_id))
+                        canonical.prepare_for_persistence()
+                        canonical_store = CanonicalEventStore(
+                            db_session, dual_write=False, skip_chain_write=True
+                        )
+                        persist_result = canonical_store.persist_event(canonical)
+                        persisted_event_id = str(
+                            getattr(persist_result, "event_id", None) or canonical.event_id
+                        )
+                        from shared.rules_engine import RulesEngine
 
-                    engine = RulesEngine(db_session)
-                    event_data = {
-                        "event_id": str(canonical.event_id),
-                        "event_type": canonical.event_type.value,
-                        "traceability_lot_code": canonical.traceability_lot_code,
-                        "product_reference": canonical.product_reference,
-                        "quantity": canonical.quantity,
-                        "unit_of_measure": canonical.unit_of_measure,
-                        "from_facility_reference": canonical.from_facility_reference,
-                        "to_facility_reference": canonical.to_facility_reference,
-                        "from_entity_reference": canonical.from_entity_reference,
-                        "to_entity_reference": canonical.to_entity_reference,
-                        "kdes": canonical.kdes,
-                    }
-                    summary = engine.evaluate_event(event_data, persist=True, tenant_id=tenant_id)
-                    canon_sp.commit()
-                except (ImportError, ValueError, TypeError, RuntimeError) as canon_err:
-                    canon_sp.rollback()
-                    summary = None
-                    # Finding A — under enforcement modes (cte_only/all)
-                    # a canonical/rules crash must not silently accept.
-                    # ``handle_preeval_exception`` raises HTTPException(500)
-                    # in those modes; under OFF it warns and returns
-                    # so the legacy best-effort accept path remains.
-                    from shared.rules.enforcement import handle_preeval_exception  # noqa: PLC0415
+                        engine = RulesEngine(db_session)
+                        event_data = {
+                            "event_id": persisted_event_id,
+                            "event_type": canonical.event_type.value,
+                            "traceability_lot_code": canonical.traceability_lot_code,
+                            "product_reference": canonical.product_reference,
+                            "quantity": canonical.quantity,
+                            "unit_of_measure": canonical.unit_of_measure,
+                            "from_facility_reference": canonical.from_facility_reference,
+                            "to_facility_reference": canonical.to_facility_reference,
+                            "from_entity_reference": canonical.from_entity_reference,
+                            "to_entity_reference": canonical.to_entity_reference,
+                            "kdes": canonical.kdes,
+                        }
+                        summary = engine.evaluate_event(
+                            event_data, persist=True, tenant_id=tenant_id
+                        )
+                        canon_sp.commit()
+                    except (ImportError, ValueError, TypeError, RuntimeError) as canon_err:
+                        canon_sp.rollback()
+                        summary = None
+                        # Finding A — under enforcement modes (cte_only/all)
+                        # a canonical/rules crash must not silently accept.
+                        # ``handle_preeval_exception`` raises HTTPException(500)
+                        # in those modes; under OFF it warns and returns
+                        # so the legacy best-effort accept path remains.
+                        from shared.rules.enforcement import handle_preeval_exception  # noqa: PLC0415
 
-                    handle_preeval_exception(canon_err, where="webhook_compat")
-                    logger.warning("compat_canonical_write_skipped: %s", str(canon_err))
+                        handle_preeval_exception(canon_err, where="webhook_compat")
+                        logger.warning("compat_canonical_write_skipped: %s", str(canon_err))
 
                 # Enforcement: if RULES_ENGINE_ENFORCE is set and the
                 # summary meets the reject policy, roll back the outer
