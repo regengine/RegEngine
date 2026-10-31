@@ -90,13 +90,14 @@ class Facility:
     gln: str
     name: str
     address: Optional[str] = None
+    phone: Optional[str] = None
     facility_type: Optional[str] = None
 
     @classmethod
     def from_api(cls, payload: Dict[str, Any]) -> "Facility":
         """Build a ``Facility`` from a facility object in a trace response.
 
-        Trace results carry ``gln``/``name``/``address``/``facility_type``
+        Trace results carry ``gln``/``name``/``address``/``phone``/``facility_type``
         with no separate identifier, so ``id`` falls back to the GLN. Keys
         the SDK does not model are ignored.
         """
@@ -106,6 +107,7 @@ class Facility:
             gln=gln,
             name=_first(payload, "name", default=""),
             address=_first(payload, "address"),
+            phone=_first(payload, "phone"),
             facility_type=_first(payload, "facility_type", "type"),
         )
 

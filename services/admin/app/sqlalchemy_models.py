@@ -420,6 +420,7 @@ class SupplierFacilityModel(Base):
     city = Column(String, nullable=False)
     state = Column(String, nullable=False)
     postal_code = Column(String, nullable=False)
+    phone = Column(String, nullable=True)  # A-2190 / 21 CFR 1.1310
     fda_registration_number = Column(String, nullable=True)
     roles = Column(JSONType(), nullable=False, default=list)
     # Hours after a CTE's event time the supplier agreed to send it. NULL: none.
