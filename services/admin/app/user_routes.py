@@ -114,6 +114,15 @@ async def list_users(
     if not tenant_id:
         raise HTTPException(status_code=400, detail="Tenant context required")
 
+    # public.users FORCE RLS (users_self_or_admin) only exposes the caller's own
+    # row unless regengine.is_sysadmin is armed. memberships already permit
+    # tenant-scoped peer SELECT, so without this arm the UserModel join silently
+    # drops every co-member and the directory returns only the caller. Permission
+    # Checker("users.read") already authorized this request; keep the query
+    # scoped by MembershipModel.tenant_id so the arm does not widen tenants.
+    # set_admin_context(true) is a no-op under SQLite.
+    TenantContext.set_admin_context(db, True)
+
     # Count total
     count_stmt = (
         select(func.count())
