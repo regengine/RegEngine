@@ -1,7 +1,7 @@
-"""v141 -- supplier_facilities.phone for 21 CFR 1.1310 (A-2190).
+"""v142 -- supplier_facilities.phone for 21 CFR 1.1310 (A-2190).
 
 Revision ID: e5cd73f8d1bb
-Revises: b8c1e4f2a901
+Revises: 08c7cf36ddbe  (#3717 v141 traceability_events append-only)
 Create Date: 2026-10-31
 
 Adds an optional business phone on supplier_facilities so a Facility location
@@ -17,7 +17,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "e5cd73f8d1bb"  # pragma: allowlist secret
-down_revision: Union[str, Sequence[str], None] = "b8c1e4f2a901"  # pragma: allowlist secret
+down_revision: Union[str, Sequence[str], None] = "08c7cf36ddbe"  # pragma: allowlist secret
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

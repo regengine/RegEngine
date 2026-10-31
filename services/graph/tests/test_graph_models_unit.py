@@ -346,12 +346,25 @@ def test_facility_location_description_complete_with_name_phone_address():
         phone="+1-202-555-0147",
     )
     assert complete.is_location_description_complete is True
+    assert complete.has_unresolved_gln is False
 
     missing_phone = Facility(name="Valley Fresh Farms", address="100 Farm Rd")
     assert missing_phone.is_location_description_complete is False
 
-    gln_stand_in = Facility(gln="0614141000005", name="")
-    assert gln_stand_in.is_location_description_complete is True
+    # Bare / unresolved GLN is incomplete (Food Safety Lens A-2190): flag only.
+    bare_gln = Facility(gln="0614141000005", name="")
+    assert bare_gln.is_location_description_complete is False
+    assert bare_gln.has_unresolved_gln is True
+
+    # GLN counts only once the master row carries name + phone + address.
+    resolved_gln = Facility(
+        gln="0614141000005",
+        name="Valley Fresh Farms",
+        address="100 Farm Rd",
+        phone="+1-202-555-0147",
+    )
+    assert resolved_gln.is_location_description_complete is True
+    assert resolved_gln.has_unresolved_gln is False
 
     city_state = Facility(
         name="Cooler Co",

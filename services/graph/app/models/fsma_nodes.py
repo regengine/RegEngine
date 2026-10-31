@@ -389,14 +389,15 @@ class Facility:
     def is_location_description_complete(self) -> bool:
         """Whether this facility satisfies 21 CFR 1.1310 location description.
 
-        Complete when a GLN is present (allowed stand-in), or when business
-        name, phone, and a physical address (street address, or city+state)
-        are all present. Ingest-path location completeness for free-text KDEs
-        lives in shared/fsma_validation (see PR #3718); this property covers
-        the Neo4j Facility node itself (A-2190 fix 4).
+        Complete only with business name + phone + physical address
+        (street address, or city+state). A GLN is not a stand-in by itself:
+        it counts only when the location master row has already resolved to
+        those three fields on this Facility node. A bare / unresolved GLN
+        leaves the description incomplete (flag; ingest must not reject —
+        A-2170). A TLC source reference is never a stand-in on Facility
+        (it only substitutes for the TLC source location field on an event
+        at ingest). See Food Safety Lens answers for A-2190 / PR #3771.
         """
-        if (self.gln or "").strip():
-            return True
         name_ok = bool((self.name or "").strip())
         phone_ok = bool((self.phone or "").strip())
         address_ok = bool(
@@ -404,6 +405,16 @@ class Facility:
             or ((self.city or "").strip() and (self.state or "").strip())
         )
         return name_ok and phone_ok and address_ok
+
+    @property
+    def has_unresolved_gln(self) -> bool:
+        """True when a GLN is stored but name+phone+address are incomplete.
+
+        Flag for operators / export; does not reject the record (A-2170).
+        """
+        if not (self.gln or "").strip():
+            return False
+        return not self.is_location_description_complete
 
     @property
     def node_properties(self) -> Dict[str, Any]:
