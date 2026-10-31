@@ -1,0 +1,267 @@
+[
+  {
+    "id": "HV01",
+    "family": "compound_requirements_complete",
+    "state": {
+      "synthetic": true,
+      "claim_id": "HV01",
+      "hypothesis_to_verify": "Kelmora's application satisfies every requirement for a blue archive pass under the current pass policy.",
+      "curated_evidence_sources": [
+        {"source_id": "P01", "scope": "Current blue archive pass policy", "excerpt": "An application satisfies the blue archive pass requirements if and only if it includes a signed request, a sponsor code, and a completed orientation record. There are no other requirements."},
+        {"source_id": "R01", "scope": "Final inspection of Kelmora's application", "excerpt": "The submitted application contains a signed request, sponsor code SC-48, and an orientation record marked completed."}
+      ]
+    },
+    "expected_verdict": "supported",
+    "rationale": "The policy gives an exhaustive three-part test, and the inspection establishes all three parts for the named application.",
+    "discriminating_fact": "Every required item is affirmatively documented."
+  },
+  {
+    "id": "HV02",
+    "family": "optional_and_negated_requirements",
+    "state": {
+      "synthetic": true,
+      "claim_id": "HV02",
+      "hypothesis_to_verify": "Under the operative rules, Tavulen's kiosk is ready to open with its inspection certificate and operator roster, even though it has neither a welcome banner nor a guest ledger.",
+      "curated_evidence_sources": [
+        {"source_id": "P02", "scope": "Operative kiosk opening rules", "excerpt": "A kiosk is ready to open when it has a current inspection certificate and a filed operator roster. These are the only prerequisites. A welcome banner is optional. A guest ledger is not required."},
+        {"source_id": "R02", "scope": "Tavulen kiosk opening inspection", "excerpt": "The certificate is current and the operator roster is filed. No welcome banner or guest ledger is present."}
+      ]
+    },
+    "expected_verdict": "supported",
+    "rationale": "Both required prerequisites are met; the policy explicitly removes the two absent items from the prerequisites.",
+    "discriminating_fact": "The missing banner is optional and the missing ledger is expressly not required."
+  },
+  {
+    "id": "HV03",
+    "family": "limited_group_and_time_disjoint_opposition",
+    "state": {
+      "synthetic": true,
+      "claim_id": "HV03",
+      "hypothesis_to_verify": "All three Sorevik research-group lockers were sealed during the 14:00 inspection on Day 12.",
+      "curated_evidence_sources": [
+        {"source_id": "R03A", "scope": "Day 12, 14:00, Sorevik research group", "excerpt": "The group's complete locker inventory is R1, R2, and R3. At 14:00 each of R1, R2, and R3 had an intact seal."},
+        {"source_id": "R03B", "scope": "Day 12, 14:00, Sorevik visitor group", "excerpt": "Visitor lockers V1 and V2 were unsealed. These lockers are assigned only to the visitor group."},
+        {"source_id": "R03C", "scope": "Day 11, 14:00, Sorevik research group", "excerpt": "Research locker R2 was unsealed at this inspection."}
+      ]
+    },
+    "expected_verdict": "supported",
+    "rationale": "The complete inventory and inspection establish the claim at its specified group and time. The unsealed lockers belong to another group or another day.",
+    "discriminating_fact": "The opposing observations do not share both the claimed group and the claimed time."
+  },
+  {
+    "id": "HV04",
+    "family": "sufficient_condition_revision_distractions",
+    "state": {
+      "synthetic": true,
+      "claim_id": "HV04",
+      "hypothesis_to_verify": "At 10:00 on Day 21, Bristava's parcel qualifies for the priority lane.",
+      "curated_evidence_sources": [
+        {"source_id": "P04", "scope": "Priority policy edition 4, effective throughout Day 21", "excerpt": "A valid amber stamp is sufficient for priority-lane qualification. No weight check or supervisor signature is required for a parcel with that stamp."},
+        {"source_id": "R04", "scope": "Bristava parcel inspection, Day 21 at 10:00", "excerpt": "The parcel bears a valid amber stamp."},
+        {"source_id": "P04OLD", "scope": "Edition 3, expired at the end of Day 20", "excerpt": "Amber stamps do not confer priority-lane qualification."},
+        {"source_id": "P04NEXT", "scope": "Edition 5, scheduled to start on Day 22", "excerpt": "An amber stamp must be accompanied by a supervisor signature for priority-lane qualification."}
+      ]
+    },
+    "expected_verdict": "supported",
+    "rationale": "The edition applicable at the claimed time makes the documented stamp sufficient. The earlier and later editions are outside that time.",
+    "discriminating_fact": "The operative policy uses a sufficient condition that the parcel meets."
+  },
+  {
+    "id": "HV05",
+    "family": "compound_explicit_failed_requirement",
+    "state": {
+      "synthetic": true,
+      "claim_id": "HV05",
+      "hypothesis_to_verify": "Wendalis has completed all prerequisites for receiving a green studio key today.",
+      "curated_evidence_sources": [
+        {"source_id": "P05", "scope": "Today's green studio key requirements", "excerpt": "Receiving a green studio key requires both a passed safety briefing and a paid deposit. Both must be completed before the key can be issued."},
+        {"source_id": "R05", "scope": "Wendalis's record at today's key decision", "excerpt": "Safety briefing: passed. Deposit: unpaid; no payment has been received."}
+      ]
+    },
+    "expected_verdict": "contradicted",
+    "rationale": "The applicable policy requires payment, and the current record explicitly states that the deposit is unpaid.",
+    "discriminating_fact": "A mandatory condition is explicitly false, rather than merely unmentioned."
+  },
+  {
+    "id": "HV06",
+    "family": "exhaustive_account_excludes_claim",
+    "state": {
+      "synthetic": true,
+      "claim_id": "HV06",
+      "hypothesis_to_verify": "The completed Dravessa equipment case contains a copper calibration disk.",
+      "curated_evidence_sources": [
+        {"source_id": "R06", "scope": "Final inventory of the sealed Dravessa equipment case", "excerpt": "The following is the complete and exhaustive list of objects inside the case after packing: one glass prism, two ceramic spacers, and one linen cloth. No other objects are inside."}
+      ]
+    },
+    "expected_verdict": "contradicted",
+    "rationale": "The inventory is explicitly exhaustive and excludes any objects beyond its listed contents, none of which is a copper calibration disk.",
+    "discriminating_fact": "The source closes the inventory with 'No other objects are inside.'"
+  },
+  {
+    "id": "HV07",
+    "family": "necessary_condition_violated",
+    "state": {
+      "synthetic": true,
+      "claim_id": "HV07",
+      "hypothesis_to_verify": "Orpelun's cart is eligible to cross the north bridge at noon today.",
+      "curated_evidence_sources": [
+        {"source_id": "P07", "scope": "North bridge eligibility rule for today", "excerpt": "A cart may be eligible to cross the north bridge only if it has a working brake. Having a working brake alone does not establish eligibility."},
+        {"source_id": "R07", "scope": "Orpelun cart inspection at noon today", "excerpt": "The cart's only brake is broken and does not work. The cart has no alternative braking mechanism."}
+      ]
+    },
+    "expected_verdict": "contradicted",
+    "rationale": "Eligibility implies a working brake, and the inspection explicitly establishes the absence of a working brake at the claimed time.",
+    "discriminating_fact": "Failure of a necessary condition rules out eligibility."
+  },
+  {
+    "id": "HV08",
+    "family": "operative_revision_over_old_and_future",
+    "state": {
+      "synthetic": true,
+      "claim_id": "HV08",
+      "hypothesis_to_verify": "At noon on Day 8, a silver token is accepted for entry to the Halqerin observatory.",
+      "curated_evidence_sources": [
+        {"source_id": "P08OLD", "scope": "Entry policy edition 1, effective Days 1 through 7", "excerpt": "Silver tokens are accepted for observatory entry."},
+        {"source_id": "P08", "scope": "Entry policy edition 2, effective for all of Days 8 through 10", "excerpt": "Silver tokens are not accepted for observatory entry. This edition replaces edition 1 for its effective period."},
+        {"source_id": "P08NEXT", "scope": "Entry policy edition 3, effective starting Day 11", "excerpt": "Silver tokens are accepted for observatory entry."}
+      ]
+    },
+    "expected_verdict": "contradicted",
+    "rationale": "Only edition 2 applies at noon on Day 8, and it explicitly says silver tokens are not accepted.",
+    "discriminating_fact": "The acceptance statements apply before and after, but not during, the claimed period."
+  },
+  {
+    "id": "HV09",
+    "family": "partial_excerpt_missing_compound_item",
+    "state": {
+      "synthetic": true,
+      "claim_id": "HV09",
+      "hypothesis_to_verify": "The Fenquara field kit contains every item required for a complete survey kit.",
+      "curated_evidence_sources": [
+        {"source_id": "P09", "scope": "Current survey-kit requirements", "excerpt": "A complete survey kit must contain a measuring cord, a sighting frame, and a brass marker."},
+        {"source_id": "R09", "scope": "Excerpt from Fenquara field-kit packing record", "excerpt": "This excerpt reproduces only the first two lines of a longer contents list: measuring cord; sighting frame. The remaining lines are not included in this excerpt."}
+      ]
+    },
+    "expected_verdict": "insufficient",
+    "rationale": "The excerpt establishes two required items but neither establishes nor excludes the brass marker because the contents list continues outside the excerpt.",
+    "discriminating_fact": "The inventory is explicitly partial, so its omission cannot establish that the required marker is absent."
+  },
+  {
+    "id": "HV10",
+    "family": "necessary_not_sufficient",
+    "state": {
+      "synthetic": true,
+      "claim_id": "HV10",
+      "hypothesis_to_verify": "Jaskovel is approved to supervise the east workshop today.",
+      "curated_evidence_sources": [
+        {"source_id": "P10", "scope": "Today's workshop supervision policy excerpt", "excerpt": "A person can be approved to supervise the east workshop only if their induction is complete. This clause states a prerequisite; it does not specify all approval criteria or record individual approvals."},
+        {"source_id": "R10", "scope": "Jaskovel's induction record today", "excerpt": "Induction status: complete."}
+      ]
+    },
+    "expected_verdict": "insufficient",
+    "rationale": "Completion satisfies a necessary condition but does not establish approval, and no source states that approval was granted or denied.",
+    "discriminating_fact": "The implication runs from approval to induction completion, not from completion to approval."
+  },
+  {
+    "id": "HV11",
+    "family": "unknown_rule_applicability",
+    "state": {
+      "synthetic": true,
+      "claim_id": "HV11",
+      "hypothesis_to_verify": "Under today's rules, Myrtasen must wear a white wristband to enter the rehearsal room.",
+      "curated_evidence_sources": [
+        {"source_id": "P11", "scope": "Today's rehearsal-room entry rules", "excerpt": "All and only temporary performers must wear a white wristband to enter the rehearsal room. Permanent performers may enter without one."},
+        {"source_id": "R11", "scope": "Myrtasen's booking record for today", "excerpt": "Myrtasen is booked as a performer. The temporary-or-permanent classification field is blank, and this record does not supply that classification elsewhere."}
+      ]
+    },
+    "expected_verdict": "insufficient",
+    "rationale": "The rules distinguish two performer classes with different wristband obligations, but the evidence does not identify Myrtasen's class.",
+    "discriminating_fact": "The fact needed to choose the applicable rule is unavailable."
+  },
+  {
+    "id": "HV12",
+    "family": "compound_condition_unresolved_current_time",
+    "state": {
+      "synthetic": true,
+      "claim_id": "HV12",
+      "hypothesis_to_verify": "At 15:00 today, the Drelvona water sample meets both conditions for release.",
+      "curated_evidence_sources": [
+        {"source_id": "P12", "scope": "Release criteria at 15:00 today", "excerpt": "A sample meets the conditions for release if and only if its seal is intact and its temperature at the time of release is below 8 degrees."},
+        {"source_id": "R12A", "scope": "Drelvona sample inspection at 15:00 today", "excerpt": "The seal is intact. Temperature was not measured during this inspection."},
+        {"source_id": "R12B", "scope": "Drelvona sample measurement at 09:00 today", "excerpt": "Temperature: 6 degrees. Storage conditions after this measurement are not recorded."}
+      ]
+    },
+    "expected_verdict": "insufficient",
+    "rationale": "The seal condition is established at 15:00, but the earlier temperature does not establish the temperature at release. No source establishes that the later temperature meets or fails the threshold.",
+    "discriminating_fact": "The essential temperature condition is unresolved at the specific claimed time."
+  },
+  {
+    "id": "HV13",
+    "family": "same_scope_incompatible_observations",
+    "state": {
+      "synthetic": true,
+      "claim_id": "HV13",
+      "hypothesis_to_verify": "The Amsorin vault door was locked at precisely 18:00 on Day 4.",
+      "curated_evidence_sources": [
+        {"source_id": "R13A", "scope": "Official inspection register A, Day 4 at precisely 18:00", "excerpt": "Amsorin vault door: locked. This is the current certified reading for that instant."},
+        {"source_id": "R13B", "scope": "Official inspection register B, Day 4 at precisely 18:00", "excerpt": "Amsorin vault door: unlocked. This is the current certified reading for that instant."},
+        {"source_id": "M13", "scope": "Register authority rules", "excerpt": "Registers A and B have equal authority. Neither reading has been corrected or withdrawn, and no priority rule selects one register over the other."}
+      ]
+    },
+    "expected_verdict": "conflicting",
+    "rationale": "Equal-authority current records assert opposite door states at the exact same instant, with no correction or priority rule resolving them.",
+    "discriminating_fact": "The incompatibility concerns one door at one instant, not different observation times."
+  },
+  {
+    "id": "HV14",
+    "family": "same_policy_requirement_optional_incompatibility",
+    "state": {
+      "synthetic": true,
+      "claim_id": "HV14",
+      "hypothesis_to_verify": "The current Velcrane exhibit-entry policy requires a printed program from every adult visitor.",
+      "curated_evidence_sources": [
+        {"source_id": "P14A", "scope": "Current authorized exhibit-entry policy copy A, edition 6", "excerpt": "Every adult visitor must present a printed program as a condition of entry."},
+        {"source_id": "P14B", "scope": "Current authorized exhibit-entry policy copy B, edition 6", "excerpt": "A printed program is optional for every adult visitor and is not a condition of entry."},
+        {"source_id": "M14", "scope": "Publication status of edition 6", "excerpt": "Both copies are authorized for the same exhibit and dates. Neither supersedes the other; both retain equal policy authority and no controlling copy is designated."}
+      ]
+    },
+    "expected_verdict": "conflicting",
+    "rationale": "The equally authoritative operative copies make the same item mandatory and optional for the same population and period.",
+    "discriminating_fact": "The optionality statement is applicable to exactly the visitors covered by the mandatory statement."
+  },
+  {
+    "id": "HV15",
+    "family": "overlapping_group_time_true_incompatibility",
+    "state": {
+      "synthetic": true,
+      "claim_id": "HV15",
+      "hypothesis_to_verify": "Every member of the Pellunex evening cohort attended the Day 9 drill.",
+      "curated_evidence_sources": [
+        {"source_id": "R15A", "scope": "Final Day 9 drill report for Pellunex evening cohort", "excerpt": "All 12 members of the evening cohort attended the drill, including member E7."},
+        {"source_id": "R15B", "scope": "Final Day 9 drill attendance register for Pellunex evening cohort", "excerpt": "E7 was a member of the evening cohort on Day 9. E7 did not attend any portion of the Day 9 drill."},
+        {"source_id": "M15", "scope": "Authority of Day 9 attendance records", "excerpt": "The final report and final register have equal authority. Both remain current; neither has a correction, and there is no rule preferring one."}
+      ]
+    },
+    "expected_verdict": "conflicting",
+    "rationale": "One current record explicitly includes E7 among all attendees, while another current record explicitly excludes E7 from attendance in the same cohort and drill.",
+    "discriminating_fact": "The named nonattendee is expressly within the same claimed cohort and event."
+  },
+  {
+    "id": "HV16",
+    "family": "compound_requirement_conflicting_current_fact",
+    "state": {
+      "synthetic": true,
+      "claim_id": "HV16",
+      "hypothesis_to_verify": "As of the final review at 16:00 on Day 17, Quervessa's package meets all conditions for dispatch.",
+      "curated_evidence_sources": [
+        {"source_id": "P16", "scope": "Dispatch conditions at the Day 17 final review", "excerpt": "A package meets all dispatch conditions if and only if it has both a readable address and a signed release."},
+        {"source_id": "R16A", "scope": "Current final-review record A, Quervessa package, Day 17 at 16:00", "excerpt": "The address is readable and the release is signed."},
+        {"source_id": "R16B", "scope": "Current final-review record B, Quervessa package, Day 17 at 16:00", "excerpt": "The address is readable and the release is unsigned."},
+        {"source_id": "M16", "scope": "Status of Quervessa final-review records", "excerpt": "Records A and B describe the same release document at the same review instant. They have equal authority, neither supersedes the other, and no corrected record has been issued."}
+      ]
+    },
+    "expected_verdict": "conflicting",
+    "rationale": "The address condition is consistent, but equally authoritative records disagree on whether the same release is signed at the claimed instant, producing both support and refutation of the compound claim.",
+    "discriminating_fact": "A required component has explicit incompatible values in equally current same-scope records."
+  }
+]

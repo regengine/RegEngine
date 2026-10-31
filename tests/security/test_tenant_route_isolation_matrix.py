@@ -15,11 +15,11 @@ the real production route table in process:
    (a permission 403 or validation 422 before the check, or scoped data
    served without echoing tenant B).
 4. Cross-tenant claims: every tenant-scoped API-key operation is probed with
-   a conflicting ``?tenant_id``, ``X-Tenant-ID``, and (for writes) JSON
-   ``tenant_id`` for tenant B. Routes that evaluate claims must deny with a
-   mismatch code; probes for routes that never evaluate the claim are
-   pinned per channel in ``CLAIM_UNENFORCED_PROBES`` so a change in either
-   direction fails loudly.
+   a conflicting ``?tenant_id``, ``X-Tenant-ID``, and (for writes) JSON or
+   multipart form ``tenant_id`` for tenant B. Routes that evaluate claims
+   must deny with a mismatch code; probes for routes that never evaluate
+   the claim are pinned per channel in ``CLAIM_UNENFORCED_PROBES`` so a
+   change in either direction fails loudly.
 5. Cross-tenant query/header claim on one monitoring route: handler-level
    tenant resolution (``services/shared/tenant_context.py``
    ``resolve_tenant_context``, surfaced through ``require_tenant_context``)
@@ -649,7 +649,8 @@ def test_conflicting_tenant_claim_never_serves_other_tenant(matrix_client, monke
     """A tenant A key with a tenant B claim is denied or serves no B data.
 
     Every tenant-scoped API-key operation is probed with a conflicting
-    ``?tenant_id``, ``X-Tenant-ID``, and (for writes) JSON ``tenant_id``.
+    ``?tenant_id``, ``X-Tenant-ID``, and (for writes) JSON or multipart form
+    ``tenant_id``.
     Routes that evaluate claims must answer with the mismatch denial (same
     rule as the path test). Routes that never evaluate the claim are pinned
     in ``CLAIM_UNENFORCED_OPERATIONS``: anything but a mismatch denial
@@ -675,7 +676,26 @@ def test_conflicting_tenant_claim_never_serves_other_tenant(matrix_client, monke
             # resolve_tenant_context). A route that enforces one must
             # enforce the other through the same claim collectors.
             probes.append(("header", {}, {"X-Tenant-ID": TENANT_B, "X-RegEngine-Tenant-ID": TENANT_B}))
-            if operation["method"] in {"POST", "PUT", "PATCH", "DELETE"}:
+            if operation["operation"] == "csv:POST:/api/v1/ingest/csv/diagnostic":
+                # This route binds its tenant claim from multipart form data.
+                # A JSON body fails file validation before reaching that boundary.
+                probes.append(
+                    (
+                        "body",
+                        {
+                            "data": {"tenant_id": TENANT_B},
+                            "files": {
+                                "file": (
+                                    "synthetic.csv",
+                                    b"cte_type,traceability_lot_code\nharvesting,synthetic-lot\n",
+                                    "text/csv",
+                                )
+                            },
+                        },
+                        {},
+                    )
+                )
+            elif operation["method"] in {"POST", "PUT", "PATCH", "DELETE"}:
                 import json as json_module
 
                 raw = json_module.dumps({"tenant_id": TENANT_B}).encode("utf-8")

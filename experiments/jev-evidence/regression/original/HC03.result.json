@@ -1,0 +1,12 @@
+{
+  "expected": "contradicted",
+  "actual": {
+    "claim_id": "HC03",
+    "verdict": "contradicted",
+    "reason": "explicit_incompatible_fact",
+    "policy_status": "uncalibrated",
+    "review_required": false,
+    "model": "jev-1.13.0"
+  },
+  "matches": true
+}
