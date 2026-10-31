@@ -111,6 +111,13 @@ if [[ "$BACKEND_URL" != https://* ]] && [[ ! "$BACKEND_URL" =~ $LOOPBACK_HTTP_RE
   echo "error: BACKEND_URL must be an https:// URL (plain http:// is accepted for loopback only)." >&2
   exit 1
 fi
+# A proxy named by http_proxy or ALL_PROXY must not sit between this script
+# and a loopback health endpoint, or it could forge the body. TLS protects the
+# https case end to end, so a corporate proxy stays usable there.
+CURL_PROXY_ARGS=()
+if [[ "$BACKEND_URL" =~ $LOOPBACK_HTTP_RE ]]; then
+  CURL_PROXY_ARGS=(--noproxy '*')
+fi
 TIMEOUT_SECONDS="${RAILWAY_DEPLOY_TIMEOUT_SECONDS:-900}"
 POLL_SECONDS="${RAILWAY_DEPLOY_POLL_SECONDS:-15}"
 
@@ -251,7 +258,7 @@ echo "waiting up to ${TIMEOUT_SECONDS}s for ${BACKEND_URL}/health to report ${EX
 while [ "$SECONDS" -lt "$deadline" ]; do
   attempt=$(( attempt + 1 ))
   body=$(mktemp)
-  last_code=$(curl -sS --max-time 20 -o "$body" -w '%{http_code}' "${BACKEND_URL}/health" || true)
+  last_code=$(curl -sS --max-time 20 ${CURL_PROXY_ARGS[@]+"${CURL_PROXY_ARGS[@]}"} -o "$body" -w '%{http_code}' "${BACKEND_URL}/health" || true)
   last_code="${last_code:-000}"
 
   if [ "$last_code" = "200" ]; then

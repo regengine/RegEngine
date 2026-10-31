@@ -70,7 +70,7 @@ out=""
 url=""
 while [ $# -gt 0 ]; do
   case "$1" in
-    -o|-w|--max-time) out_or_opt="$1"; [ "$out_or_opt" = "-o" ] && out="$2"; shift 2 ;;
+    -o|-w|--max-time|--noproxy) out_or_opt="$1"; [ "$out_or_opt" = "-o" ] && out="$2"; shift 2 ;;
     -*) shift ;;
     *) url="$1"; shift ;;
   esac
@@ -304,6 +304,22 @@ def test_stamps_head_sha_for_the_upload_and_restores_the_placeholder(harness: _H
     assert "fake-token-must-not-be-printed" not in output
     assert "svc-from-env" not in output and "env-from-env" not in output
     assert "proj-from-env" not in output
+
+
+def test_loopback_health_check_ignores_proxy_variables(harness: _Harness) -> None:
+    # A proxy from the environment must not sit between the script and the
+    # loopback /health it trusts. Port 1 is closed, so a proxied request would
+    # fail with status 000 and the run would time out instead of passing.
+    harness.health.sha = harness.head()
+
+    result = harness.run(
+        http_proxy="http://127.0.0.1:1",
+        HTTP_PROXY="http://127.0.0.1:1",
+        ALL_PROXY="http://127.0.0.1:1",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert f"Deployed commit matches: {harness.head()}" in result.stdout
 
 
 def test_reads_service_and_environment_from_railway_status_when_unset(harness: _Harness) -> None:
