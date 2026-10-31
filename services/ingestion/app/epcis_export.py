@@ -19,6 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from shared.database import get_db_safe
+from shared.epcis_lot_identity import is_full_class_uri, lot_token_only
 from shared.fsma_validation import normalize_gtin, verify_gs1_check_digit
 from shared.tenant_context import TenantContext
 from sqlalchemy import text
@@ -332,13 +333,20 @@ def _valid_class_uri(value: object) -> bool:
 def _epc_class(row: dict) -> str | None:
     """Use an existing class URI, product_id, or a GTIN Digital Link.
 
+    SEL-598 / H2: if ``traceability_lot_code`` (or ``epc_class`` /
+    ``product_id``) already holds a full LGTIN / Digital Link, emit it
+    unchanged. Never pass a full class URI as the ``{lot}`` argument when
+    rebuilding from GTIN + lot token.
+
     GTIN/GLN digits do not reveal the company-prefix split required by EPC
-    URNs. A lot code alone cannot identify an EPC class — callers must
+    URNs. A lot code alone cannot identify an EPC class: callers must
     persist ``epc_class``, ``product_id`` (class URI), ``gtin``, or an
     embedded ``epcis_document_json`` quantity class.
     """
-    for key in ("epc_class", "product_id"):
+    for key in ("epc_class", "product_id", "traceability_lot_code", "canonical_epc_class"):
         value = _kde_scalar(row.get(key))
+        # Strict export gate only — do not emit URIs the lenient parser accepts
+        # but `_valid_class_uri` rejects (Codex P2 / CodeRabbit).
         if _valid_class_uri(value):
             return value
     raw = row.get("epcis_document_json")
@@ -354,7 +362,16 @@ def _epc_class(row: dict) -> str | None:
         except (TypeError, ValueError):
             pass
     gtin_raw = _kde_scalar(row.get("gtin")) or _kde_scalar(row.get("product_id"))
-    lot = _kde_scalar(row.get("traceability_lot_code"))
+    raw_lot = _kde_scalar(row.get("lot_token")) or _kde_scalar(row.get("traceability_lot_code"))
+    # Never pass a full URI as the lot argument (SEL-598).
+    lot = lot_token_only(raw_lot) or (
+        raw_lot
+        if raw_lot
+        and not is_full_class_uri(raw_lot)
+        and "://" not in raw_lot
+        and not str(raw_lot).lower().startswith("urn:epc:")
+        else None
+    )
     digits = re.sub(r"\D", "", gtin_raw)
     if digits and lot:
         try:
