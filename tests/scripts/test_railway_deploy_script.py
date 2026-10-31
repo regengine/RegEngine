@@ -319,12 +319,22 @@ def test_reads_service_and_environment_from_railway_status_when_unset(harness: _
     assert "svc-from-status" not in result.stdout + result.stderr
 
 
-def test_refuses_a_plain_http_backend_url_that_is_not_loopback(harness: _Harness) -> None:
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://health.example.invalid:8080",
+        # Loopback text as user information; the real host is the attacker's.
+        "http://127.0.0.1:80@health.example.invalid",
+        "http://localhost@health.example.invalid",
+        "http://[::1]:80@health.example.invalid",
+    ],
+)
+def test_refuses_a_plain_http_backend_url_that_is_not_loopback(harness: _Harness, url: str) -> None:
     # The /health body is trusted for the shipped SHA, so a public URL must be
     # https; the loopback http URL the other tests use stays allowed.
     harness.health.sha = harness.head()
 
-    result = harness.run(BACKEND_URL="http://health.example.invalid:8080")
+    result = harness.run(BACKEND_URL=url)
 
     assert result.returncode != 0
     assert "BACKEND_URL must be an https:// URL" in result.stderr

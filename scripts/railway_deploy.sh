@@ -101,17 +101,16 @@ BACKEND_URL_SET=1
 [ -n "${BACKEND_URL:-}" ] || BACKEND_URL_SET=0
 BACKEND_URL="${BACKEND_URL:-$DEFAULT_BACKEND_URL}"
 # The /health body is trusted for the shipped SHA, so it has to arrive over
-# TLS. Plain http is allowed only to loopback (what the tests use).
-case "$BACKEND_URL" in
-  https://*) ;;
-  http://127.0.0.1 | http://127.0.0.1:* | http://127.0.0.1/* | \
-  http://localhost | http://localhost:* | http://localhost/* | \
-  "http://[::1]" | "http://[::1]:"* | "http://[::1]/"*) ;;
-  *)
-    echo "error: BACKEND_URL must be an https:// URL (plain http:// is accepted for loopback only)." >&2
-    exit 1
-    ;;
-esac
+# TLS. Plain http is allowed only to loopback (what the tests use). The
+# loopback host may be followed only by a decimal port and then the end of
+# the URL or a path: a glob such as `http://127.0.0.1:*` would also accept
+# `http://127.0.0.1:80@attacker.example`, where the loopback text is user
+# information and the real host is the attacker's.
+LOOPBACK_HTTP_RE='^http://(127\.0\.0\.1|localhost|\[::1\])(:[0-9]+)?(/.*)?$'
+if [[ "$BACKEND_URL" != https://* ]] && [[ ! "$BACKEND_URL" =~ $LOOPBACK_HTTP_RE ]]; then
+  echo "error: BACKEND_URL must be an https:// URL (plain http:// is accepted for loopback only)." >&2
+  exit 1
+fi
 TIMEOUT_SECONDS="${RAILWAY_DEPLOY_TIMEOUT_SECONDS:-900}"
 POLL_SECONDS="${RAILWAY_DEPLOY_POLL_SECONDS:-15}"
 
