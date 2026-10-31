@@ -870,6 +870,24 @@ class SchedulerService:
             interval_seconds=self.settings.remediation_outbox_drain_interval_seconds,
         )
 
+        # Partner-file 30-day retention (SEL-549 first-file): delete objects
+        # whose delete_after has passed, append partner_file_deletion_log,
+        # and audit. Hourly by default.
+        self._add_tracked_job(
+            self.run_partner_file_retention,
+            job_id="partner_file_retention",
+            trigger=IntervalTrigger(
+                seconds=self.settings.partner_file_retention_interval_seconds,
+            ),
+            name="Partner File 30-Day Retention",
+            max_instances=1,
+        )
+        logger.info(
+            "job_scheduled",
+            job_id="partner_file_retention",
+            interval_seconds=self.settings.partner_file_retention_interval_seconds,
+        )
+
         # WS-8 (#2709): replay dead-lettered rule evaluations into
         # fsma.rule_evaluations so the audit trail self-heals.
         self._add_tracked_job(
@@ -919,6 +937,33 @@ class SchedulerService:
             raise
         if totals["claimed"]:
             logger.info("remediation_notification_drain_tick", **totals)
+
+    def run_partner_file_retention(self) -> None:
+        """Delete due partner uploads (delete_after passed) and audit.
+
+        Discovers tenants via ``list_maintenance_tenant_ids`` (sysadmin), then
+        sets the tenant GUC per tenant / row so RLS on partner_files and
+        deletion_log holds.
+        """
+        try:
+            from shared.database import SessionLocal  # noqa: PLC0415
+
+            from services.ingestion.app.partner_file_retention import (  # noqa: PLC0415
+                run_retention_pass,
+            )
+
+            db = SessionLocal()
+            try:
+                totals = run_retention_pass(db)
+                db.commit()
+            finally:
+                db.close()
+        except Exception as exc:
+            logger.exception("partner_file_retention_failed", error=str(exc))
+            raise
+        if totals.get("due"):
+            logger.info("partner_file_retention_tick", **totals)
+
 
     def replay_rule_eval_deadletter(self) -> None:
         """Replay dead-lettered rule evaluations once (WS-8, #2709).
