@@ -89,6 +89,7 @@ async def list_supplier_facilities(
             city=f.city,
             state=f.state,
             postal_code=f.postal_code,
+            phone=f.phone,
             fda_registration_number=f.fda_registration_number,
             roles=f.roles or [],
         )
@@ -115,6 +116,7 @@ async def create_supplier_facility(
         city=request.city.strip(),
         state=request.state.strip(),
         postal_code=request.postal_code.strip(),
+        phone=(request.phone.strip() if request.phone else None),
         fda_registration_number=(request.fda_registration_number.strip() if request.fda_registration_number else None),
         roles=[role.strip() for role in request.roles if role.strip()],
     )
@@ -129,6 +131,7 @@ async def create_supplier_facility(
         city=facility.city,
         state=facility.state,
         postal_code=facility.postal_code,
+        phone=facility.phone,
         fda_registration_number=facility.fda_registration_number,
         roles=facility.roles or [],
     )
@@ -255,6 +258,7 @@ async def check_supplier_facility_removal(
             "city": facility.city,
             "state": facility.state,
             "postal_code": facility.postal_code,
+            "phone": facility.phone or "",
         },
     )
 
@@ -390,6 +394,7 @@ async def set_facility_ftl_categories(
         city=facility.city,
         state=facility.state,
         postal_code=facility.postal_code,
+        phone=facility.phone,
         fda_registration_number=facility.fda_registration_number,
         roles=facility.roles or [],
         categories=categories,

@@ -364,6 +364,7 @@ class Facility:
     city: Optional[str] = None
     state: Optional[str] = None
     country: Optional[str] = "US"
+    phone: Optional[str] = None  # A-2190 / 21 CFR 1.1310 location description
     facility_type: FacilityType = FacilityType.UNKNOWN
     tenant_id: Optional[str] = None
     # Merkle hash-chain integrity
@@ -385,6 +386,26 @@ class Facility:
         return self.gln or self.fda_registration or self.name
 
     @property
+    def is_location_description_complete(self) -> bool:
+        """Whether this facility satisfies 21 CFR 1.1310 location description.
+
+        Complete when a GLN is present (allowed stand-in), or when business
+        name, phone, and a physical address (street address, or city+state)
+        are all present. Ingest-path location completeness for free-text KDEs
+        lives in shared/fsma_validation (see PR #3718); this property covers
+        the Neo4j Facility node itself (A-2190 fix 4).
+        """
+        if (self.gln or "").strip():
+            return True
+        name_ok = bool((self.name or "").strip())
+        phone_ok = bool((self.phone or "").strip())
+        address_ok = bool(
+            (self.address or "").strip()
+            or ((self.city or "").strip() and (self.state or "").strip())
+        )
+        return name_ok and phone_ok and address_ok
+
+    @property
     def node_properties(self) -> Dict[str, Any]:
         """Return properties for Neo4j node creation."""
         props = {"name": self.name}
@@ -400,6 +421,8 @@ class Facility:
             props["state"] = self.state
         if self.country:
             props["country"] = self.country
+        if self.phone:
+            props["phone"] = self.phone
         props["facility_type"] = (
             self.facility_type.value if isinstance(self.facility_type, FacilityType) else self.facility_type
         )

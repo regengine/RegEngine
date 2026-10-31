@@ -324,3 +324,39 @@ def test_response_envelope_carries_data_and_fresh_meta():
     assert first.data == {"hello": "world"}
     assert isinstance(first.meta, ResponseMeta)
     assert first.meta is not second.meta
+
+
+def test_facility_phone_serialises_into_node_properties():
+    facility = Facility(
+        gln="G1",
+        name="Valley Fresh Farms",
+        address="100 Farm Rd",
+        phone="+1-202-555-0147",
+        tenant_id="tenant-a",
+    )
+    props = facility.node_properties
+    assert props["phone"] == "+1-202-555-0147"
+    assert props["address"] == "100 Farm Rd"
+
+
+def test_facility_location_description_complete_with_name_phone_address():
+    complete = Facility(
+        name="Valley Fresh Farms",
+        address="100 Farm Rd",
+        phone="+1-202-555-0147",
+    )
+    assert complete.is_location_description_complete is True
+
+    missing_phone = Facility(name="Valley Fresh Farms", address="100 Farm Rd")
+    assert missing_phone.is_location_description_complete is False
+
+    gln_stand_in = Facility(gln="0614141000005", name="")
+    assert gln_stand_in.is_location_description_complete is True
+
+    city_state = Facility(
+        name="Cooler Co",
+        city="Salinas",
+        state="CA",
+        phone="+1-831-555-0100",
+    )
+    assert city_state.is_location_description_complete is True

@@ -63,6 +63,10 @@ class SupplierFacilityCreateRequest(BaseModel):
     city: str = Field(min_length=2)
     state: str = Field(min_length=2)
     postal_code: str = Field(min_length=3)
+    phone: str | None = Field(
+        default=None,
+        description="Facility business phone (21 CFR 1.1310 location description)",
+    )
     fda_registration_number: str | None = None
     roles: list[str] = Field(default_factory=list)
 
@@ -74,6 +78,7 @@ class SupplierFacilityResponse(BaseModel):
     city: str
     state: str
     postal_code: str
+    phone: str | None = None
     fda_registration_number: str | None
     roles: list[str]
 
