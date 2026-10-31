@@ -136,6 +136,7 @@ audit-findings-*.md
 .claude/skills/*
 !.claude/skills/typesafe-ai/
 !.claude/skills/jev-sidecar/
+!.claude/skills/verify/
 .gemini/
 .swarm_memory/
 
