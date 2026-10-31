@@ -92,6 +92,13 @@ APPROVED_GLOBAL_ADMIN_ARMS = {
         "identity-global-self-service",
         1,
     ),
+    # Tenant-scoped directory under PermissionChecker("users.read").
+    # Arm unlocks users_self_or_admin peer rows; MembershipModel.tenant_id
+    # still filters. SET LOCAL via arm/disarm (try/finally).
+    ("services/admin/app/user_routes.py", "list_users"): (
+        "tenant-scoped-directory",
+        1,
+    ),
     # Background coordination paths. These run only on ADMIN_DATABASE_URL and
     # do not derive global authority from request metadata.
     ("services/shared/task_queue.py", "_arm_global_queue_transaction"): (
