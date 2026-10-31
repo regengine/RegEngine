@@ -10,6 +10,7 @@ monkeypatching ``app.webhook_router_v2.<name>`` keeps working.
 from __future__ import annotations
 
 import json
+import re
 import sys
 
 from sqlalchemy.exc import SQLAlchemyError
@@ -47,6 +48,23 @@ def _authoritative_kdes(event: IngestEvent) -> dict[str, object]:
         if isinstance(_val, str) and _val.strip() == "":
             continue
         available[_key] = _val
+    # Contract v3 wire name is input_lot_codes; accept Lab's legacy
+    # input_traceability_lot_codes (kdes or top-level) as a fill-in.
+    def _present(val: object) -> bool:
+        if val is None:
+            return False
+        if isinstance(val, str):
+            return val.strip() != ""
+        if isinstance(val, (list, tuple, set)):
+            return len(val) > 0
+        return True
+
+    if not _present(available.get("input_lot_codes")):
+        legacy = available.get("input_traceability_lot_codes")
+        if not _present(legacy):
+            legacy = event.input_traceability_lot_codes
+        if _present(legacy):
+            available["input_lot_codes"] = legacy
     return available
 
 
@@ -73,6 +91,58 @@ def _event_ftl_payload(event: IngestEvent) -> dict:
             if val is not None:
                 payload[key] = val
     return payload
+
+
+
+def _parse_cooled_flag(val: object) -> bool | None:
+    """Parse explicit cooled yes/no. None means missing / unparseable."""
+    if val is None:
+        return None
+    if isinstance(val, bool):
+        return val
+    if isinstance(val, (int, float)) and val in (0, 1):
+        return bool(val)
+    if isinstance(val, str):
+        normalized = val.strip().lower()
+        if normalized in {"1", "true", "yes", "y"}:
+            return True
+        if normalized in {"0", "false", "no", "n"}:
+            return False
+        if normalized == "":
+            return None
+    return None
+
+
+def _looks_like_internal_id(val: object) -> bool:
+    """True for opaque codes (FIELD-A7, UUID-like) rather than display names."""
+    if not isinstance(val, str):
+        return False
+    s = val.strip()
+    if not s or " " in s:
+        return False
+    # Hyphenated uppercase/digit tokens or UUID-ish strings are internal ids.
+    if re.fullmatch(r"[A-Z0-9]+(?:-[A-Z0-9]+)+", s):
+        return True
+    if re.fullmatch(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}", s):
+        return True
+    if re.fullmatch(r"[A-Z]{1,12}-?[0-9]{1,8}", s):
+        return True
+    return False
+
+
+def _is_human_readable_name(val: object) -> bool:
+    """True when a value looks like a human-readable place/field name."""
+    if not isinstance(val, str):
+        return False
+    s = val.strip()
+    if len(s) < 2:
+        return False
+    if _looks_like_internal_id(s):
+        return False
+    # Must contain a letter; prefer spaces / mixed content over pure codes.
+    if not any(ch.isalpha() for ch in s):
+        return False
+    return True
 
 
 def _validate_event_kdes(event: IngestEvent) -> list[str]:
@@ -107,35 +177,64 @@ def _validate_event_kdes(event: IngestEvent) -> list[str]:
         elif not _kde_present(val):
             errors.append(f"Missing required KDE '{kde_name}' for {event.cte_type.value} CTE")
 
-    # Initial packing conditionals (A-2190 fix 2): field/growing area, and
-    # cooling location+date only when the food was cooled.
+    # Initial packing conditionals (A-2190 fix 2; Food Safety Lens answers):
+    # - farm location description (name + phone + address) separately required
+    # - field/growing area must be a human-readable name (internal id alone
+    #   only when a readable name is also supplied for export)
+    # - explicit cooled yes/no required; cooling_* only when cooled=yes
+    #   (do not infer cooled from cooling field presence)
     cte_value = getattr(event.cte_type, "value", event.cte_type)
     if cte_value == "initial_packing":
-        has_field = _kde_present(available.get("growing_area_name")) or _kde_present(
-            available.get("field_id")
+        for farm_key in (
+            "harvest_location_name",
+            "harvest_location_phone",
+            "harvest_location_address",
+        ):
+            # harvest_location_name is also in REQUIRED_KDES_BY_CTE; re-check
+            # phone/address here so the farm description is complete as a set.
+            if farm_key == "harvest_location_name":
+                continue
+            if not _kde_present(available.get(farm_key)):
+                errors.append(
+                    f"Missing required KDE '{farm_key}' for initial_packing CTE "
+                    "(farm location description: name, phone, and address)"
+                )
+
+        growing_name = available.get("growing_area_name")
+        field_name = available.get("field_name")
+        field_id = available.get("field_id")
+        has_readable_name = _is_human_readable_name(growing_name) or _is_human_readable_name(
+            field_name
         )
-        if not has_field:
+        has_readable_field_id = _is_human_readable_name(field_id) and not _looks_like_internal_id(
+            field_id
+        )
+        # Internal id alone is OK only when a human-readable name is also present
+        # (stand-in for "maps to a name in the export" at ingest time).
+        has_mapped_internal_id = _kde_present(field_id) and has_readable_name
+        if not (has_readable_name or has_readable_field_id or has_mapped_internal_id):
             errors.append(
-                "Missing required KDE 'growing_area_name' or 'field_id' for initial_packing CTE"
+                "Missing required human-readable growing area or field name for "
+                "initial_packing CTE (growing_area_name or field_name; field_id "
+                "alone only when paired with a readable name for export)"
             )
 
-        cooled_flag = available.get("cooled")
-        cooled = cooled_flag is True or (
-            isinstance(cooled_flag, str) and cooled_flag.strip().lower() in {"1", "true", "yes"}
-        )
-        cooling_hint = _kde_present(available.get("cooling_date")) or _kde_present(
-            available.get("cooling_location_name")
-        )
-        if cooled or cooling_hint:
+        cooled_parsed = _parse_cooled_flag(available.get("cooled"))
+        if cooled_parsed is None:
+            errors.append(
+                "Missing required KDE 'cooled' for initial_packing CTE "
+                "(explicit yes/no required; do not infer from cooling fields)"
+            )
+        elif cooled_parsed is True:
             if not _kde_present(available.get("cooling_location_name")):
                 errors.append(
                     "Missing required KDE 'cooling_location_name' for initial_packing CTE "
-                    "(required when cooled)"
+                    "(required when cooled=yes)"
                 )
             if not _kde_present(available.get("cooling_date")):
                 errors.append(
                     "Missing required KDE 'cooling_date' for initial_packing CTE "
-                    "(required when cooled)"
+                    "(required when cooled=yes)"
                 )
 
     return errors

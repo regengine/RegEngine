@@ -133,8 +133,10 @@ REQUIRED_KDES_BY_CTE: Dict[WebhookCTEType, List[str]] = {
         "harvest_location_name",  # farm where harvested; contract v3 / A-2190
         "received_date",  # date food received; contract v3 / A-2190
         "received_quantity",  # qty received (distinct from packed); contract v3 / A-2190
-        # cooling_location_name + cooling_date required when cooled — see validation.py
-        # growing_area_name OR field_id required for produce — see validation.py
+        # Food Safety Lens (A-2190): see validation.py for —
+        #   harvest_location_phone + harvest_location_address (farm description)
+        #   explicit cooled yes/no; cooling_* only when cooled=yes
+        #   human-readable growing_area_name / field_name (field_id alone insufficient)
     ],
     WebhookCTEType.FIRST_LAND_BASED_RECEIVING: [
         "traceability_lot_code",

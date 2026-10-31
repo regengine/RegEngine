@@ -156,17 +156,41 @@ CTE_COLUMNS: dict[str, list[tuple[str, str, str]]] = {
         (
             "harvest_location_name",
             "Valley Fresh Farms, Salinas CA",
-            "Farm location where the food was harvested",
+            "Farm name where the food was harvested (location description)",
         ),
-        ("field_id", "FIELD-A7", "Field or growing area identifier (or use growing_area_name)"),
+        (
+            "harvest_location_phone",
+            "+1-831-555-0147",
+            "Farm business phone for the harvest location description",
+        ),
+        (
+            "harvest_location_address",
+            "100 Farm Rd, Salinas CA 93901",
+            "Farm physical address for the harvest location description",
+        ),
+        (
+            "growing_area_name",
+            "North Field Block A",
+            "Human-readable growing area or field name (required; field_id alone is not enough)",
+        ),
+        (
+            "field_id",
+            "FIELD-A7",
+            "Optional internal field id; only sufficient when paired with growing_area_name / field_name",
+        ),
         ("received_date", "2026-02-26", "Date the packer received the food (YYYY-MM-DD)"),
         ("received_quantity", "500", "Quantity received (distinct from packed quantity)"),
         (
+            "cooled",
+            "yes",
+            "Explicit yes/no: was the food cooled before packing? Required for RAC initial packing",
+        ),
+        (
             "cooling_location_name",
             "Valley Fresh Cooler #2",
-            "Cooling location (required when the food was cooled)",
+            "Cooling location (required when cooled=yes)",
         ),
-        ("cooling_date", "2026-02-26", "Date of cooling (required when the food was cooled)"),
+        ("cooling_date", "2026-02-26", "Date of cooling (required when cooled=yes)"),
     ],
     "shipping": [
         ("traceability_lot_code", "TOM-0226-F3-001", "Lot code being shipped"),
