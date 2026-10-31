@@ -23,6 +23,8 @@ relevant to FSMA Critical Tracking Events.
 
 from __future__ import annotations
 
+import contextvars
+import functools
 import importlib
 import logging
 import os
@@ -50,7 +52,7 @@ from .constants import (
     _REQUIRED_SEGMENTS_BY_SET,
     _SUPPORTED_TRANSACTION_SETS,
 )
-from .dedup import check_and_record_interchange, verify_trading_partner_allowed
+from .dedup import check_and_record_interchange, release_interchange, verify_trading_partner_allowed
 from .extractors import _extract_856_fields, _extract_fields_for_set
 from .models import EDIIngestResponse
 from .parser import (
@@ -81,9 +83,50 @@ def _record_edi_rejection(**kwargs):
     Tests swap ``app.edi_ingestion`` modules in and out of ``sys.modules``.
     Looking up the recorder lazily keeps the route and the test helpers
     pointed at the same in-memory rejection store.
+
+    Resolved relative to this package: in the consolidated server the
+    top-level ``app`` is another service's package (services/graph/app),
+    so ``app.edi_ingestion`` does not exist there.
     """
-    rejection_log = importlib.import_module("app.edi_ingestion.rejection_log")
+    rejection_log = importlib.import_module(".rejection_log", __package__)
     return rejection_log.record_edi_rejection(**kwargs)
+
+
+# ISA13 claims taken by ``_enforce_envelope_integrity`` during the current
+# request. ``_release_isa13_unless_stored`` installs the list.
+_reserved_interchanges: contextvars.ContextVar[list[tuple[Any, Any, Any]] | None] = contextvars.ContextVar(
+    "edi_reserved_interchanges", default=None
+)
+
+
+def _release_isa13_unless_stored(endpoint):
+    """Free the request's ISA13 claim when the document was not stored.
+
+    The claim is taken before content validation and ingest. A later
+    rejection, a server error, or a result with no accepted events stores
+    nothing, and keeping the claim would turn the partner's corrected
+    resend into a 409 "already processed" for the full dedup TTL.
+    """
+
+    @functools.wraps(endpoint)
+    async def wrapper(*args, **kwargs):
+        reserved: list[tuple[Any, Any, Any]] = []
+        token = _reserved_interchanges.set(reserved)
+        try:
+            response = await endpoint(*args, **kwargs)
+        except BaseException:
+            for claim in reserved:
+                release_interchange(*claim)
+            raise
+        finally:
+            _reserved_interchanges.reset(token)
+        ingestion_result = getattr(response, "ingestion_result", None)
+        if ingestion_result is None or not ingestion_result.accepted:
+            for claim in reserved:
+                release_interchange(*claim)
+        return response
+
+    return wrapper
 
 
 def _decode_edi_bytes(raw_bytes: bytes) -> str:
@@ -442,6 +485,10 @@ def _enforce_envelope_integrity(
             },
         )
 
+    reserved = _reserved_interchanges.get()
+    if reserved is not None:
+        reserved.append((extracted.get("sender_id"), extracted.get("receiver_id"), extracted.get("isa13")))
+
 
 def _enforce_interchange_structure(
     segments: list[list[str]],
@@ -515,6 +562,7 @@ def _enforce_interchange_structure(
         "persists as FSMA shipping CTE events."
     ),
 )
+@_release_isa13_unless_stored
 async def ingest_edi_856(
     file: UploadFile = File(..., description="X12 EDI file (856 ASN)"),
     traceability_lot_code: str = Form(..., description="FSMA Traceability Lot Code"),
@@ -1033,6 +1081,7 @@ def _build_ingest_event_for_set(
         "and extracts FSMA-relevant KDEs for CTE creation."
     ),
 )
+@_release_isa13_unless_stored
 async def ingest_edi_document(
     file: UploadFile = File(..., description="X12 EDI file"),
     traceability_lot_code: str = Form(

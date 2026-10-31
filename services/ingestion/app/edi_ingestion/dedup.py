@@ -102,6 +102,37 @@ def check_and_record_interchange(
         return False, None
 
 
+def release_interchange(
+    sender_id: Optional[str],
+    receiver_id: Optional[str],
+    isa13: Optional[str],
+) -> None:
+    """Free an ISA13 reserved by ``check_and_record_interchange``.
+
+    Called when the request fails after the reservation (content
+    rejection, ingest error). Without it the 409 replay answer, "already
+    processed — no events were ingested", would refuse the partner's
+    resend for the full TTL even though nothing was stored. Best-effort:
+    a Redis error is logged and the key simply expires.
+    """
+    if not isa13 or not sender_id:
+        return
+
+    client = _redis_client()
+    if client is None:
+        return
+
+    try:
+        client.delete(_dedup_key(sender_id, receiver_id, isa13))
+    except Exception as exc:
+        logger.warning(
+            "edi_dedup_release_error sender=%s isa13=%s error=%s",
+            sender_id,
+            isa13,
+            str(exc),
+        )
+
+
 # ---------------------------------------------------------------------------
 # Partner allowlist — bind GS sender to tenant's configured trading partners.
 # ---------------------------------------------------------------------------
