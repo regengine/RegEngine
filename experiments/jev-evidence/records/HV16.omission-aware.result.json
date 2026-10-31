@@ -1,0 +1,12 @@
+{
+  "expected": "conflicting",
+  "actual": {
+    "claim_id": "HV16",
+    "verdict": "conflicting",
+    "reason": "incompatible_same_scope_evidence",
+    "policy_status": "uncalibrated",
+    "review_required": true,
+    "model": "jev-1.13.0"
+  },
+  "matches": true
+}

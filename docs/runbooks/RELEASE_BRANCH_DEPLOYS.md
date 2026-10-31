@@ -7,12 +7,13 @@ workflow, Railway setting, or branch rule changes with this file.
 
 ## 1. Status
 
-Production still deploys on every backend-relevant push to `main`.
-
-`.github/workflows/deploy.yml` ("Deploy to Railway") runs on `push` to
-`main` for the backend path list, and on `workflow_dispatch`. It waits for
-a green **Backend CI Status Gate** on that commit, then runs `railway up --ci`
-against the production Railway service. Vercel deploys the frontend separately.
+Until 2026-10-28, production deployed on every backend-relevant push to
+`main`: `.github/workflows/deploy.yml` ("Deploy to Railway") ran on `push`
+to `main` for the backend path list, and on `workflow_dispatch`, waited for
+a green **Backend CI Status Gate** on that commit, then ran `railway up --ci`
+against the production Railway service. That workflow is now disabled and
+production deploys are manual; section 11 has the current process. Vercel
+deploys the frontend separately.
 
 Nothing changes until the founder approves this model and a later pull
 request lands.
@@ -215,5 +216,36 @@ run the audit-chain integrity check (section 6).
 ## 10. Decision needed
 
 Approve or reject this model, and pick the cadence: on demand, or at most
-two or three times per weekday. Until then, production keeps deploying
-from `main` through `deploy.yml`.
+two or three times per weekday. Until then, production deploys by hand as
+section 11 describes.
+
+## 11. Manual deploys today (in effect, not part of the proposal)
+
+Since 2026-10-28 the Railway production service has no GitHub source and
+`deploy.yml` is disabled, so every production deploy is a hand-run
+`railway up` from a local checkout. A hand deploy must go through
+`scripts/railway/deploy_prod.sh`, never a bare `railway up`.
+
+Reason: the image has no `.git` (`.dockerignore` excludes it), so the only
+commit identity it carries is `build-sha.txt`, which the `Dockerfile` copies
+to `/app/build-sha.txt`. The tracked file is the placeholder `unknown`.
+`deploy.yml` overwrites it with the commit before `railway up`; a bare
+`railway up` ships the placeholder and `/health` reports `commit_sha: null`.
+The 2026-10-29 deploy (Railway deployment `44c0486a`) did exactly that, and
+the live commit could only be identified by hashing files inside the
+container over `railway ssh`.
+
+The script refuses a dirty tree, a git worktree (`railway up` cannot index
+one), and a commit that is not on `main` unless `--allow-non-main` is passed.
+It then requires a `success` **Backend CI Status Gate** check run on the
+commit, as `deploy.yml` did (`--skip-ci-gate` overrides, knowingly), stamps
+`git rev-parse HEAD` into `build-sha.txt`, runs `railway up --ci` against the
+production project, service and environment named on the command line,
+restores the placeholder (also on failure), then polls `BACKEND_URL/health`
+(default `https://api.regengine.co`, the same deployment `deploy.yml` polls
+by its Railway hostname) until `build.commit_sha` equals the stamped commit,
+with the same three failure diagnoses as `deploy.yml`. `--dry-run` does
+everything except the upload and the poll. `RAILWAY_PROJECT`,
+`RAILWAY_SERVICE` and `RAILWAY_ENVIRONMENT` override the production
+defaults; `railway link` state is ignored so a checkout linked to staging
+cannot redirect it.

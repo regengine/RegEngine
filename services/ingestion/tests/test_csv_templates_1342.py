@@ -39,6 +39,7 @@ from app.webhook_models import (
 )
 from app.webhook_router_v2.validation import _validate_event_kdes
 from fastapi import FastAPI
+from fastapi.routing import APIRoute, iter_route_contexts
 from fastapi.testclient import TestClient
 
 # ---------------------------------------------------------------------------
@@ -1062,10 +1063,13 @@ class TestRouterSurface:
         assert "CSV Templates & Import" in router.tags
 
     def test_endpoints_registered(self):
-        paths = {route.path for route in router.routes}
+        app = FastAPI()
+        app.include_router(router)
+        paths = {context.path for context in iter_route_contexts(app.routes) if isinstance(context.route, APIRoute)}
         assert "/api/v1/templates/{cte_type}" in paths
         assert "/api/v1/templates" in paths
         assert "/api/v1/ingest/csv" in paths
+        assert "/api/v1/ingest/csv/diagnostic" in paths
 
     def test_alias_coverage(self):
         # Spot-check each canonical CTE has at least one alias mapping back to it
