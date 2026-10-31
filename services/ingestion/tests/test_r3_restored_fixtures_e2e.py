@@ -144,7 +144,13 @@ def test_edi_856_fixture_end_to_end():
     transition, gaps = gaps_by_tlc[tlc]
     assert transition == "open"
     assert {g.gap_kind for g in gaps} == {GAP_KIND_MISSING_KDE}
-    assert {"ship_date", "tlc_source_reference"} <= {g.gap_key for g in gaps}
+    gap_keys = {g.gap_key for g in gaps}
+    # The 856 carries no TLC source reference and none was supplied, so it
+    # stays a gap; the BSN ship date is mapped, so ship_date is not one.
+    assert "tlc_source_reference" in gap_keys
+    assert "ship_date" not in gap_keys
+    assert event.kdes["ship_date"] == "2026-03-10"
+    assert event.kdes["reference_document"] == expected["reference_document_number"]
 
     headers, rows = _parse_sheet(sheet)
     assert headers == FDA_COLUMNS

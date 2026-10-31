@@ -212,3 +212,45 @@ def test_ingest_failure_frees_isa13_for_retry(client, store, ingested, monkeypat
 
     replay = _post(client, FIXTURE.read_bytes(), route)
     assert replay.status_code == 409
+
+
+@pytest.mark.parametrize("route", ["", "/document"])
+def test_856_carries_required_shipping_kdes(client, store, ingested, route):
+    """reference_document, ship_date and the caller's tlc_source_reference reach the event."""
+    response = client.post(
+        f"/api/v1/ingest/edi{route}",
+        data={"traceability_lot_code": VALID_TLC, "tenant_id": TENANT, "tlc_source_reference": " PACK-0310 "},
+        files={"file": ("asn_856.edi", FIXTURE.read_bytes(), "application/edi-x12")},
+    )
+    assert response.status_code == 201, response.json()
+    kdes = ingested[0].events[0].kdes
+    assert kdes["reference_document"] == "BOL-9001"
+    assert kdes["tlc_source_reference"] == "PACK-0310"
+    assert kdes["ship_date"] == "2026-03-10"
+
+
+@pytest.mark.parametrize("route", ["", "/document"])
+def test_all_events_rejected_frees_isa13(client, store, monkeypatch, route):
+    """201 with accepted=0 stored nothing, so the corrected resend must not 409."""
+
+    async def _rejecting(payload, *, principal_tenant_id=None, x_regengine_api_key=None):
+        return IngestResponse(
+            accepted=0,
+            rejected=len(payload.events),
+            total=len(payload.events),
+            events=[
+                EventResult(
+                    traceability_lot_code=event.traceability_lot_code,
+                    cte_type=event.cte_type.value,
+                    status="rejected",
+                    errors=["Missing required KDE 'tlc_source_reference' for shipping CTE"],
+                )
+                for event in payload.events
+            ],
+        )
+
+    monkeypatch.setattr(edi_routes, "ingest_events", _rejecting)
+    first = _post(client, FIXTURE.read_bytes(), route)
+    assert first.status_code == 201, first.json()
+    assert first.json()["ingestion_result"]["accepted"] == 0
+    assert store.keys == {}, "an all-rejected interchange must not burn its ISA13"

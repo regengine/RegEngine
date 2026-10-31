@@ -522,6 +522,13 @@ def _enforce_interchange_structure(
 async def ingest_edi_856(
     file: UploadFile = File(..., description="X12 EDI file (856 ASN)"),
     traceability_lot_code: str = Form(..., description="FSMA Traceability Lot Code"),
+    tlc_source_reference: Optional[str] = Form(
+        None,
+        description=(
+            "FSMA TLC source reference (where the lot code was assigned). An 856 "
+            "does not carry it; without it the shipping event is rejected."
+        ),
+    ),
     tenant_id: Optional[str] = Form(None, description="Optional tenant override"),
     source: str = Form("edi_856_inbound", description="Source system identifier"),
     product_description: Optional[str] = Form(None, description="Optional product description override"),
@@ -703,6 +710,10 @@ async def ingest_edi_856(
                 "ship_from_gln": ship_from_gln or ship_from_gln_raw,
                 "ship_to_gln": ship_to_gln or ship_to_gln_raw,
                 "reference_document_number": extracted.get("reference_document_number"),
+                # Required shipping KDE name; reference_document_number is kept
+                # for existing readers of stored EDI KDEs.
+                "reference_document": extracted.get("reference_document_number"),
+                "tlc_source_reference": tlc_source_reference.strip() if tlc_source_reference else None,
                 "carrier": extracted.get("carrier"),
                 "asn_number": extracted.get("asn_number"),
                 "edi_transaction_set": "856",
@@ -744,6 +755,14 @@ async def ingest_edi_856(
             principal_tenant_id=sender_tenant_id,
             x_regengine_api_key=x_regengine_api_key,
         )
+        if not ingestion_result.accepted:
+            # Every event was rejected, so nothing was stored: free the ISA13
+            # so the corrected resend is not refused as a 409 replay.
+            release_interchange(
+                extracted.get("sender_id"),
+                extracted.get("receiver_id"),
+                extracted.get("isa13"),
+            )
 
         return EDIIngestResponse(
             sender_tenant_id=sender_tenant_id,
@@ -911,6 +930,10 @@ def _build_ingest_event_for_set(
                 "asn_number": extracted.get("asn_number"),
                 "lot_number": extracted.get("lot_number"),
                 "edi_line_index": extracted.get("edi_line_index"),
+                # Required shipping KDEs, same names the legacy 856 route sends.
+                "ship_date": event_date,
+                "reference_document": extracted.get("reference_document_number"),
+                "tlc_source_reference": extracted.get("tlc_source_reference"),
             }
         )
     elif transaction_set == "850":
@@ -1055,7 +1078,7 @@ async def ingest_edi_document(
         description="FSMA Traceability Lot Code for 856/850/810/861; required but ignored for 944/945 event TLCs, which use each line's lot code",
     ),
     tlc_source_reference: Optional[str] = Form(
-        None, description="Optional TLC source reference copied to 944/945 KDEs"
+        None, description="TLC source reference copied to 856/944/945 KDEs; those CTEs are rejected without it"
     ),
     tenant_id: Optional[str] = Form(None, description="Optional tenant override"),
     source: str = Form("edi_inbound", description="Source system identifier"),
@@ -1204,8 +1227,9 @@ async def ingest_edi_document(
             first_event_indexes.append(len(event_inputs))
             if slice_set in ("856", "861", "944", "945"):
                 header = {key: value for key, value in slice_extracted.items() if key != "line_items"}
-                if slice_set in ("944", "945"):
+                if slice_set in ("856", "944", "945"):
                     header["tlc_source_reference"] = tlc_source_reference.strip() if tlc_source_reference else None
+                if slice_set in ("944", "945"):
                     date_field = "receive_date_raw" if slice_set == "944" else "ship_date_raw"
                     header["_event_timestamp"], header["_event_date"] = _ship_timestamp_and_date(
                         header.get(date_field), None
@@ -1468,6 +1492,14 @@ async def ingest_edi_document(
             principal_tenant_id=sender_tenant_id,
             x_regengine_api_key=x_regengine_api_key,
         )
+        if not ingestion_result.accepted:
+            # Every event was rejected, so nothing was stored: free the ISA13
+            # so the corrected resend is not refused as a 409 replay.
+            release_interchange(
+                extracted.get("sender_id"),
+                extracted.get("receiver_id"),
+                extracted.get("isa13"),
+            )
 
         return EDIIngestResponse(
             document_type=f"X12_{transaction_set}",
