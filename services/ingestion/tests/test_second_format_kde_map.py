@@ -106,8 +106,9 @@ def test_t2_asn_plus_synthetic_lot_and_tlc_source_can_pass() -> None:
     lenient = validate_tlc(lot, strict=False)
     assert lenient.is_valid
     strict = validate_tlc(lot, strict=True)
-    # Harvest style lot is lenient-only; GS1 mismatch is warning not failure
-    assert not strict.is_valid
+    # Harvest style lot: a GS1 pattern mismatch is a warning, not a failure (#3719)
+    assert strict.is_valid
+    assert any("production pattern" in w for w in strict.warnings)
 
 
 def test_t3_strict_style_tlc_no_format_warning() -> None:
