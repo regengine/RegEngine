@@ -7,8 +7,8 @@ on:
   # confirm=deploy-prod when running the workflow. No GitHub Environment
   # protection rules are used here (avoids paid settings).
   # The wait-for-ci job below still blocks any SHA without a green Backend
-  # CI Status Gate, and the cancel-in-progress concurrency group collapses
-  # concurrent manual runs.
+  # CI Status Gate. The deploy job uses concurrency group deploy-main with
+  # cancel-in-progress: false so a prod migration mid-run is never cancelled.
   workflow_dispatch:
     inputs:
       confirm:
@@ -19,10 +19,6 @@ on:
 permissions:
   checks: read
   contents: read
-
-concurrency:
-  group: deploy-main
-  cancel-in-progress: true
 
 jobs:
   # Fail closed unless the operator typed the confirm phrase. A wrong/empty
@@ -83,6 +79,10 @@ jobs:
   deploy:
     name: Deploy RegEngine Service
     needs: [wait-for-ci]
+    # Serialize prod deploys; never cancel mid-migration (Railway migrate).
+    concurrency:
+      group: deploy-main
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
