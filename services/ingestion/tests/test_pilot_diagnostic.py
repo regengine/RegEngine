@@ -243,7 +243,12 @@ def test_transformation_input_warnings_are_row_associated_and_private(
     for issue in missing.values():
         assert issue["disposition"] == "flagged" and issue["row_indices"] == [2]
         assert issue["affected_row_count"] == 1
-    assert {state["error_cluster"]["field"] for state in states} == set(missing)
+    # Contract v3 also flags missing_kde for input_lot_codes / input_product_descriptions
+    # on rows without those columns; only the quantity-data clusters are in scope here.
+    qty_states = [
+        state for state in states if state["error_cluster"]["issue_reason"] == "missing_input_quantity_data"
+    ]
+    assert {state["error_cluster"]["field"] for state in qty_states} == set(missing)
     rendered = response.text + json.dumps(states) + caplog.text
     for row in rows:
         for field in ("traceability_lot_code", "product_description", "location_name", "reference_document"):

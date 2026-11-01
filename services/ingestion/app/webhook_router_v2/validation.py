@@ -65,6 +65,18 @@ def _authoritative_kdes(event: IngestEvent) -> dict[str, object]:
             legacy = getattr(event, "input_traceability_lot_codes", None)
         if _present(legacy):
             available["input_lot_codes"] = legacy
+    # Structured ``inputs`` (from CSV input_quantities / input_units_of_measure)
+    # satisfies the contract-v3 raw field names when every entry has qty+UOM.
+    inputs = available.get("inputs")
+    if isinstance(inputs, list) and inputs:
+        if all(
+            isinstance(item, dict)
+            and _present(item.get("quantity"))
+            and _present(item.get("unit_of_measure"))
+            for item in inputs
+        ):
+            available.setdefault("input_quantities", inputs)
+            available.setdefault("input_units_of_measure", inputs)
     return available
 
 

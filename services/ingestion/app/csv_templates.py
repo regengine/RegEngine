@@ -533,6 +533,30 @@ def _inject_required_kdes(kdes: dict, row_cte: str, row: dict, loc_name: Optiona
                 kdes[kde_key] = value
 
 
+def _inputs_satisfy_quantity_kdes(kdes: dict) -> bool:
+    """True when ``kdes.inputs`` carries quantity + UOM for every input lot.
+
+    ``parse_csv_rows`` folds ``input_quantities`` / ``input_units_of_measure``
+    into structured ``inputs`` and leaves the raw columns out of ``kdes``
+    (see test_csv_input_quantities). Contract v3 still names those raw fields
+    in REQUIRED_KDES_BY_CTE; treat a complete ``inputs`` list as satisfying
+    them so template rows and aligned uploads are not false-missing.
+    """
+    inputs = kdes.get("inputs")
+    if not isinstance(inputs, list) or not inputs:
+        return False
+    for item in inputs:
+        if not isinstance(item, dict):
+            return False
+        qty = item.get("quantity")
+        uom = item.get("unit_of_measure")
+        if qty is None or str(qty).strip() == "":
+            return False
+        if uom is None or str(uom).strip() == "":
+            return False
+    return True
+
+
 def _validate_kde_completeness(cte_type: str, event: IngestEvent, kdes: dict) -> list[str]:
     """Check required KDEs for a CTE type. Returns list of missing field names."""
     try:
@@ -541,6 +565,7 @@ def _validate_kde_completeness(cte_type: str, event: IngestEvent, kdes: dict) ->
         return []
     required = REQUIRED_KDES_BY_CTE.get(cte_enum, [])
     missing = []
+    inputs_ok = _inputs_satisfy_quantity_kdes(kdes)
     for field in required:
         # Check in top-level event fields first, then KDEs
         if field in {"traceability_lot_code", "product_description", "quantity", "unit_of_measure"}:
@@ -550,6 +575,8 @@ def _validate_kde_completeness(cte_type: str, event: IngestEvent, kdes: dict) ->
         elif field == "location_name":
             if not (event.location_name or kdes.get("location_name")):
                 missing.append(field)
+        elif field in {"input_quantities", "input_units_of_measure"} and inputs_ok:
+            continue
         else:
             val = kdes.get(field)
             if val is None or str(val).strip() == "":
