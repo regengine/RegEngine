@@ -518,6 +518,12 @@ async def accept_invite(
     invite_tenant_id = _resolve_invite_tenant(db, token_hash)
     if invite_tenant_id is not None:
         TenantContext.set_tenant_context(db, invite_tenant_id)
+        # public.users / organization_memberships FORCE RLS policies for
+        # regengine_sysadmin require regengine.is_sysadmin (or a matching
+        # regengine.user_id) on WITH CHECK. Invite acceptance provisions a
+        # brand-new user row, so arm the admin GUC on this already-sysadmin
+        # connection. set_admin_context(true) is a no-op under SQLite.
+        TenantContext.set_admin_context(db, True)
     elif _uses_postgres(db):
         # Fail closed: unknown, revoked, accepted or expired token. Proceeding
         # would read invites with no tenant context and 500 instead of

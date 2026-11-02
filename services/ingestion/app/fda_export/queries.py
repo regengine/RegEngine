@@ -850,12 +850,20 @@ def fetch_trace_graph_data(
     tenant_id: str,
     tlc: str,
     depth: int,
+    direction: str = "both",
 ) -> dict:
     """Fetch the transformation trace graph for a TLC.
 
-    Returns a dict with nodes, edges, and summary stats.
+    ``direction`` is ``forward`` (downstream outputs), ``backward``
+    (upstream inputs) or ``both`` (the union of the two directed walks).
+    Returns a dict with nodes, edges, summary stats, the ``direction``
+    walked and ``depth_exhausted``: True when a lot was reached at
+    ``depth`` and not expanded, so the graph may continue past what is
+    returned.
     """
-    linked_tlcs = persistence._expand_tlcs_via_transformation_links(tenant_id=tenant_id, seed_tlc=tlc, depth=depth)
+    expansion = persistence._expand_tlcs_detailed(tenant_id=tenant_id, seed_tlc=tlc, depth=depth, direction=direction)
+    linked_tlcs = expansion.tlcs
+    reached_via = expansion.reached_via
 
     # Fetch event counts per TLC in one query
     if linked_tlcs:
@@ -887,13 +895,20 @@ def fetch_trace_graph_data(
     else:
         tlc_stats = {}
 
-    # Also fetch direct link edges for the graph visualization
+    # Edges for the graph visualization: only links whose BOTH ends are
+    # lots the directed walk returned, so ``nodes`` and ``edges`` describe
+    # the same graph. A link touching one returned lot and one excluded
+    # lot (a sibling branch, an opposite-direction neighbour, or a lot
+    # past the depth limit) used to leak in through an OR predicate and
+    # name lots absent from ``nodes``.
+    node_set = set(linked_tlcs)
     link_rows = db_session.execute(
         text("""
             SELECT input_tlc, output_tlc, process_type, confidence_score
             FROM   fsma.transformation_links
             WHERE  tenant_id = :tid
-              AND  (input_tlc = ANY(:tlcs) OR output_tlc = ANY(:tlcs))
+              AND  input_tlc = ANY(:tlcs)
+              AND  output_tlc = ANY(:tlcs)
         """),
         {"tid": tenant_id, "tlcs": linked_tlcs},
     ).fetchall()
@@ -905,19 +920,32 @@ def fetch_trace_graph_data(
             "confidence_score": float(row[3]) if row[3] is not None else None,
         }
         for row in link_rows
+        # Defence in depth for persistence stubs and older catalogs: the
+        # SQL already restricts both ends.
+        if row[0] in node_set and row[1] in node_set
     ]
+
+    def _role(t: str) -> str:
+        # The role comes from the walk that reached the lot, not from a
+        # direct edge to the seed: a lot two hops downstream used to be
+        # labelled "upstream" because only seed-adjacent edges were checked.
+        if t == tlc:
+            return "seed"
+        via = reached_via.get(t)
+        if via is None:
+            # Persistence without reach data (older stubs): fall back to
+            # the seed-adjacent heuristic.
+            return "downstream" if any(e["input_tlc"] == tlc and e["output_tlc"] == t for e in edges) else "upstream"
+        if via.get("downstream") and via.get("upstream"):
+            return "both"
+        return "downstream" if via.get("downstream") else "upstream"
 
     nodes = [
         {
             "tlc": t,
             "is_seed": t == tlc,
-            "role": (
-                "seed"
-                if t == tlc
-                else "downstream"
-                if any(e["input_tlc"] == tlc and e["output_tlc"] == t for e in edges)
-                else "upstream"
-            ),
+            "role": _role(t),
+            "depth": reached_via.get(t, {}).get("depth"),
             **tlc_stats.get(t, {"event_count": 0, "first_event": None, "last_event": None}),
         }
         for t in linked_tlcs
@@ -927,6 +955,10 @@ def fetch_trace_graph_data(
         "seed_tlc": tlc,
         "tenant_id": tenant_id,
         "traversal_depth": depth,
+        "direction": expansion.direction,
+        # True when a lot sat at the depth limit unexpanded: the trace may
+        # continue past these nodes. Never silently complete (#3701 S2).
+        "depth_exhausted": expansion.depth_exhausted,
         "node_count": len(nodes),
         "edge_count": len(edges),
         "nodes": nodes,
