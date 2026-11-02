@@ -269,7 +269,11 @@ class TestValidateKdeCompleteness:
 
     def test_all_present(self):
         event = _make_event()
-        kdes = {"harvest_date": "2026-04-17", "reference_document": "REF-1"}
+        kdes = {
+            "harvest_date": "2026-04-17",
+            "reference_document": "REF-1",
+            "immediate_subsequent_recipient": "Packhouse A",
+        }
         missing = _validate_kde_completeness("harvesting", event, kdes)
         assert missing == []
 
