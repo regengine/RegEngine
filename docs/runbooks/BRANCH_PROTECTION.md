@@ -56,6 +56,19 @@ time out (spurious block, recoverable), while the dangerous direction —
 passing an area whose real gate actually failed — only happens on
 under-detection.
 
+## Merge queue
+
+After these workflow changes land, configure the queue as a repository ruleset
+on `main`: squash merging, `ALLGREEN`, and a check timeout of 180 minutes.
+Required-context workflows need `merge_group: types: [checks_requested]`
+triggers, as do `backend-ci.yml` and `frontend-ci.yml` because PR Gate mirrors
+their gates. Without these triggers the queue would deadlock waiting for
+checks on the merge-group SHA. The workflow inventory guard enforces this.
+
+`gh pr merge --squash --auto` enqueues the PR. To turn the queue off,
+disable or delete its repository ruleset; removing workflow triggers while
+the queue is enabled would leave required checks pending forever.
+
 ## Rules
 
 ### No admin-override merges

@@ -1,6 +1,8 @@
 name: Frontend CI/CD
 
 on:
+  merge_group:
+    types: [checks_requested]
   # Nightly run against main, mirroring backend-ci: the path-filtered
   # triggers below leave these gates unexercised during stretches of
   # backend-only merges, letting drift (promise-audit URL rot, e2e flake)

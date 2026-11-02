@@ -98,6 +98,7 @@ updates:
       - "dependencies"
       - "backend"
     groups:
+      # Separate major upgrades so routine minor/patch updates can land independently.
       root-backend-runtime:
         patterns:
           - "*"
@@ -112,6 +113,22 @@ updates:
           - "stripe"
           - "httpx"
           - "opentelemetry-*"
+        update-types: ["minor", "patch"]
+      root-backend-major:
+        patterns:
+          - "*"
+        exclude-patterns:
+          - "cryptography"
+          - "pyjwt"
+          - "python-jose"
+          - "sqlalchemy"
+          - "alembic"
+          - "fastapi"
+          - "starlette"
+          - "stripe"
+          - "httpx"
+          - "opentelemetry-*"
+        update-types: ["major"]
 
   # Services directories no longer have their own requirements files;
   # all Python dependencies are managed at the repository root.
@@ -135,6 +152,12 @@ updates:
       - "dependencies"
       - "ci"
     groups:
+      # Separate major upgrades so routine minor/patch updates can land independently.
       all-actions:
         patterns:
           - "*"
+        update-types: ["minor", "patch"]
+      actions-major:
+        patterns:
+          - "*"
+        update-types: ["major"]
