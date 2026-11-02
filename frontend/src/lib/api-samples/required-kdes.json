@@ -32,13 +32,7 @@
       "harvest_date",
       "harvest_location_name",
       "received_date",
-      "received_quantity",
-      "harvest_location_phone",
-      "harvest_location_address",
-      "growing_area_name_or_field_name",
-      "cooled",
-      "cooling_location_name_when_cooled_yes",
-      "cooling_date_when_cooled_yes"
+      "received_quantity"
     ]
   },
   "first_land_based_receiving": {
