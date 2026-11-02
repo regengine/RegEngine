@@ -294,7 +294,7 @@ async def test_csv_fixture_ingest_resolves_tenant_validation_under_prod_path(
     response = await wc.ingest_events(
         payload,
         principal_tenant_id=TENANT,
-        x_regengine_api_key="test-key",
+        x_regengine_api_key="test-key",  # pragma: allowlist secret — synthetic test fixture only
     )
 
     assert called == [TENANT]
@@ -317,7 +317,7 @@ async def test_edi_fixture_ingest_resolves_tenant_validation_under_prod_path(
     response = await wc.ingest_events(
         payload,
         principal_tenant_id=TENANT,
-        x_regengine_api_key="test-key",
+        x_regengine_api_key="test-key",  # pragma: allowlist secret — synthetic test fixture only
     )
     assert response.total == 1
     assert response.accepted + response.rejected == 1
@@ -351,7 +351,7 @@ def test_csv_and_edi_routes_call_ingest_events_under_prod_path(
         return await wc.ingest_events(
             payload,
             principal_tenant_id=kwargs.get("principal_tenant_id") or TENANT,
-            x_regengine_api_key=kwargs.get("x_regengine_api_key") or "test-key",
+            x_regengine_api_key=kwargs.get("x_regengine_api_key") or "test-key",  # pragma: allowlist secret — synthetic test fixture only
             principal=kwargs.get("principal"),
             source_file=kwargs.get("source_file"),
         )
