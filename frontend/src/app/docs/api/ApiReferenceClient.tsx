@@ -141,17 +141,19 @@ const API_SERVICES: { name: string; baseUrl: string; icon: React.ComponentType<{
             {
                 method: 'GET',
                 path: '/trace/{tlc}',
-                description: 'Trace the transformation graph for a traceability lot code (upstream sources and downstream products). Requires the fda.read scope. Unlike the Records API, FDA endpoints take tenant_id as an explicit query parameter (it must match your key’s workspace).',
+                description: 'Trace the transformation graph for a traceability lot code. direction selects upstream sources (backward), downstream products (forward) or both (default). depth_exhausted is true when a lot sat at the depth limit and was not expanded, so the graph may continue past the response. Requires the fda.read scope. Unlike the Records API, FDA endpoints take tenant_id as an explicit query parameter (it must match your key’s workspace).',
                 auth: true,
                 headers: ['X-RegEngine-API-Key'],
-                params: ['tenant_id={your-workspace-uuid}'],
+                params: ['tenant_id={your-workspace-uuid}', 'direction=both', 'depth=5'],
                 response: JSON.stringify({
                     seed_tlc: "<the lot code you traced>",
                     tenant_id: "<your workspace ID>",
                     traversal_depth: 5,
+                    direction: "both",
+                    depth_exhausted: false,
                     node_count: 1,
                     edge_count: 0,
-                    nodes: [{ tlc: "<the lot code you traced>", is_seed: true, role: "seed", event_count: 1 }],
+                    nodes: [{ tlc: "<the lot code you traced>", is_seed: true, role: "seed", depth: 0, event_count: 1 }],
                     edges: [],
                     total_events: 1
                 }, null, 2),

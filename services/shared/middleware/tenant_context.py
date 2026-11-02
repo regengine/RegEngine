@@ -290,16 +290,33 @@ def _tenant_id_from_authenticated_principal(request: Request) -> Optional[uuid.U
         return None
 
 
+def _as_uuid(value: object) -> Optional[uuid.UUID]:
+    """Parse ``value`` as a UUID; None when it is not one."""
+    try:
+        return uuid.UUID(str(value).strip())
+    except (ValueError, AttributeError, TypeError):
+        return None
+
+
 async def get_current_tenant_id(request: Request) -> uuid.UUID:
     """
     FastAPI dependency to get the current request's tenant_id.
 
     Resolution order:
-    1. ``request.state.tenant_id`` set by ``TenantContextMiddleware``
-       (JWT or authenticated internal header).
-    2. Fallback to the tenant on the authenticated principal that
-       ``require_api_key`` attaches to ``request.state.api_key`` — this is how
-       per-key DB-issued API keys resolve their own tenant (#2524).
+    1. The tenant on the authenticated principal that ``require_api_key``
+       attaches to ``request.state.api_key`` — this is how per-key DB-issued
+       API keys resolve their own tenant (#2524), and when it is present it is
+       the single source of truth.
+    2. ``request.state.tenant_id`` set by ``TenantContextMiddleware`` (JWT or
+       authenticated internal header). When a principal tenant is also present
+       the middleware tenant is only an assertion that must match it: a
+       divergence is rejected with 409 ``E_TENANT_MISMATCH`` (the
+       ``shared.auth.reconcile_tenant_scope`` contract, #2511) before any data
+       access. It is never resolved in favour of the middleware — since #3698
+       the key resolves first on every graph router, which had made the
+       middleware tenant the last writer of the RLS contextvar, so key tenant A
+       plus middleware tenant B read and wrote B's rows on the routers that do
+       not call ``reconcile_tenant_scope`` themselves.
 
     Raises HTTPException(401) if no tenant_id is available (fail closed).
 
@@ -310,9 +327,36 @@ async def get_current_tenant_id(request: Request) -> uuid.UUID:
         ):
             return await fetch_reports(tenant_id)
     """
-    tenant_id = getattr(request.state, "tenant_id", None)
-    if tenant_id is None:
-        tenant_id = _tenant_id_from_authenticated_principal(request)
+    middleware_tenant = getattr(request.state, "tenant_id", None)
+    api_key = getattr(request.state, "api_key", None)
+    principal_tenant = _tenant_id_from_authenticated_principal(request)
+
+    if api_key is not None and principal_tenant is None:
+        # An authenticated principal with no usable tenant (missing, empty or
+        # unparseable) is a malformed credential, never a reason to fall back
+        # to the middleware tenant: that would let a header or claim pick the
+        # tenant with no principal authority behind it.
+        raise HTTPException(status_code=401, detail="Tenant ID not found in authentication context")
+
+    # Compare parsed UUIDs, so equivalent spellings (case, braces, no hyphens)
+    # never 409 and a middleware value that is not a UUID never matches.
+    if (
+        principal_tenant is not None
+        and middleware_tenant is not None
+        and _as_uuid(middleware_tenant) != principal_tenant
+    ):
+        logger.warning(
+            "graph_tenant_scope_mismatch: middleware tenant differs from the authenticated API key's tenant",
+            extra={
+                "authenticated_tenant": str(principal_tenant),
+                "middleware_tenant": str(middleware_tenant),
+                "key_id": getattr(api_key, "key_id", None),
+                "path": request.url.path if getattr(request, "url", None) is not None else None,
+            },
+        )
+        raise HTTPException(status_code=409, detail="E_TENANT_MISMATCH")
+
+    tenant_id = principal_tenant if principal_tenant is not None else middleware_tenant
 
     if tenant_id is None:
         raise HTTPException(status_code=401, detail="Tenant ID not found in authentication context")
@@ -320,7 +364,12 @@ async def get_current_tenant_id(request: Request) -> uuid.UUID:
     # #2461: seed the RLS contextvar — this dependency is the tenant
     # funnel for all graph routers (traceability, recall, lineage,
     # compliance, metrics, labels), whose fsma_recall / fsma_audit
-    # private engines are covered by the class-level begin-hook.
+    # private engines are covered by the class-level begin-hook. The
+    # comparison above only works when require_api_key has already run:
+    # every graph route resolves the key first (router-level dependency
+    # or declaration order), and test_graph_compliance_key_before_tenant
+    # fails any route that does not, because a tenant resolved before the
+    # key would hand the handler the middleware tenant with no 409.
     set_rls_tenant_id(tenant_id)
     return tenant_id
 

@@ -70,6 +70,21 @@ function isLocalE2E(): boolean {
     return !process.env.PLAYWRIGHT_BASE_URL;
 }
 
+/**
+ * Invite audit/cleanup helpers talk to node:sqlite against ADMIN_FALLBACK_SQLITE.
+ * When ADMIN_DATABASE_URL points at Postgres (CI Passwordless E2E / sysadmin
+ * API-key store), SessionLocal writes invites + audit_logs there instead, so
+ * the SQLite file has no invites table. Skip the SQLite assertions/cleanup in
+ * that mode; API + UI checks below still cover the journey.
+ */
+function adminUsesSqliteFallback(): boolean {
+    const adminUrl = (process.env.ADMIN_DATABASE_URL || '').trim().toLowerCase();
+    if (adminUrl.startsWith('postgres')) return false;
+    if (adminUrl.startsWith('sqlite')) return true;
+    // Unset ADMIN_DATABASE_URL → local E2E uses ADMIN_FALLBACK_SQLITE.
+    return isLocalE2E();
+}
+
 function parseInviteEmailOutboxLine(line: string): InviteEmailOutboxRecord | null {
     try {
         return JSON.parse(line) as InviteEmailOutboxRecord;
@@ -99,6 +114,8 @@ function removeInviteEmailOutboxRecords(email: string): void {
 }
 
 function expectAdminAuditLog(tenantId: string, eventType: string, resourceId: string): void {
+    if (!adminUsesSqliteFallback()) return;
+
     const database = new DatabaseSync(adminSqlitePath());
     try {
         const row = database
@@ -112,7 +129,7 @@ function expectAdminAuditLog(tenantId: string, eventType: string, resourceId: st
 
 function cleanupInviteFixture(tenantId: string | null, email: string, userId?: string, inviteId?: string): void {
     removeInviteEmailOutboxRecords(email);
-    if (!tenantId || !isLocalE2E()) return;
+    if (!tenantId || !isLocalE2E() || !adminUsesSqliteFallback()) return;
 
     const database = new DatabaseSync(adminSqlitePath());
     try {
