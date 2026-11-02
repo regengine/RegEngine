@@ -23,7 +23,7 @@ jobs:
     if: (github.event_name == 'pull_request' || github.event_name == 'pull_request_review' || github.event_name == 'pull_request_review_comment' || (github.event_name == 'issue_comment' && github.event.issue.pull_request))
     concurrency:
       group: ${{ github.workflow }}-pr-blocker-checklist-${{ github.event.pull_request.number || github.event.issue.number }}
-      cancel-in-progress: true
+      cancel-in-progress: false
     permissions:
       contents: read
       pull-requests: write
@@ -748,7 +748,7 @@ jobs:
     if: (github.event_name == 'pull_request' && github.event.action != 'ready_for_review') || github.event_name == 'check_suite' || github.event_name == 'workflow_run'
     concurrency:
       group: ${{ github.workflow }}-head-sha-check-guard-${{ github.event.pull_request.number || github.event.workflow_run.pull_requests[0].number || github.event.check_suite.pull_requests[0].number || github.sha }}
-      cancel-in-progress: true
+      cancel-in-progress: false
     permissions:
       contents: read
       checks: read
