@@ -32,21 +32,21 @@ export function buildInflowLabTutorialSteps({
             target: '[data-testid="inflow-evidence-chain"]',
             title: "What Inflow Lab is",
             content:
-                "A sandbox for supplier traceability data. This is one lot's chain of custody, harvest through receiving. A solid link is a record we have; a broken one is a record that never arrived. The gate at the end is what a missing link costs you. Nothing here writes to production exports.",
+                "A lab for supplier traceability data. This is one lot's chain of custody, harvest through receiving. A solid link is a record we have; a broken one is a record that never arrived. The gate at the end is what a missing link costs you. Nothing here writes to production exports.",
             position: "bottom",
         },
         {
             target: '[data-tutorial="inflow-load-data"]',
             title: "Bring supplier data in",
             content:
-                "Upload CSV takes your own supplier rows; Load realistic sample fills the editor with a believable farm-to-DC trace so you can explore safely. Both open the data editor below.",
+                "Upload CSV takes your own supplier rows; Load realistic fixture fills the editor with a believable farm-to-DC trace so you can explore safely. Both open the data editor below.",
             position: "bottom",
         },
         {
             target: '[data-tutorial="inflow-guided-proof"]',
             title: "Run your first test",
             content:
-                "This evaluates the built-in sample end to end. The highlighted button is live, or use the one right here. The chain, pipeline, score, and lot panels fill with the results.",
+                "This evaluates the built-in fixture end to end. The highlighted button runs now, or use the one right here. The chain, pipeline, score, and lot panels fill with the results.",
             position: "bottom",
             action: "Run trace",
             onAction: runGuidedProof,
@@ -69,7 +69,7 @@ export function buildInflowLabTutorialSteps({
             target: '[data-tutorial="inflow-exceptions"]',
             title: "Clear exceptions by pattern",
             content:
-                "Blocked lots are grouped by shared root cause: handoff, source, or mixed. Fix the pattern once (for example, map a missing handoff field) and the whole group unblocks. The sample data passes cleanly, so this list is empty until your own data brings real exceptions.",
+                "Blocked lots are grouped by shared root cause: handoff, source, or mixed. Fix the pattern once (for example, map a missing handoff field) and the whole group unblocks. The fixture data passes cleanly, so this list is empty until your own data brings real exceptions.",
             position: "top",
         },
         {
@@ -103,12 +103,12 @@ export function buildInflowLabClientTutorialSteps({
         },
         {
             target: '[data-tutorial="lab-primary-actions"]',
-            title: "Run your first demo",
+            title: "Run your first walkthrough",
             content: isStandalone
                 ? "Load mock scenario fills the lab with a believable supplier feed; Run pipeline processes it end to end. The button here does both in one go and jumps to the event log when it finishes."
                 : "Start guided test run loads a mock supplier feed if the lab is empty, processes it end to end, and jumps to the record log when it finishes.",
             position: "bottom",
-            action: "Run the demo",
+            action: "Run the walkthrough",
             onAction: runDemo,
         },
         {
@@ -168,7 +168,7 @@ export function dismissInflowLabTutorialBanner(key: string = INFLOW_LAB_TUTORIAL
 export function InflowLabTutorialBanner({
     onStart,
     dismissKey = INFLOW_LAB_TUTORIAL_BANNER_KEY,
-    description = "A guided walkthrough: load supplier data, run a sandbox test, read the readiness score, and clear blocked lots.",
+    description = "A guided walkthrough: load supplier data, run a CSV check, read the readiness score, and clear blocked lots.",
 }: {
     onStart: () => void;
     dismissKey?: string;

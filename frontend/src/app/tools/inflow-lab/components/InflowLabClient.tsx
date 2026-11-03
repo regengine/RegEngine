@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { inflowErrorMessage } from "@/lib/inflow-error";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import {
     AlertTriangle,
     ArrowDownToLine,
@@ -243,17 +243,17 @@ const SANDBOX_CTE_TYPES = [
     "transformation",
 ];
 const FEEDER_SAMPLE_CSV = `cte_type,traceability_lot_code,product_description,quantity,unit_of_measure,location_name,timestamp,harvest_date,cooling_date,packing_date,ship_date,receive_date,ship_from_location,ship_to_location,receiving_location,immediate_previous_source,reference_document,tlc_source_reference,harvester_business_name,harvest_location_ref
-harvesting,TLC-FEED-001,Romaine Lettuce,120,cases,Valley Fresh Farms,2026-04-26T15:20:00Z,2026-04-26,,,,,,,,,HARV-001,SRC-HARV-001,Valley Fresh Farms,Valley Fresh Farms Field 7
-cooling,TLC-FEED-001,Romaine Lettuce,120,cases,Salinas Cooling Hub,2026-04-26T18:12:00Z,,2026-04-26,,,,,,,,COOL-001,SRC-COOL-001,,Valley Fresh Farms Field 7
-initial_packing,TLC-FEED-001,Romaine Lettuce,118,cases,Salinas Packhouse,2026-04-26T20:12:00Z,,,2026-04-26,,,,,,,PACK-001,SRC-PACK-001,Valley Fresh Farms,Valley Fresh Farms Field 7
-shipping,TLC-FEED-001,Romaine Lettuce,118,cases,Salinas Packout Dock,2026-04-26T22:41:00Z,,,,2026-04-26,,Salinas Packhouse,Bay Area DC,,,BOL-001,SRC-PACK-001,,Valley Fresh Farms Field 7
-receiving,TLC-FEED-001,Romaine Lettuce,118,cases,Bay Area DC,2026-04-27T02:04:00Z,,,,,2026-04-27,,,Bay Area DC,Salinas Packout Dock,REC-001,SRC-PACK-001,,Valley Fresh Farms Field 7`;
+harvesting,TLC-FEED-001,Romaine Lettuce,120,cases,Example Grower Co,2026-04-26T15:20:00Z,2026-04-26,,,,,,,,,HARV-001,SRC-HARV-001,Example Grower Co,Example Grower Field 7
+cooling,TLC-FEED-001,Romaine Lettuce,120,cases,Salinas Cooling Hub,2026-04-26T18:12:00Z,,2026-04-26,,,,,,,,COOL-001,SRC-COOL-001,,Example Grower Field 7
+initial_packing,TLC-FEED-001,Romaine Lettuce,118,cases,Salinas Packhouse,2026-04-26T20:12:00Z,,,2026-04-26,,,,,,,PACK-001,SRC-PACK-001,Example Grower Co,Example Grower Field 7
+shipping,TLC-FEED-001,Romaine Lettuce,118,cases,Salinas Packout Dock,2026-04-26T22:41:00Z,,,,2026-04-26,,Salinas Packhouse,Bay Area DC,,,BOL-001,SRC-PACK-001,,Example Grower Field 7
+receiving,TLC-FEED-001,Romaine Lettuce,118,cases,Bay Area DC,2026-04-27T02:04:00Z,,,,,2026-04-27,,,Bay Area DC,Salinas Packout Dock,REC-001,SRC-PACK-001,,Example Grower Field 7`;
 const MISSING_DESTINATION_CSV = `cte_type,traceability_lot_code,product_description,quantity,unit_of_measure,location_name,timestamp,harvest_date,cooling_date,packing_date,ship_date,receive_date,ship_from_location,ship_to_location,receiving_location,immediate_previous_source,reference_document,tlc_source_reference,harvester_business_name,harvest_location_ref
-harvesting,TLC-FEED-002,Romaine Lettuce,104,cases,Valley Fresh Farms,2026-04-26T15:20:00Z,2026-04-26,,,,,,,,,HARV-002,SRC-HARV-002,Valley Fresh Farms,Valley Fresh Farms Field 11
-cooling,TLC-FEED-002,Romaine Lettuce,104,cases,Salinas Cooling Hub,2026-04-26T18:12:00Z,,2026-04-26,,,,,,,,COOL-002,SRC-COOL-002,,Valley Fresh Farms Field 11
-initial_packing,TLC-FEED-002,Romaine Lettuce,103,cases,Salinas Packhouse,2026-04-26T20:12:00Z,,,2026-04-26,,,,,,,PACK-002,SRC-PACK-002,Valley Fresh Farms,Valley Fresh Farms Field 11
-shipping,TLC-FEED-002,Romaine Lettuce,103,cases,Salinas Packout Dock,2026-04-26T22:41:00Z,,,,2026-04-26,,Salinas Packhouse,,,,BOL-002,SRC-PACK-002,,Valley Fresh Farms Field 11
-receiving,TLC-FEED-002,Romaine Lettuce,103,cases,Bay Area DC,2026-04-27T02:04:00Z,,,,,2026-04-27,,,Bay Area DC,Salinas Packout Dock,REC-002,SRC-PACK-002,,Valley Fresh Farms Field 11`;
+harvesting,TLC-FEED-002,Romaine Lettuce,104,cases,Example Grower Co,2026-04-26T15:20:00Z,2026-04-26,,,,,,,,,HARV-002,SRC-HARV-002,Example Grower Co,Example Grower Field 11
+cooling,TLC-FEED-002,Romaine Lettuce,104,cases,Salinas Cooling Hub,2026-04-26T18:12:00Z,,2026-04-26,,,,,,,,COOL-002,SRC-COOL-002,,Example Grower Field 11
+initial_packing,TLC-FEED-002,Romaine Lettuce,103,cases,Salinas Packhouse,2026-04-26T20:12:00Z,,,2026-04-26,,,,,,,PACK-002,SRC-PACK-002,Example Grower Co,Example Grower Field 11
+shipping,TLC-FEED-002,Romaine Lettuce,103,cases,Salinas Packout Dock,2026-04-26T22:41:00Z,,,,2026-04-26,,Salinas Packhouse,,,,BOL-002,SRC-PACK-002,,Example Grower Field 11
+receiving,TLC-FEED-002,Romaine Lettuce,103,cases,Bay Area DC,2026-04-27T02:04:00Z,,,,,2026-04-27,,,Bay Area DC,Salinas Packout Dock,REC-002,SRC-PACK-002,,Example Grower Field 11`;
 const BROKEN_LINEAGE_CSV = `cte_type,traceability_lot_code,product_description,quantity,unit_of_measure,location_name,timestamp,harvest_date,cooling_date,packing_date,ship_date,receive_date,ship_from_location,ship_to_location,receiving_location,immediate_previous_source,reference_document,tlc_source_reference,harvester_business_name,harvest_location_ref,transformation_date,input_traceability_lot_codes
 harvesting,TLC-FEED-003,Romaine Lettuce,220,cases,Desert Bloom Farm,2026-04-26T14:43:00Z,2026-04-26,,,,,,,,,HARV-003,SRC-HARV-003,Desert Bloom Farm,Desert Bloom Farm Block 3,,
 cooling,TLC-FEED-003,Romaine Lettuce,220,cases,Imperial Pre-Cool Facility,2026-04-26T17:51:00Z,,2026-04-26,,,,,,,,COOL-003,SRC-COOL-003,,Desert Bloom Farm Block 3,,
@@ -437,10 +437,10 @@ function summarizeFeederDiagnosis(result: SandboxEvaluationResult): FeederDiagno
         status,
         headline:
             status === "clear"
-                ? "Sandbox diagnosis found no blocking fixes"
+                ? "CSV check found no blocking fixes"
                 : status === "blocked"
-                ? "Sandbox diagnosis found blockers before mapping"
-                : "Sandbox diagnosis found corrections before mapping",
+                ? "CSV check found blockers before mapping"
+                : "CSV check found corrections before mapping",
         impact:
             status === "clear"
                 ? "This test run can move into import mapping, but it still cannot create formal production records."
@@ -465,7 +465,7 @@ function buildFeederRemediationPlan(result: SandboxEvaluationResult): FeederReme
     if (result.total_rule_failures > 0) {
         steps.push({
             title: "Resolve failed FSMA checks",
-            detail: "Review the failed row-level rules, fix source data, and rerun the sandbox diagnosis.",
+            detail: "Review the failed row-level rules, fix source data, and rerun the CSV check.",
         });
     }
     if (result.duplicate_warnings?.length || result.entity_warnings?.length) {
@@ -516,7 +516,7 @@ function buildFixQueue(result: SandboxEvaluationResult | null, lotSummaries: {
                 owner: "Source data owner",
                 status: result.submission_blocked ? "open" : "waiting",
                 severity: result.submission_blocked ? "blocked" : "warning",
-                impact: event.blocking_defects?.[0]?.remediation || "Correct the source record and rerun sandbox validation.",
+                impact: event.blocking_defects?.[0]?.remediation || "Correct the source record and rerun CSV validation.",
                 source: event.traceability_lot_code || `row-${event.event_index + 1}`,
             });
         });
@@ -529,7 +529,7 @@ function buildFixQueue(result: SandboxEvaluationResult | null, lotSummaries: {
             status: "open",
             severity: "blocked",
             impact: "Commit gate stays closed until this blocker is resolved.",
-            source: "Sandbox evaluator",
+            source: "CSV evaluator",
         });
     });
 
@@ -541,7 +541,7 @@ function buildFixQueue(result: SandboxEvaluationResult | null, lotSummaries: {
             status: "waiting",
             severity: "warning",
             impact: "Duplicate records can weaken audit trust and supplier feed quality.",
-            source: "Sandbox evaluator",
+            source: "CSV evaluator",
         });
     }
 
@@ -637,7 +637,7 @@ const events: TraceEvent[] = [
         cte: "harvesting",
         lotCode: lotCodes[0],
         product: "Green Leaf Lettuce",
-        location: "Valley Fresh Farms",
+        location: "Example Grower Co",
         timestamp: "Apr 26, 2026, 3:20 PM",
         mode: "simulation",
         attempts: 1,
@@ -714,7 +714,7 @@ const events: TraceEvent[] = [
         cte: "harvesting",
         lotCode: lotCodes[2],
         product: "Green Leaf Lettuce",
-        location: "Valley Fresh Farms",
+        location: "Example Grower Co",
         timestamp: "Apr 26, 2026, 4:28 PM",
         mode: "simulation",
         attempts: 1,
@@ -724,7 +724,7 @@ const events: TraceEvent[] = [
 
 const lineageByLot: Record<string, LineageNode[]> = {
     [lotCodes[0]]: [
-        { cte: "Harvesting", location: "Valley Fresh Farms", time: "Apr 26, 3:20 PM", state: "complete" },
+        { cte: "Harvesting", location: "Example Grower Co", time: "Apr 26, 3:20 PM", state: "complete" },
         { cte: "Cooling", location: "Salinas Cooling Hub", time: "Apr 26, 6:12 PM", state: "complete" },
         { cte: "Initial packing", location: "Salinas Packhouse", time: "Apr 26, 8:12 PM", state: "complete" },
         { cte: "Shipping", location: "Salinas Packout Dock", time: "Apr 26, 10:41 PM", state: "complete" },
@@ -738,7 +738,7 @@ const lineageByLot: Record<string, LineageNode[]> = {
         { cte: "DC receiving", location: "Los Angeles DC", time: "Apr 27, 1:24 AM", state: "complete" },
     ],
     [lotCodes[2]]: [
-        { cte: "Harvesting", location: "Valley Fresh Farms", time: "Apr 26, 4:28 PM", state: "complete" },
+        { cte: "Harvesting", location: "Example Grower Co", time: "Apr 26, 4:28 PM", state: "complete" },
         { cte: "Cooling", location: "Salinas Cooling Hub", time: "Apr 26, 5:26 PM", state: "complete" },
         { cte: "Initial packing", location: "Not captured", time: "Missing KDEs", state: "missing" },
         { cte: "Shipping", location: "Not captured", time: "Missing CTE", state: "missing" },
@@ -1075,7 +1075,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
 
             if (!response.ok) {
                 const payload = await response.json().catch(() => ({}));
-                const detail = typeof payload.detail === "string" ? payload.detail : `Sandbox evaluation failed: ${response.status}`;
+                const detail = typeof payload.detail === "string" ? payload.detail : `CSV evaluation failed: ${response.status}`;
                 throw new Error(detail);
             }
 
@@ -1252,17 +1252,22 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
         setActiveTab(isStandalone ? "Event log" : "Record log");
     };
 
-    // The tour's demo action reads through a ref so the step array stays
+    // The tour's walkthrough action reads through a ref so the step array stays
     // referentially stable while the action always sees fresh state.
     const startMachineDemoRef = useRef(startMachineDemo);
-    startMachineDemoRef.current = startMachineDemo;
+    useEffect(() => {
+        startMachineDemoRef.current = startMachineDemo;
+    });
+    const runTutorialDemo = useCallback(() => {
+        void startMachineDemoRef.current();
+    }, []);
     const tutorialSteps = useMemo(
         () =>
             buildInflowLabClientTutorialSteps({
-                runDemo: () => void startMachineDemoRef.current(),
+                runDemo: runTutorialDemo,
                 isStandalone,
             }),
-        [isStandalone],
+        [isStandalone, runTutorialDemo],
     );
 
     const startTutorial = () => {
@@ -1287,7 +1292,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
     const validationOutcome = feederResult
         ? feederDefectCount
             ? `${feederDefectCount} validation issue${feederDefectCount === 1 ? "" : "s"} found`
-            : "No sandbox validation issues"
+            : "No CSV validation issues"
         : exceptionCount
         ? `${exceptionCount} exception${exceptionCount === 1 ? "" : "s"} to review`
         : "No blocking exceptions";
@@ -1346,19 +1351,18 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
         [backendFixQueue, feederResult, uniqueLots]
     );
     const unresolvedFixCount = fixQueue.filter((item) => item.status === "open" || item.status === "waiting").length;
-    const supplierReadiness = useMemo(
-        () => [
+    const supplierReadiness = [
             {
-                name: "Valley Fresh Farms",
-                status: exportReadyCount > 0 ? "Passing validation" : "Sample received",
+                name: "Example Grower Co",
+                status: exportReadyCount > 0 ? "Passing validation" : "Fixture received",
                 score: Math.max(58, readinessScore - 3),
                 blocker: exceptionLots.length ? "Waiting on missing CTE handoffs" : "No open blockers",
             },
             {
                 name: "FreshPack Central",
-                status: feederResult ? (feederResult.submission_blocked ? "Sample received" : "Mapping configured") : "Invited",
+                status: feederResult ? (feederResult.submission_blocked ? "Fixture received" : "Mapping configured") : "Invited",
                 score: feederResult ? Math.max(35, Math.round((feederResult.compliant_events / Math.max(1, feederResult.total_events)) * 100)) : 44,
-                blocker: feederResult?.submission_blocked ? "Sandbox blockers need correction" : "Mapping profile not promoted",
+                blocker: feederResult?.submission_blocked ? "CSV blockers need correction" : "Mapping profile not promoted",
             },
             {
                 name: "Bay Area DC",
@@ -1366,21 +1370,19 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                 score: Math.min(98, readinessScore + 5),
                 blocker: selectedIsExportReady ? "No open blockers" : "Selected lot needs complete lineage",
             },
-        ],
-        [exceptionLots.length, exportReadyCount, feederResult, readinessScore, selectedIsExportReady]
-    );
+        ];
     const supplierAverageScore = Math.round(
         supplierReadiness.reduce((total, supplier) => total + supplier.score, 0) / Math.max(1, supplierReadiness.length)
     );
-    const activeDataBoundary = feederResult ? "Uploaded CSV test run" : serviceEvents.length ? "Mock feed data" : "Bundled mock fixture";
+    const activeDataBoundary = feederResult ? "Uploaded CSV check run" : serviceEvents.length ? "Mock feed data" : "Bundled mock fixture";
     const boundaryStateDetail = feederResult
         ? "You are viewing uploaded CSV data checked in this browser session."
         : serviceEvents.length
-        ? "You are viewing mock feed data; no uploaded CSV sandbox run has been evaluated yet."
-        : "You are viewing bundled fixture data that is safe for testing and demos.";
+        ? "You are viewing mock feed data; no uploaded CSV check run has been evaluated yet."
+        : "You are viewing bundled fixture data that is safe for exploration and walkthroughs.";
     const boundarySteps = [
         {
-            label: "Sandbox diagnosis",
+            label: "CSV check",
             value: feederResult ? "Uploaded CSV was checked" : "No uploaded CSV run yet",
             tone: "border-blue-200 bg-blue-50 text-blue-900",
         },
@@ -1576,7 +1578,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                 <InflowLabTutorialBanner
                     onStart={startTutorial}
                     dismissKey={INFLOW_LAB_CLIENT_TUTORIAL_BANNER_KEY}
-                    description="A guided walkthrough: run the mock demo, find each workspace, and read pipeline results."
+                    description="A guided walkthrough: run the mock walkthrough, find each workspace, and read pipeline results."
                 />
 
                 <section
@@ -1621,7 +1623,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                     <p className="mt-1 text-sm leading-5 text-slate-500">
                                         {isStandalone
                                             ? "Review mock-generated records, trace lots, and preview test filters without mixing simulator data into production imports."
-                                            : "Validate FSMA 204 records, resolve exceptions, prove traceability, and keep formal production records separate from test data."}
+                                            : "Validate FSMA 204 records, resolve exceptions, prove traceability, and keep formal production records separate from fixture data."}
                                     </p>
                                 </div>
                                 <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
@@ -1678,7 +1680,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                 </div>
                                                 <p className="mt-2 text-2xl font-semibold text-slate-950">{readinessScore}/100</p>
                                                 <p className="mt-1 text-xs leading-5 text-slate-500">
-                                                    Blends KDE completeness, CTE lifecycle coverage, delivery quality, sandbox pass rate, and connection health.
+                                                    Blends KDE completeness, CTE lifecycle coverage, delivery quality, CSV check pass rate, and connection health.
                                                 </p>
                                             </div>
 
@@ -1766,7 +1768,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                     <div className={cn("space-y-3", isStandalone ? "mt-4" : "mt-3")}>
                                                         {exceptionLots.length === 0 && failedCount === 0 ? (
                                                             <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
-                                                                No blocking exceptions found in the current test data.
+                                                                No blocking exceptions found in the current fixture data.
                                                             </div>
                                                         ) : (
                                                             <>
@@ -1831,7 +1833,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                 <div>
                                                     <p className="text-sm font-semibold text-slate-950">Paste or upload inbound CSV</p>
                                                     <p className="mt-1 text-xs leading-5 text-slate-500">
-                                                        Uses the public stateless sandbox evaluator. Data is parsed, normalized, and checked against FSMA 204 rules without being stored or promoted to production ingestion.
+                                                        Uses the public stateless CSV evaluator. Data is parsed, normalized, and checked against FSMA 204 rules without being stored or promoted to production ingestion.
                                                     </p>
                                                 </div>
                                                 <div className="flex shrink-0 gap-2">
@@ -2031,12 +2033,12 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                     <p className="text-sm font-semibold">Path to production</p>
                                                 </div>
                                                 <p className="mt-1 text-xs leading-5 text-slate-300">
-                                                    Move from free diagnosis to a monitored feed without treating sandbox rows as formal production records.
+                                                    Move from free diagnosis to a monitored feed without treating CSV check rows as formal production records.
                                                 </p>
                                                 <div className="mt-4 space-y-3">
                                                     {[
                                                         ["1", "Diagnose free", feederResult ? `${feederResult.total_events} events evaluated` : "Evaluate CSV first"],
-                                                        ["2", "Save as test run", workbenchRunId ? `Persisted as ${workbenchRunId}` : feederSavedAt ? `Saved ${formatServiceTime(feederSavedAt)}` : "Keep the sandbox result for handoff"],
+                                                        ["2", "Save as test run", workbenchRunId ? `Persisted as ${workbenchRunId}` : feederSavedAt ? `Saved ${formatServiceTime(feederSavedAt)}` : "Keep the CSV check result for handoff"],
                                                         ["3", "Convert to import mapping", "Turn headers and CTE aliases into an import setup"],
                                                         ["4", "Monitor live feed", "Watch connector health, failures, and exceptions"],
                                                         ["5", "Generate production evidence", "Use signed-in production records only"],
@@ -2095,7 +2097,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                     <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
                                                         <p className="text-sm font-semibold text-emerald-900">No open fixes in the current run</p>
                                                         <p className="mt-1 text-xs leading-5 text-emerald-800">
-                                                            Ready lots can move to production import mapping. Sandbox and mock records still stay outside formal production records.
+                                                            Ready lots can move to production import mapping. CSV check and mock records still stay outside formal production records.
                                                         </p>
                                                     </div>
                                                 ) : (
@@ -2137,7 +2139,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                             <div className="mt-4 space-y-2">
                                                 {[
                                                     ["Simulation", "Mock and scenario data only"],
-                                                    ["Preflight", feederResult ? "Sandbox result available" : "Awaiting sandbox evaluation"],
+                                                    ["Preflight", feederResult ? "CSV check result available" : "Awaiting CSV evaluation"],
                                                     ["Staging", feederSavedAt ? "Saved test run ready for mapping" : "Save a test run before mapping"],
                                                     [
                                                         "Production evidence",
@@ -2205,7 +2207,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                         <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
                                             <p className="text-sm font-semibold text-slate-950">Supplier readiness</p>
                                             <p className="mt-1 text-xs leading-5 text-slate-500">
-                                                Supplier state uses sample validation, mapping progress, repeated fixes, and export-ready lots to show who is blocking readiness.
+                                                Supplier state uses fixture validation, mapping progress, repeated fixes, and export-ready lots to show who is blocking readiness.
                                             </p>
                                             <p className="mt-3 text-sm font-semibold text-slate-950">Network average {supplierAverageScore}/100</p>
                                         </div>
@@ -2399,7 +2401,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                 <p className="mt-1 text-sm text-slate-500">
                                                     {isStandalone
                                                         ? "Run the pipeline to generate FSMA 204 traceability records."
-                                                        : "Load test data to validate FSMA 204 records before production ingestion."}
+                                                        : "Load fixture data to validate FSMA 204 records before production ingestion."}
                                                 </p>
                                             </div>
                                         ) : (
@@ -2445,7 +2447,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                             <TableCell className={cn("px-3 text-xs text-slate-700", isStandalone ? "py-3" : "py-2")}>{event.location}</TableCell>
                                                             <TableCell className={cn("px-3 text-xs text-slate-600", isStandalone ? "py-3" : "py-2")}>{event.timestamp}</TableCell>
                                                             <TableCell className={cn("px-3 text-xs text-slate-600", isStandalone ? "py-3" : "py-2")}>
-                                                                {isStandalone ? event.mode : "Test data"}
+                                                                {isStandalone ? event.mode : "Fixture data"}
                                                             </TableCell>
                                                             <TableCell className={cn("px-3 text-xs text-slate-600", isStandalone ? "py-3" : "py-2")}>{event.attempts}</TableCell>
                                                             <TableCell className={cn("px-3", isStandalone ? "py-3" : "py-2")}>
@@ -2542,8 +2544,8 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                             {!selectedIsExportReady && (
                                                 <div className="mt-4 rounded-md border border-amber-200 bg-white px-3 py-2 text-xs text-amber-800">
                                                     {selectedReadiness.missingCtes.length > 0
-                                                        ? `Capture missing KDE evidence for ${selectedReadiness.missingCtes.join(", ")} before this lot is counted as test complete.`
-                                                        : "Resolve delivery status before this lot is counted as test complete."}
+                                                        ? `Capture missing KDE evidence for ${selectedReadiness.missingCtes.join(", ")} before this lot is counted as fixture complete.`
+                                                        : "Resolve delivery status before this lot is counted as fixture complete."}
                                                 </div>
                                             )}
                                             <div className="mt-5 grid gap-3 md:grid-cols-5">
@@ -2606,7 +2608,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                             <div className="mb-3 rounded-lg border border-slate-200 bg-white p-4">
                                                 <div className="flex items-center gap-2">
                                                     <SlidersHorizontal className="h-4 w-4 text-slate-700" />
-                                                    <p className="text-sm font-semibold text-slate-950">Test data controls</p>
+                                                    <p className="text-sm font-semibold text-slate-950">Fixture data controls</p>
                                                 </div>
                                                 <p className="mt-1 text-xs leading-5 text-slate-500">
                                                     Fixture and source settings are kept here for implementation review; the main workflow stays focused on validation and evidence.
@@ -2647,7 +2649,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                 <div className="mt-4 flex flex-wrap gap-2">
                                                     <Button className="h-9 bg-emerald-700 text-white hover:bg-emerald-800" onClick={loadScenario} disabled={isBusy}>
                                                         <RefreshCcw className="mr-2 h-4 w-4" />
-                                                        Load test data
+                                                        Load fixture data
                                                     </Button>
                                                     <Button variant="outline" className="h-9 border-slate-300 bg-white" onClick={resetServiceState} disabled={isBusy}>
                                                         Reset test state
@@ -2658,7 +2660,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                         <div className="grid gap-3 md:grid-cols-2">
                                             {[
                                                 ["Auth", isStandalone ? "Off for local simulation" : "Dashboard session"],
-                                                ["Storage", isStandalone ? "Local JSONL" : "Test data store"],
+                                                ["Storage", isStandalone ? "Local JSONL" : "Fixture data store"],
                                                 ["Persist path", "data/events.jsonl"],
                                                 ["Source", source],
                                                 ["Service build", health?.build?.commit_sha_short || health?.build?.version || "Not connected"],
@@ -2815,7 +2817,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                 ) : (
                                     <Button variant="outline" className="mt-1 h-9 w-full border-slate-300 bg-white" onClick={() => setActiveTab("Diagnostics")}>
                                         <SlidersHorizontal className="mr-2 h-4 w-4" />
-                                        Test data settings
+                                        Fixture data settings
                                     </Button>
                                 )}
                             </CardContent>
