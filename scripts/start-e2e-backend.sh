@@ -44,6 +44,20 @@ export REGENGINE_ENV="${REGENGINE_ENV:-development}"
 export AUTH_SECRET_KEY="${AUTH_SECRET_KEY:-playwright-local-jwt-signing-key-2026}"
 export JWT_SIGNING_KEY="${JWT_SIGNING_KEY:-$AUTH_SECRET_KEY}"
 export DATABASE_URL="${DATABASE_URL:-sqlite:///$shared_db_path}"
+# Prefer an explicit ADMIN_DATABASE_URL. For the Playwright Postgres cluster,
+# default to the CI-only regengine_sysadmin LOGIN created by
+# setup_e2e_postgres.py (NOSUPERUSER/NOBYPASSRLS). Sqlite local falls back to
+# DATABASE_URL. Fake CI-only password — never a production secret.
+_default_admin_database_url="$DATABASE_URL"
+case "$DATABASE_URL" in
+  postgresql://*playwright_shared*|postgres://*playwright_shared*)
+    _default_admin_database_url="postgresql://regengine_sysadmin:ci-e2e-only-sysadmin-not-a-real-secret@localhost:5432/playwright_shared" # pragma: allowlist secret — CI-only fake password for E2E NOSUPERUSER role
+    ;;
+esac
+export ADMIN_DATABASE_URL="${ADMIN_DATABASE_URL:-$_default_admin_database_url}"
+# E2E-only: raise product-mutation rate limit. Hook is inert unless this env
+# var is set; production start paths do not source this script.
+export REGENGINE_E2E_RELAX_PRODUCT_MUTATION_LIMIT="${REGENGINE_E2E_RELAX_PRODUCT_MUTATION_LIMIT:-true}"
 export ADMIN_FALLBACK_SQLITE="${ADMIN_FALLBACK_SQLITE:-sqlite:///$admin_db_path}"
 export DISABLE_TASK_WORKER="${DISABLE_TASK_WORKER:-true}"
 export ALLOW_INMEMORY_SESSION_STORE="${ALLOW_INMEMORY_SESSION_STORE:-true}"

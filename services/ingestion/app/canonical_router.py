@@ -473,6 +473,49 @@ class TraceResponse(BaseModel):
     # exports should either fail-closed or re-query with a higher cap
     # when this flag is set. Defaults to False for existing clients.
     truncated: bool = False
+    # ``depth_exhausted=True`` means at least one lot was reached at
+    # ``max_depth`` and was not expanded: the graph may continue beyond
+    # the returned links. Reported separately from ``truncated`` so a
+    # client can tell the result cap from the depth limit. Conservative:
+    # the unexpanded lot may have no further links. Defaults to False
+    # for existing clients.
+    depth_exhausted: bool = False
+    # The depth limit the walk ran with, so a client reading
+    # ``depth_exhausted`` knows what to raise on a re-query.
+    max_depth: int = 5
+
+
+def _trace_response(store: Any, tid: str, tlc: str, direction: str, max_depth: int) -> TraceResponse:
+    """Run one directional walk and shape it as a ``TraceResponse``.
+
+    Forward links carry ``output_quantity`` / ``output_unit``; backward
+    links carry ``input_quantity`` / ``input_unit``. Both map onto the
+    response's ``quantity`` / ``unit``.
+    """
+    walk = store.trace_walk(tid, tlc, direction, max_depth=max_depth)
+    qty_key, unit_key = ("output_quantity", "output_unit") if direction == "forward" else ("input_quantity", "input_unit")
+    links = [
+        TraceLink(
+            input_tlc=r["input_tlc"],
+            output_tlc=r["output_tlc"],
+            transformation_event_id=r["transformation_event_id"],
+            process_type=r.get("process_type"),
+            depth=r["depth"],
+            confidence_score=r.get("confidence_score", 1.0),
+            quantity=r.get(qty_key),
+            unit=r.get(unit_key),
+        )
+        for r in walk.links
+    ]
+    return TraceResponse(
+        tlc=tlc,
+        direction=direction,
+        links=links,
+        total_hops=max(r["depth"] for r in walk.links) if walk.links else 0,
+        truncated=walk.truncated,
+        depth_exhausted=walk.depth_exhausted,
+        max_depth=walk.max_depth,
+    )
 
 
 @router.get(
@@ -493,31 +536,11 @@ def trace_forward(
     set_tenant_guc(db_session, tid)
 
     store = CanonicalEventStore(db_session, dual_write=False)
-    # #1282: trace_forward now returns (links, truncated). ``truncated``
-    # means the BFS hit max_results and stopped early; surface it so
-    # API clients can distinguish a complete trace from a capped one.
-    raw_links, truncated = store.trace_forward(tid, tlc, max_depth=max_depth)
-
-    links = [
-        TraceLink(
-            input_tlc=r["input_tlc"],
-            output_tlc=r["output_tlc"],
-            transformation_event_id=r["transformation_event_id"],
-            process_type=r.get("process_type"),
-            depth=r["depth"],
-            confidence_score=r.get("confidence_score", 1.0),
-            quantity=r.get("output_quantity"),
-            unit=r.get("output_unit"),
-        )
-        for r in raw_links
-    ]
-    return TraceResponse(
-        tlc=tlc,
-        direction="forward",
-        links=links,
-        total_hops=max(r["depth"] for r in raw_links) if raw_links else 0,
-        truncated=truncated,
-    )
+    # #1282: ``truncated`` means the BFS hit max_results and stopped early;
+    # ``depth_exhausted`` means ``max_depth`` cut the walk short. Both are
+    # surfaced so API clients can distinguish a complete trace from a
+    # capped one.
+    return _trace_response(store, tid, tlc, "forward", max_depth)
 
 
 @router.get(
@@ -538,27 +561,5 @@ def trace_backward(
     set_tenant_guc(db_session, tid)
 
     store = CanonicalEventStore(db_session, dual_write=False)
-    # #1282: trace_backward now returns (links, truncated). See
-    # trace_forward handler for the rationale.
-    raw_links, truncated = store.trace_backward(tid, tlc, max_depth=max_depth)
-
-    links = [
-        TraceLink(
-            input_tlc=r["input_tlc"],
-            output_tlc=r["output_tlc"],
-            transformation_event_id=r["transformation_event_id"],
-            process_type=r.get("process_type"),
-            depth=r["depth"],
-            confidence_score=r.get("confidence_score", 1.0),
-            quantity=r.get("input_quantity"),
-            unit=r.get("input_unit"),
-        )
-        for r in raw_links
-    ]
-    return TraceResponse(
-        tlc=tlc,
-        direction="backward",
-        links=links,
-        total_hops=max(r["depth"] for r in raw_links) if raw_links else 0,
-        truncated=truncated,
-    )
+    # See trace_forward for the ``truncated`` / ``depth_exhausted`` contract.
+    return _trace_response(store, tid, tlc, "backward", max_depth)

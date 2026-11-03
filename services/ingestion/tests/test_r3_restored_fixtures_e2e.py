@@ -38,7 +38,6 @@ from app.edi_ingestion.parser import _parse_x12_segments  # noqa: E402
 from app.edi_ingestion.validation import _validate_edi_as_fsma_event  # noqa: E402
 from app.fda_export_service import FDA_COLUMNS, _generate_csv  # noqa: E402
 from app.webhook_router_v2 import _validate_event_kdes  # noqa: E402
-from pydantic import ValidationError  # noqa: E402
 from shared.data_gap_tracking import (  # noqa: E402
     GAP_KIND_MISSING_KDE,
     decide_transition,
@@ -102,9 +101,7 @@ def test_csv_harvesting_fixture_end_to_end():
 
     headers, rows = _parse_sheet(sheet)
     assert headers == FDA_COLUMNS
-    assert [r["Traceability Lot Code (TLC)"] for r in rows] == [
-        s["traceability_lot_code"] for s in source
-    ]
+    assert [r["Traceability Lot Code (TLC)"] for r in rows] == [s["traceability_lot_code"] for s in source]
     for row, src in zip(rows, source):
         assert row["Event Type (CTE)"].lower() == "harvesting"
         assert row["Product Description"] == src["product_description"]
@@ -133,12 +130,11 @@ def test_edi_856_fixture_end_to_end():
     merged = {**header, **lines[0], "edi_line_index": 1}
     tlc = extracted["asn_number"]
 
-    with pytest.raises(ValidationError):
-        _validate_edi_as_fsma_event(merged, "856", tlc, None)
+    validated = _validate_edi_as_fsma_event(merged, "856", tlc, None)
+    assert validated["tlc"] == tlc.strip()
+    assert any("production pattern" in warning for warning in validated["warnings"])
 
-    event = edi_routes._build_ingest_event_for_set(
-        "856", merged, tlc, None, None, None, None, segments=segments
-    )
+    event = edi_routes._build_ingest_event_for_set("856", merged, tlc, None, None, None, None, segments=segments)
     assert event.cte_type.value == "shipping"
     assert event.quantity == lines[0]["quantity"]
     assert event.kdes["ship_from_gln"] == expected["ship_from_gln"]

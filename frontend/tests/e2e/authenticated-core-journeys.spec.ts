@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
+import { setTimeout as delay } from 'node:timers/promises';
 import { expect, test, type APIResponse, type BrowserContext, type Page } from '@playwright/test';
 import { hasPasswordlessE2E, passwordlessE2ESkipReason } from './auth-prereqs';
 import { csrfHeader, loginViaApi, logoutViaApi } from './support/api-auth';
@@ -69,6 +70,21 @@ function isLocalE2E(): boolean {
     return !process.env.PLAYWRIGHT_BASE_URL;
 }
 
+/**
+ * Invite audit/cleanup helpers talk to node:sqlite against ADMIN_FALLBACK_SQLITE.
+ * When ADMIN_DATABASE_URL points at Postgres (CI Passwordless E2E / sysadmin
+ * API-key store), SessionLocal writes invites + audit_logs there instead, so
+ * the SQLite file has no invites table. Skip the SQLite assertions/cleanup in
+ * that mode; API + UI checks below still cover the journey.
+ */
+function adminUsesSqliteFallback(): boolean {
+    const adminUrl = (process.env.ADMIN_DATABASE_URL || '').trim().toLowerCase();
+    if (adminUrl.startsWith('postgres')) return false;
+    if (adminUrl.startsWith('sqlite')) return true;
+    // Unset ADMIN_DATABASE_URL → local E2E uses ADMIN_FALLBACK_SQLITE.
+    return isLocalE2E();
+}
+
 function parseInviteEmailOutboxLine(line: string): InviteEmailOutboxRecord | null {
     try {
         return JSON.parse(line) as InviteEmailOutboxRecord;
@@ -98,6 +114,8 @@ function removeInviteEmailOutboxRecords(email: string): void {
 }
 
 function expectAdminAuditLog(tenantId: string, eventType: string, resourceId: string): void {
+    if (!adminUsesSqliteFallback()) return;
+
     const database = new DatabaseSync(adminSqlitePath());
     try {
         const row = database
@@ -111,7 +129,7 @@ function expectAdminAuditLog(tenantId: string, eventType: string, resourceId: st
 
 function cleanupInviteFixture(tenantId: string | null, email: string, userId?: string, inviteId?: string): void {
     removeInviteEmailOutboxRecords(email);
-    if (!tenantId || !isLocalE2E()) return;
+    if (!tenantId || !isLocalE2E() || !adminUsesSqliteFallback()) return;
 
     const database = new DatabaseSync(adminSqlitePath());
     try {
@@ -165,15 +183,28 @@ async function expectMemberInBackend(context: BrowserContext, email: string): Pr
     return member!;
 }
 
+async function requestProductFixture(request: () => Promise<APIResponse>): Promise<APIResponse> {
+    const response = await request();
+    if (response.status() !== 429) return response;
+
+    // Product mutations retain their production 30/minute limit in E2E.
+    // Retry only an explicit rejection, never an ambiguous failed request.
+    const retryAfter = response.headers()['retry-after'];
+    const seconds = retryAfter?.trim() ? Number(retryAfter) : NaN;
+    const waitMs = Number.isFinite(seconds) && seconds >= 0 ? Math.ceil(seconds * 1000) + 1000 : 61_000;
+    await delay(waitMs);
+    return request();
+}
+
 async function createProduct(
     context: BrowserContext,
     tenantId: string,
     product: { name: string; category: string; sku: string },
 ): Promise<ProductPayload> {
-    const response = await context.request.post(ingestionPath(tenantId, 'products'), {
+    const response = await requestProductFixture(async () => context.request.post(ingestionPath(tenantId, 'products'), {
         headers: await csrfHeader(context),
         data: product,
-    });
+    }));
     await expectResponseOk(response, `create product ${product.name}`);
     const payload = await response.json() as { created?: boolean; product?: ProductPayload };
     expect(payload.created).toBe(true);
@@ -187,9 +218,9 @@ async function deleteProduct(
     tenantId: string,
     productId: string,
 ): Promise<void> {
-    const response = await context.request.delete(`${ingestionPath(tenantId, 'products')}/${productId}`, {
+    const response = await requestProductFixture(async () => context.request.delete(`${ingestionPath(tenantId, 'products')}/${productId}`, {
         headers: await csrfHeader(context),
-    });
+    }));
     if (response.status() === 404) return;
     await expectResponseOk(response, `delete product ${productId}`);
 }
@@ -354,6 +385,8 @@ test.describe.serial('Authenticated core journeys', () => {
     });
 
     test('search/filter on populated dataset returns expected results and backend pagination', async ({ page, context }, testInfo) => {
+        // Creating and deleting 55 products can each wait for a rate-limit window.
+        test.setTimeout(240_000);
         const session = await login(context);
         const tenantId = String(session.tenant_id);
         const runId = Date.now();

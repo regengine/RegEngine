@@ -1,0 +1,14 @@
+{
+  "name": "regengine-jev-evidence-experiment",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "scripts": {
+    "test": "node --test *.test.mjs",
+    "preflight": "node run-compare.mjs --preflight",
+    "analyze": "node analyze-offline.mjs"
+  }
+}

@@ -235,19 +235,13 @@ jobs:
         run: pip install detect-secrets==1.5.0
 
       - name: Scan for new secrets (fail on findings not in baseline)
-        # The pre-commit hook uses the same baseline/exclude list; mirror it
-        # here so pre-commit and CI agree on which files are in scope.
-        # `detect-secrets-hook` is the CLI the pre-commit hook invokes — it
-        # exits non-zero when it finds a potential secret that isn't already
-        # captured in `.secrets.baseline`.
-        run: |
-          # shellcheck disable=SC2046
-          detect-secrets-hook \
-            --baseline .secrets.baseline \
-            --exclude-files '.*\.lock$' \
-            --exclude-files '.*package-lock\.json$' \
-            --exclude-files '\.secrets\.baseline$' \
-            $(git ls-files)
+        # Same check the PR gates run (pr-gate.yml, pr-secrets-non-main.yml):
+        # detect-secrets-hook with the pre-commit baseline/exclude list over
+        # every tracked file, run against a temp copy of `.secrets.baseline`.
+        # It fails on a secret that isn't in the baseline (exit 1) but passes
+        # line-number-only drift (exit 3), which otherwise turned main red
+        # every time a merge moved a baselined line.
+        run: bash scripts/ci/check_secrets_baseline.sh
 
       - name: Baseline report (informational)
         # Prints the current baseline contents as a JSON report so reviewers

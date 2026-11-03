@@ -548,7 +548,7 @@ jobs:
     name: "CI Status Gate"
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: [backend, frontend, workflow-contract, secrets]
+    needs: [backend, frontend, workflow-contract, secrets, jev-evidence]
     if: always()
     steps:
       - name: Verify all gate dependencies passed
@@ -557,13 +557,15 @@ jobs:
           FRONTEND: ${{ needs.frontend.result }}
           CONTRACT: ${{ needs.workflow-contract.result }}
           SECRETS: ${{ needs.secrets.result }}
+          JEV: ${{ needs.jev-evidence.result }}
         run: |
           echo "PR Gate: Backend           = $BACKEND"
           echo "PR Gate: Frontend          = $FRONTEND"
           echo "PR Gate: Workflow Contract = $CONTRACT"
           echo "PR Gate: Secrets          = $SECRETS"
-          if [ "$BACKEND" != "success" ] || [ "$FRONTEND" != "success" ] || [ "$CONTRACT" != "success" ] || [ "$SECRETS" != "success" ]; then
-            echo "::error::CI Status Gate failed — backend=$BACKEND frontend=$FRONTEND contract=$CONTRACT secrets=$SECRETS"
+          echo "PR Gate: Jev Evidence     = $JEV"
+          if [ "$BACKEND" != "success" ] || [ "$FRONTEND" != "success" ] || [ "$CONTRACT" != "success" ] || [ "$SECRETS" != "success" ] || [ "$JEV" != "success" ]; then
+            echo "::error::CI Status Gate failed — backend=$BACKEND frontend=$FRONTEND contract=$CONTRACT secrets=$SECRETS jev=$JEV"
             exit 1
           fi
           echo "All gate dependencies green."
@@ -578,6 +580,7 @@ jobs:
       quality: ${{ steps.filter.outputs.quality }}
       tools: ${{ steps.filter.outputs.tools }}
       review: ${{ steps.filter.outputs.review }}
+      jev: ${{ steps.filter.outputs.jev }}
     steps:
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
         id: filter
@@ -589,6 +592,9 @@ jobs:
             tools:
               - 'frontend/src/app/tools/**'
               - '.github/workflows/pr-gate.yml'
+            jev:
+              - 'experiments/jev-evidence/**'
+              - '.github/workflows/pr-gate.yml'
             # Original Review Gates pull_request paths, with its merged file.
             review:
               - 'frontend/**'
@@ -598,6 +604,28 @@ jobs:
               - 'tests/**'
               - 'scripts/**'
               - '.github/workflows/pr-gate.yml'
+
+  jev-evidence:
+    name: "PR Gate: Jev Evidence"
+    needs: changes
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+        if: needs.changes.outputs.jev == 'true'
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v6
+        if: needs.changes.outputs.jev == 'true'
+        with:
+          node-version: '24'
+      - name: Replay frozen responses and verify runner safeguards offline
+        if: needs.changes.outputs.jev == 'true'
+        working-directory: experiments/jev-evidence
+        run: npm test
+      - name: No standalone Jev changes
+        if: needs.changes.outputs.jev != 'true'
+        run: echo "Standalone Jev experiment unchanged."
 
   # Jobs migrated from PR Quality Gate.
   # ── PR Size Check ───────────────────────────────────────

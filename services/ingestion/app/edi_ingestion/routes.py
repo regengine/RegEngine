@@ -1240,6 +1240,8 @@ async def ingest_edi_document(
             )
             if slice_set in ("856", "861", "944", "945"):
                 slice_extracted["traceability_lot_code"] = validated["tlc"]
+            if validated.get("warnings"):
+                slice_extracted["fsma_validation_warnings"] = validated["warnings"]
             slice_extracted["fsma_validation_status"] = "passed"
         except ValidationError as ve:
             errors = ve.errors(include_context=False) if slice_set in ("856", "861", "944", "945") else ve.errors()
@@ -1312,6 +1314,7 @@ async def ingest_edi_document(
             "product_description": slice_extracted.get("product_description"),
             "reference_document_number": slice_extracted.get("reference_document_number"),
             "fsma_validation_status": slice_extracted.get("fsma_validation_status"),
+            "fsma_validation_warnings": slice_extracted.get("fsma_validation_warnings", []),
         }
         if slice_set in ("856", "861", "944", "945"):
             summary.update(

@@ -1,0 +1,28 @@
+{
+  "model": "jev-1.13.0",
+  "answers": {
+    "evidence_addresses_claim": {
+      "type": "noul",
+      "noul": 0.96
+    },
+    "sources_conflict_on_claim": {
+      "type": "noul",
+      "noul": 0.94
+    },
+    "claim_polarity": {
+      "type": "choice",
+      "choice": "unaddressed_cannot_judge",
+      "confidence": 0.61,
+      "probabilities": {
+        "affirms_hypothesis": 0.02,
+        "refutes_hypothesis": 0.27,
+        "partial_scope_only": 0,
+        "unaddressed_cannot_judge": 0.71
+      }
+    }
+  },
+  "usage": {
+    "input_tokens": 1069,
+    "output_tokens": 116
+  }
+}

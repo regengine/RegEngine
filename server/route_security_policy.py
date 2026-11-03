@@ -206,6 +206,14 @@ TENANT_API_KEY_OWNER_POLICIES: dict[str, TenantApiKeyRoutePolicy] = {
 
 TENANT_API_KEY_OPERATION_POLICIES: dict[tuple[str, str, str], TenantApiKeyRoutePolicy] = {
     (
+        "csv",
+        "POST",
+        "/api/v1/ingest/csv/diagnostic",
+    ): TenantApiKeyRoutePolicy(
+        "none:credential-bound-tenant-preview",
+        "tenant_api_key_no_persistence",
+    ),
+    (
         "status",
         "GET",
         "/v1/ingest/status/{job_id}",
@@ -228,6 +236,7 @@ TENANT_API_KEY_OPERATION_POLICIES: dict[tuple[str, str, str], TenantApiKeyRouteP
 # contract during manifest generation.
 REQUIRED_EXACT_TENANT_API_KEY_POLICIES = frozenset(
     {
+        ("csv", "POST", "/api/v1/ingest/csv/diagnostic"),
         ("status", "GET", "/v1/ingest/status/{job_id}"),
         ("status", "GET", "/v1/ingest/documents/{document_id}/analysis"),
     }
@@ -245,9 +254,7 @@ _HIGH_ASSURANCE_SESSION_DEPS = frozenset(
         "services.admin.app.auth.session_auth:require_high_assurance_session",
     }
 )
-_SCOPED_OPAQUE_SESSION_DEP = (
-    "services.admin.app.auth.session_auth:get_scoped_active_session_context"
-)
+_SCOPED_OPAQUE_SESSION_DEP = "services.admin.app.auth.session_auth:get_scoped_active_session_context"
 _REVIEW_DEPS = frozenset(
     {
         "services.admin.app.privileged_auth:require_review_read",
@@ -269,10 +276,10 @@ _TENANT_API_KEY_DEPS = frozenset(
         "services.ingestion.app.webhook_compat:_verify_api_key",
     }
 )
-_OPTIONAL_TENANT_API_KEY_DEP = "services.ingestion.app.authz:get_optional_ingestion_principal"  # pragma: allowlist secret
-_CHECKOUT_RATE_LIMIT_DEP = (
-    "services.ingestion.app.stripe_billing.rate_limiting:_check_stripe_checkout_rate_limit"
+_OPTIONAL_TENANT_API_KEY_DEP = (
+    "services.ingestion.app.authz:get_optional_ingestion_principal"  # pragma: allowlist secret
 )
+_CHECKOUT_RATE_LIMIT_DEP = "services.ingestion.app.stripe_billing.rate_limiting:_check_stripe_checkout_rate_limit"
 _ALL_AUTH_DEPS = (
     {_METRICS_DEP, _WORKLOAD_DEP}
     | _HIGH_ASSURANCE_SYSADMIN_DEPS
@@ -351,10 +358,7 @@ def _required_permissions(route: APIRoute, dependency_keys: set[str]) -> tuple[s
     if dependency_keys & _HIGH_ASSURANCE_SYSADMIN_DEPS and "sysadmin" not in permissions:
         permissions.append("sysadmin")
     if not permissions and dependency_keys & (
-        _TENANT_API_KEY_DEPS
-        | _OPAQUE_SESSION_DEPS
-        | _HIGH_ASSURANCE_SESSION_DEPS
-        | {_DUAL_SESSION_DEP}
+        _TENANT_API_KEY_DEPS | _OPAQUE_SESSION_DEPS | _HIGH_ASSURANCE_SESSION_DEPS | {_DUAL_SESSION_DEP}
     ):
         permissions.append("authenticated")
     return tuple(sorted(permissions))
@@ -553,8 +557,7 @@ def _adapt_public_optional_tenant_checkout(route: APIRoute) -> None:
         return False
 
     catches_auth_failure_exception = any(
-        isinstance(node, ast.ExceptHandler) and catches_auth_failure(node.type)
-        for node in ast.walk(tree)
+        isinstance(node, ast.ExceptHandler) and catches_auth_failure(node.type) for node in ast.walk(tree)
     )
     if catches_auth_failure_exception:
         raise RouteManifestError(
@@ -688,19 +691,13 @@ def _adapt_tenant_identity_global_self_erasure(route: APIRoute) -> None:
 
     _adapt_tenant_dual_session_csrf(route)
     if route.endpoint.__name__ != "request_erasure":
-        raise RouteManifestError(
-            f"Identity-global self-erasure adapter is not bound to request_erasure: {route.path}"
-        )
+        raise RouteManifestError(f"Identity-global self-erasure adapter is not bound to request_erasure: {route.path}")
 
     source = textwrap.dedent(inspect.getsource(route.endpoint))
     tree = ast.parse(source)
     assignments: dict[str, ast.expr] = {}
     for node in ast.walk(tree):
-        if (
-            isinstance(node, ast.Assign)
-            and len(node.targets) == 1
-            and isinstance(node.targets[0], ast.Name)
-        ):
+        if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
             assignments[node.targets[0].id] = node.value
 
     raw_user_id = assignments.get("user_id")
@@ -730,25 +727,14 @@ def _adapt_tenant_identity_global_self_erasure(route: APIRoute) -> None:
     erasure_calls = [
         node
         for node in ast.walk(tree)
-        if isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Name)
-        and node.func.id == "_apply_account_erasure"
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "_apply_account_erasure"
     ]
-    erasure_target_is_normalized_user = (
-        len(erasure_calls) == 1
-        and any(
-            keyword.arg == "user_id"
-            and isinstance(keyword.value, ast.Name)
-            and keyword.value.id == "user_uuid"
-            for keyword in erasure_calls[0].keywords
-        )
+    erasure_target_is_normalized_user = len(erasure_calls) == 1 and any(
+        keyword.arg == "user_id" and isinstance(keyword.value, ast.Name) and keyword.value.id == "user_uuid"
+        for keyword in erasure_calls[0].keywords
     )
 
-    if not (
-        authenticated_user_binding
-        and normalized_authenticated_user
-        and erasure_target_is_normalized_user
-    ):
+    if not (authenticated_user_binding and normalized_authenticated_user and erasure_target_is_normalized_user):
         raise RouteManifestError(
             "Identity-global self-erasure must normalize current_user.id and bind it "
             "as _apply_account_erasure(..., user_id=...)"
@@ -803,6 +789,7 @@ TEST_ADAPTERS: dict[str, Callable[[APIRoute], None]] = {
     "public_optional_tenant_checkout": _adapt_public_optional_tenant_checkout,
     "tenant_api_key_postgres_rls": _adapt_tenant_api_key_postgres_rls,
     "tenant_api_key_mixed_storage": _adapt_tenant_api_key_mixed_storage,
+    "tenant_api_key_no_persistence": _adapt_tenant_api_key_dependency,
     "tenant_api_key_ingestion_postgres_filter": _adapt_tenant_api_key_ingestion_postgres_filter,
     "tenant_api_key_redis_job_owner": _adapt_tenant_api_key_redis_job_owner,
     "tenant_dual_session_csrf": _adapt_tenant_dual_session_csrf,

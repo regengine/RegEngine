@@ -1,0 +1,9 @@
+{
+  "authorized": true,
+  "user_instruction": "Ok do it, make sure its ready and the pr, commit, merge now",
+  "scope": "Corrective iteration after v1 failed B08; preserve failed results,34regression+16freshsyntheticcases,2variants; original$1cap unchanged",
+  "requests": 100,
+  "original_budget_cap_usd": "1.00",
+  "prior_spend_usd": "0.006837516",
+  "maximum_cumulative_reservation_usd": "0.906837516"
+}

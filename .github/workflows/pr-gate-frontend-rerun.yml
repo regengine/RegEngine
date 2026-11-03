@@ -1,9 +1,17 @@
 # Re-runs a "PR Gate: Frontend" job that gave up while Frontend CI/CD was
 # still queued. pr-gate.yml polls for "Frontend CI Status Gate" for at most
 # 12 minutes; when the runner queue is backed up the gate may not exist yet.
-# Once Frontend CI/CD finishes for the same head SHA, this workflow re-runs
-# the failed PR Gate: Frontend job, which then mirrors the real gate result.
+# Once Frontend CI/CD finishes for the same head SHA, this workflow recovers
+# the failed PR Gate: Frontend job so the gate mirrors the real result.
 # This also covers a gate that timed out just after Frontend CI completed.
+#
+# IMPORTANT: we first wait for the parent PR Gate run to finish, then re-run
+# its FAILED JOBS (not a single job) via reRunWorkflowFailedJobs so that both
+# "PR Gate: Frontend" and the dependent "CI Status Gate" recover together. A
+# single-job re-run would leave CI Status Gate red, and re-running while the
+# PR Gate run is still queued/running returns 403 "already running" -- that
+# already-running race is exactly what this workflow fixes, so a 403 is
+# treated as "still running" and we keep waiting.
 # Skips SHAs that are no longer the PR head and stops after run attempt 3.
 #
 # Runs on the default branch (workflow_run) and never checks out PR code.
@@ -25,7 +33,7 @@ jobs:
     name: "Re-run PR Gate: Frontend"
     if: github.event.workflow_run.event == 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 100
     permissions:
       actions: write
       contents: read
@@ -90,7 +98,68 @@ jobs:
               core.info(`PR Gate run ${latest.id} is already on attempt ${latest.run_attempt}; not re-running again.`);
               return;
             }
-            core.info(`Re-running PR Gate: Frontend job ${job.id} (run ${latest.id}) for ${sha}.`);
-            await github.request('POST /repos/{owner}/{repo}/actions/jobs/{job_id}/rerun', {
-              owner, repo, job_id: job.id,
+            const sleep = (ms) => new Promise(res => setTimeout(res, ms));
+            // Wait for the parent PR Gate run to finish before re-running. The
+            // run that contains the failed Frontend job also still has queued/
+            // running jobs (e.g. CI Status Gate); re-running now yields 403
+            // "already running". Poll getWorkflowRun until it's completed.
+            const WAIT_DEADLINE_MS = 90 * 60 * 1000; // 90 minutes
+            const waitStart = Date.now();
+            let runCompleted = false;
+            while (Date.now() - waitStart < WAIT_DEADLINE_MS) {
+              const cur = await github.rest.actions.getWorkflowRun({
+                owner, repo, run_id: latest.id,
+              });
+              if (cur.data.status === 'completed') {
+                core.info(`PR Gate run ${latest.id} is completed (${cur.data.conclusion}).`);
+                runCompleted = true;
+                break;
+              }
+              const waitedMin = Math.round((Date.now() - waitStart) / 60000);
+              core.info(`PR Gate run ${latest.id} is ${cur.data.status}; waited ${waitedMin}m, polling again.`);
+              await sleep(45000); // 45s between polls (30-60s range)
+            }
+            if (!runCompleted) {
+              core.setFailed(`PR Gate run ${latest.id} did not complete within 90 minutes; not re-running.`);
+              return;
+            }
+
+            // Re-check that the Frontend job is still a failure after the wait;
+            // it may have recovered on its own while we waited.
+            const jobs2 = await github.rest.actions.listJobsForWorkflowRun({
+              owner, repo, run_id: latest.id, filter: 'latest', per_page: 100,
             });
+            const job2 = jobs2.data.jobs.find(j => j.name === 'PR Gate: Frontend');
+            if (!job2) {
+              core.info(`PR Gate run ${latest.id} no longer has a PR Gate: Frontend job.`);
+              return;
+            }
+            if (job2.status !== 'completed' || !['failure', 'timed_out', 'cancelled'].includes(job2.conclusion)) {
+              core.info(`PR Gate: Frontend recovered (${job2.status}/${job2.conclusion}); no re-run needed.`);
+              return;
+            }
+
+            // Re-run failed jobs (not a single job) so the dependent
+            // CI Status Gate recovers too. If the run is somehow still
+            // running, GitHub returns 403 "already running" -- treat that as
+            // still-running and keep polling until the deadline.
+            core.info(`Re-running failed jobs for PR Gate run ${latest.id} (${sha}).`);
+            while (Date.now() - waitStart < WAIT_DEADLINE_MS) {
+              try {
+                await github.rest.actions.reRunWorkflowFailedJobs({
+                  owner, repo, run_id: latest.id,
+                });
+                core.info(`Re-ran failed jobs for PR Gate run ${latest.id}.`);
+                return;
+              } catch (err) {
+                const alreadyRunning = err.status === 403 &&
+                  /already running/i.test(err.message || '');
+                if (!alreadyRunning) {
+                  throw err;
+                }
+                const waitedMin = Math.round((Date.now() - waitStart) / 60000);
+                core.info(`PR Gate run ${latest.id} still running (403); waited ${waitedMin}m, retrying.`);
+                await sleep(45000);
+              }
+            }
+            core.setFailed(`PR Gate run ${latest.id} stayed "already running" past 90 minutes; not re-running.`);

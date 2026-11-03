@@ -1,0 +1,864 @@
+[
+  {
+    "id": "HC01",
+    "family": "conflict",
+    "state": {
+      "synthetic": true,
+      "claim_id": "HC01",
+      "hypothesis_to_verify": "Vellorin Archive record VX-14 has exactly 6 seals in frozen snapshot S4.",
+      "curated_evidence_sources": [
+        {
+          "source_id": "vellorin-main",
+          "scope": "Vellorin Archive; frozen snapshot S4; record VX-14; total seal count.",
+          "excerpt": "The final S4 register lists record VX-14 with total seal count 6."
+        },
+        {
+          "source_id": "vellorin-index",
+          "scope": "Vellorin Archive; frozen snapshot S4; record VX-41; total seal count.",
+          "excerpt": "The final S4 index lists record VX-41 with total seal count 11. VX-14 and VX-41 are distinct archive records."
+        }
+      ]
+    },
+    "expected_verdict": "supported",
+    "rationale": "The evidence explicitly gives VX-14 a total of 6 seals in S4. The count of 11 belongs to VX-41, so the two statements can both be true.",
+    "discriminating_fact": "The second source describes VX-41, a different record from the hypothesis."
+  },
+  {
+    "id": "HC02",
+    "family": "conflict",
+    "state": {
+      "synthetic": true,
+      "claim_id": "HC02",
+      "hypothesis_to_verify": "Vellorin Archive record VX-14 has exactly 6 seals in frozen snapshot S4.",
+      "curated_evidence_sources": [
+        {
+          "source_id": "vellorin-main",
+          "scope": "Vellorin Archive; frozen snapshot S4; record VX-14; total seal count.",
+          "excerpt": "The final S4 register lists record VX-14 with total seal count 6."
+        },
+        {
+          "source_id": "vellorin-index",
+          "scope": "Vellorin Archive; frozen snapshot S4; record VX-14; total seal count.",
+          "excerpt": "The final S4 index lists record VX-14 with total seal count 11. The index and register are final publications of the same frozen S4 snapshot; neither publication replaces the other."
+        }
+      ]
+    },
+    "expected_verdict": "conflicting",
+    "rationale": "The final register and final index give incompatible total seal counts for the same record in the same frozen snapshot. One supports the hypothesis and the other refutes it, with no replacement or correction resolving the disagreement.",
+    "discriminating_fact": "Both values refer to VX-14 in S4, rather than to distinct records."
+  },
+  {
+    "id": "HC03",
+    "family": "conflict",
+    "state": {
+      "synthetic": true,
+      "claim_id": "HC03",
+      "hypothesis_to_verify": "Pellorin North's consignment P-83 had status RELEASED at 14:00 on operational day 27.",
+      "curated_evidence_sources": [
+        {
+          "source_id": "pellorin-status-photo",
+          "scope": "A status-board photograph taken at 14:00 on operational day 27.",
+          "excerpt": "The photograph shows the depot label 'Pellorin North', consignment identifier 'P-83', and current status 'HELD'. The photograph captures the board's live status at 14:00."
+        },
+        {
+          "source_id": "pellorin-registry-rule",
+          "scope": "Identifier and status definitions used by Pellorin North and Pellorin South.",
+          "excerpt": "North and South maintain separate consignment registries, and each has a consignment P-83. A consignment has exactly one current status; HELD and RELEASED are distinct status values."
+        }
+      ]
+    },
+    "expected_verdict": "contradicted",
+    "rationale": "The photograph identifies the exact depot, consignment, and time in the hypothesis and shows HELD. The status definitions make HELD incompatible with RELEASED. The two evidence sources agree rather than contradict each other.",
+    "discriminating_fact": "The readable depot label links the observed HELD status to Pellorin North's P-83."
+  },
+  {
+    "id": "HC04",
+    "family": "conflict",
+    "state": {
+      "synthetic": true,
+      "claim_id": "HC04",
+      "hypothesis_to_verify": "Pellorin North's consignment P-83 had status RELEASED at 14:00 on operational day 27.",
+      "curated_evidence_sources": [
+        {
+          "source_id": "pellorin-status-photo",
+          "scope": "A status-board photograph taken at 14:00 on operational day 27.",
+          "excerpt": "The photograph shows consignment identifier 'P-83' and current status 'HELD'. The depot label is cropped out. Its capture log identifies the location only as either Pellorin North or Pellorin South. The photograph captures that board's live status at 14:00."
+        },
+        {
+          "source_id": "pellorin-registry-rule",
+          "scope": "Identifier and status definitions used by Pellorin North and Pellorin South.",
+          "excerpt": "North and South maintain separate consignment registries, and each has a consignment P-83. A consignment has exactly one current status; HELD and RELEASED are distinct status values."
+        }
+      ]
+    },
+    "expected_verdict": "insufficient",
+    "rationale": "The HELD observation could describe either depot's separate P-83. Because the depot identity is missing, it cannot establish or refute the status of Pellorin North's P-83. Nothing else supplies North's status.",
+    "discriminating_fact": "The missing depot label prevents matching the observed consignment to the entity in the hypothesis."
+  },
+  {
+    "id": "HC05",
+    "family": "conflict",
+    "state": {
+      "synthetic": true,
+      "claim_id": "HC05",
+      "hypothesis_to_verify": "Mireth Storehouse cabinet M8 contained exactly 12 sealed bins at 10:00 on operational day 8.",
+      "curated_evidence_sources": [
+        {
+          "source_id": "mireth-inventory-sheet",
+          "scope": "One signed inventory sheet for Mireth Storehouse cabinet M8 on operational day 8; each row records the whole cabinet's sealed-bin count.",
+          "excerpt": "Row A: observation time 10:00, cabinet M8, sealed-bin count 12. Row B: observation time 10:00, cabinet M8, sealed-bin count 18. Both rows are marked final observations. Neither row is marked as a correction, and the sheet gives neither row priority."
+        }
+      ]
+    },
+    "expected_verdict": "conflicting",
+    "rationale": "The single sheet contains two incompatible counts for the same cabinet, inventory measure, and observation time. The conflict exists within the evidence even though there is only one source.",
+    "discriminating_fact": "Both final observations refer to 10:00 and count the entire cabinet."
+  },
+  {
+    "id": "HC06",
+    "family": "conflict",
+    "state": {
+      "synthetic": true,
+      "claim_id": "HC06",
+      "hypothesis_to_verify": "Mireth Storehouse cabinet M8 contained exactly 12 sealed bins at 10:00 on operational day 8.",
+      "curated_evidence_sources": [
+        {
+          "source_id": "mireth-inventory-sheet",
+          "scope": "One signed inventory sheet for Mireth Storehouse cabinet M8 on operational day 8; each row records the whole cabinet's sealed-bin count.",
+          "excerpt": "Row A: observation time 10:00, cabinet M8, sealed-bin count 12. Row B: observation time 11:00, cabinet M8, sealed-bin count 18. Both rows are marked final observations. Neither row is marked as a correction, and the sheet gives neither row priority. Six sealed bins were added at 10:30, with no other inventory changes between the observations."
+        }
+      ]
+    },
+    "expected_verdict": "supported",
+    "rationale": "The 10:00 observation directly establishes the claimed count of 12. The count of 18 is from 11:00 after six bins were added, so the two observations are compatible.",
+    "discriminating_fact": "The second count is an hour later, after a documented inventory addition."
+  },
+  {
+    "id": "HC07",
+    "family": "conflict",
+    "state": {
+      "synthetic": true,
+      "claim_id": "HC07",
+      "hypothesis_to_verify": "Talvori Yard bay T9 held exactly 9 crates at 13:00 on operational day 42.",
+      "curated_evidence_sources": [
+        {
+          "source_id": "talvori-count-card",
+          "scope": "Talvori Yard; bay T9; operational day 42; whole-bay crate inventory.",
+          "excerpt": "The verified count card records 4 crates in bay T9 at 13:00. Its timestamp denotes the time of the physical count."
+        },
+        {
+          "source_id": "talvori-movement-note",
+          "scope": "Talvori Yard; bay T9; operational day 42; crate movements.",
+          "excerpt": "Crates were brought into and taken out of bay T9 between 12:15 and 12:45. The movement note does not record the quantities. No crates moved between 12:45 and 13:05."
+        }
+      ]
+    },
+    "expected_verdict": "contradicted",
+    "rationale": "A physical count at the exact target time establishes 4 crates, which refutes the claimed total of 9. Earlier movements do not conflict with that observation and do not create uncertainty about its time.",
+    "discriminating_fact": "The physical count of 4 was made at 13:00, the time asked about."
+  },
+  {
+    "id": "HC08",
+    "family": "conflict",
+    "state": {
+      "synthetic": true,
+      "claim_id": "HC08",
+      "hypothesis_to_verify": "Talvori Yard bay T9 held exactly 9 crates at 13:00 on operational day 42.",
+      "curated_evidence_sources": [
+        {
+          "source_id": "talvori-count-card",
+          "scope": "Talvori Yard; bay T9; operational day 42; whole-bay crate inventory.",
+          "excerpt": "The verified count card records 4 crates in bay T9 at 12:00. Its timestamp denotes the time of the physical count."
+        },
+        {
+          "source_id": "talvori-movement-note",
+          "scope": "Talvori Yard; bay T9; operational day 42; crate movements.",
+          "excerpt": "Crates were brought into and taken out of bay T9 between 12:15 and 12:45. The movement note does not record the quantities. No crates moved between 12:45 and 13:05."
+        }
+      ]
+    },
+    "expected_verdict": "insufficient",
+    "rationale": "The count of 4 predates movements of unknown quantities. The absence of movements after 12:45 does not reveal the resulting count. A 13:00 total of 9 and other totals are all consistent with the supplied evidence.",
+    "discriminating_fact": "The only physical count occurred before the unquantified movements, leaving the target-time count unknown."
+  },
+  {
+    "id": "HS01",
+    "family": "scope",
+    "state": {
+      "synthetic": true,
+      "claim_id": "HS01",
+      "hypothesis_to_verify": "At the 14:20 handoff snapshot on fictional day D18, every container in Luma Yard batch LY-62 had both a readable label and an unbroken seal.",
+      "curated_evidence_sources": [
+        {
+          "source_id": "HS01-membership",
+          "scope": "Luma Yard; batch LY-62; day D18; 14:20 handoff snapshot",
+          "excerpt": "The complete membership of LY-62 at this snapshot was twelve containers, identified locally as C01 through C12. Container identifiers are local to a batch."
+        },
+        {
+          "source_id": "HS01-labels",
+          "scope": "Luma Yard; batch LY-62; day D18; 14:20 handoff snapshot",
+          "excerpt": "The label inspection at this snapshot recorded a readable label for each of LY-62 containers C01 through C12."
+        },
+        {
+          "source_id": "HS01-seals",
+          "scope": "Luma Yard; batch LY-62; day D18; 14:20 handoff snapshot",
+          "excerpt": "The seal inspection at this snapshot recorded an unbroken seal for each of LY-62 containers C01 through C12."
+        },
+        {
+          "source_id": "HS01-neighbor-batch",
+          "scope": "Luma Yard; batch LY-63; day D18; 14:20 handoff snapshot",
+          "excerpt": "In LY-63, container C07 had an unreadable label and container C12 had an unbroken seal. LY-63 was a separate batch from LY-62."
+        }
+      ]
+    },
+    "expected_verdict": "supported",
+    "rationale": "The complete LY-62 population is identified, and both required properties are recorded for every member at the exact claimed snapshot. The unreadable label belongs to a different batch and does not weaken support.",
+    "discriminating_fact": "Both required properties cover all twelve LY-62 containers; the adverse fact is scoped only to LY-63."
+  },
+  {
+    "id": "HS02",
+    "family": "scope",
+    "state": {
+      "synthetic": true,
+      "claim_id": "HS02",
+      "hypothesis_to_verify": "At the 14:20 handoff snapshot on fictional day D18, every container in Luma Yard batch LY-62 had both a readable label and an unbroken seal.",
+      "curated_evidence_sources": [
+        {
+          "source_id": "HS02-membership",
+          "scope": "Luma Yard; batch LY-62; day D18; 14:20 handoff snapshot",
+          "excerpt": "The complete membership of LY-62 at this snapshot was twelve containers, identified locally as C01 through C12. Container identifiers are local to a batch."
+        },
+        {
+          "source_id": "HS02-labels",
+          "scope": "Luma Yard; batch LY-62; day D18; 14:20 handoff snapshot",
+          "excerpt": "The label inspection at this snapshot recorded a readable label for each of LY-62 containers C01 through C12."
+        },
+        {
+          "source_id": "HS02-seals",
+          "scope": "Luma Yard; batch LY-62; day D18; 14:20 handoff snapshot",
+          "excerpt": "The seal inspection at this snapshot recorded an unbroken seal for each of LY-62 containers C01 through C11."
+        },
+        {
+          "source_id": "HS02-neighbor-batch",
+          "scope": "Luma Yard; batch LY-63; day D18; 14:20 handoff snapshot",
+          "excerpt": "In LY-63, container C07 had an unreadable label and container C12 had an unbroken seal. LY-63 was a separate batch from LY-62."
+        }
+      ]
+    },
+    "expected_verdict": "insufficient",
+    "rationale": "LY-62 container C12 is in the claimed population, but its seal condition is absent. The evidence neither establishes nor refutes that missing condition. The intact seal on LY-63 container C12 concerns a different entity and cannot supply it.",
+    "discriminating_fact": "Compared with HS01, the only material change is that LY-62 seal coverage ends at C11 rather than C12."
+  },
+  {
+    "id": "HS03",
+    "family": "scope",
+    "state": {
+      "synthetic": true,
+      "claim_id": "HS03",
+      "hypothesis_to_verify": "During fictional cycle M4, revision R7 of the Varo transfer protocol required both a signed manifest and acknowledgments by two distinct operators before a transfer could be closed.",
+      "curated_evidence_sources": [
+        {
+          "source_id": "HS03-version-register",
+          "scope": "Varo transfer protocol; revision applicability",
+          "excerpt": "R6 governed cycle M3. R7 governed every day of cycle M4. R8 was scheduled to begin at the start of cycle M5. Each cycle had exactly one governing revision."
+        },
+        {
+          "source_id": "HS03-r7-text",
+          "scope": "Varo transfer protocol; R7; effective cycle M4",
+          "excerpt": "Section 4: a transfer may be closed only after its signed manifest has been recorded. Section 5: a transfer may be closed only after acknowledgments by two distinct operators have been recorded. Both sections apply to every transfer governed by R7, with no exceptions."
+        },
+        {
+          "source_id": "HS03-r6-text",
+          "scope": "Varo transfer protocol; R6; effective cycle M3",
+          "excerpt": "A transfer may close with a signed manifest and one operator acknowledgment. A second operator acknowledgment is optional."
+        },
+        {
+          "source_id": "HS03-r8-text",
+          "scope": "Varo transfer protocol; R8; scheduled for cycle M5",
+          "excerpt": "Closing a transfer requires a signed manifest and acknowledgments by two distinct operators."
+        }
+      ]
+    },
+    "expected_verdict": "supported",
+    "rationale": "The register identifies R7 as the sole governing revision for M4, and the R7 text expressly requires each conjunct before closure. The weaker R6 rule applies to M3 and does not contradict the scoped hypothesis.",
+    "discriminating_fact": "Both conditions appear in the governing R7 text for M4; the optional second acknowledgment appears only in R6 for M3."
+  },
+  {
+    "id": "HS04",
+    "family": "scope",
+    "state": {
+      "synthetic": true,
+      "claim_id": "HS04",
+      "hypothesis_to_verify": "During fictional cycle M4, revision R7 of the Varo transfer protocol required both a signed manifest and acknowledgments by two distinct operators before a transfer could be closed.",
+      "curated_evidence_sources": [
+        {
+          "source_id": "HS04-version-register",
+          "scope": "Varo transfer protocol; revision applicability",
+          "excerpt": "R6 governed cycle M3. R7 governed every day of cycle M4. R8 was scheduled to begin at the start of cycle M5. Each cycle had exactly one governing revision."
+        },
+        {
+          "source_id": "HS04-r7-text",
+          "scope": "Varo transfer protocol; R7; effective cycle M4",
+          "excerpt": "Section 4: a transfer may be closed only after its signed manifest has been recorded. This section applies to every transfer governed by R7, with no exceptions."
+        },
+        {
+          "source_id": "HS04-r6-text",
+          "scope": "Varo transfer protocol; R6; effective cycle M3",
+          "excerpt": "A transfer may close with a signed manifest and one operator acknowledgment. A second operator acknowledgment is optional."
+        },
+        {
+          "source_id": "HS04-r8-text",
+          "scope": "Varo transfer protocol; R8; scheduled for cycle M5",
+          "excerpt": "Closing a transfer requires a signed manifest and acknowledgments by two distinct operators."
+        }
+      ]
+    },
+    "expected_verdict": "insufficient",
+    "rationale": "The R7 excerpt establishes the signed-manifest requirement but provides no R7 acknowledgment requirement. Neither the weaker prior revision nor the stronger future revision resolves the missing condition for M4.",
+    "discriminating_fact": "Compared with HS03, the R7 two-operator requirement is absent; its presence in R8 cannot establish it for R7."
+  },
+  {
+    "id": "HS05",
+    "family": "scope",
+    "state": {
+      "synthetic": true,
+      "claim_id": "HS05",
+      "hypothesis_to_verify": "At the 09:10 inventory snapshot on fictional day D26, every one of Neral Depot batch ND-8's five cases was both latched and tagged.",
+      "curated_evidence_sources": [
+        {
+          "source_id": "HS05-inventory",
+          "scope": "Neral Depot; batch ND-8; day D26; 09:10 snapshot",
+          "excerpt": "ND-8 consisted of exactly cases A1, A2, A3, A4, and A5 at 09:10. All five cases had tags. Cases A1 through A4 were latched. Case A5 was unlatched at that same snapshot."
+        },
+        {
+          "source_id": "HS05-other-depot",
+          "scope": "Oriel Depot; batch ND-8; day D26; 09:10 snapshot",
+          "excerpt": "Oriel Depot's separately owned batch ND-8 contained five cases, each latched and tagged. Oriel and Neral reused local batch identifiers but shared no cases."
+        }
+      ]
+    },
+    "expected_verdict": "contradicted",
+    "rationale": "Neral case A5 is an explicit in-scope counterexample to the universal latched-and-tagged claim. The favorable inventory at Oriel describes a separate population and supplies no conflicting support for Neral.",
+    "discriminating_fact": "A5 is expressly unlatched in the exact claimed Neral population and snapshot."
+  },
+  {
+    "id": "HS06",
+    "family": "scope",
+    "state": {
+      "synthetic": true,
+      "claim_id": "HS06",
+      "hypothesis_to_verify": "For every ordinary dispatch in fictional cycle P9, revision V3 of the Tovin dispatch procedure required both a counter-signed ticket and a sensor receipt before release.",
+      "curated_evidence_sources": [
+        {
+          "source_id": "HS06-effective-register",
+          "scope": "Tovin dispatch procedure; revision applicability",
+          "excerpt": "V2 applied only during cycle P8. V3 was the sole applicable revision throughout cycle P9."
+        },
+        {
+          "source_id": "HS06-v3-rule",
+          "scope": "Tovin dispatch procedure; V3; ordinary dispatches; cycle P9",
+          "excerpt": "Every ordinary dispatch requires a counter-signed ticket before release. A sensor receipt is optional for every ordinary dispatch, and its absence never prevents release under V3."
+        },
+        {
+          "source_id": "HS06-v2-rule",
+          "scope": "Tovin dispatch procedure; V2; ordinary dispatches; cycle P8",
+          "excerpt": "Every ordinary dispatch requires both a counter-signed ticket and a sensor receipt before release."
+        }
+      ]
+    },
+    "expected_verdict": "contradicted",
+    "rationale": "The governing V3 rule explicitly makes the claimed mandatory sensor receipt optional for every in-scope dispatch. The prior V2 requirement does not create a same-period conflict.",
+    "discriminating_fact": "The exact governing revision explicitly denies one of the two claimed mandatory conditions."
+  },
+  {
+    "id": "HS07",
+    "family": "scope",
+    "state": {
+      "synthetic": true,
+      "claim_id": "HS07",
+      "hypothesis_to_verify": "At the 09:10 inventory snapshot on fictional day D26, every one of Neral Depot batch ND-8's five cases was both latched and tagged.",
+      "curated_evidence_sources": [
+        {
+          "source_id": "HS07-inventory",
+          "scope": "Neral Depot; batch ND-8; day D26; 09:10 snapshot",
+          "excerpt": "ND-8 consisted of exactly cases A1, A2, A3, A4, and A5 at 09:10. All five cases had tags. Cases A1 through A4 were latched. Case A5 was unlatched at that same snapshot."
+        },
+        {
+          "source_id": "HS07-second-inventory",
+          "scope": "Neral Depot; batch ND-8; day D26; 09:10 snapshot",
+          "excerpt": "The second inventory record for the 09:10 snapshot identifies exactly cases A1 through A5 in Neral's ND-8. It records all five as latched and tagged at 09:10, including A5."
+        },
+        {
+          "source_id": "HS07-record-register",
+          "scope": "Neral Depot; the two ND-8 inventory records for day D26 at 09:10",
+          "excerpt": "Both inventory records refer to the same five physical cases and the same instantaneous snapshot. Both remain active records of equal authority; neither is a correction of the other, and no reconciliation has been recorded."
+        },
+        {
+          "source_id": "HS07-other-depot",
+          "scope": "Oriel Depot; batch ND-8; day D26; 09:10 snapshot",
+          "excerpt": "Oriel Depot's separately owned batch ND-8 contained five cases, each latched and tagged. Oriel and Neral reused local batch identifiers but shared no cases."
+        }
+      ]
+    },
+    "expected_verdict": "conflicting",
+    "rationale": "One active Neral record directly refutes the claim through A5, while another equally authoritative record fully supports it for the identical population and instant. The register rules out a correction, different entities, or different times as a resolution.",
+    "discriminating_fact": "Compared with HS05, an equally authoritative supporting record has been added for the exact same Neral cases and snapshot."
+  },
+  {
+    "id": "HS08",
+    "family": "scope",
+    "state": {
+      "synthetic": true,
+      "claim_id": "HS08",
+      "hypothesis_to_verify": "For every ordinary dispatch in fictional cycle P9, revision V3 of the Tovin dispatch procedure required both a counter-signed ticket and a sensor receipt before release.",
+      "curated_evidence_sources": [
+        {
+          "source_id": "HS08-effective-register",
+          "scope": "Tovin dispatch procedure; revision applicability",
+          "excerpt": "V2 applied only during cycle P8. V3 was the sole applicable revision throughout cycle P9."
+        },
+        {
+          "source_id": "HS08-v3-rule",
+          "scope": "Tovin dispatch procedure; V3; ordinary dispatches; cycle P9",
+          "excerpt": "Every ordinary dispatch requires a counter-signed ticket before release. A sensor receipt is optional for every ordinary dispatch, and its absence never prevents release under V3."
+        },
+        {
+          "source_id": "HS08-v3-second-copy",
+          "scope": "Tovin dispatch procedure; V3; ordinary dispatches; cycle P9",
+          "excerpt": "Every ordinary dispatch requires both a counter-signed ticket and a sensor receipt before release. No ordinary dispatch may be released without either required item."
+        },
+        {
+          "source_id": "HS08-document-register",
+          "scope": "Tovin dispatch procedure; both V3 copies; cycle P9",
+          "excerpt": "Both V3 copies are approved texts of equal authority, applicable to all ordinary dispatches throughout P9. Neither is superseded, neither has precedence, and neither is an exception or a supplement to the other. No resolving amendment is registered."
+        },
+        {
+          "source_id": "HS08-v2-rule",
+          "scope": "Tovin dispatch procedure; V2; ordinary dispatches; cycle P8",
+          "excerpt": "Every ordinary dispatch requires both a counter-signed ticket and a sensor receipt before release."
+        }
+      ]
+    },
+    "expected_verdict": "conflicting",
+    "rationale": "Two equally authoritative texts of the governing V3 revision apply to the identical population and period. One explicitly permits release without a sensor receipt, while the other explicitly requires it. The register provides no precedence rule that resolves the conflict.",
+    "discriminating_fact": "Compared with HS06, the newly added supporting requirement belongs to the same V3 period and population, rather than only to obsolete V2."
+  },
+  {
+    "id": "B02",
+    "family": "prior-development",
+    "state": {
+      "synthetic": true,
+      "claim_id": "B02-explicit-refutation",
+      "hypothesis_to_verify": "The fictional Cedar Processor receiving export contains a lot code for every one of its three rows.",
+      "curated_evidence_sources": [
+        {
+          "source_id": "B02-explicit-refutation-source-1",
+          "scope": "Cedar Processor, the complete three-row synthetic receiving export under review.",
+          "excerpt": "Synthetic record: R1 has lot TEST-LOT-11. R2 has an empty lot-code cell. R3 has lot TEST-LOT-13. The R2 value is absent, not redacted or held in an alternate field."
+        }
+      ]
+    },
+    "expected_verdict": "contradicted"
+  },
+  {
+    "id": "B08",
+    "family": "prior-development",
+    "state": {
+      "synthetic": true,
+      "claim_id": "B08-different-scope-dates",
+      "hypothesis_to_verify": "The fictional Iris Retailer requires Group A declarations for the 2030 cycle by November 25, 2030.",
+      "curated_evidence_sources": [
+        {
+          "source_id": "B08-different-scope-dates-source-1",
+          "scope": "Group A declarations for the 2030 cycle only.",
+          "excerpt": "Synthetic record: Group A declarations for the 2030 cycle are due November 25, 2030."
+        },
+        {
+          "source_id": "B08-different-scope-dates-source-2",
+          "scope": "Group B declarations for the 2030 cycle only; Group A is explicitly excluded.",
+          "excerpt": "Synthetic record: Group B declarations for the 2030 cycle are due December 18, 2030. This requirement does not apply to Group A."
+        }
+      ]
+    },
+    "expected_verdict": "supported"
+  },
+  {
+    "id": "HP01",
+    "family": "compound_all_required_conditions_met",
+    "state": {
+      "synthetic": true,
+      "claim_id": "HP01",
+      "hypothesis_to_verify": "Daro may enter Nemi Hall during session S8.",
+      "curated_evidence_sources": [
+        {
+          "source_id": "HP01-S1",
+          "scope": "Nemi Hall, session S8, all entrants",
+          "excerpt": "An entrant may enter exactly when their card bears both a blue stamp and a green notch. These are the only entry conditions."
+        },
+        {
+          "source_id": "HP01-S2",
+          "scope": "Daro's card at the entrance to Nemi Hall, session S8",
+          "excerpt": "The card bears a blue stamp and a green notch."
+        }
+      ]
+    },
+    "expected_verdict": "supported",
+    "rationale": "The applicable rule makes the two conditions jointly sufficient, and both are established for Daro.",
+    "discriminating_fact": "Both required conjuncts are affirmatively established."
+  },
+  {
+    "id": "HP02",
+    "family": "compound_required_conjunct_explicitly_false",
+    "state": {
+      "synthetic": true,
+      "claim_id": "HP02",
+      "hypothesis_to_verify": "Daro may enter Nemi Hall during session S8.",
+      "curated_evidence_sources": [
+        {
+          "source_id": "HP02-S1",
+          "scope": "Nemi Hall, session S8, all entrants",
+          "excerpt": "An entrant may enter exactly when their card bears both a blue stamp and a green notch. These are the only entry conditions."
+        },
+        {
+          "source_id": "HP02-S2",
+          "scope": "Daro's card at the entrance to Nemi Hall, session S8",
+          "excerpt": "The card has no green notch. The blue-stamp field has not been assessed."
+        }
+      ]
+    },
+    "expected_verdict": "contradicted",
+    "rationale": "A necessary condition is explicitly false. The unknown blue-stamp status cannot restore eligibility.",
+    "discriminating_fact": "The absent green notch refutes the compound requirement even though the other conjunct is unknown."
+  },
+  {
+    "id": "HP03",
+    "family": "compound_required_conjunct_unreported",
+    "state": {
+      "synthetic": true,
+      "claim_id": "HP03",
+      "hypothesis_to_verify": "Daro may enter Nemi Hall during session S8.",
+      "curated_evidence_sources": [
+        {
+          "source_id": "HP03-S1",
+          "scope": "Nemi Hall, session S8, all entrants",
+          "excerpt": "An entrant may enter exactly when their card bears both a blue stamp and a green notch. These are the only entry conditions."
+        },
+        {
+          "source_id": "HP03-S2",
+          "scope": "Excerpt from inspection of Daro's card for session S8",
+          "excerpt": "The blue stamp is present. This excerpt gives no finding about whether the green notch is present."
+        }
+      ]
+    },
+    "expected_verdict": "insufficient",
+    "rationale": "The green notch is essential, but its presence and absence are both unestablished.",
+    "discriminating_fact": "An omitted finding is not an explicit failed condition."
+  },
+  {
+    "id": "HP04",
+    "family": "optional_condition_need_not_be_established",
+    "state": {
+      "synthetic": true,
+      "claim_id": "HP04",
+      "hypothesis_to_verify": "Daro may enter Nemi Hall during session S8.",
+      "curated_evidence_sources": [
+        {
+          "source_id": "HP04-S1",
+          "scope": "Nemi Hall, session S8, all entrants",
+          "excerpt": "A blue stamp is the sole entry requirement. A green notch is optional and has no effect on entry permission."
+        },
+        {
+          "source_id": "HP04-S2",
+          "scope": "Excerpt from inspection of Daro's card for session S8",
+          "excerpt": "The blue stamp is present. This excerpt gives no finding about whether the green notch is present."
+        }
+      ]
+    },
+    "expected_verdict": "supported",
+    "rationale": "The sole required condition is established. The unresolved notch status concerns an expressly optional feature.",
+    "discriminating_fact": "The governing rule expressly makes the unreported feature optional."
+  },
+  {
+    "id": "HP05",
+    "family": "explicit_optionality_refutes_necessity",
+    "state": {
+      "synthetic": true,
+      "claim_id": "HP05",
+      "hypothesis_to_verify": "A green notch is necessary for entry to Nemi Hall during session S8.",
+      "curated_evidence_sources": [
+        {
+          "source_id": "HP05-S1",
+          "scope": "Nemi Hall, session S8, all entrants",
+          "excerpt": "A blue stamp is the sole entry requirement. A green notch is optional. Entrants with a blue stamp and no green notch are permitted to enter."
+        }
+      ]
+    },
+    "expected_verdict": "contradicted",
+    "rationale": "The applicable rule explicitly permits entry without the feature claimed to be necessary.",
+    "discriminating_fact": "Permission without a notch directly refutes notch necessity."
+  },
+  {
+    "id": "HP06",
+    "family": "necessary_condition_does_not_establish_sufficiency",
+    "state": {
+      "synthetic": true,
+      "claim_id": "HP06",
+      "hypothesis_to_verify": "Passing the spindle scan alone is sufficient to authorize a Tillo model assembly during round R3.",
+      "curated_evidence_sources": [
+        {
+          "source_id": "HP06-S1",
+          "scope": "Tillo model assemblies, round R3",
+          "excerpt": "Assembly authorization may be granted only after the spindle scan has passed. This excerpt does not state whether other authorization conditions exist."
+        },
+        {
+          "source_id": "HP06-S2",
+          "scope": "Model Veli, a Tillo assembly in round R3",
+          "excerpt": "Veli passed the spindle scan. The authorization decision is not included in this record."
+        }
+      ]
+    },
+    "expected_verdict": "insufficient",
+    "rationale": "The rule establishes scan passage as necessary, but does not say it is sufficient. No contrary prerequisite or counterexample is established either.",
+    "discriminating_fact": "The phrase 'only after' supplies a prerequisite, not a complete authorization rule."
+  },
+  {
+    "id": "HP07",
+    "family": "explicit_sole_condition_establishes_sufficiency",
+    "state": {
+      "synthetic": true,
+      "claim_id": "HP07",
+      "hypothesis_to_verify": "Passing the spindle scan alone is sufficient to authorize a Tillo model assembly during round R3.",
+      "curated_evidence_sources": [
+        {
+          "source_id": "HP07-S1",
+          "scope": "Tillo model assemblies, round R3",
+          "excerpt": "A passing spindle scan automatically grants assembly authorization. It is the sole condition; no signoff or other prerequisite is required."
+        }
+      ]
+    },
+    "expected_verdict": "supported",
+    "rationale": "The applicable rule explicitly identifies scan passage as sufficient by itself.",
+    "discriminating_fact": "Automatic authorization and the absence of additional prerequisites are expressly stated."
+  },
+  {
+    "id": "HP08",
+    "family": "additional_required_condition_refutes_sufficiency",
+    "state": {
+      "synthetic": true,
+      "claim_id": "HP08",
+      "hypothesis_to_verify": "Passing the spindle scan alone is sufficient to authorize a Tillo model assembly during round R3.",
+      "curated_evidence_sources": [
+        {
+          "source_id": "HP08-S1",
+          "scope": "Tillo model assemblies, round R3",
+          "excerpt": "Authorization requires both a passing spindle scan and a separate maker signoff. Scan passage does not supply or waive the signoff."
+        },
+        {
+          "source_id": "HP08-S2",
+          "scope": "Model Veli, a Tillo assembly in round R3",
+          "excerpt": "Veli passed the spindle scan but has no maker signoff. Its assembly authorization is therefore denied."
+        }
+      ]
+    },
+    "expected_verdict": "contradicted",
+    "rationale": "The applicable rule requires an independent additional condition, and an actual scan-passing assembly is denied authorization for lacking it.",
+    "discriminating_fact": "A scan-passing assembly without signoff is explicitly unauthorized."
+  },
+  {
+    "id": "HP09",
+    "family": "partial_account_does_not_establish_exclusivity",
+    "state": {
+      "synthetic": true,
+      "claim_id": "HP09",
+      "hypothesis_to_verify": "Vale and Tera were the only attendees at the Luma paper-circle meeting M4.",
+      "curated_evidence_sources": [
+        {
+          "source_id": "HP09-S1",
+          "scope": "Luma paper-circle meeting M4, attendance record excerpt",
+          "excerpt": "Attendees: Vale; Tera. This is a partial excerpt from the attendance record, and omitted portions may contain further names."
+        }
+      ]
+    },
+    "expected_verdict": "insufficient",
+    "rationale": "The two named attendees are established, but the partial record neither establishes exclusivity nor identifies an additional attendee.",
+    "discriminating_fact": "The list is explicitly partial, without asserting that additional attendees actually existed."
+  },
+  {
+    "id": "HP10",
+    "family": "exhaustive_account_establishes_exclusivity",
+    "state": {
+      "synthetic": true,
+      "claim_id": "HP10",
+      "hypothesis_to_verify": "Vale and Tera were the only attendees at the Luma paper-circle meeting M4.",
+      "curated_evidence_sources": [
+        {
+          "source_id": "HP10-S1",
+          "scope": "Luma paper-circle meeting M4, complete attendance record",
+          "excerpt": "Complete and exhaustive attendee list: Vale; Tera. Exactly these two people attended; nobody else attended any part of this meeting."
+        }
+      ]
+    },
+    "expected_verdict": "supported",
+    "rationale": "The record expressly identifies both attendees and excludes any others across the whole meeting.",
+    "discriminating_fact": "The account is explicitly exhaustive, rather than merely a list with two names."
+  },
+  {
+    "id": "HP11",
+    "family": "governing_revision_overrides_temporal_distractors",
+    "state": {
+      "synthetic": true,
+      "claim_id": "HP11",
+      "hypothesis_to_verify": "The maximum team size for the Pavo tile game in cycle C5 is eight players.",
+      "curated_evidence_sources": [
+        {
+          "source_id": "HP11-S1",
+          "scope": "Pavo tile game rule revision A, cycles C1 through C4 only",
+          "excerpt": "Maximum team size: eight players. This revision expires at the end of cycle C4."
+        },
+        {
+          "source_id": "HP11-S2",
+          "scope": "Pavo tile game rule revision B, governing cycle C5",
+          "excerpt": "Revision B replaces A for cycle C5. Maximum team size: six players."
+        },
+        {
+          "source_id": "HP11-S3",
+          "scope": "Pavo tile game rule revision C, effective from cycle C6",
+          "excerpt": "Maximum team size: ten players. Revision C begins in C6 and does not change the rules governing C5."
+        }
+      ]
+    },
+    "expected_verdict": "contradicted",
+    "rationale": "The governing C5 revision specifies six, which is incompatible with eight. The older and future revisions do not apply to C5.",
+    "discriminating_fact": "Applicability is fixed by the stated effective cycle, not by which revision is oldest or newest."
+  },
+  {
+    "id": "HP12",
+    "family": "unknown_item_applicability_prevents_branch_selection",
+    "state": {
+      "synthetic": true,
+      "claim_id": "HP12",
+      "hypothesis_to_verify": "Model Liri-6 is required to have an amber cap under the current Nalo display rules.",
+      "curated_evidence_sources": [
+        {
+          "source_id": "HP12-S1",
+          "scope": "Current Nalo display rules, both model families",
+          "excerpt": "Every model belongs to exactly one family: cedar or birch. Cedar-family models require an amber cap. Birch-family models must not have an amber cap."
+        },
+        {
+          "source_id": "HP12-S2",
+          "scope": "Model Liri-6 in the current Nalo display",
+          "excerpt": "Liri-6 is a Nalo model. Its family has not been recorded or otherwise identified in the available evidence."
+        }
+      ]
+    },
+    "expected_verdict": "insufficient",
+    "rationale": "The model's family determines the requirement, but its family is unknown. Neither applicable support nor applicable refutation is established for Liri-6.",
+    "discriminating_fact": "Unknown applicability does not justify assigning the model to either rule's scope."
+  },
+  {
+    "id": "HP13",
+    "family": "unresolved_conflict_on_required_conjunct",
+    "state": {
+      "synthetic": true,
+      "claim_id": "HP13",
+      "hypothesis_to_verify": "Daro may enter Nemi Hall during session S8.",
+      "curated_evidence_sources": [
+        {
+          "source_id": "HP13-S1",
+          "scope": "Nemi Hall, session S8, all entrants",
+          "excerpt": "An entrant may enter exactly when their card bears both a blue stamp and a green notch. These are the only entry conditions."
+        },
+        {
+          "source_id": "HP13-S2",
+          "scope": "Daro's card at checkpoint instant T2 in session S8, current inspection A",
+          "excerpt": "At T2, Daro's card bears both a blue stamp and a green notch. Inspection A and inspection B are equally authoritative current records; neither corrects or supersedes the other."
+        },
+        {
+          "source_id": "HP13-S3",
+          "scope": "Daro's card at checkpoint instant T2 in session S8, current inspection B",
+          "excerpt": "At T2, Daro's card bears a blue stamp but has no green notch. This record has not been withdrawn or corrected."
+        }
+      ]
+    },
+    "expected_verdict": "conflicting",
+    "rationale": "Equally applicable unresolved inspections establish eligibility and ineligibility for the same card at the same instant.",
+    "discriminating_fact": "The records disagree about the required notch in identical overlapping scope, with no correction or precedence."
+  },
+  {
+    "id": "HP14",
+    "family": "unresolved_mandatory_versus_optional_rules",
+    "state": {
+      "synthetic": true,
+      "claim_id": "HP14",
+      "hypothesis_to_verify": "A reflective strip is required for every Nera parcel placed on the violet shelf in round V2.",
+      "curated_evidence_sources": [
+        {
+          "source_id": "HP14-S1",
+          "scope": "All Nera parcels on the violet shelf, round V2, current instruction card A",
+          "excerpt": "Every parcel must have a reflective strip. Cards A and B have equal authority, cover the entire same round and shelf, and neither supersedes the other."
+        },
+        {
+          "source_id": "HP14-S2",
+          "scope": "All Nera parcels on the violet shelf, round V2, current instruction card B",
+          "excerpt": "A reflective strip is optional. Parcels without one are permitted. No correction or withdrawal of either current instruction card has been issued."
+        }
+      ]
+    },
+    "expected_verdict": "conflicting",
+    "rationale": "One applicable rule requires the strip and the other expressly allows its absence in exactly the same scope, without a resolution rule.",
+    "discriminating_fact": "The optionality statement is an affirmative incompatible rule, not silence about the strip."
+  },
+  {
+    "id": "HP15",
+    "family": "unresolved_exhaustive_accounts_disagree",
+    "state": {
+      "synthetic": true,
+      "claim_id": "HP15",
+      "hypothesis_to_verify": "Nilo attended the Luma paper-circle meeting M4.",
+      "curated_evidence_sources": [
+        {
+          "source_id": "HP15-S1",
+          "scope": "Entire Luma paper-circle meeting M4, final attendance register A",
+          "excerpt": "Complete and exhaustive attendee list: Vale; Tera. Nobody else attended any part of M4. Registers A and B are equally authoritative final accounts, and neither replaces the other."
+        },
+        {
+          "source_id": "HP15-S2",
+          "scope": "Entire Luma paper-circle meeting M4, final attendance register B",
+          "excerpt": "Complete and exhaustive attendee list: Vale; Tera; Nilo. All three attended M4. Neither final register has been corrected or withdrawn."
+        }
+      ]
+    },
+    "expected_verdict": "conflicting",
+    "rationale": "Register B includes Nilo, while register A's explicit exhaustive account excludes Nilo. Both describe the whole same meeting and remain unresolved.",
+    "discriminating_fact": "Exhaustiveness turns Nilo's absence from register A into an actual incompatible fact."
+  },
+  {
+    "id": "HP16",
+    "family": "equally_current_revision_copies_conflict",
+    "state": {
+      "synthetic": true,
+      "claim_id": "HP16",
+      "hypothesis_to_verify": "The maximum team size for the Kivo bead game in cycle K7 is four players.",
+      "curated_evidence_sources": [
+        {
+          "source_id": "HP16-S1",
+          "scope": "Kivo bead game, archived revision M6, cycle K6 only",
+          "excerpt": "Maximum team size: four players. M6 expired before cycle K7 and has no authority for K7."
+        },
+        {
+          "source_id": "HP16-S2",
+          "scope": "Kivo bead game, revision M7 copy A, governing all of cycle K7",
+          "excerpt": "Maximum team size: four players. Copies A and B are both designated current M7, have equal authority, and apply to all teams throughout K7."
+        },
+        {
+          "source_id": "HP16-S3",
+          "scope": "Kivo bead game, revision M7 copy B, governing all of cycle K7",
+          "excerpt": "Maximum team size: six players. No ordering, correction, withdrawal, or precedence between current copies A and B is established."
+        }
+      ]
+    },
+    "expected_verdict": "conflicting",
+    "rationale": "The two equally governing M7 copies disagree in identical scope. Agreement between the archive and copy A does not resolve which current copy governs.",
+    "discriminating_fact": "An expired matching revision cannot break a conflict between equally applicable current revisions."
+  }
+]

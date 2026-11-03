@@ -17,7 +17,7 @@ extract_company_prefix  – extract GS1 Company Prefix from GTIN-14
 detect_identifier_type  – auto-detect identifier kind from format
 validate_gln            – GLN-13 with GS1 check digit
 validate_gtin           – GTIN-8/12/13/14 with GS1 check digit
-validate_tlc            – Traceability Lot Code (GTIN-14 prefix in strict mode)
+validate_tlc            – Traceability Lot Code (GTIN-14 pattern warning in strict mode)
 validate_sscc           – SSCC-18 with GS1 check digit
 validate_identifier     – auto-detecting dispatcher
 validate_batch          – batch validation helper
@@ -187,14 +187,14 @@ def validate_tlc(tlc: str, *, strict: bool = False) -> ValidationResult:
     """
     Validate Traceability Lot Code (TLC).
 
-    A production TLC must match the GTIN-14 prefix pattern:
+    Strict mode checks the production GTIN-14 prefix pattern:
     ``^\\d{14}[A-Za-z0-9\\-\\.]+$`` (14 numeric digits followed by an
-    alphanumeric lot suffix).  In non-strict mode the format is more
-    permissive (minimum 3 chars, alphanumeric + common separators).
+    alphanumeric lot suffix). Strict mismatches are warnings, not failures.
+    Both modes require at least 3 characters and warn on unusual characters.
 
     Args:
         tlc: Raw TLC string to validate.
-        strict: When True, enforce the production GTIN-14 prefix pattern.
+        strict: When True, warn on a production GTIN-14 prefix pattern mismatch.
     """
     raw = str(tlc) if tlc else ""
     cleaned = raw.strip()
@@ -209,28 +209,14 @@ def validate_tlc(tlc: str, *, strict: bool = False) -> ValidationResult:
 
     warnings: List[str] = []
 
-    if strict:
-        # Production mode: GTIN-14 prefix + alphanumeric lot suffix
-        if not _TLC_PRODUCTION_PATTERN.match(cleaned):
-            return ValidationResult(
-                is_valid=False,
-                identifier_type=IdentifierType.TLC,
-                original_value=raw,
-                errors=[
-                    ValidationError(
-                        field="tlc",
-                        message=(
-                            "TLC does not match production pattern "
-                            "(expected 14-digit GTIN prefix + alphanumeric lot suffix, "
-                            "e.g. '00012345678901-LotA')"
-                        ),
-                    )
-                ],
-            )
-    else:
-        # Permissive mode: reject obviously invalid characters
-        if not re.match(r"^[A-Za-z0-9\-\._/]+$", cleaned):
-            warnings.append("TLC contains unusual characters; consider strict validation")
+    if strict and not _TLC_PRODUCTION_PATTERN.match(cleaned):
+        warnings.append(
+            "Warning: TLC does not match production pattern "
+            "(14-digit GTIN prefix + alphanumeric lot suffix); this is not a validation failure"
+        )
+
+    if not re.match(r"^[A-Za-z0-9\-\._/]+$", cleaned):
+        warnings.append("TLC contains unusual characters; consider strict validation")
 
     # Warn on very long TLCs
     if len(cleaned) > 50:
