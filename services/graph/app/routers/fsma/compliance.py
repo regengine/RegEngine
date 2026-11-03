@@ -471,12 +471,14 @@ async def export_epcis(
                 "https://ref.gs1.org/standards/epcis/2.0.0/epcis-context.jsonld",
                 {
                     "regengine": "https://regengine.co/ns/",
+                    "skippedEventsByReason": {
+                        "@id": "regengine:skippedEventsByReason", "@type": "@json",
+                    },
                     **{
                         key: f"regengine:{key}"
                         for key in (
                             "eventsCount",
                             "skippedEventsCount",
-                            "skippedEventsByReason",
                             "preview",
                             "previewNotice",
                         )
@@ -654,6 +656,14 @@ def _epcis_to_xml(epcis_doc: dict) -> str:
             add_epcs(node, event, "outputEPCList")
             add_quantities(node, event, "outputQuantityList")
             add_common_tail(node, event, include_action=False)
+
+    if metadata := epcis_doc.get("regengine:exportMetadata"):
+        namespace = "{https://regengine.co/ns/}"
+        metadata_node = sub_element(root, f"{namespace}exportMetadata")
+        for key in ("preview", "previewNotice"):
+            if key in metadata:
+                value = metadata[key]
+                add(metadata_node, f"{namespace}{key}", str(value).lower() if isinstance(value, bool) else value)
 
     return ET.tostring(root, encoding="utf-8", xml_declaration=True).decode("utf-8")
 

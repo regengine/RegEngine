@@ -15,25 +15,26 @@ from starlette.requests import Request
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from shared.fsma_validation import calculate_gs1_check_digit, verify_gs1_check_digit  # noqa: E402
+from shared.fsma_validation import verify_gs1_check_digit  # noqa: E402
 from services.graph.app import fsma_utils  # noqa: E402
+from services.graph.app.fsma.queries import EXPORT_EVENT_CAP  # noqa: E402
 from services.graph.app.routers.fsma import compliance  # noqa: E402
 
 FIXTURES = Path(__file__).resolve().parents[2] / "ingestion" / "tests" / "fixtures" / "epcis_gs1"
 TENANT = uuid.uuid4()
 
 
-def _independent_gs1_mod10_check_digit(data_digits: str) -> int:
-    """GS1 mod-10, weight 3 from the rightmost data digit. Test-local oracle."""
+def _independent_gs1_mod10_check_digit(data_digits: str, *, rightmost_weight: int = 3) -> int:
+    """GS1 mod-10 with configurable rightmost weight. Test-local oracle."""
     total = 0
     for i, ch in enumerate(reversed(data_digits)):
-        total += (3 if i % 2 == 0 else 1) * int(ch)
+        total += (rightmost_weight if i % 2 == 0 else 4 - rightmost_weight) * int(ch)
     return (10 - (total % 10)) % 10
 
 
 def gs1_number(length):
-    digits = str(uuid.uuid4().int).zfill(length - 1)[:length - 1]
-    value = f"{digits}{calculate_gs1_check_digit(digits)}"
+    digits = "0" + str(uuid.uuid4().int).zfill(length - 2)[:length - 2]
+    value = f"{digits}{_independent_gs1_mod10_check_digit(digits)}"
     assert len(value) == length
     assert value.isdigit()
     assert verify_gs1_check_digit(value)
@@ -96,7 +97,12 @@ def graph_row(kind):
 
 
 async def export(format, rows):
-    async def query(client, start, end, tenant, **kwargs):
+    async def query(client, start, end, tenant, *, tlc=None, limit, export_cap):
+        assert start == today
+        assert end == today
+        assert tlc is None
+        assert limit == EXPORT_EVENT_CAP + 1
+        assert export_cap is True
         assert tenant == str(TENANT)
         return rows
 
@@ -128,7 +134,10 @@ async def export(format, rows):
             assert context[1]["previewNotice"] == "regengine:previewNotice"
             metadata = document["regengine:exportMetadata"]
             for key in metadata:
-                assert context[1][key] == f"regengine:{key}"
+                assert context[1][key] == (
+                    {"@id": "regengine:skippedEventsByReason", "@type": "@json"}
+                    if key == "skippedEventsByReason" else f"regengine:{key}"
+                )
             assert metadata["preview"] is True
             assert metadata["previewNotice"] == (
                 "EPCIS export is in Preview. Validate with your trading partner before relying on it for compliance."
@@ -176,6 +185,12 @@ def test_empty_export_has_no_events_in_either_format():
     tree = etree.fromstring(xml, etree.XMLParser(no_network=True)).getroottree()
     assert schema.validate(tree), str(schema.error_log)
     assert tree.xpath("//*[local-name()='EventList']/*") == []
+    metadata = tree.getroot().find("{https://regengine.co/ns/}exportMetadata")
+    assert metadata is not None
+    assert metadata.find("{https://regengine.co/ns/}preview").text == "true"
+    assert metadata.find("{https://regengine.co/ns/}previewNotice").text == (
+        document["regengine:exportMetadata"]["previewNotice"]
+    )
 
 
 def test_missing_event_time_is_skipped():
@@ -183,13 +198,19 @@ def test_missing_event_time_is_skipped():
     row["event_time"] = None
     document = json.loads(asyncio.run(export("json-ld", [row])))
     assert document["epcisBody"]["eventList"] == []
+    assert document["regengine:exportMetadata"]["skippedEventsByReason"] == {"missing_time": 1}
 
 
 def test_gs1_location_check_digit_accepts_generated_valid_gln():
     """Graph location helper must use GS1 weight-3-from-right."""
     row = graph_row("RECEIVING")
-    digits = str(uuid.uuid4().int).zfill(12)[:12]
-    check_digit = _independent_gs1_mod10_check_digit(digits)
+    for _ in range(100):
+        digits = "0" + str(uuid.uuid4().int).zfill(11)[:11]
+        check_digit = _independent_gs1_mod10_check_digit(digits)
+        if check_digit != _independent_gs1_mod10_check_digit(digits, rightmost_weight=1):
+            break
+    else:
+        pytest.fail("Could not generate a GLN that distinguishes GS1 weighting")
     row["location_gln"] = f"{digits}{check_digit}"
     assert verify_gs1_check_digit(row["location_gln"])
     row["tlc"] = epc_identifier()
@@ -203,6 +224,7 @@ def test_gs1_location_check_digit_accepts_generated_valid_gln():
     assert not verify_gs1_check_digit(bad_gln)
     row["location_gln"] = bad_gln
     document = json.loads(asyncio.run(export("json-ld", [row])))
+    assert len(document["epcisBody"]["eventList"]) == 1
     for event in document["epcisBody"]["eventList"]:
         assert "readPoint" not in event
 
