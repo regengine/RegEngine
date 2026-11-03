@@ -233,6 +233,49 @@ describe('Inflow Lab public proxy', () => {
         expect(await epcis.text()).toBe('<epcis/>');
     });
 
+    it('strips tenant-like fields from JSON / JSON-LD export responses', async () => {
+        mockFetch.mockResolvedValueOnce(
+            new Response(
+                JSON.stringify({
+                    '@context': 'https://ref.gs1.org/epcis/epcis-context.jsonld',
+                    type: 'EPCISDocument',
+                    tenant_id: 'should-vanish',
+                    epcisBody: {
+                        eventList: [
+                            {
+                                type: 'ObjectEvent',
+                                tenantId: 'also-vanish',
+                                customer_id: 'c1',
+                                bizStep: 'shipping',
+                            },
+                        ],
+                    },
+                }),
+                {
+                    status: 200,
+                    headers: { 'content-type': 'application/ld+json' },
+                },
+            ),
+        );
+
+        const response = await GET(
+            makeRequest({
+                url: 'http://localhost/api/inflow-lab-demo/api/regengine/export/epcis?traceability_lot_code=L1',
+            }),
+            { params: Promise.resolve({ path: ['api', 'regengine', 'export', 'epcis'] }) },
+        );
+
+        expect(response.status).toBe(200);
+        expect(response.headers.get('content-type')).toMatch(/json/i);
+        await expect(response.json()).resolves.toEqual({
+            '@context': 'https://ref.gs1.org/epcis/epcis-context.jsonld',
+            type: 'EPCISDocument',
+            epcisBody: {
+                eventList: [{ type: 'ObjectEvent', bizStep: 'shipping' }],
+            },
+        });
+    });
+
     it('rejects cross-origin requests', async () => {
         const response = await GET(
             makeRequest({

@@ -11,8 +11,9 @@ export const runtime = "nodejs";
 
 const DEFAULT_LOCAL_INFLOW_LAB_URL = "http://127.0.0.1:8000";
 const ALLOWED_METHODS = new Set(["GET", "POST"]);
-const JSON_CONTENT_TYPES = ["application/json", "application/problem+json"];
+const JSON_CONTENT_TYPES = ["application/json", "application/problem+json", "application/ld+json"];
 const MAX_BODY_BYTES = 32 * 1024;
+const MAX_EXPORT_JSON_BYTES = 2 * 1024 * 1024;
 const TENANT_LIKE_KEY = /^(tenant(_?id)?|tenantId|customer(_?id)?|customerId|organization(_?id)?|org_id|orgId)$/i;
 const TRAVERSAL_ENCODED = /%2e|%2f|%5c/i;
 const SEGMENT_ALLOW = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
@@ -405,8 +406,45 @@ async function proxyPublic(request: NextRequest, params: Promise<{ path?: string
             );
         }
 
-        // Export previews are streamed (CSV / EPCIS Preview), not JSON.
+        // Export previews: CSV/XML stream as-is. JSON / JSON-LD is buffered
+        // (size-capped) and run through stripTenantLike before reflection.
         if (contract === "export" && upstream.ok) {
+            if (isJsonResponse(upstream)) {
+                const raw = await upstream.arrayBuffer();
+                if (raw.byteLength > MAX_EXPORT_JSON_BYTES) {
+                    return NextResponse.json(
+                        {
+                            ok: false,
+                            error: "Export response too large",
+                            code: "EXPORT_TOO_LARGE",
+                        },
+                        { status: 502, headers: responseHeaders(contract) },
+                    );
+                }
+                let parsed: unknown;
+                try {
+                    parsed = JSON.parse(new TextDecoder("utf-8").decode(raw)) as unknown;
+                } catch {
+                    return NextResponse.json(
+                        {
+                            ok: false,
+                            error: "Upstream returned invalid JSON export",
+                            code: "UPSTREAM_BAD_RESPONSE",
+                        },
+                        { status: 502, headers: responseHeaders(contract) },
+                    );
+                }
+                const sanitized = stripTenantLike(parsed);
+                const headers = responseHeaders(contract, upstream);
+                // Preserve upstream JSON / JSON-LD content-type when present.
+                if (!headers.has("content-type")) {
+                    headers.set("content-type", "application/json");
+                }
+                return new NextResponse(JSON.stringify(sanitized), {
+                    status: upstream.status,
+                    headers,
+                });
+            }
             return new NextResponse(upstream.body, {
                 status: upstream.status,
                 headers: responseHeaders(contract, upstream),
