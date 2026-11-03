@@ -42,19 +42,21 @@ describe("buildDemoExportQuery", () => {
         );
     });
 
-    it("omits whitespace-only lots and preserves nonblank padding exactly", () => {
+    it("trims lot values and omits whitespace-only lots so spaces never become +++", () => {
+        // Spaces-only must not emit traceability_lot_code=+++.
         expect(
             buildDemoExportQuery({
                 preset: "all_records",
                 traceabilityLotCode: "   ",
             }),
         ).toBe("?preset=all_records");
-        const lot = "  padded  ";
-        const query = buildDemoExportQuery({ traceabilityLotCode: lot });
-        const expected = new URLSearchParams();
-        expected.set("traceability_lot_code", lot);
-        expect(query).toBe(`?${expected.toString()}`);
+        expect(buildDemoExportQuery({ traceabilityLotCode: " \t " })).toBe("");
+
+        const query = buildDemoExportQuery({
+            traceabilityLotCode: "  seg  ",
+        });
+        expect(query).toBe("?traceability_lot_code=seg");
         const params = new URLSearchParams(query.slice(1));
-        expect(params.get("traceability_lot_code")).toBe(lot);
+        expect(params.get("traceability_lot_code")).toBe("seg");
     });
 });
