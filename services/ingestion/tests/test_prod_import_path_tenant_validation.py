@@ -46,11 +46,12 @@ _EDI_FIXTURE = _FIXTURES / "edi_corpus" / "asn_856.edi"
 TENANT = "00000000-0000-0000-0000-000000000123"
 
 
-def _bootstrap_prod_sys_path() -> Path:
+def _bootstrap_prod_sys_path(monkeypatch: pytest.MonkeyPatch) -> tuple[Path, dict[str, Any]]:
     """Match ``server/main.py`` path bootstrap (insert-0 order).
 
-    Returns the directory of the top-level ``app`` package that wins — the
-    same collision the prod image hits.
+    Returns ``(winner_app_dir, removed_app_modules)``. ``removed_app_modules``
+    must be restored by the caller at fixture teardown so later tests do not
+    inherit a poisoned ``sys.modules``.
     """
     order = [
         _REPO_ROOT,
@@ -62,21 +63,27 @@ def _bootstrap_prod_sys_path() -> Path:
         _SERVICES / "compliance",
     ]
     # Drop any prior service ``app`` bindings so the prod winner is fresh.
+    removed: dict[str, Any] = {}
     for key in list(sys.modules):
         if key == "app" or key.startswith("app."):
-            del sys.modules[key]
+            removed[key] = sys.modules.pop(key)
 
     front: list[str] = []
     for path in order:
         front.insert(0, str(path))
-    sys.path[:] = front + [p for p in sys.path if p not in front]
+    monkeypatch.setattr(
+        sys,
+        "path",
+        front + [p for p in sys.path if p not in front],
+        raising=False,
+    )
 
     import app as top_app  # noqa: PLC0415
 
     app_file = Path(top_app.__file__).resolve()
     # Must NOT be ingestion's app — that is the bug condition.
     assert "services/ingestion/app" not in str(app_file).replace("\\", "/")
-    return app_file.parent
+    return app_file.parent, removed
 
 
 class _Savepoint:
@@ -109,7 +116,7 @@ def _fake_db_session() -> Iterator[_FakeSession]:
 def prod_path_webhook_compat(monkeypatch: pytest.MonkeyPatch):
     """Load webhook_compat under the prod path collision and stub persistence."""
     pytest.importorskip("fastapi")
-    winner = _bootstrap_prod_sys_path()
+    winner, removed_app_modules = _bootstrap_prod_sys_path(monkeypatch)
 
     # Document the failure mode this PR fixes.
     with pytest.raises(ModuleNotFoundError):
@@ -191,7 +198,14 @@ def prod_path_webhook_compat(monkeypatch: pytest.MonkeyPatch):
 
     monkeypatch.setattr(rules_engine, "RulesEngine", _FakeRulesEngine)
 
-    return wc, ingestion_tv, winner
+    try:
+        yield wc, ingestion_tv, winner
+    finally:
+        # Undo the ``app`` / ``app.*`` purge so later tests see a clean module map.
+        for key in list(sys.modules):
+            if key == "app" or key.startswith("app."):
+                sys.modules.pop(key, None)
+        sys.modules.update(removed_app_modules)
 
 
 def _payload_from_shipping_csv() -> Any:
@@ -274,6 +288,7 @@ def _payload_from_edi_asn() -> Any:
 @pytest.mark.asyncio
 async def test_csv_fixture_ingest_resolves_tenant_validation_under_prod_path(
     prod_path_webhook_compat,
+    monkeypatch: pytest.MonkeyPatch,
 ):
     wc, ingestion_tv, winner = prod_path_webhook_compat
     called: list[str] = []
@@ -288,7 +303,7 @@ async def test_csv_fixture_ingest_resolves_tenant_validation_under_prod_path(
     # is our tracker.
     import services.ingestion.app.tenant_validation as tv_mod  # noqa: PLC0415
 
-    tv_mod.validate_tenant_id = _tracking_validate  # type: ignore[method-assign]
+    monkeypatch.setattr(tv_mod, "validate_tenant_id", _tracking_validate)
 
     payload = _payload_from_shipping_csv()
     response = await wc.ingest_events(
@@ -398,16 +413,13 @@ def test_csv_and_edi_routes_call_ingest_events_under_prod_path(
         assert csv_resp.status_code != 500, csv_resp.text
 
         edi_resp = client.post(
-            "/api/v1/ingest/edi/856",
+            "/api/v1/ingest/edi",
             data={"traceability_lot_code": "00012345678901-LOT001", "tenant_id": TENANT},
             files={"file": ("asn_856.edi", edi_bytes, "application/edi-x12")},
         )
         assert edi_resp.status_code != 500, edi_resp.text
 
-    # At least one route handed work to ingest_events under the prod layout.
-    # (CSV may reject before ingest if partner hardening trips; EDI usually reaches it.)
-    assert seen or csv_resp.status_code in {200, 400, 422} or edi_resp.status_code in {
-        200,
-        400,
-        422,
-    }
+    # Both HTTP routes must reach ingest_events so the relative import is
+    # exercised under the poisoned top-level ``app`` for CSV and EDI.
+    assert "csv_upload" in seen, (csv_resp.status_code, csv_resp.text[:500], seen)
+    assert "edi_856_inbound" in seen, (edi_resp.status_code, edi_resp.text[:500], seen)
