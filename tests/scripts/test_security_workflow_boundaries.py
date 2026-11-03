@@ -38,8 +38,12 @@ def test_secret_scans_cover_main_and_non_main_prs():
     )
     assert match, "detect-secrets-hook invocation not found in wrapper"
     hook_block = match.group(0)
-    assert "--" in hook_block and '"$@"' in hook_block
-    assert hook_block.rindex("--") < hook_block.rindex('"$@"')
+    # Require a standalone `--` argument (own line; optional shell line-
+    # continuation backslash), not a substring of `--exclude-files`.
+    term = re.search(r"(?m)^\s*--(?:\s*\\)?\s*$", hook_block)
+    assert term, "standalone -- option terminator missing before filenames"
+    assert '"$@"' in hook_block
+    assert term.start() < hook_block.index('"$@"')
     for workflow in (main, other):
         steps = workflow["jobs"]["secrets"]["steps"]
         assert any("gitleaks detect" in step.get("run", "") for step in steps)

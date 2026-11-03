@@ -61,22 +61,6 @@ def _run(
     )
 
 
-def test_wrapper_source_terminates_options_before_filenames() -> None:
-    import re
-
-    source = SCRIPT.read_text()
-    match = re.search(
-        r"(?m)^\s*detect-secrets-hook\b.*?status=\$\?",
-        source,
-        flags=re.S,
-    )
-    assert match, "detect-secrets-hook invocation not found"
-    block = match.group(0)
-    assert "--" in block
-    assert '"$@"' in block
-    assert block.rindex("--") < block.rindex('"$@"')
-
-
 def test_exit_0_passes(repo: Path, tmp_path: Path) -> None:
     bin_dir = tmp_path / "bin"
     _write_hook(bin_dir, "exit 0\n")
@@ -172,3 +156,69 @@ def test_other_hook_exit_is_passed_through(repo: Path, tmp_path: Path) -> None:
     result = _run(repo, bin_dir, "tracked.txt")
     assert result.returncode == 99
     assert "exit code 99" in result.stderr + result.stdout
+
+
+def test_exit_1_unable_to_read_baseline_is_setup_error(
+    repo: Path, tmp_path: Path
+) -> None:
+    """detect-secrets 1.5.0 prints this for malformed baseline JSON."""
+    bin_dir = tmp_path / "bin"
+    _write_hook(
+        bin_dir,
+        'echo "detect-secrets-hook: error: Unable to read baseline."; exit 1\n',
+    )
+    result = _run(repo, bin_dir, "tracked.txt")
+    assert result.returncode == 2, result.stderr + result.stdout
+    combined = result.stdout + result.stderr
+    assert "baseline/setup error" in combined
+    assert "found secrets not in .secrets.baseline" not in combined
+
+
+def test_exit_1_finding_in_baseline_error_path_is_still_finding(
+    repo: Path, tmp_path: Path
+) -> None:
+    """A finding whose path contains 'baseline-error' must not look like setup."""
+    bin_dir = tmp_path / "bin"
+    _write_hook(
+        bin_dir,
+        textwrap.dedent(
+            """\
+            echo "ERROR: Potential secrets about to be committed to git repo!"
+            echo "baseline-error.txt:1:fake-token"
+            exit 1
+            """
+        ),
+    )
+    result = _run(repo, bin_dir, "tracked.txt")
+    assert result.returncode == 1, result.stderr + result.stdout
+    combined = result.stdout + result.stderr
+    assert "found secrets not in .secrets.baseline" in combined
+    assert "baseline/setup error" not in combined
+
+
+def test_ls_files_nonzero_during_collection_exits_2(
+    repo: Path, tmp_path: Path
+) -> None:
+    """A failing git ls-files -z must not pass a partial list to the hook."""
+    bin_dir = tmp_path / "bin"
+    _write_hook(bin_dir, "exit 0\n")
+    fake_git = bin_dir / "git"
+    fake_git.write_text(
+        textwrap.dedent(
+            """\
+            #!/usr/bin/env bash
+            # Emit one path then fail — old process-sub loop would keep the path.
+            if [[ " $* " == *" -z "* ]]; then
+              printf 'partial.txt\\0'
+              exit 1
+            fi
+            exit 0
+            """
+        )
+    )
+    fake_git.chmod(fake_git.stat().st_mode | 0o111)
+    (repo / "partial.txt").write_text("x\n")
+    # No filename args → wrapper collects via git ls-files -z.
+    result = _run(repo, bin_dir)
+    assert result.returncode == 2, result.stderr + result.stdout
+    assert "git ls-files failed" in result.stderr + result.stdout
