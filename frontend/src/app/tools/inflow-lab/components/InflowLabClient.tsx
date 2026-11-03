@@ -1276,8 +1276,9 @@ export function InflowLabClient({
     const traceLot = async () => {
         // Lineage may fall back to selectedLot, but never copy that into traceInput —
         // that field also drives CSV/EPCIS export filters (keep defaults unfiltered).
-        // Trim only to detect blank; keep nonblank TLC padding for lineage.
-        const lot = traceInput.trim() ? traceInput : selectedLot;
+        // Lineage path is SEGMENT_ALLOW (no spaces): trim for the API/selection.
+        // Export hrefs still read raw traceInput via buildDemoExportQuery (padding kept).
+        const lot = traceInput.trim() || selectedLot;
         if (!lot) {
             return;
         }
