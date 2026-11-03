@@ -4,8 +4,14 @@ Canonical stored identity is the full LGTIN or GS1 Digital Link (AI 01 + 10).
 The bare lot token is derived for UI, gap reports, and export rebuild paths.
 Round-trip acceptance is exact equality on the canonical full ID.
 
-Feature flag: ``LOT_IDENTITY_LOSSLESS`` (default enabled). Set to ``0`` /
-``false`` to restore segment-only canonical writes (rollback).
+Feature flag: ``LOT_IDENTITY_LOSSLESS`` (default disabled). Set to ``1`` /
+``true`` to store the full class URI as ``traceability_lot_code``.
+
+Keep it off until a dual-key or migration path exists for the event hash and
+idempotency key. Both include the TLC, so switching a lot from its bare token
+to the full URI changes them, and re-ingesting events stored before the switch
+would create duplicates. With the flag off, canonical writes are the same as
+before H2.
 """
 
 from __future__ import annotations
@@ -25,8 +31,8 @@ _DL_CLASS_RE = re.compile(
 
 
 def lossless_enabled() -> bool:
-    raw = (os.environ.get("LOT_IDENTITY_LOSSLESS") or "1").strip().lower()
-    return raw not in {"0", "false", "no", "off"}
+    raw = (os.environ.get("LOT_IDENTITY_LOSSLESS") or "0").strip().lower()
+    return raw in {"1", "true", "yes", "on"}
 
 
 @dataclass(frozen=True)
@@ -135,15 +141,17 @@ def lot_token_only(value: object) -> Optional[str]:
     text = value.strip()
     if not text:
         return None
-    # Legacy LGTIN/SGTIN segment helper for non-class schemes already truncated
     lowered = text.lower()
-    if "lgtin" in lowered or "sgtin" in lowered:
+    # Legacy LGTIN/SGTIN segment helper, only for EPC URNs the strict class
+    # parse rejected. A bare lot that merely contains "lgtin"/"sgtin" is a
+    # lot token, not a URI, and must not be dropped.
+    if lowered.startswith("urn:epc:") and ("lgtin" in lowered or "sgtin" in lowered):
         parts = text.rsplit(".", 1)
         if len(parts) == 2 and parts[1]:
             return unquote(parts[1])
         return None
     # Reject values that look like URIs but failed class parse
-    if "://" in text or text.lower().startswith("urn:epc:"):
+    if "://" in text or lowered.startswith("urn:epc:"):
         return None
     return text
 

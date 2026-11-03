@@ -117,8 +117,12 @@ class TestQueryTenantEvents:
         sql, params = session.calls[0][1]
         expected_where = "WHERE e.tenant_id = :tenant_id"
         expected_params = {"tenant_id": tenant_id, "row_limit": epcis_export._MAX_EXPORT_EVENTS + 1}
+        if lot_code is not None:
+            # SEL-598 dual-read: bare and full-class-URI TLCs both match.
+            lot_predicate, lot_params = epcis_export._lot_code_filter(lot_code)
+            expected_where += f" AND {lot_predicate}"
+            expected_params.update(lot_params)
         for name, value, predicate in (
-            ("lot_code", lot_code, "e.traceability_lot_code = :lot_code"),
             ("date_from", date_from, "e.event_timestamp >= :date_from"),
             ("date_to", date_to, "e.event_timestamp < :date_to"),
         ):

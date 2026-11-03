@@ -11,6 +11,8 @@ import pytest
 from shared.canonical_event import (
     _epcis_traceability_lot_code,
     _epcis_transformation_inputs,
+    _legacy_epcis_traceability_lot_code,
+    _legacy_epcis_transformation_inputs,
 )
 from shared.epcis_lot_identity import (
     is_full_class_uri,
@@ -29,6 +31,13 @@ SYN_LOT = "LOT-ROM-2026-0312A"
 SYN_LGTIN = f"urn:epc:class:lgtin:0614141.123452.{SYN_LOT}"
 SYN_DL = f"https://id.gs1.org/01/{SYN_GTIN14}/10/{SYN_LOT}"
 SYN_LGTIN_OTHER_GTIN = f"urn:epc:class:lgtin:0614141.999990.{SYN_LOT}"
+
+
+
+@pytest.fixture(autouse=True)
+def _lossless_on(monkeypatch):
+    """The H2 behaviour under test is opt-in; tests that need it off say so."""
+    monkeypatch.setenv("LOT_IDENTITY_LOSSLESS", "1")
 
 
 def test_lgtin_canonical_not_truncated_on_parse():
@@ -95,7 +104,7 @@ def test_lenient_only_fixture_preserves_raw_tlc_and_gtin():
 
 
 def test_canonical_path_preserves_full_lgtin_when_lossless(monkeypatch):
-    monkeypatch.delenv("LOT_IDENTITY_LOSSLESS", raising=False)
+    monkeypatch.setenv("LOT_IDENTITY_LOSSLESS", "1")
     assert lossless_enabled() is True
     event = {
         "quantityList": [{"epcClass": SYN_LGTIN, "quantity": 1, "uom": "EA"}],
@@ -118,7 +127,7 @@ def test_canonical_path_segment_only_when_flag_off(monkeypatch):
 
 
 def test_transformation_inputs_keep_full_class_uri(monkeypatch):
-    monkeypatch.delenv("LOT_IDENTITY_LOSSLESS", raising=False)
+    monkeypatch.setenv("LOT_IDENTITY_LOSSLESS", "1")
     event = {
         "inputQuantityList": [
             {"epcClass": SYN_LGTIN, "quantity": 2.5, "uom": "KGM"},
@@ -169,7 +178,7 @@ def test_lgtin_company_item_rebuilds_indicator_and_check_digit():
 
 def test_bare_ilmd_tlc_preserved_with_sgtin_epc(monkeypatch):
     """SGTIN + bare ILMD lot must not fabricate a Digital Link TLC."""
-    monkeypatch.delenv("LOT_IDENTITY_LOSSLESS", raising=False)
+    monkeypatch.setenv("LOT_IDENTITY_LOSSLESS", "1")
     sgtin = "urn:epc:id:sgtin:0614141.123452.SERIAL9"
     event = {
         "epcList": [sgtin],
@@ -182,7 +191,7 @@ def test_bare_ilmd_tlc_preserved_with_sgtin_epc(monkeypatch):
 
 
 def test_transformation_inputs_same_lot_different_gtin_kept(monkeypatch):
-    monkeypatch.delenv("LOT_IDENTITY_LOSSLESS", raising=False)
+    monkeypatch.setenv("LOT_IDENTITY_LOSSLESS", "1")
     event = {
         "inputQuantityList": [
             {"epcClass": SYN_LGTIN, "quantity": 1, "uom": "EA"},
@@ -207,3 +216,69 @@ def test_export_rejects_invalid_class_uri_from_lenient_parse():
     bad_dl = "https://id.gs1.org/01/09506000134351/10/LOT1"
     row2 = {"traceability_lot_code": bad_dl, "gtin": None, "epc_class": None, "product_id": None}
     assert _epc_class(row2) is None
+
+
+def test_lossless_is_opt_in_by_default(monkeypatch):
+    monkeypatch.delenv("LOT_IDENTITY_LOSSLESS", raising=False)
+    assert lossless_enabled() is False
+    monkeypatch.setenv("LOT_IDENTITY_LOSSLESS", "true")
+    assert lossless_enabled() is True
+
+
+@pytest.mark.parametrize(
+    "event",
+    [
+        {"quantityList": [{"epcClass": SYN_LGTIN, "quantity": 1, "uom": "EA"}], "ilmd": {}},
+        {"epcList": ["urn:epc:id:sgtin:0614141.123452.SERIAL9"], "ilmd": {"cbvmda:lotNumber": SYN_LOT}},
+        {"quantityList": [{"epcClass": SYN_LGTIN_OTHER_GTIN, "quantity": 1}], "ilmd": {"fsma:traceabilityLotCode": "TLC-ILMD-1"}},
+        {"traceability_lot_code": " FLAT-LOT-9 "},
+    ],
+)
+def test_flag_off_resolver_is_pre_h2_unchanged(monkeypatch, event):
+    """Flag off must keep TLC and GTIN KDE (and so hash/idempotency) as before H2."""
+    monkeypatch.setenv("LOT_IDENTITY_LOSSLESS", "0")
+    assert _epcis_traceability_lot_code(event) == _legacy_epcis_traceability_lot_code(event)
+
+
+def test_flag_off_transformation_inputs_are_pre_h2_unchanged(monkeypatch):
+    monkeypatch.setenv("LOT_IDENTITY_LOSSLESS", "0")
+    event = {
+        "inputQuantityList": [
+            {"epcClass": SYN_LGTIN, "quantity": 1, "uom": "EA"},
+            {"epcClass": SYN_LGTIN_OTHER_GTIN, "quantity": 2, "uom": "EA"},
+        ],
+        "inputEPCList": ["urn:epc:id:sgtin:0614141.123452.SERIAL9"],
+    }
+    assert _epcis_transformation_inputs(event) == _legacy_epcis_transformation_inputs(event)
+
+
+@pytest.mark.parametrize("bare", ["SGTINLOT-7", "PLGTIN.A", "lot-lgtin"])
+def test_lot_token_only_keeps_bare_lot_containing_gtin_words(bare):
+    assert lot_token_only(bare) == bare
+
+
+def test_export_lot_filter_bare_lot_reads_both_shapes():
+    from ingestion.app.epcis_export import _lot_code_filter, _row_matches_lot
+
+    predicate, params = _lot_code_filter(SYN_LOT)
+    assert "e.traceability_lot_code = :lot_code" in predicate
+    assert f"/10/{SYN_LOT}" in params.values()
+    assert f".{SYN_LOT}" in params.values()
+    assert _row_matches_lot(SYN_LOT, SYN_LOT)
+    assert _row_matches_lot(SYN_DL, SYN_LOT)
+    assert _row_matches_lot(SYN_LGTIN, SYN_LOT)
+    # Same suffix, different lot: excluded after the coarse SQL match.
+    assert not _row_matches_lot(f"urn:epc:class:lgtin:0614141.123452.X.{SYN_LOT}", SYN_LOT)
+    assert not _row_matches_lot("OTHER-LOT", SYN_LOT)
+
+
+def test_export_lot_filter_full_uri_also_reads_bare_rows():
+    from ingestion.app.epcis_export import _lot_code_filter, _row_matches_lot
+
+    predicate, params = _lot_code_filter(SYN_DL)
+    assert params == {"lot_code": SYN_DL, "lot_token": SYN_LOT}
+    assert "e.traceability_lot_code = :lot_token" in predicate
+    assert _row_matches_lot(SYN_DL, SYN_DL)
+    assert _row_matches_lot(SYN_LOT, SYN_DL)
+    # A different GTIN's URI with the same lot is not the requested class.
+    assert not _row_matches_lot(SYN_LGTIN_OTHER_GTIN, SYN_DL)

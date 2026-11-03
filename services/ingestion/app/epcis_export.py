@@ -47,6 +47,53 @@ class ExportStorageUnavailable(RuntimeError):
     """The event store could not be read; never report this as "no data"."""
 
 
+def _lot_code_filter(lot_code: str | None) -> tuple[str | None, dict]:
+    """SQL predicate for an export lot filter that reads both TLC shapes (SEL-598).
+
+    Rows may store the bare lot token (pre-H2, or ``LOT_IDENTITY_LOSSLESS``
+    off) or the full LGTIN / GS1 Digital Link class URI (flag on). A bare
+    filter also matches URIs whose lot segment ends with that token; a URI
+    filter also matches the bare token. ``_row_matches_lot`` then keeps
+    only rows whose lot token is exactly the requested one.
+    """
+    if not lot_code:
+        return None, {}
+    params: dict = {"lot_code": lot_code}
+    clauses = ["e.traceability_lot_code = :lot_code"]
+    token = lot_token_only(lot_code)
+    if token and token != lot_code:
+        # Full URI requested: also match rows stored with the bare token.
+        params["lot_token"] = token
+        clauses.append("e.traceability_lot_code = :lot_token")
+    elif token:
+        # Bare lot requested: also match full class URIs carrying it.
+        suffixes = sorted({f"/10/{token}", f"/10/{quote(token, safe='-._~')}", f".{token}", f".{quote(token, safe='-._~')}"})
+        for index, suffix in enumerate(suffixes):
+            name = f"lot_suffix_{index}"
+            params[name] = suffix
+            clauses.append(
+                "((lower(e.traceability_lot_code) LIKE 'https://id.gs1.org/01/%'"
+                " OR lower(e.traceability_lot_code) LIKE 'urn:epc:class:lgtin:%')"
+                f" AND right(e.traceability_lot_code, char_length(:{name})) = :{name})"
+            )
+    return "(" + " OR ".join(clauses) + ")", params
+
+
+def _row_matches_lot(stored: object, lot_code: str) -> bool:
+    """Exact lot match across bare-token and full-class-URI storage."""
+    if not isinstance(stored, str):
+        return False
+    if stored == lot_code:
+        return True
+    wanted = lot_token_only(lot_code)
+    if not wanted:
+        return False
+    if is_full_class_uri(lot_code):
+        # A URI filter matches its own URI (above) or a bare historical row.
+        return stored == wanted
+    return lot_token_only(stored) == wanted and (stored == wanted or is_full_class_uri(stored))
+
+
 def _query_tenant_events(
     tenant_id: str, lot_code: str | None, date_from: str | None, date_to: str | None
 ) -> list[dict]:
@@ -60,9 +107,10 @@ def _query_tenant_events(
     try:
         where = []
         params: dict = {"tenant_id": tenant_id}
-        if lot_code:
-            where.append("e.traceability_lot_code = :lot_code")
-            params["lot_code"] = lot_code
+        lot_predicate, lot_params = _lot_code_filter(lot_code)
+        if lot_predicate:
+            where.append(lot_predicate)
+            params.update(lot_params)
         if date_from:
             where.append("e.event_timestamp >= :date_from")
             params["date_from"] = date_from
@@ -118,12 +166,15 @@ def _query_tenant_events(
             """),
             {**params, "row_limit": _MAX_EXPORT_EVENTS + 1},
         ).fetchall()
-        return [dict(row._mapping) for row in rows]
+        result = [dict(row._mapping) for row in rows]
     except Exception as exc:
         logger.error("db_query_failed_for_export", extra={"error": str(exc)})
         raise ExportStorageUnavailable(str(exc)) from exc
     finally:
         db.close()
+    if lot_code:
+        result = [row for row in result if _row_matches_lot(row.get("traceability_lot_code"), lot_code)]
+    return result
 
 
 def _load_export_rows(tenant_id: str, request: "ExportRequest") -> list[dict]:
