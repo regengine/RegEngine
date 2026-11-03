@@ -11,6 +11,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Callout } from '@/components/ui/callout';
 import { ErrorState } from '@/components/ui/error-state';
+import { BetaUnavailableState } from '@/components/ui/beta-unavailable-state';
+import { isBetaUnavailableError } from '@/lib/dashboard-load-failure';
 import { Field } from '@/components/ui/field';
 import { Input, fieldControlClasses } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -20,7 +22,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/lib/auth-context';
 import { useTenant } from '@/lib/tenant-context';
 import { useCurrentSubscription } from '@/hooks/use-billing';
-import { getErrorRequestId } from '@/lib/api-error';
+import { apiError, getErrorRequestId, withRequestId } from '@/lib/api-error';
 import {
     Building2, Key, Database, Plug,
     Save, CheckCircle2, CreditCard,
@@ -121,7 +123,7 @@ export default function SettingsPage() {
         fei_number: '',
     });
 
-    const { data: settingsData } = useQuery({
+    const { data: settingsData, error: settingsError, isSuccess: settingsLoaded, refetch: refetchSettings, isFetching: settingsFetching } = useQuery({
         queryKey: ['settings', tenantId],
         queryFn: async (): Promise<SettingsResponse | null> => {
             const { getServiceURL } = await import('@/lib/api-config');
@@ -130,7 +132,7 @@ export default function SettingsPage() {
                 credentials: 'include',
                 headers: { 'Content-Type': 'application/json' },
             });
-            if (!res.ok) return null;
+            if (!res.ok) throw withRequestId(apiError(res.status, res.statusText), res);
             return res.json();
         },
         enabled: !!effectiveTenantId && isAuthenticated,
@@ -237,7 +239,7 @@ export default function SettingsPage() {
                 primaryAction={
                     <Button
                         onClick={handleSave}
-                        disabled={saving}
+                        disabled={saving || !settingsLoaded || !!settingsError}
                         loading={saving}
                         size="lg"
                         className="w-full sm:w-auto"
@@ -329,7 +331,10 @@ export default function SettingsPage() {
 
                     {/* ── Company Profile Tab ── */}
                     <TabsContent value="profile">
-                        <Card>
+                        {settingsError ? (
+                            isBetaUnavailableError(settingsError) ? <BetaUnavailableState feature="Company profile" /> :
+                                <ErrorState message="We could not load this page." onRetry={() => refetchSettings()} retrying={settingsFetching} requestId={getErrorRequestId(settingsError)} />
+                        ) : settingsLoaded ? <Card>
                             <CardHeader>
                                 <div className="min-w-0">
                                     <CardTitle>Company Profile</CardTitle>
@@ -384,7 +389,7 @@ export default function SettingsPage() {
                                     />
                                 </Field>
                             </CardContent>
-                        </Card>
+                        </Card> : null}
                     </TabsContent>
 
                     {/* ── API Keys Tab ── */}

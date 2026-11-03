@@ -197,8 +197,9 @@ def _post(
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.parametrize("tlc", (_VALID_FSMA_TLC, "A" * 3))
 def test_2976_multi_st_interchange_emits_one_event_per_transaction_set(
-    client: TestClient, captured_payload: dict
+    client: TestClient, captured_payload: dict, tlc: str
 ) -> None:
     """A batched interchange must produce one CTE per ST/SE pair with no
     cross-shipment field bleed.
@@ -236,7 +237,7 @@ def test_2976_multi_st_interchange_emits_one_event_per_transaction_set(
         isa13="000029761",
     )
 
-    response = _post(client, raw)
+    response = _post(client, raw, extra_data={"traceability_lot_code": tlc})
     assert response.status_code == 201, response.text
 
     payload = captured_payload["payload"]
@@ -262,6 +263,10 @@ def test_2976_multi_st_interchange_emits_one_event_per_transaction_set(
 
     body = response.json()
     assert body["extracted"]["transaction_set_count"] == 3
+    if tlc == "A" * 3:
+        for transaction in body["extracted"]["transaction_sets"]:
+            assert transaction["fsma_validation_status"] == "passed"
+            assert any("production pattern" in warning for warning in transaction["fsma_validation_warnings"])
 
 
 def test_2976_ge01_disagreeing_with_st_count_is_rejected(client: TestClient, captured_payload: dict) -> None:
@@ -558,8 +563,8 @@ def test_2976_batched_interchange_never_half_lands(client: TestClient, captured_
         "/api/v1/ingest/edi/document",
         params={"strict": "false"},
         data={
-            # Fails FSMAEvent.validate_tlc_format for every set.
-            "traceability_lot_code": "not-a-gtin-tlc",
+            # Below the shared TLC minimum for every set; pattern misses only warn.
+            "traceability_lot_code": "A" * 2,
             "tenant_id": TEST_TENANT_ID,
         },
         files={"file": ("batch.edi", raw, "application/edi-x12")},
@@ -670,3 +675,59 @@ def test_scalar_overrides_still_work_for_a_single_transaction_set(client: TestCl
 
     assert response.status_code in (200, 201), response.text
     assert captured_payload["payload"].events[0].quantity == 42.0
+
+
+@pytest.mark.parametrize("transaction_set", ("856", "861", "944", "945"))
+def test_tlc_pattern_miss_is_accepted_with_persisted_warning(transaction_set):
+    validated = edi_ingestion_routes._validate_edi_as_fsma_event(
+        {"lot_number": " \t" + "A" * 3 + "\n", "quantity": 1},
+        transaction_set,
+        "A" * 3,
+    )
+    assert validated["tlc"] == "A" * 3
+    assert any("production pattern" in warning for warning in validated["warnings"])
+
+
+@pytest.mark.parametrize("transaction_set", ("944", "945"))
+@pytest.mark.parametrize("lot", ("A" * 3, "0" * 14 + "A", "A"))
+def test_warehouse_tlc_prefix_rebuild_is_reachable(transaction_set, lot):
+    validated = edi_ingestion_routes._validate_edi_as_fsma_event(
+        {"lot_number": lot, "quantity": 1, "gtin": "0" * 14},
+        transaction_set,
+        lot,
+    )
+    expected = lot if lot.startswith("0" * 14) else "0" * 14 + "-" + lot.strip()
+    assert validated["tlc"] == expected
+    assert validated["warnings"] == []
+
+
+@pytest.mark.parametrize("transaction_set", ("944", "945"))
+@pytest.mark.parametrize("item_id", ("A" * 14, "0" * 3))
+def test_invalid_warehouse_prefix_keeps_lot_and_warning(transaction_set, item_id):
+    validated = edi_ingestion_routes._validate_edi_as_fsma_event(
+        {"lot_number": "A" * 3, "quantity": 1, "gtin": item_id, "upc": item_id},
+        transaction_set,
+        "A" * 3,
+    )
+    assert validated["tlc"] == "A" * 3
+    assert any("production pattern" in warning for warning in validated["warnings"])
+
+
+@pytest.mark.parametrize("transaction_set", ("944", "945"))
+@pytest.mark.parametrize("lot", ("", " ", "   ", "\t"))
+def test_warehouse_stripped_empty_lot_rejected_before_rebuild(transaction_set, lot):
+    """A-2170: empty or whitespace-only 944/945 lots reject like a missing lot.
+
+    Must fail before the GTIN/UPC rebuild; otherwise a blank lot becomes
+    ``{gtin}-`` and FSMAEvent accepts it with no warning.
+    """
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError) as excinfo:
+        edi_ingestion_routes._validate_edi_as_fsma_event(
+            {"lot_number": lot, "quantity": 1, "gtin": "0" * 14},
+            transaction_set,
+            "caller-tlc",
+        )
+    assert any(err["loc"][-1] == "lot_number" for err in excinfo.value.errors())
+

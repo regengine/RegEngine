@@ -88,6 +88,24 @@ def _valid_body() -> dict:
 # ---------------------------------------------------------------------------
 
 
+def test_product_mutation_rate_limit_default_when_relax_env_unset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Production default stays 30/minute when the E2E-only relax env is unset."""
+    monkeypatch.delenv("REGENGINE_E2E_RELAX_PRODUCT_MUTATION_LIMIT", raising=False)
+    assert pc.resolve_product_mutation_rate_limit({}) == "30/minute"
+    assert pc.resolve_product_mutation_rate_limit() == "30/minute"
+
+
+def test_product_mutation_rate_limit_relaxed_when_env_set() -> None:
+    assert (
+        pc.resolve_product_mutation_rate_limit(
+            {"REGENGINE_E2E_RELAX_PRODUCT_MUTATION_LIMIT": "true"}
+        )
+        == "10000/minute"
+    )
+
+
 def test_add_product_rate_limited() -> None:
     client = TestClient(_build_app())
     saw_429 = False

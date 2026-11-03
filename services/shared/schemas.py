@@ -11,7 +11,9 @@ from typing import Any, Dict, List, Literal, Optional
 from urllib.parse import unquote
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+from .fsma_validation import validate_tlc
 
 # Example constants to avoid duplication in schema examples
 EX_SUBJECT = "food facilities on the FTL"
@@ -372,7 +374,7 @@ class FSMAEvent(BaseModel):
     model before being emitted to Kafka.
 
     Required KDEs (rejection triggers):
-      - ``tlc``        – GTIN-14 + lot, LGTIN class URN, or GS1 Digital Link
+      - ``tlc``        – at least 3 characters after stripping whitespace
       - ``event_time`` – ISO 8601 timestamp (required)
     """
 
@@ -386,11 +388,8 @@ class FSMAEvent(BaseModel):
     )
     tlc: str = Field(
         ...,
-        description="Traceability Lot Code (GTIN-14 + lot, LGTIN class URN, or GS1 Digital Link)",
-        # 15 is the GTIN-14 form (14 digits + 1 lot character). An LGTIN class
-        # URN is at least 36 characters and a GS1 Digital Link at least 31,
-        # so this floor does not reject either lot-level form.
-        min_length=15,
+        description="Traceability Lot Code (production-pattern mismatches warn only)",
+        min_length=3,
     )
     product_description: str = Field(
         default="Unknown Product",
@@ -409,6 +408,8 @@ class FSMAEvent(BaseModel):
     reference_document_number: Optional[str] = Field(None, description="Source document reference number")
     tenant_id: Optional[str] = Field(None, description="Tenant identifier for multi-tenancy")
 
+    warnings: List[str] = Field(default_factory=list)
+
     # Legacy fields retained for backward compatibility with document extraction
     date: Optional[str] = Field(None, description="Event date in YYYY-MM-DD format")
     cte_type: Optional[CTEType] = Field(None, description="Legacy CTE type (use event_type instead)")
@@ -424,18 +425,23 @@ class FSMAEvent(BaseModel):
     @field_validator("tlc")
     @classmethod
     def validate_tlc_format(cls, v: str) -> str:
-        """Accept GTIN-14 + lot, an LGTIN class URN, or a GS1 Digital Link."""
-        if _TLC_PRODUCTION_RE.fullmatch(v):
-            return v
-        for pattern in (_TLC_LGTIN_RE, _TLC_DIGITAL_LINK_RE):
-            matched = pattern.fullmatch(v)
-            if matched is not None and _decoded_ai10_lot_within_limit(matched.group("lot")):
-                return v
-        raise ValueError(
-            f"TLC '{v}' does not match FSMA 204 production pattern "
-            "(accepted formats: a fourteen-digit GTIN prefix followed by a lot "
-            "suffix, an LGTIN class URN, or a GS1 Digital Link)"
-        )
+        """Strip surrounding whitespace; reject blank or short TLCs.
+
+        Production-pattern advisories are collected on each model instance.
+        """
+        cleaned = v.strip()
+        if not cleaned:
+            raise ValueError("TLC must not be blank")
+        if len(cleaned) < 3:
+            raise ValueError("TLC must be at least 3 characters")
+        return cleaned
+
+    @model_validator(mode="after")
+    def collect_tlc_warnings(self) -> "FSMAEvent":
+        for warning in validate_tlc(self.tlc, strict=True).warnings:
+            if warning not in self.warnings:
+                self.warnings.append(warning)
+        return self
 
     @field_validator("event_time")
     @classmethod

@@ -39,7 +39,7 @@ def _validate_edi_as_fsma_event(
     forced every caller to treat ``None`` as "maybe-failed, maybe-
     unavailable" and masked schema errors in the audit trail.
     """
-    from shared.schemas import FSMAEvent, FSMAEventType
+    from shared.schemas import _TLC_PRODUCTION_RE, FSMAEvent, FSMAEventType
 
     type_map = {
         "856": FSMAEventType.SHIPPING,
@@ -56,18 +56,26 @@ def _validate_edi_as_fsma_event(
             lot_number=extracted.get("lot_number"),
             quantity=extracted.get("quantity"),
         )
-        tlc = line.lot_number
-        # Follow the shared EDI schema TLC rule; originator lot versus
-        # GTIN-prefixed TLC remains a founder decision (#1104).
+        tlc = line.lot_number.strip()
+        # A-2170: a whitespace-only lot strips empty. Reject before the
+        # GTIN/UPC rebuild so we never emit a production-shaped "GTIN-"
+        # TLC that FSMAEvent would accept, collapsing blank lots onto one id.
+        if not tlc:
+            _WarehouseLineRequiredKDEs(lot_number=tlc, quantity=line.quantity)
+        # Pattern misses are advisory, so check explicitly to retain the
+        # warehouse GTIN/UPC rebuild for both accepted and short lots.
         try:
-            FSMAEvent.validate_tlc_format(tlc)
+            tlc = FSMAEvent.validate_tlc_format(tlc)
+            rebuild = not _TLC_PRODUCTION_RE.fullmatch(tlc)
         except ValueError:
+            rebuild = True
+        if rebuild:
             for item_id, lengths in (
                 (extracted.get("gtin"), (8, 12, 13, 14)),
                 (extracted.get("upc"), (12, 13)),
             ):
                 if isinstance(item_id, str) and item_id.isascii() and item_id.isdigit() and len(item_id) in lengths:
-                    tlc = f"{item_id.zfill(14)}-{line.lot_number}"
+                    tlc = f"{item_id.zfill(14)}-{tlc}"
                     break
     elif transaction_set in ("856", "861"):
         # The line lot is the TLC verbatim. Do not prefix a GTIN (#1104).

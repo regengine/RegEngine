@@ -219,8 +219,8 @@ class TestExportEpcisEndpoint:
         body = response.json()
         metadata = body["regengine:exportMetadata"]
         assert metadata["dataSource"] == "tenant"
-        assert metadata["integrityVerified"] is True
-        assert metadata["chainHashVerified"] is True
+        assert metadata["integrityVerified"] is False
+        assert metadata["chainHashVerified"] is False
         assert metadata["eventsCount"] == 1
         assert "regengine:disclaimer" not in metadata
         events = body["epcisBody"]["eventList"]
@@ -232,8 +232,42 @@ class TestExportEpcisEndpoint:
         assert event["quantityList"][0]["epcClass"] == row["epc_class"]
         assert metadata["skippedEventsCount"] == 0
         assert response.headers["X-RegEngine-Data-Source"] == "tenant"
-        assert response.headers["X-RegEngine-Integrity-Verified"] == "true"
+        assert response.headers["X-RegEngine-Integrity-Verified"] == "false"
         assert response.headers["X-RegEngine-Events-Count"] == "1"
+
+    @pytest.mark.parametrize("validate", [False, True])
+    def test_corrupted_stored_hash_remains_unverified(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch, validate: bool
+    ) -> None:
+        # A well-formed but wrong hash must not acquire a verification claim
+        # just because it was loaded from storage or passed structural checks.
+        corrupted_hash = "0" * 64
+        session = _FakeSession(execute_queue=[[_event_row(sha256_hash=corrupted_hash)]])
+        monkeypatch.setattr(epcis_export, "get_db_safe", lambda: session)
+
+        response = client.post(
+            "/api/v1/export/epcis",
+            params={"validate": str(validate).lower()},
+            json={"tenant_id": str(uuid4()), "format": "epcis"},
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        metadata = body["regengine:exportMetadata"]
+        assert metadata["dataSource"] == "tenant"
+        assert metadata["eventsCount"] == 1
+        assert body["epcisBody"]["eventList"][0]["regengine:sha256"] == corrupted_hash
+        assert metadata["integrityVerified"] is False
+        assert metadata["chainHashVerified"] is False
+        assert response.headers["X-RegEngine-Integrity-Verified"] == "false"
+        assert session.closed
+        if validate:
+            assert body["regengine:validation"]["valid"] is True
+            assert body["regengine:validation"]["errors"] == []
+            assert response.headers["X-RegEngine-Schema-Valid"] == "true"
+        else:
+            assert "regengine:validation" not in body
+            assert "X-RegEngine-Schema-Valid" not in response.headers
 
     def test_null_timestamp_is_skipped_without_no_data_message(
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
@@ -251,6 +285,10 @@ class TestExportEpcisEndpoint:
         assert meta["eventsCount"] == 0
         assert meta["skippedEventsCount"] == 1
         assert meta["skippedEventsByReason"]["missing_timestamp"] == 1
+        assert meta["dataSource"] == "tenant"
+        assert meta["integrityVerified"] is False
+        assert meta["chainHashVerified"] is False
+        assert response.headers["X-RegEngine-Integrity-Verified"] == "false"
         assert "regengine:message" not in meta
         assert response.headers["X-RegEngine-Events-Count"] == "0"
         assert response.headers["X-RegEngine-Skipped-Events-Count"] == "1"

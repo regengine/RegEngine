@@ -1,0 +1,3343 @@
+{
+  "model": "jev-1.13.0",
+  "thresholds": {
+    "yes": 0.7,
+    "no": 0.3,
+    "choice": 0.7
+  },
+  "policy_status": "uncalibrated",
+  "synthetic_only": true,
+  "requests": 68,
+  "unique_cases": 34,
+  "retries": 0,
+  "live_started_at_utc": "2026-10-29T09:31:32.256Z",
+  "live_finished_at_utc": "2026-10-29T09:31:39.757Z",
+  "offline_replay_matches": 68,
+  "datasets": {
+    "heldout": {
+      "combined": {
+        "total": 16,
+        "correct": 16,
+        "accuracy": 1,
+        "mismatches": [],
+        "harness_errors": 0,
+        "confusion": {
+          "supported": {
+            "supported": 4,
+            "contradicted": 0,
+            "conflicting": 0,
+            "insufficient": 0
+          },
+          "contradicted": {
+            "supported": 0,
+            "contradicted": 4,
+            "conflicting": 0,
+            "insufficient": 0
+          },
+          "conflicting": {
+            "supported": 0,
+            "contradicted": 0,
+            "conflicting": 4,
+            "insufficient": 0
+          },
+          "insufficient": {
+            "supported": 0,
+            "contradicted": 0,
+            "conflicting": 0,
+            "insufficient": 4
+          }
+        },
+        "unnecessary_insufficient": [],
+        "false_decisive": [],
+        "missed_conflicts": [],
+        "false_conflicts": [],
+        "families": {
+          "compound_all_required_conditions_met": {
+            "total": 1,
+            "correct": 1,
+            "accuracy": 1,
+            "mismatches": [],
+            "harness_errors": 0,
+            "confusion": {
+              "supported": {
+                "supported": 1,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "contradicted": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "conflicting": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "insufficient": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              }
+            },
+            "unnecessary_insufficient": [],
+            "false_decisive": [],
+            "missed_conflicts": [],
+            "false_conflicts": []
+          },
+          "compound_required_conjunct_explicitly_false": {
+            "total": 1,
+            "correct": 1,
+            "accuracy": 1,
+            "mismatches": [],
+            "harness_errors": 0,
+            "confusion": {
+              "supported": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "contradicted": {
+                "supported": 0,
+                "contradicted": 1,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "conflicting": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "insufficient": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              }
+            },
+            "unnecessary_insufficient": [],
+            "false_decisive": [],
+            "missed_conflicts": [],
+            "false_conflicts": []
+          },
+          "compound_required_conjunct_unreported": {
+            "total": 1,
+            "correct": 1,
+            "accuracy": 1,
+            "mismatches": [],
+            "harness_errors": 0,
+            "confusion": {
+              "supported": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "contradicted": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "conflicting": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "insufficient": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 1
+              }
+            },
+            "unnecessary_insufficient": [],
+            "false_decisive": [],
+            "missed_conflicts": [],
+            "false_conflicts": []
+          },
+          "optional_condition_need_not_be_established": {
+            "total": 1,
+            "correct": 1,
+            "accuracy": 1,
+            "mismatches": [],
+            "harness_errors": 0,
+            "confusion": {
+              "supported": {
+                "supported": 1,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "contradicted": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "conflicting": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "insufficient": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              }
+            },
+            "unnecessary_insufficient": [],
+            "false_decisive": [],
+            "missed_conflicts": [],
+            "false_conflicts": []
+          },
+          "explicit_optionality_refutes_necessity": {
+            "total": 1,
+            "correct": 1,
+            "accuracy": 1,
+            "mismatches": [],
+            "harness_errors": 0,
+            "confusion": {
+              "supported": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "contradicted": {
+                "supported": 0,
+                "contradicted": 1,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "conflicting": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "insufficient": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              }
+            },
+            "unnecessary_insufficient": [],
+            "false_decisive": [],
+            "missed_conflicts": [],
+            "false_conflicts": []
+          },
+          "necessary_condition_does_not_establish_sufficiency": {
+            "total": 1,
+            "correct": 1,
+            "accuracy": 1,
+            "mismatches": [],
+            "harness_errors": 0,
+            "confusion": {
+              "supported": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "contradicted": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "conflicting": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "insufficient": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 1
+              }
+            },
+            "unnecessary_insufficient": [],
+            "false_decisive": [],
+            "missed_conflicts": [],
+            "false_conflicts": []
+          },
+          "explicit_sole_condition_establishes_sufficiency": {
+            "total": 1,
+            "correct": 1,
+            "accuracy": 1,
+            "mismatches": [],
+            "harness_errors": 0,
+            "confusion": {
+              "supported": {
+                "supported": 1,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "contradicted": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "conflicting": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "insufficient": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              }
+            },
+            "unnecessary_insufficient": [],
+            "false_decisive": [],
+            "missed_conflicts": [],
+            "false_conflicts": []
+          },
+          "additional_required_condition_refutes_sufficiency": {
+            "total": 1,
+            "correct": 1,
+            "accuracy": 1,
+            "mismatches": [],
+            "harness_errors": 0,
+            "confusion": {
+              "supported": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "contradicted": {
+                "supported": 0,
+                "contradicted": 1,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "conflicting": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "insufficient": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              }
+            },
+            "unnecessary_insufficient": [],
+            "false_decisive": [],
+            "missed_conflicts": [],
+            "false_conflicts": []
+          },
+          "partial_account_does_not_establish_exclusivity": {
+            "total": 1,
+            "correct": 1,
+            "accuracy": 1,
+            "mismatches": [],
+            "harness_errors": 0,
+            "confusion": {
+              "supported": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "contradicted": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "conflicting": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "insufficient": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 1
+              }
+            },
+            "unnecessary_insufficient": [],
+            "false_decisive": [],
+            "missed_conflicts": [],
+            "false_conflicts": []
+          },
+          "exhaustive_account_establishes_exclusivity": {
+            "total": 1,
+            "correct": 1,
+            "accuracy": 1,
+            "mismatches": [],
+            "harness_errors": 0,
+            "confusion": {
+              "supported": {
+                "supported": 1,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "contradicted": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "conflicting": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "insufficient": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              }
+            },
+            "unnecessary_insufficient": [],
+            "false_decisive": [],
+            "missed_conflicts": [],
+            "false_conflicts": []
+          },
+          "governing_revision_overrides_temporal_distractors": {
+            "total": 1,
+            "correct": 1,
+            "accuracy": 1,
+            "mismatches": [],
+            "harness_errors": 0,
+            "confusion": {
+              "supported": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "contradicted": {
+                "supported": 0,
+                "contradicted": 1,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "conflicting": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "insufficient": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              }
+            },
+            "unnecessary_insufficient": [],
+            "false_decisive": [],
+            "missed_conflicts": [],
+            "false_conflicts": []
+          },
+          "unknown_item_applicability_prevents_branch_selection": {
+            "total": 1,
+            "correct": 1,
+            "accuracy": 1,
+            "mismatches": [],
+            "harness_errors": 0,
+            "confusion": {
+              "supported": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "contradicted": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "conflicting": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "insufficient": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 1
+              }
+            },
+            "unnecessary_insufficient": [],
+            "false_decisive": [],
+            "missed_conflicts": [],
+            "false_conflicts": []
+          },
+          "unresolved_conflict_on_required_conjunct": {
+            "total": 1,
+            "correct": 1,
+            "accuracy": 1,
+            "mismatches": [],
+            "harness_errors": 0,
+            "confusion": {
+              "supported": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "contradicted": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "conflicting": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 1,
+                "insufficient": 0
+              },
+              "insufficient": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              }
+            },
+            "unnecessary_insufficient": [],
+            "false_decisive": [],
+            "missed_conflicts": [],
+            "false_conflicts": []
+          },
+          "unresolved_mandatory_versus_optional_rules": {
+            "total": 1,
+            "correct": 1,
+            "accuracy": 1,
+            "mismatches": [],
+            "harness_errors": 0,
+            "confusion": {
+              "supported": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "contradicted": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "conflicting": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 1,
+                "insufficient": 0
+              },
+              "insufficient": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              }
+            },
+            "unnecessary_insufficient": [],
+            "false_decisive": [],
+            "missed_conflicts": [],
+            "false_conflicts": []
+          },
+          "unresolved_exhaustive_accounts_disagree": {
+            "total": 1,
+            "correct": 1,
+            "accuracy": 1,
+            "mismatches": [],
+            "harness_errors": 0,
+            "confusion": {
+              "supported": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "contradicted": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "conflicting": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 1,
+                "insufficient": 0
+              },
+              "insufficient": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              }
+            },
+            "unnecessary_insufficient": [],
+            "false_decisive": [],
+            "missed_conflicts": [],
+            "false_conflicts": []
+          },
+          "equally_current_revision_copies_conflict": {
+            "total": 1,
+            "correct": 1,
+            "accuracy": 1,
+            "mismatches": [],
+            "harness_errors": 0,
+            "confusion": {
+              "supported": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "contradicted": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "conflicting": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 1,
+                "insufficient": 0
+              },
+              "insufficient": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              }
+            },
+            "unnecessary_insufficient": [],
+            "false_decisive": [],
+            "missed_conflicts": [],
+            "false_conflicts": []
+          }
+        },
+        "improvements_vs_baseline": [],
+        "regressions_vs_baseline": []
+      },
+      "omission-aware": {
+        "total": 16,
+        "correct": 16,
+        "accuracy": 1,
+        "mismatches": [],
+        "harness_errors": 0,
+        "confusion": {
+          "supported": {
+            "supported": 4,
+            "contradicted": 0,
+            "conflicting": 0,
+            "insufficient": 0
+          },
+          "contradicted": {
+            "supported": 0,
+            "contradicted": 4,
+            "conflicting": 0,
+            "insufficient": 0
+          },
+          "conflicting": {
+            "supported": 0,
+            "contradicted": 0,
+            "conflicting": 4,
+            "insufficient": 0
+          },
+          "insufficient": {
+            "supported": 0,
+            "contradicted": 0,
+            "conflicting": 0,
+            "insufficient": 4
+          }
+        },
+        "unnecessary_insufficient": [],
+        "false_decisive": [],
+        "missed_conflicts": [],
+        "false_conflicts": [],
+        "families": {
+          "compound_all_required_conditions_met": {
+            "total": 1,
+            "correct": 1,
+            "accuracy": 1,
+            "mismatches": [],
+            "harness_errors": 0,
+            "confusion": {
+              "supported": {
+                "supported": 1,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "contradicted": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "conflicting": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "insufficient": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              }
+            },
+            "unnecessary_insufficient": [],
+            "false_decisive": [],
+            "missed_conflicts": [],
+            "false_conflicts": []
+          },
+          "compound_required_conjunct_explicitly_false": {
+            "total": 1,
+            "correct": 1,
+            "accuracy": 1,
+            "mismatches": [],
+            "harness_errors": 0,
+            "confusion": {
+              "supported": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "contradicted": {
+                "supported": 0,
+                "contradicted": 1,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "conflicting": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "insufficient": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              }
+            },
+            "unnecessary_insufficient": [],
+            "false_decisive": [],
+            "missed_conflicts": [],
+            "false_conflicts": []
+          },
+          "compound_required_conjunct_unreported": {
+            "total": 1,
+            "correct": 1,
+            "accuracy": 1,
+            "mismatches": [],
+            "harness_errors": 0,
+            "confusion": {
+              "supported": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "contradicted": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "conflicting": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "insufficient": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 1
+              }
+            },
+            "unnecessary_insufficient": [],
+            "false_decisive": [],
+            "missed_conflicts": [],
+            "false_conflicts": []
+          },
+          "optional_condition_need_not_be_established": {
+            "total": 1,
+            "correct": 1,
+            "accuracy": 1,
+            "mismatches": [],
+            "harness_errors": 0,
+            "confusion": {
+              "supported": {
+                "supported": 1,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "contradicted": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "conflicting": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "insufficient": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              }
+            },
+            "unnecessary_insufficient": [],
+            "false_decisive": [],
+            "missed_conflicts": [],
+            "false_conflicts": []
+          },
+          "explicit_optionality_refutes_necessity": {
+            "total": 1,
+            "correct": 1,
+            "accuracy": 1,
+            "mismatches": [],
+            "harness_errors": 0,
+            "confusion": {
+              "supported": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "contradicted": {
+                "supported": 0,
+                "contradicted": 1,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "conflicting": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "insufficient": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              }
+            },
+            "unnecessary_insufficient": [],
+            "false_decisive": [],
+            "missed_conflicts": [],
+            "false_conflicts": []
+          },
+          "necessary_condition_does_not_establish_sufficiency": {
+            "total": 1,
+            "correct": 1,
+            "accuracy": 1,
+            "mismatches": [],
+            "harness_errors": 0,
+            "confusion": {
+              "supported": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "contradicted": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "conflicting": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "insufficient": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 1
+              }
+            },
+            "unnecessary_insufficient": [],
+            "false_decisive": [],
+            "missed_conflicts": [],
+            "false_conflicts": []
+          },
+          "explicit_sole_condition_establishes_sufficiency": {
+            "total": 1,
+            "correct": 1,
+            "accuracy": 1,
+            "mismatches": [],
+            "harness_errors": 0,
+            "confusion": {
+              "supported": {
+                "supported": 1,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "contradicted": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "conflicting": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "insufficient": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              }
+            },
+            "unnecessary_insufficient": [],
+            "false_decisive": [],
+            "missed_conflicts": [],
+            "false_conflicts": []
+          },
+          "additional_required_condition_refutes_sufficiency": {
+            "total": 1,
+            "correct": 1,
+            "accuracy": 1,
+            "mismatches": [],
+            "harness_errors": 0,
+            "confusion": {
+              "supported": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "contradicted": {
+                "supported": 0,
+                "contradicted": 1,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "conflicting": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "insufficient": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              }
+            },
+            "unnecessary_insufficient": [],
+            "false_decisive": [],
+            "missed_conflicts": [],
+            "false_conflicts": []
+          },
+          "partial_account_does_not_establish_exclusivity": {
+            "total": 1,
+            "correct": 1,
+            "accuracy": 1,
+            "mismatches": [],
+            "harness_errors": 0,
+            "confusion": {
+              "supported": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "contradicted": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "conflicting": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "insufficient": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 1
+              }
+            },
+            "unnecessary_insufficient": [],
+            "false_decisive": [],
+            "missed_conflicts": [],
+            "false_conflicts": []
+          },
+          "exhaustive_account_establishes_exclusivity": {
+            "total": 1,
+            "correct": 1,
+            "accuracy": 1,
+            "mismatches": [],
+            "harness_errors": 0,
+            "confusion": {
+              "supported": {
+                "supported": 1,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "contradicted": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "conflicting": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "insufficient": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              }
+            },
+            "unnecessary_insufficient": [],
+            "false_decisive": [],
+            "missed_conflicts": [],
+            "false_conflicts": []
+          },
+          "governing_revision_overrides_temporal_distractors": {
+            "total": 1,
+            "correct": 1,
+            "accuracy": 1,
+            "mismatches": [],
+            "harness_errors": 0,
+            "confusion": {
+              "supported": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "contradicted": {
+                "supported": 0,
+                "contradicted": 1,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "conflicting": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "insufficient": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              }
+            },
+            "unnecessary_insufficient": [],
+            "false_decisive": [],
+            "missed_conflicts": [],
+            "false_conflicts": []
+          },
+          "unknown_item_applicability_prevents_branch_selection": {
+            "total": 1,
+            "correct": 1,
+            "accuracy": 1,
+            "mismatches": [],
+            "harness_errors": 0,
+            "confusion": {
+              "supported": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "contradicted": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "conflicting": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "insufficient": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 1
+              }
+            },
+            "unnecessary_insufficient": [],
+            "false_decisive": [],
+            "missed_conflicts": [],
+            "false_conflicts": []
+          },
+          "unresolved_conflict_on_required_conjunct": {
+            "total": 1,
+            "correct": 1,
+            "accuracy": 1,
+            "mismatches": [],
+            "harness_errors": 0,
+            "confusion": {
+              "supported": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "contradicted": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "conflicting": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 1,
+                "insufficient": 0
+              },
+              "insufficient": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              }
+            },
+            "unnecessary_insufficient": [],
+            "false_decisive": [],
+            "missed_conflicts": [],
+            "false_conflicts": []
+          },
+          "unresolved_mandatory_versus_optional_rules": {
+            "total": 1,
+            "correct": 1,
+            "accuracy": 1,
+            "mismatches": [],
+            "harness_errors": 0,
+            "confusion": {
+              "supported": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "contradicted": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "conflicting": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 1,
+                "insufficient": 0
+              },
+              "insufficient": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              }
+            },
+            "unnecessary_insufficient": [],
+            "false_decisive": [],
+            "missed_conflicts": [],
+            "false_conflicts": []
+          },
+          "unresolved_exhaustive_accounts_disagree": {
+            "total": 1,
+            "correct": 1,
+            "accuracy": 1,
+            "mismatches": [],
+            "harness_errors": 0,
+            "confusion": {
+              "supported": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "contradicted": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "conflicting": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 1,
+                "insufficient": 0
+              },
+              "insufficient": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              }
+            },
+            "unnecessary_insufficient": [],
+            "false_decisive": [],
+            "missed_conflicts": [],
+            "false_conflicts": []
+          },
+          "equally_current_revision_copies_conflict": {
+            "total": 1,
+            "correct": 1,
+            "accuracy": 1,
+            "mismatches": [],
+            "harness_errors": 0,
+            "confusion": {
+              "supported": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "contradicted": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "conflicting": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 1,
+                "insufficient": 0
+              },
+              "insufficient": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              }
+            },
+            "unnecessary_insufficient": [],
+            "false_decisive": [],
+            "missed_conflicts": [],
+            "false_conflicts": []
+          }
+        },
+        "improvements_vs_baseline": [],
+        "regressions_vs_baseline": []
+      }
+    },
+    "regression": {
+      "combined": {
+        "total": 18,
+        "correct": 17,
+        "accuracy": 0.9444444444444444,
+        "mismatches": [
+          "HS04"
+        ],
+        "harness_errors": 0,
+        "confusion": {
+          "supported": {
+            "supported": 5,
+            "contradicted": 0,
+            "conflicting": 0,
+            "insufficient": 0
+          },
+          "contradicted": {
+            "supported": 0,
+            "contradicted": 5,
+            "conflicting": 0,
+            "insufficient": 0
+          },
+          "conflicting": {
+            "supported": 0,
+            "contradicted": 0,
+            "conflicting": 4,
+            "insufficient": 0
+          },
+          "insufficient": {
+            "supported": 0,
+            "contradicted": 1,
+            "conflicting": 0,
+            "insufficient": 3
+          }
+        },
+        "unnecessary_insufficient": [],
+        "false_decisive": [
+          "HS04"
+        ],
+        "missed_conflicts": [],
+        "false_conflicts": [],
+        "families": {
+          "conflict": {
+            "total": 8,
+            "correct": 8,
+            "accuracy": 1,
+            "mismatches": [],
+            "harness_errors": 0,
+            "confusion": {
+              "supported": {
+                "supported": 2,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "contradicted": {
+                "supported": 0,
+                "contradicted": 2,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "conflicting": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 2,
+                "insufficient": 0
+              },
+              "insufficient": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 2
+              }
+            },
+            "unnecessary_insufficient": [],
+            "false_decisive": [],
+            "missed_conflicts": [],
+            "false_conflicts": []
+          },
+          "scope": {
+            "total": 8,
+            "correct": 7,
+            "accuracy": 0.875,
+            "mismatches": [
+              "HS04"
+            ],
+            "harness_errors": 0,
+            "confusion": {
+              "supported": {
+                "supported": 2,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "contradicted": {
+                "supported": 0,
+                "contradicted": 2,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "conflicting": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 2,
+                "insufficient": 0
+              },
+              "insufficient": {
+                "supported": 0,
+                "contradicted": 1,
+                "conflicting": 0,
+                "insufficient": 1
+              }
+            },
+            "unnecessary_insufficient": [],
+            "false_decisive": [
+              "HS04"
+            ],
+            "missed_conflicts": [],
+            "false_conflicts": []
+          },
+          "prior-development": {
+            "total": 2,
+            "correct": 2,
+            "accuracy": 1,
+            "mismatches": [],
+            "harness_errors": 0,
+            "confusion": {
+              "supported": {
+                "supported": 1,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "contradicted": {
+                "supported": 0,
+                "contradicted": 1,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "conflicting": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "insufficient": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              }
+            },
+            "unnecessary_insufficient": [],
+            "false_decisive": [],
+            "missed_conflicts": [],
+            "false_conflicts": []
+          }
+        },
+        "improvements_vs_baseline": [],
+        "regressions_vs_baseline": []
+      },
+      "omission-aware": {
+        "total": 18,
+        "correct": 17,
+        "accuracy": 0.9444444444444444,
+        "mismatches": [
+          "B08"
+        ],
+        "harness_errors": 0,
+        "confusion": {
+          "supported": {
+            "supported": 4,
+            "contradicted": 0,
+            "conflicting": 0,
+            "insufficient": 1
+          },
+          "contradicted": {
+            "supported": 0,
+            "contradicted": 5,
+            "conflicting": 0,
+            "insufficient": 0
+          },
+          "conflicting": {
+            "supported": 0,
+            "contradicted": 0,
+            "conflicting": 4,
+            "insufficient": 0
+          },
+          "insufficient": {
+            "supported": 0,
+            "contradicted": 0,
+            "conflicting": 0,
+            "insufficient": 4
+          }
+        },
+        "unnecessary_insufficient": [
+          "B08"
+        ],
+        "false_decisive": [],
+        "missed_conflicts": [],
+        "false_conflicts": [],
+        "families": {
+          "conflict": {
+            "total": 8,
+            "correct": 8,
+            "accuracy": 1,
+            "mismatches": [],
+            "harness_errors": 0,
+            "confusion": {
+              "supported": {
+                "supported": 2,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "contradicted": {
+                "supported": 0,
+                "contradicted": 2,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "conflicting": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 2,
+                "insufficient": 0
+              },
+              "insufficient": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 2
+              }
+            },
+            "unnecessary_insufficient": [],
+            "false_decisive": [],
+            "missed_conflicts": [],
+            "false_conflicts": []
+          },
+          "scope": {
+            "total": 8,
+            "correct": 8,
+            "accuracy": 1,
+            "mismatches": [],
+            "harness_errors": 0,
+            "confusion": {
+              "supported": {
+                "supported": 2,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "contradicted": {
+                "supported": 0,
+                "contradicted": 2,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "conflicting": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 2,
+                "insufficient": 0
+              },
+              "insufficient": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 2
+              }
+            },
+            "unnecessary_insufficient": [],
+            "false_decisive": [],
+            "missed_conflicts": [],
+            "false_conflicts": []
+          },
+          "prior-development": {
+            "total": 2,
+            "correct": 1,
+            "accuracy": 0.5,
+            "mismatches": [
+              "B08"
+            ],
+            "harness_errors": 0,
+            "confusion": {
+              "supported": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 1
+              },
+              "contradicted": {
+                "supported": 0,
+                "contradicted": 1,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "conflicting": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              },
+              "insufficient": {
+                "supported": 0,
+                "contradicted": 0,
+                "conflicting": 0,
+                "insufficient": 0
+              }
+            },
+            "unnecessary_insufficient": [
+              "B08"
+            ],
+            "false_decisive": [],
+            "missed_conflicts": [],
+            "false_conflicts": []
+          }
+        },
+        "improvements_vs_baseline": [
+          "HS04"
+        ],
+        "regressions_vs_baseline": [
+          "B08"
+        ]
+      }
+    }
+  },
+  "cost": {
+    "input_tokens": 73470,
+    "output_tokens": 7720,
+    "input_usd_per_million": "0.042",
+    "output_usd_per_million": "0",
+    "batch_usd": "0.003085740",
+    "prior_usd": "0.003751776",
+    "cumulative_usd": "0.006837516",
+    "original_cap_usd": "1.00",
+    "remaining_usd": "0.993162484",
+    "unmetered_attempts": 0,
+    "invoice_debit_verified": false,
+    "pricing_source": "https://docs.typesafe.ai/models"
+  },
+  "promotion_performed": false,
+  "limitations": [
+    "One response per case and variant; repeated-run stability is unmeasured.",
+    "Sixteen synthetic held-out cases include related pairs and are not independent production samples.",
+    "All 18 exposed cases, including HS04, are regression evidence and excluded from primary accuracy.",
+    "The 16 fresh cases become development evidence for any subsequent prompt revision."
+  ],
+  "rows": [
+    {
+      "dataset": "heldout",
+      "case_id": "HP01",
+      "variant": "combined",
+      "family": "compound_all_required_conditions_met",
+      "expected": "supported",
+      "actual": "supported",
+      "matches": true,
+      "reason": "direct_support",
+      "coverage": 0.97,
+      "conflict": 0.03,
+      "polarity": "affirms_hypothesis",
+      "chosen_probability": 1,
+      "confidence": 1,
+      "probabilities": {
+        "affirms_hypothesis": 1,
+        "refutes_hypothesis": 0,
+        "partial_scope_only": 0,
+        "unaddressed_cannot_judge": 0
+      },
+      "input_tokens": 949,
+      "output_tokens": 113,
+      "cost_nano_usd": 39858,
+      "cost_usd": "0.000039858"
+    },
+    {
+      "dataset": "heldout",
+      "case_id": "HP01",
+      "variant": "omission-aware",
+      "family": "compound_all_required_conditions_met",
+      "expected": "supported",
+      "actual": "supported",
+      "matches": true,
+      "reason": "direct_support",
+      "coverage": 0.97,
+      "conflict": 0.04,
+      "polarity": "affirms_hypothesis",
+      "chosen_probability": 1,
+      "confidence": 1,
+      "probabilities": {
+        "affirms_hypothesis": 1,
+        "refutes_hypothesis": 0,
+        "partial_scope_only": 0,
+        "unaddressed_cannot_judge": 0
+      },
+      "input_tokens": 1071,
+      "output_tokens": 113,
+      "cost_nano_usd": 44982,
+      "cost_usd": "0.000044982"
+    },
+    {
+      "dataset": "heldout",
+      "case_id": "HP02",
+      "variant": "omission-aware",
+      "family": "compound_required_conjunct_explicitly_false",
+      "expected": "contradicted",
+      "actual": "contradicted",
+      "matches": true,
+      "reason": "explicit_incompatible_fact",
+      "coverage": 0.95,
+      "conflict": 0.09,
+      "polarity": "refutes_hypothesis",
+      "chosen_probability": 1,
+      "confidence": 1,
+      "probabilities": {
+        "affirms_hypothesis": 0,
+        "refutes_hypothesis": 1,
+        "partial_scope_only": 0,
+        "unaddressed_cannot_judge": 0
+      },
+      "input_tokens": 1077,
+      "output_tokens": 113,
+      "cost_nano_usd": 45234,
+      "cost_usd": "0.000045234"
+    },
+    {
+      "dataset": "heldout",
+      "case_id": "HP02",
+      "variant": "combined",
+      "family": "compound_required_conjunct_explicitly_false",
+      "expected": "contradicted",
+      "actual": "contradicted",
+      "matches": true,
+      "reason": "explicit_incompatible_fact",
+      "coverage": 0.95,
+      "conflict": 0.09,
+      "polarity": "refutes_hypothesis",
+      "chosen_probability": 1,
+      "confidence": 1,
+      "probabilities": {
+        "affirms_hypothesis": 0,
+        "refutes_hypothesis": 1,
+        "partial_scope_only": 0,
+        "unaddressed_cannot_judge": 0
+      },
+      "input_tokens": 955,
+      "output_tokens": 113,
+      "cost_nano_usd": 40110,
+      "cost_usd": "0.000040110"
+    },
+    {
+      "dataset": "heldout",
+      "case_id": "HP03",
+      "variant": "combined",
+      "family": "compound_required_conjunct_unreported",
+      "expected": "insufficient",
+      "actual": "insufficient",
+      "matches": true,
+      "reason": "polarity_uncertain",
+      "coverage": 0.88,
+      "conflict": 0.06,
+      "polarity": "partial_scope_only",
+      "chosen_probability": 0.63,
+      "confidence": 0.51,
+      "probabilities": {
+        "affirms_hypothesis": 0,
+        "refutes_hypothesis": 0,
+        "partial_scope_only": 0.63,
+        "unaddressed_cannot_judge": 0.37
+      },
+      "input_tokens": 956,
+      "output_tokens": 110,
+      "cost_nano_usd": 40152,
+      "cost_usd": "0.000040152"
+    },
+    {
+      "dataset": "heldout",
+      "case_id": "HP03",
+      "variant": "omission-aware",
+      "family": "compound_required_conjunct_unreported",
+      "expected": "insufficient",
+      "actual": "insufficient",
+      "matches": true,
+      "reason": "only_partial_support",
+      "coverage": 0.88,
+      "conflict": 0.05,
+      "polarity": "partial_scope_only",
+      "chosen_probability": 0.99,
+      "confidence": 0.99,
+      "probabilities": {
+        "affirms_hypothesis": 0,
+        "refutes_hypothesis": 0,
+        "partial_scope_only": 0.99,
+        "unaddressed_cannot_judge": 0.01
+      },
+      "input_tokens": 1078,
+      "output_tokens": 110,
+      "cost_nano_usd": 45276,
+      "cost_usd": "0.000045276"
+    },
+    {
+      "dataset": "heldout",
+      "case_id": "HP04",
+      "variant": "omission-aware",
+      "family": "optional_condition_need_not_be_established",
+      "expected": "supported",
+      "actual": "supported",
+      "matches": true,
+      "reason": "direct_support",
+      "coverage": 0.92,
+      "conflict": 0.05,
+      "polarity": "affirms_hypothesis",
+      "chosen_probability": 0.93,
+      "confidence": 0.91,
+      "probabilities": {
+        "affirms_hypothesis": 0.93,
+        "refutes_hypothesis": 0,
+        "partial_scope_only": 0.07,
+        "unaddressed_cannot_judge": 0
+      },
+      "input_tokens": 1074,
+      "output_tokens": 113,
+      "cost_nano_usd": 45108,
+      "cost_usd": "0.000045108"
+    },
+    {
+      "dataset": "heldout",
+      "case_id": "HP04",
+      "variant": "combined",
+      "family": "optional_condition_need_not_be_established",
+      "expected": "supported",
+      "actual": "supported",
+      "matches": true,
+      "reason": "direct_support",
+      "coverage": 0.93,
+      "conflict": 0.05,
+      "polarity": "affirms_hypothesis",
+      "chosen_probability": 0.98,
+      "confidence": 0.97,
+      "probabilities": {
+        "affirms_hypothesis": 0.98,
+        "refutes_hypothesis": 0,
+        "partial_scope_only": 0.01,
+        "unaddressed_cannot_judge": 0.01
+      },
+      "input_tokens": 952,
+      "output_tokens": 113,
+      "cost_nano_usd": 39984,
+      "cost_usd": "0.000039984"
+    },
+    {
+      "dataset": "heldout",
+      "case_id": "HP05",
+      "variant": "combined",
+      "family": "explicit_optionality_refutes_necessity",
+      "expected": "contradicted",
+      "actual": "contradicted",
+      "matches": true,
+      "reason": "explicit_incompatible_fact",
+      "coverage": 0.97,
+      "conflict": 0.05,
+      "polarity": "refutes_hypothesis",
+      "chosen_probability": 1,
+      "confidence": 1,
+      "probabilities": {
+        "affirms_hypothesis": 0,
+        "refutes_hypothesis": 1,
+        "partial_scope_only": 0,
+        "unaddressed_cannot_judge": 0
+      },
+      "input_tokens": 902,
+      "output_tokens": 113,
+      "cost_nano_usd": 37884,
+      "cost_usd": "0.000037884"
+    },
+    {
+      "dataset": "heldout",
+      "case_id": "HP05",
+      "variant": "omission-aware",
+      "family": "explicit_optionality_refutes_necessity",
+      "expected": "contradicted",
+      "actual": "contradicted",
+      "matches": true,
+      "reason": "explicit_incompatible_fact",
+      "coverage": 0.97,
+      "conflict": 0.04,
+      "polarity": "refutes_hypothesis",
+      "chosen_probability": 1,
+      "confidence": 1,
+      "probabilities": {
+        "affirms_hypothesis": 0,
+        "refutes_hypothesis": 1,
+        "partial_scope_only": 0,
+        "unaddressed_cannot_judge": 0
+      },
+      "input_tokens": 1024,
+      "output_tokens": 113,
+      "cost_nano_usd": 43008,
+      "cost_usd": "0.000043008"
+    },
+    {
+      "dataset": "heldout",
+      "case_id": "HP06",
+      "variant": "omission-aware",
+      "family": "necessary_condition_does_not_establish_sufficiency",
+      "expected": "insufficient",
+      "actual": "insufficient",
+      "matches": true,
+      "reason": "polarity_uncertain",
+      "coverage": 0.76,
+      "conflict": 0.06,
+      "polarity": "partial_scope_only",
+      "chosen_probability": 0.68,
+      "confidence": 0.57,
+      "probabilities": {
+        "affirms_hypothesis": 0,
+        "refutes_hypothesis": 0.19,
+        "partial_scope_only": 0.68,
+        "unaddressed_cannot_judge": 0.13
+      },
+      "input_tokens": 1077,
+      "output_tokens": 110,
+      "cost_nano_usd": 45234,
+      "cost_usd": "0.000045234"
+    },
+    {
+      "dataset": "heldout",
+      "case_id": "HP06",
+      "variant": "combined",
+      "family": "necessary_condition_does_not_establish_sufficiency",
+      "expected": "insufficient",
+      "actual": "insufficient",
+      "matches": true,
+      "reason": "claim_not_resolved",
+      "coverage": 0.74,
+      "conflict": 0.06,
+      "polarity": "unaddressed_cannot_judge",
+      "chosen_probability": 0.73,
+      "confidence": 0.64,
+      "probabilities": {
+        "affirms_hypothesis": 0,
+        "refutes_hypothesis": 0.03,
+        "partial_scope_only": 0.24,
+        "unaddressed_cannot_judge": 0.73
+      },
+      "input_tokens": 955,
+      "output_tokens": 116,
+      "cost_nano_usd": 40110,
+      "cost_usd": "0.000040110"
+    },
+    {
+      "dataset": "heldout",
+      "case_id": "HP07",
+      "variant": "combined",
+      "family": "explicit_sole_condition_establishes_sufficiency",
+      "expected": "supported",
+      "actual": "supported",
+      "matches": true,
+      "reason": "direct_support",
+      "coverage": 0.96,
+      "conflict": 0.04,
+      "polarity": "affirms_hypothesis",
+      "chosen_probability": 1,
+      "confidence": 1,
+      "probabilities": {
+        "affirms_hypothesis": 1,
+        "refutes_hypothesis": 0,
+        "partial_scope_only": 0,
+        "unaddressed_cannot_judge": 0
+      },
+      "input_tokens": 897,
+      "output_tokens": 113,
+      "cost_nano_usd": 37674,
+      "cost_usd": "0.000037674"
+    },
+    {
+      "dataset": "heldout",
+      "case_id": "HP07",
+      "variant": "omission-aware",
+      "family": "explicit_sole_condition_establishes_sufficiency",
+      "expected": "supported",
+      "actual": "supported",
+      "matches": true,
+      "reason": "direct_support",
+      "coverage": 0.96,
+      "conflict": 0.05,
+      "polarity": "affirms_hypothesis",
+      "chosen_probability": 1,
+      "confidence": 1,
+      "probabilities": {
+        "affirms_hypothesis": 1,
+        "refutes_hypothesis": 0,
+        "partial_scope_only": 0,
+        "unaddressed_cannot_judge": 0
+      },
+      "input_tokens": 1019,
+      "output_tokens": 113,
+      "cost_nano_usd": 42798,
+      "cost_usd": "0.000042798"
+    },
+    {
+      "dataset": "heldout",
+      "case_id": "HP08",
+      "variant": "omission-aware",
+      "family": "additional_required_condition_refutes_sufficiency",
+      "expected": "contradicted",
+      "actual": "contradicted",
+      "matches": true,
+      "reason": "explicit_incompatible_fact",
+      "coverage": 0.96,
+      "conflict": 0.04,
+      "polarity": "refutes_hypothesis",
+      "chosen_probability": 1,
+      "confidence": 1,
+      "probabilities": {
+        "affirms_hypothesis": 0,
+        "refutes_hypothesis": 1,
+        "partial_scope_only": 0,
+        "unaddressed_cannot_judge": 0
+      },
+      "input_tokens": 1081,
+      "output_tokens": 113,
+      "cost_nano_usd": 45402,
+      "cost_usd": "0.000045402"
+    },
+    {
+      "dataset": "heldout",
+      "case_id": "HP08",
+      "variant": "combined",
+      "family": "additional_required_condition_refutes_sufficiency",
+      "expected": "contradicted",
+      "actual": "contradicted",
+      "matches": true,
+      "reason": "explicit_incompatible_fact",
+      "coverage": 0.96,
+      "conflict": 0.04,
+      "polarity": "refutes_hypothesis",
+      "chosen_probability": 1,
+      "confidence": 1,
+      "probabilities": {
+        "affirms_hypothesis": 0,
+        "refutes_hypothesis": 1,
+        "partial_scope_only": 0,
+        "unaddressed_cannot_judge": 0
+      },
+      "input_tokens": 959,
+      "output_tokens": 113,
+      "cost_nano_usd": 40278,
+      "cost_usd": "0.000040278"
+    },
+    {
+      "dataset": "heldout",
+      "case_id": "HP09",
+      "variant": "combined",
+      "family": "partial_account_does_not_establish_exclusivity",
+      "expected": "insufficient",
+      "actual": "insufficient",
+      "matches": true,
+      "reason": "only_partial_support",
+      "coverage": 0.78,
+      "conflict": 0.08,
+      "polarity": "partial_scope_only",
+      "chosen_probability": 0.76,
+      "confidence": 0.68,
+      "probabilities": {
+        "affirms_hypothesis": 0,
+        "refutes_hypothesis": 0,
+        "partial_scope_only": 0.76,
+        "unaddressed_cannot_judge": 0.24
+      },
+      "input_tokens": 901,
+      "output_tokens": 110,
+      "cost_nano_usd": 37842,
+      "cost_usd": "0.000037842"
+    },
+    {
+      "dataset": "heldout",
+      "case_id": "HP09",
+      "variant": "omission-aware",
+      "family": "partial_account_does_not_establish_exclusivity",
+      "expected": "insufficient",
+      "actual": "insufficient",
+      "matches": true,
+      "reason": "only_partial_support",
+      "coverage": 0.78,
+      "conflict": 0.09,
+      "polarity": "partial_scope_only",
+      "chosen_probability": 0.99,
+      "confidence": 0.99,
+      "probabilities": {
+        "affirms_hypothesis": 0,
+        "refutes_hypothesis": 0,
+        "partial_scope_only": 0.99,
+        "unaddressed_cannot_judge": 0.01
+      },
+      "input_tokens": 1023,
+      "output_tokens": 110,
+      "cost_nano_usd": 42966,
+      "cost_usd": "0.000042966"
+    },
+    {
+      "dataset": "heldout",
+      "case_id": "HP10",
+      "variant": "omission-aware",
+      "family": "exhaustive_account_establishes_exclusivity",
+      "expected": "supported",
+      "actual": "supported",
+      "matches": true,
+      "reason": "direct_support",
+      "coverage": 0.98,
+      "conflict": 0.04,
+      "polarity": "affirms_hypothesis",
+      "chosen_probability": 1,
+      "confidence": 1,
+      "probabilities": {
+        "affirms_hypothesis": 1,
+        "refutes_hypothesis": 0,
+        "partial_scope_only": 0,
+        "unaddressed_cannot_judge": 0
+      },
+      "input_tokens": 1022,
+      "output_tokens": 113,
+      "cost_nano_usd": 42924,
+      "cost_usd": "0.000042924"
+    },
+    {
+      "dataset": "heldout",
+      "case_id": "HP10",
+      "variant": "combined",
+      "family": "exhaustive_account_establishes_exclusivity",
+      "expected": "supported",
+      "actual": "supported",
+      "matches": true,
+      "reason": "direct_support",
+      "coverage": 0.98,
+      "conflict": 0.04,
+      "polarity": "affirms_hypothesis",
+      "chosen_probability": 1,
+      "confidence": 1,
+      "probabilities": {
+        "affirms_hypothesis": 1,
+        "refutes_hypothesis": 0,
+        "partial_scope_only": 0,
+        "unaddressed_cannot_judge": 0
+      },
+      "input_tokens": 900,
+      "output_tokens": 113,
+      "cost_nano_usd": 37800,
+      "cost_usd": "0.000037800"
+    },
+    {
+      "dataset": "heldout",
+      "case_id": "HP11",
+      "variant": "combined",
+      "family": "governing_revision_overrides_temporal_distractors",
+      "expected": "contradicted",
+      "actual": "contradicted",
+      "matches": true,
+      "reason": "explicit_incompatible_fact",
+      "coverage": 0.95,
+      "conflict": 0.09,
+      "polarity": "refutes_hypothesis",
+      "chosen_probability": 1,
+      "confidence": 1,
+      "probabilities": {
+        "affirms_hypothesis": 0,
+        "refutes_hypothesis": 1,
+        "partial_scope_only": 0,
+        "unaddressed_cannot_judge": 0
+      },
+      "input_tokens": 1018,
+      "output_tokens": 113,
+      "cost_nano_usd": 42756,
+      "cost_usd": "0.000042756"
+    },
+    {
+      "dataset": "heldout",
+      "case_id": "HP11",
+      "variant": "omission-aware",
+      "family": "governing_revision_overrides_temporal_distractors",
+      "expected": "contradicted",
+      "actual": "contradicted",
+      "matches": true,
+      "reason": "explicit_incompatible_fact",
+      "coverage": 0.95,
+      "conflict": 0.09,
+      "polarity": "refutes_hypothesis",
+      "chosen_probability": 1,
+      "confidence": 1,
+      "probabilities": {
+        "affirms_hypothesis": 0,
+        "refutes_hypothesis": 1,
+        "partial_scope_only": 0,
+        "unaddressed_cannot_judge": 0
+      },
+      "input_tokens": 1140,
+      "output_tokens": 113,
+      "cost_nano_usd": 47880,
+      "cost_usd": "0.000047880"
+    },
+    {
+      "dataset": "heldout",
+      "case_id": "HP12",
+      "variant": "omission-aware",
+      "family": "unknown_item_applicability_prevents_branch_selection",
+      "expected": "insufficient",
+      "actual": "insufficient",
+      "matches": true,
+      "reason": "claim_not_resolved",
+      "coverage": 0.78,
+      "conflict": 0.06,
+      "polarity": "unaddressed_cannot_judge",
+      "chosen_probability": 0.95,
+      "confidence": 0.93,
+      "probabilities": {
+        "affirms_hypothesis": 0,
+        "refutes_hypothesis": 0,
+        "partial_scope_only": 0.05,
+        "unaddressed_cannot_judge": 0.95
+      },
+      "input_tokens": 1091,
+      "output_tokens": 116,
+      "cost_nano_usd": 45822,
+      "cost_usd": "0.000045822"
+    },
+    {
+      "dataset": "heldout",
+      "case_id": "HP12",
+      "variant": "combined",
+      "family": "unknown_item_applicability_prevents_branch_selection",
+      "expected": "insufficient",
+      "actual": "insufficient",
+      "matches": true,
+      "reason": "claim_not_resolved",
+      "coverage": 0.77,
+      "conflict": 0.07,
+      "polarity": "unaddressed_cannot_judge",
+      "chosen_probability": 0.97,
+      "confidence": 0.96,
+      "probabilities": {
+        "affirms_hypothesis": 0,
+        "refutes_hypothesis": 0,
+        "partial_scope_only": 0.03,
+        "unaddressed_cannot_judge": 0.97
+      },
+      "input_tokens": 969,
+      "output_tokens": 116,
+      "cost_nano_usd": 40698,
+      "cost_usd": "0.000040698"
+    },
+    {
+      "dataset": "heldout",
+      "case_id": "HP13",
+      "variant": "combined",
+      "family": "unresolved_conflict_on_required_conjunct",
+      "expected": "conflicting",
+      "actual": "conflicting",
+      "matches": true,
+      "reason": "incompatible_same_scope_evidence",
+      "coverage": 0.94,
+      "conflict": 0.92,
+      "polarity": "unaddressed_cannot_judge",
+      "chosen_probability": 0.95,
+      "confidence": 0.93,
+      "probabilities": {
+        "affirms_hypothesis": 0.02,
+        "refutes_hypothesis": 0.02,
+        "partial_scope_only": 0.01,
+        "unaddressed_cannot_judge": 0.95
+      },
+      "input_tokens": 1053,
+      "output_tokens": 116,
+      "cost_nano_usd": 44226,
+      "cost_usd": "0.000044226"
+    },
+    {
+      "dataset": "heldout",
+      "case_id": "HP13",
+      "variant": "omission-aware",
+      "family": "unresolved_conflict_on_required_conjunct",
+      "expected": "conflicting",
+      "actual": "conflicting",
+      "matches": true,
+      "reason": "incompatible_same_scope_evidence",
+      "coverage": 0.94,
+      "conflict": 0.92,
+      "polarity": "unaddressed_cannot_judge",
+      "chosen_probability": 0.86,
+      "confidence": 0.81,
+      "probabilities": {
+        "affirms_hypothesis": 0.02,
+        "refutes_hypothesis": 0.1,
+        "partial_scope_only": 0.02,
+        "unaddressed_cannot_judge": 0.86
+      },
+      "input_tokens": 1175,
+      "output_tokens": 116,
+      "cost_nano_usd": 49350,
+      "cost_usd": "0.000049350"
+    },
+    {
+      "dataset": "heldout",
+      "case_id": "HP14",
+      "variant": "omission-aware",
+      "family": "unresolved_mandatory_versus_optional_rules",
+      "expected": "conflicting",
+      "actual": "conflicting",
+      "matches": true,
+      "reason": "incompatible_same_scope_evidence",
+      "coverage": 0.88,
+      "conflict": 0.96,
+      "polarity": "refutes_hypothesis",
+      "chosen_probability": 0.7,
+      "confidence": 0.6,
+      "probabilities": {
+        "affirms_hypothesis": 0.01,
+        "refutes_hypothesis": 0.7,
+        "partial_scope_only": 0,
+        "unaddressed_cannot_judge": 0.29
+      },
+      "input_tokens": 1108,
+      "output_tokens": 113,
+      "cost_nano_usd": 46536,
+      "cost_usd": "0.000046536"
+    },
+    {
+      "dataset": "heldout",
+      "case_id": "HP14",
+      "variant": "combined",
+      "family": "unresolved_mandatory_versus_optional_rules",
+      "expected": "conflicting",
+      "actual": "conflicting",
+      "matches": true,
+      "reason": "incompatible_same_scope_evidence",
+      "coverage": 0.85,
+      "conflict": 0.95,
+      "polarity": "unaddressed_cannot_judge",
+      "chosen_probability": 0.6,
+      "confidence": 0.47,
+      "probabilities": {
+        "affirms_hypothesis": 0.02,
+        "refutes_hypothesis": 0.38,
+        "partial_scope_only": 0,
+        "unaddressed_cannot_judge": 0.6
+      },
+      "input_tokens": 986,
+      "output_tokens": 116,
+      "cost_nano_usd": 41412,
+      "cost_usd": "0.000041412"
+    },
+    {
+      "dataset": "heldout",
+      "case_id": "HP15",
+      "variant": "combined",
+      "family": "unresolved_exhaustive_accounts_disagree",
+      "expected": "conflicting",
+      "actual": "conflicting",
+      "matches": true,
+      "reason": "incompatible_same_scope_evidence",
+      "coverage": 0.96,
+      "conflict": 0.93,
+      "polarity": "unaddressed_cannot_judge",
+      "chosen_probability": 0.96,
+      "confidence": 0.95,
+      "probabilities": {
+        "affirms_hypothesis": 0.02,
+        "refutes_hypothesis": 0.02,
+        "partial_scope_only": 0,
+        "unaddressed_cannot_judge": 0.96
+      },
+      "input_tokens": 979,
+      "output_tokens": 116,
+      "cost_nano_usd": 41118,
+      "cost_usd": "0.000041118"
+    },
+    {
+      "dataset": "heldout",
+      "case_id": "HP15",
+      "variant": "omission-aware",
+      "family": "unresolved_exhaustive_accounts_disagree",
+      "expected": "conflicting",
+      "actual": "conflicting",
+      "matches": true,
+      "reason": "incompatible_same_scope_evidence",
+      "coverage": 0.96,
+      "conflict": 0.93,
+      "polarity": "unaddressed_cannot_judge",
+      "chosen_probability": 0.79,
+      "confidence": 0.72,
+      "probabilities": {
+        "affirms_hypothesis": 0.03,
+        "refutes_hypothesis": 0.17,
+        "partial_scope_only": 0.01,
+        "unaddressed_cannot_judge": 0.79
+      },
+      "input_tokens": 1101,
+      "output_tokens": 116,
+      "cost_nano_usd": 46242,
+      "cost_usd": "0.000046242"
+    },
+    {
+      "dataset": "heldout",
+      "case_id": "HP16",
+      "variant": "omission-aware",
+      "family": "equally_current_revision_copies_conflict",
+      "expected": "conflicting",
+      "actual": "conflicting",
+      "matches": true,
+      "reason": "incompatible_same_scope_evidence",
+      "coverage": 0.92,
+      "conflict": 0.95,
+      "polarity": "unaddressed_cannot_judge",
+      "chosen_probability": 0.81,
+      "confidence": 0.75,
+      "probabilities": {
+        "affirms_hypothesis": 0,
+        "refutes_hypothesis": 0.18,
+        "partial_scope_only": 0.01,
+        "unaddressed_cannot_judge": 0.81
+      },
+      "input_tokens": 1169,
+      "output_tokens": 116,
+      "cost_nano_usd": 49098,
+      "cost_usd": "0.000049098"
+    },
+    {
+      "dataset": "heldout",
+      "case_id": "HP16",
+      "variant": "combined",
+      "family": "equally_current_revision_copies_conflict",
+      "expected": "conflicting",
+      "actual": "conflicting",
+      "matches": true,
+      "reason": "incompatible_same_scope_evidence",
+      "coverage": 0.92,
+      "conflict": 0.96,
+      "polarity": "unaddressed_cannot_judge",
+      "chosen_probability": 0.91,
+      "confidence": 0.88,
+      "probabilities": {
+        "affirms_hypothesis": 0,
+        "refutes_hypothesis": 0.08,
+        "partial_scope_only": 0.01,
+        "unaddressed_cannot_judge": 0.91
+      },
+      "input_tokens": 1047,
+      "output_tokens": 116,
+      "cost_nano_usd": 43974,
+      "cost_usd": "0.000043974"
+    },
+    {
+      "dataset": "regression",
+      "case_id": "HC01",
+      "variant": "combined",
+      "family": "conflict",
+      "expected": "supported",
+      "actual": "supported",
+      "matches": true,
+      "reason": "direct_support",
+      "coverage": 0.95,
+      "conflict": 0.04,
+      "polarity": "affirms_hypothesis",
+      "chosen_probability": 1,
+      "confidence": 1,
+      "probabilities": {
+        "affirms_hypothesis": 1,
+        "refutes_hypothesis": 0,
+        "partial_scope_only": 0,
+        "unaddressed_cannot_judge": 0
+      },
+      "input_tokens": 981,
+      "output_tokens": 113,
+      "cost_nano_usd": 41202,
+      "cost_usd": "0.000041202"
+    },
+    {
+      "dataset": "regression",
+      "case_id": "HC01",
+      "variant": "omission-aware",
+      "family": "conflict",
+      "expected": "supported",
+      "actual": "supported",
+      "matches": true,
+      "reason": "direct_support",
+      "coverage": 0.95,
+      "conflict": 0.03,
+      "polarity": "affirms_hypothesis",
+      "chosen_probability": 1,
+      "confidence": 1,
+      "probabilities": {
+        "affirms_hypothesis": 1,
+        "refutes_hypothesis": 0,
+        "partial_scope_only": 0,
+        "unaddressed_cannot_judge": 0
+      },
+      "input_tokens": 1103,
+      "output_tokens": 113,
+      "cost_nano_usd": 46326,
+      "cost_usd": "0.000046326"
+    },
+    {
+      "dataset": "regression",
+      "case_id": "HC02",
+      "variant": "omission-aware",
+      "family": "conflict",
+      "expected": "conflicting",
+      "actual": "conflicting",
+      "matches": true,
+      "reason": "incompatible_same_scope_evidence",
+      "coverage": 0.96,
+      "conflict": 0.94,
+      "polarity": "unaddressed_cannot_judge",
+      "chosen_probability": 0.58,
+      "confidence": 0.44,
+      "probabilities": {
+        "affirms_hypothesis": 0.01,
+        "refutes_hypothesis": 0.41,
+        "partial_scope_only": 0,
+        "unaddressed_cannot_judge": 0.58
+      },
+      "input_tokens": 1110,
+      "output_tokens": 116,
+      "cost_nano_usd": 46620,
+      "cost_usd": "0.000046620"
+    },
+    {
+      "dataset": "regression",
+      "case_id": "HC02",
+      "variant": "combined",
+      "family": "conflict",
+      "expected": "conflicting",
+      "actual": "conflicting",
+      "matches": true,
+      "reason": "incompatible_same_scope_evidence",
+      "coverage": 0.96,
+      "conflict": 0.95,
+      "polarity": "unaddressed_cannot_judge",
+      "chosen_probability": 0.86,
+      "confidence": 0.81,
+      "probabilities": {
+        "affirms_hypothesis": 0.02,
+        "refutes_hypothesis": 0.12,
+        "partial_scope_only": 0,
+        "unaddressed_cannot_judge": 0.86
+      },
+      "input_tokens": 988,
+      "output_tokens": 116,
+      "cost_nano_usd": 41496,
+      "cost_usd": "0.000041496"
+    },
+    {
+      "dataset": "regression",
+      "case_id": "HC03",
+      "variant": "combined",
+      "family": "conflict",
+      "expected": "contradicted",
+      "actual": "contradicted",
+      "matches": true,
+      "reason": "explicit_incompatible_fact",
+      "coverage": 0.95,
+      "conflict": 0.12,
+      "polarity": "refutes_hypothesis",
+      "chosen_probability": 1,
+      "confidence": 1,
+      "probabilities": {
+        "affirms_hypothesis": 0,
+        "refutes_hypothesis": 1,
+        "partial_scope_only": 0,
+        "unaddressed_cannot_judge": 0
+      },
+      "input_tokens": 1029,
+      "output_tokens": 113,
+      "cost_nano_usd": 43218,
+      "cost_usd": "0.000043218"
+    },
+    {
+      "dataset": "regression",
+      "case_id": "HC03",
+      "variant": "omission-aware",
+      "family": "conflict",
+      "expected": "contradicted",
+      "actual": "contradicted",
+      "matches": true,
+      "reason": "explicit_incompatible_fact",
+      "coverage": 0.95,
+      "conflict": 0.12,
+      "polarity": "refutes_hypothesis",
+      "chosen_probability": 1,
+      "confidence": 1,
+      "probabilities": {
+        "affirms_hypothesis": 0,
+        "refutes_hypothesis": 1,
+        "partial_scope_only": 0,
+        "unaddressed_cannot_judge": 0
+      },
+      "input_tokens": 1151,
+      "output_tokens": 113,
+      "cost_nano_usd": 48342,
+      "cost_usd": "0.000048342"
+    },
+    {
+      "dataset": "regression",
+      "case_id": "HC04",
+      "variant": "omission-aware",
+      "family": "conflict",
+      "expected": "insufficient",
+      "actual": "insufficient",
+      "matches": true,
+      "reason": "claim_coverage_not_established",
+      "coverage": 0.66,
+      "conflict": 0.17,
+      "polarity": "unaddressed_cannot_judge",
+      "chosen_probability": 0.55,
+      "confidence": 0.4,
+      "probabilities": {
+        "affirms_hypothesis": 0,
+        "refutes_hypothesis": 0.23,
+        "partial_scope_only": 0.22,
+        "unaddressed_cannot_judge": 0.55
+      },
+      "input_tokens": 1166,
+      "output_tokens": 116,
+      "cost_nano_usd": 48972,
+      "cost_usd": "0.000048972"
+    },
+    {
+      "dataset": "regression",
+      "case_id": "HC04",
+      "variant": "combined",
+      "family": "conflict",
+      "expected": "insufficient",
+      "actual": "insufficient",
+      "matches": true,
+      "reason": "claim_coverage_not_established",
+      "coverage": 0.65,
+      "conflict": 0.18,
+      "polarity": "unaddressed_cannot_judge",
+      "chosen_probability": 0.76,
+      "confidence": 0.68,
+      "probabilities": {
+        "affirms_hypothesis": 0,
+        "refutes_hypothesis": 0.12,
+        "partial_scope_only": 0.12,
+        "unaddressed_cannot_judge": 0.76
+      },
+      "input_tokens": 1044,
+      "output_tokens": 116,
+      "cost_nano_usd": 43848,
+      "cost_usd": "0.000043848"
+    },
+    {
+      "dataset": "regression",
+      "case_id": "HC05",
+      "variant": "combined",
+      "family": "conflict",
+      "expected": "conflicting",
+      "actual": "conflicting",
+      "matches": true,
+      "reason": "incompatible_same_scope_evidence",
+      "coverage": 0.92,
+      "conflict": 0.96,
+      "polarity": "unaddressed_cannot_judge",
+      "chosen_probability": 0.97,
+      "confidence": 0.96,
+      "probabilities": {
+        "affirms_hypothesis": 0.01,
+        "refutes_hypothesis": 0.02,
+        "partial_scope_only": 0,
+        "unaddressed_cannot_judge": 0.97
+      },
+      "input_tokens": 977,
+      "output_tokens": 116,
+      "cost_nano_usd": 41034,
+      "cost_usd": "0.000041034"
+    },
+    {
+      "dataset": "regression",
+      "case_id": "HC05",
+      "variant": "omission-aware",
+      "family": "conflict",
+      "expected": "conflicting",
+      "actual": "conflicting",
+      "matches": true,
+      "reason": "incompatible_same_scope_evidence",
+      "coverage": 0.92,
+      "conflict": 0.96,
+      "polarity": "unaddressed_cannot_judge",
+      "chosen_probability": 0.91,
+      "confidence": 0.88,
+      "probabilities": {
+        "affirms_hypothesis": 0.01,
+        "refutes_hypothesis": 0.07,
+        "partial_scope_only": 0.01,
+        "unaddressed_cannot_judge": 0.91
+      },
+      "input_tokens": 1099,
+      "output_tokens": 116,
+      "cost_nano_usd": 46158,
+      "cost_usd": "0.000046158"
+    },
+    {
+      "dataset": "regression",
+      "case_id": "HC06",
+      "variant": "omission-aware",
+      "family": "conflict",
+      "expected": "supported",
+      "actual": "supported",
+      "matches": true,
+      "reason": "direct_support",
+      "coverage": 0.96,
+      "conflict": 0.11,
+      "polarity": "affirms_hypothesis",
+      "chosen_probability": 0.96,
+      "confidence": 0.95,
+      "probabilities": {
+        "affirms_hypothesis": 0.96,
+        "refutes_hypothesis": 0,
+        "partial_scope_only": 0.03,
+        "unaddressed_cannot_judge": 0.01
+      },
+      "input_tokens": 1121,
+      "output_tokens": 113,
+      "cost_nano_usd": 47082,
+      "cost_usd": "0.000047082"
+    },
+    {
+      "dataset": "regression",
+      "case_id": "HC06",
+      "variant": "combined",
+      "family": "conflict",
+      "expected": "supported",
+      "actual": "supported",
+      "matches": true,
+      "reason": "direct_support",
+      "coverage": 0.96,
+      "conflict": 0.1,
+      "polarity": "affirms_hypothesis",
+      "chosen_probability": 0.99,
+      "confidence": 0.99,
+      "probabilities": {
+        "affirms_hypothesis": 0.99,
+        "refutes_hypothesis": 0,
+        "partial_scope_only": 0,
+        "unaddressed_cannot_judge": 0.01
+      },
+      "input_tokens": 999,
+      "output_tokens": 113,
+      "cost_nano_usd": 41958,
+      "cost_usd": "0.000041958"
+    },
+    {
+      "dataset": "regression",
+      "case_id": "HC07",
+      "variant": "combined",
+      "family": "conflict",
+      "expected": "contradicted",
+      "actual": "contradicted",
+      "matches": true,
+      "reason": "explicit_incompatible_fact",
+      "coverage": 0.95,
+      "conflict": 0.07,
+      "polarity": "refutes_hypothesis",
+      "chosen_probability": 1,
+      "confidence": 1,
+      "probabilities": {
+        "affirms_hypothesis": 0,
+        "refutes_hypothesis": 1,
+        "partial_scope_only": 0,
+        "unaddressed_cannot_judge": 0
+      },
+      "input_tokens": 1025,
+      "output_tokens": 113,
+      "cost_nano_usd": 43050,
+      "cost_usd": "0.000043050"
+    },
+    {
+      "dataset": "regression",
+      "case_id": "HC07",
+      "variant": "omission-aware",
+      "family": "conflict",
+      "expected": "contradicted",
+      "actual": "contradicted",
+      "matches": true,
+      "reason": "explicit_incompatible_fact",
+      "coverage": 0.95,
+      "conflict": 0.07,
+      "polarity": "refutes_hypothesis",
+      "chosen_probability": 1,
+      "confidence": 1,
+      "probabilities": {
+        "affirms_hypothesis": 0,
+        "refutes_hypothesis": 1,
+        "partial_scope_only": 0,
+        "unaddressed_cannot_judge": 0
+      },
+      "input_tokens": 1147,
+      "output_tokens": 113,
+      "cost_nano_usd": 48174,
+      "cost_usd": "0.000048174"
+    },
+    {
+      "dataset": "regression",
+      "case_id": "HC08",
+      "variant": "omission-aware",
+      "family": "conflict",
+      "expected": "insufficient",
+      "actual": "insufficient",
+      "matches": true,
+      "reason": "polarity_uncertain",
+      "coverage": 0.77,
+      "conflict": 0.09,
+      "polarity": "partial_scope_only",
+      "chosen_probability": 0.55,
+      "confidence": 0.4,
+      "probabilities": {
+        "affirms_hypothesis": 0.01,
+        "refutes_hypothesis": 0.14,
+        "partial_scope_only": 0.55,
+        "unaddressed_cannot_judge": 0.3
+      },
+      "input_tokens": 1147,
+      "output_tokens": 110,
+      "cost_nano_usd": 48174,
+      "cost_usd": "0.000048174"
+    },
+    {
+      "dataset": "regression",
+      "case_id": "HC08",
+      "variant": "combined",
+      "family": "conflict",
+      "expected": "insufficient",
+      "actual": "insufficient",
+      "matches": true,
+      "reason": "polarity_uncertain",
+      "coverage": 0.77,
+      "conflict": 0.09,
+      "polarity": "unaddressed_cannot_judge",
+      "chosen_probability": 0.55,
+      "confidence": 0.4,
+      "probabilities": {
+        "affirms_hypothesis": 0.01,
+        "refutes_hypothesis": 0.12,
+        "partial_scope_only": 0.32,
+        "unaddressed_cannot_judge": 0.55
+      },
+      "input_tokens": 1025,
+      "output_tokens": 116,
+      "cost_nano_usd": 43050,
+      "cost_usd": "0.000043050"
+    },
+    {
+      "dataset": "regression",
+      "case_id": "HS01",
+      "variant": "combined",
+      "family": "scope",
+      "expected": "supported",
+      "actual": "supported",
+      "matches": true,
+      "reason": "direct_support",
+      "coverage": 0.97,
+      "conflict": 0.04,
+      "polarity": "affirms_hypothesis",
+      "chosen_probability": 1,
+      "confidence": 1,
+      "probabilities": {
+        "affirms_hypothesis": 1,
+        "refutes_hypothesis": 0,
+        "partial_scope_only": 0,
+        "unaddressed_cannot_judge": 0
+      },
+      "input_tokens": 1206,
+      "output_tokens": 113,
+      "cost_nano_usd": 50652,
+      "cost_usd": "0.000050652"
+    },
+    {
+      "dataset": "regression",
+      "case_id": "HS01",
+      "variant": "omission-aware",
+      "family": "scope",
+      "expected": "supported",
+      "actual": "supported",
+      "matches": true,
+      "reason": "direct_support",
+      "coverage": 0.97,
+      "conflict": 0.03,
+      "polarity": "affirms_hypothesis",
+      "chosen_probability": 1,
+      "confidence": 1,
+      "probabilities": {
+        "affirms_hypothesis": 1,
+        "refutes_hypothesis": 0,
+        "partial_scope_only": 0,
+        "unaddressed_cannot_judge": 0
+      },
+      "input_tokens": 1328,
+      "output_tokens": 113,
+      "cost_nano_usd": 55776,
+      "cost_usd": "0.000055776"
+    },
+    {
+      "dataset": "regression",
+      "case_id": "HS02",
+      "variant": "omission-aware",
+      "family": "scope",
+      "expected": "insufficient",
+      "actual": "insufficient",
+      "matches": true,
+      "reason": "polarity_uncertain",
+      "coverage": 0.85,
+      "conflict": 0.11,
+      "polarity": "partial_scope_only",
+      "chosen_probability": 0.56,
+      "confidence": 0.41,
+      "probabilities": {
+        "affirms_hypothesis": 0.01,
+        "refutes_hypothesis": 0.42,
+        "partial_scope_only": 0.56,
+        "unaddressed_cannot_judge": 0.01
+      },
+      "input_tokens": 1328,
+      "output_tokens": 110,
+      "cost_nano_usd": 55776,
+      "cost_usd": "0.000055776"
+    },
+    {
+      "dataset": "regression",
+      "case_id": "HS02",
+      "variant": "combined",
+      "family": "scope",
+      "expected": "insufficient",
+      "actual": "insufficient",
+      "matches": true,
+      "reason": "polarity_uncertain",
+      "coverage": 0.85,
+      "conflict": 0.11,
+      "polarity": "partial_scope_only",
+      "chosen_probability": 0.61,
+      "confidence": 0.48,
+      "probabilities": {
+        "affirms_hypothesis": 0,
+        "refutes_hypothesis": 0.25,
+        "partial_scope_only": 0.61,
+        "unaddressed_cannot_judge": 0.14
+      },
+      "input_tokens": 1206,
+      "output_tokens": 110,
+      "cost_nano_usd": 50652,
+      "cost_usd": "0.000050652"
+    },
+    {
+      "dataset": "regression",
+      "case_id": "HS03",
+      "variant": "combined",
+      "family": "scope",
+      "expected": "supported",
+      "actual": "supported",
+      "matches": true,
+      "reason": "direct_support",
+      "coverage": 0.97,
+      "conflict": 0.06,
+      "polarity": "affirms_hypothesis",
+      "chosen_probability": 1,
+      "confidence": 1,
+      "probabilities": {
+        "affirms_hypothesis": 1,
+        "refutes_hypothesis": 0,
+        "partial_scope_only": 0,
+        "unaddressed_cannot_judge": 0
+      },
+      "input_tokens": 1153,
+      "output_tokens": 113,
+      "cost_nano_usd": 48426,
+      "cost_usd": "0.000048426"
+    },
+    {
+      "dataset": "regression",
+      "case_id": "HS03",
+      "variant": "omission-aware",
+      "family": "scope",
+      "expected": "supported",
+      "actual": "supported",
+      "matches": true,
+      "reason": "direct_support",
+      "coverage": 0.97,
+      "conflict": 0.06,
+      "polarity": "affirms_hypothesis",
+      "chosen_probability": 1,
+      "confidence": 1,
+      "probabilities": {
+        "affirms_hypothesis": 1,
+        "refutes_hypothesis": 0,
+        "partial_scope_only": 0,
+        "unaddressed_cannot_judge": 0
+      },
+      "input_tokens": 1275,
+      "output_tokens": 113,
+      "cost_nano_usd": 53550,
+      "cost_usd": "0.000053550"
+    },
+    {
+      "dataset": "regression",
+      "case_id": "HS04",
+      "variant": "omission-aware",
+      "family": "scope",
+      "expected": "insufficient",
+      "actual": "insufficient",
+      "matches": true,
+      "reason": "only_partial_support",
+      "coverage": 0.8,
+      "conflict": 0.13,
+      "polarity": "partial_scope_only",
+      "chosen_probability": 0.88,
+      "confidence": 0.84,
+      "probabilities": {
+        "affirms_hypothesis": 0,
+        "refutes_hypothesis": 0.12,
+        "partial_scope_only": 0.88,
+        "unaddressed_cannot_judge": 0
+      },
+      "input_tokens": 1251,
+      "output_tokens": 110,
+      "cost_nano_usd": 52542,
+      "cost_usd": "0.000052542"
+    },
+    {
+      "dataset": "regression",
+      "case_id": "HS04",
+      "variant": "combined",
+      "family": "scope",
+      "expected": "insufficient",
+      "actual": "contradicted",
+      "matches": false,
+      "reason": "explicit_incompatible_fact",
+      "coverage": 0.81,
+      "conflict": 0.13,
+      "polarity": "refutes_hypothesis",
+      "chosen_probability": 0.75,
+      "confidence": 0.67,
+      "probabilities": {
+        "affirms_hypothesis": 0,
+        "refutes_hypothesis": 0.75,
+        "partial_scope_only": 0.24,
+        "unaddressed_cannot_judge": 0.01
+      },
+      "input_tokens": 1129,
+      "output_tokens": 113,
+      "cost_nano_usd": 47418,
+      "cost_usd": "0.000047418"
+    },
+    {
+      "dataset": "regression",
+      "case_id": "HS05",
+      "variant": "combined",
+      "family": "scope",
+      "expected": "contradicted",
+      "actual": "contradicted",
+      "matches": true,
+      "reason": "explicit_incompatible_fact",
+      "coverage": 0.93,
+      "conflict": 0.12,
+      "polarity": "refutes_hypothesis",
+      "chosen_probability": 1,
+      "confidence": 1,
+      "probabilities": {
+        "affirms_hypothesis": 0,
+        "refutes_hypothesis": 1,
+        "partial_scope_only": 0,
+        "unaddressed_cannot_judge": 0
+      },
+      "input_tokens": 1047,
+      "output_tokens": 113,
+      "cost_nano_usd": 43974,
+      "cost_usd": "0.000043974"
+    },
+    {
+      "dataset": "regression",
+      "case_id": "HS05",
+      "variant": "omission-aware",
+      "family": "scope",
+      "expected": "contradicted",
+      "actual": "contradicted",
+      "matches": true,
+      "reason": "explicit_incompatible_fact",
+      "coverage": 0.93,
+      "conflict": 0.11,
+      "polarity": "refutes_hypothesis",
+      "chosen_probability": 1,
+      "confidence": 1,
+      "probabilities": {
+        "affirms_hypothesis": 0,
+        "refutes_hypothesis": 1,
+        "partial_scope_only": 0,
+        "unaddressed_cannot_judge": 0
+      },
+      "input_tokens": 1169,
+      "output_tokens": 113,
+      "cost_nano_usd": 49098,
+      "cost_usd": "0.000049098"
+    },
+    {
+      "dataset": "regression",
+      "case_id": "HS06",
+      "variant": "omission-aware",
+      "family": "scope",
+      "expected": "contradicted",
+      "actual": "contradicted",
+      "matches": true,
+      "reason": "explicit_incompatible_fact",
+      "coverage": 0.96,
+      "conflict": 0.11,
+      "polarity": "refutes_hypothesis",
+      "chosen_probability": 1,
+      "confidence": 1,
+      "probabilities": {
+        "affirms_hypothesis": 0,
+        "refutes_hypothesis": 1,
+        "partial_scope_only": 0,
+        "unaddressed_cannot_judge": 0
+      },
+      "input_tokens": 1172,
+      "output_tokens": 113,
+      "cost_nano_usd": 49224,
+      "cost_usd": "0.000049224"
+    },
+    {
+      "dataset": "regression",
+      "case_id": "HS06",
+      "variant": "combined",
+      "family": "scope",
+      "expected": "contradicted",
+      "actual": "contradicted",
+      "matches": true,
+      "reason": "explicit_incompatible_fact",
+      "coverage": 0.96,
+      "conflict": 0.11,
+      "polarity": "refutes_hypothesis",
+      "chosen_probability": 1,
+      "confidence": 1,
+      "probabilities": {
+        "affirms_hypothesis": 0,
+        "refutes_hypothesis": 1,
+        "partial_scope_only": 0,
+        "unaddressed_cannot_judge": 0
+      },
+      "input_tokens": 1050,
+      "output_tokens": 113,
+      "cost_nano_usd": 44100,
+      "cost_usd": "0.000044100"
+    },
+    {
+      "dataset": "regression",
+      "case_id": "HS07",
+      "variant": "combined",
+      "family": "scope",
+      "expected": "conflicting",
+      "actual": "conflicting",
+      "matches": true,
+      "reason": "incompatible_same_scope_evidence",
+      "coverage": 0.95,
+      "conflict": 0.96,
+      "polarity": "unaddressed_cannot_judge",
+      "chosen_probability": 0.92,
+      "confidence": 0.89,
+      "probabilities": {
+        "affirms_hypothesis": 0,
+        "refutes_hypothesis": 0.08,
+        "partial_scope_only": 0,
+        "unaddressed_cannot_judge": 0.92
+      },
+      "input_tokens": 1240,
+      "output_tokens": 116,
+      "cost_nano_usd": 52080,
+      "cost_usd": "0.000052080"
+    },
+    {
+      "dataset": "regression",
+      "case_id": "HS07",
+      "variant": "omission-aware",
+      "family": "scope",
+      "expected": "conflicting",
+      "actual": "conflicting",
+      "matches": true,
+      "reason": "incompatible_same_scope_evidence",
+      "coverage": 0.95,
+      "conflict": 0.96,
+      "polarity": "unaddressed_cannot_judge",
+      "chosen_probability": 0.73,
+      "confidence": 0.64,
+      "probabilities": {
+        "affirms_hypothesis": 0,
+        "refutes_hypothesis": 0.27,
+        "partial_scope_only": 0,
+        "unaddressed_cannot_judge": 0.73
+      },
+      "input_tokens": 1362,
+      "output_tokens": 116,
+      "cost_nano_usd": 57204,
+      "cost_usd": "0.000057204"
+    },
+    {
+      "dataset": "regression",
+      "case_id": "HS08",
+      "variant": "omission-aware",
+      "family": "scope",
+      "expected": "conflicting",
+      "actual": "conflicting",
+      "matches": true,
+      "reason": "incompatible_same_scope_evidence",
+      "coverage": 0.95,
+      "conflict": 0.97,
+      "polarity": "unaddressed_cannot_judge",
+      "chosen_probability": 0.61,
+      "confidence": 0.48,
+      "probabilities": {
+        "affirms_hypothesis": 0.01,
+        "refutes_hypothesis": 0.38,
+        "partial_scope_only": 0,
+        "unaddressed_cannot_judge": 0.61
+      },
+      "input_tokens": 1339,
+      "output_tokens": 116,
+      "cost_nano_usd": 56238,
+      "cost_usd": "0.000056238"
+    },
+    {
+      "dataset": "regression",
+      "case_id": "HS08",
+      "variant": "combined",
+      "family": "scope",
+      "expected": "conflicting",
+      "actual": "conflicting",
+      "matches": true,
+      "reason": "incompatible_same_scope_evidence",
+      "coverage": 0.95,
+      "conflict": 0.97,
+      "polarity": "unaddressed_cannot_judge",
+      "chosen_probability": 0.81,
+      "confidence": 0.75,
+      "probabilities": {
+        "affirms_hypothesis": 0.01,
+        "refutes_hypothesis": 0.18,
+        "partial_scope_only": 0,
+        "unaddressed_cannot_judge": 0.81
+      },
+      "input_tokens": 1217,
+      "output_tokens": 116,
+      "cost_nano_usd": 51114,
+      "cost_usd": "0.000051114"
+    },
+    {
+      "dataset": "regression",
+      "case_id": "B02",
+      "variant": "combined",
+      "family": "prior-development",
+      "expected": "contradicted",
+      "actual": "contradicted",
+      "matches": true,
+      "reason": "explicit_incompatible_fact",
+      "coverage": 0.97,
+      "conflict": 0.07,
+      "polarity": "refutes_hypothesis",
+      "chosen_probability": 1,
+      "confidence": 1,
+      "probabilities": {
+        "affirms_hypothesis": 0,
+        "refutes_hypothesis": 1,
+        "partial_scope_only": 0,
+        "unaddressed_cannot_judge": 0
+      },
+      "input_tokens": 941,
+      "output_tokens": 113,
+      "cost_nano_usd": 39522,
+      "cost_usd": "0.000039522"
+    },
+    {
+      "dataset": "regression",
+      "case_id": "B02",
+      "variant": "omission-aware",
+      "family": "prior-development",
+      "expected": "contradicted",
+      "actual": "contradicted",
+      "matches": true,
+      "reason": "explicit_incompatible_fact",
+      "coverage": 0.97,
+      "conflict": 0.06,
+      "polarity": "refutes_hypothesis",
+      "chosen_probability": 1,
+      "confidence": 1,
+      "probabilities": {
+        "affirms_hypothesis": 0,
+        "refutes_hypothesis": 1,
+        "partial_scope_only": 0,
+        "unaddressed_cannot_judge": 0
+      },
+      "input_tokens": 1063,
+      "output_tokens": 113,
+      "cost_nano_usd": 44646,
+      "cost_usd": "0.000044646"
+    },
+    {
+      "dataset": "regression",
+      "case_id": "B08",
+      "variant": "omission-aware",
+      "family": "prior-development",
+      "expected": "supported",
+      "actual": "insufficient",
+      "matches": false,
+      "reason": "polarity_uncertain",
+      "coverage": 0.82,
+      "conflict": 0.06,
+      "polarity": "affirms_hypothesis",
+      "chosen_probability": 0.65,
+      "confidence": 0.53,
+      "probabilities": {
+        "affirms_hypothesis": 0.65,
+        "refutes_hypothesis": 0.01,
+        "partial_scope_only": 0.32,
+        "unaddressed_cannot_judge": 0.02
+      },
+      "input_tokens": 1148,
+      "output_tokens": 113,
+      "cost_nano_usd": 48216,
+      "cost_usd": "0.000048216"
+    },
+    {
+      "dataset": "regression",
+      "case_id": "B08",
+      "variant": "combined",
+      "family": "prior-development",
+      "expected": "supported",
+      "actual": "supported",
+      "matches": true,
+      "reason": "direct_support",
+      "coverage": 0.83,
+      "conflict": 0.05,
+      "polarity": "affirms_hypothesis",
+      "chosen_probability": 0.82,
+      "confidence": 0.76,
+      "probabilities": {
+        "affirms_hypothesis": 0.82,
+        "refutes_hypothesis": 0,
+        "partial_scope_only": 0.15,
+        "unaddressed_cannot_judge": 0.03
+      },
+      "input_tokens": 1026,
+      "output_tokens": 113,
+      "cost_nano_usd": 43092,
+      "cost_usd": "0.000043092"
+    }
+  ],
+  "acceptance": {
+    "hs04_fixed": true,
+    "all_regressions_correct": false,
+    "heldout_accuracy_not_lower": true,
+    "no_heldout_false_decisive": true,
+    "no_lost_true_contradictions_or_conflicts": true
+  },
+  "acceptance_passed": false
+}

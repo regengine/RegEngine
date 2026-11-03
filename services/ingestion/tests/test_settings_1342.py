@@ -22,6 +22,7 @@ from pathlib import Path
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from shared.rate_limit import limiter
 
 service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
@@ -53,10 +54,27 @@ def _reset_memory_store():
     s._settings_store.clear()
 
 
+@pytest.fixture(autouse=True)
+def _reset_limiter():
+    """Reset the shared slowapi limiter so the 30/min PUT limit doesn't leak."""
+    try:
+        limiter.reset()
+    except Exception:  # pragma: no cover - defensive fallback
+        pass
+    yield
+    try:
+        limiter.reset()
+    except Exception:  # pragma: no cover - defensive fallback
+        pass
+
+
 @pytest.fixture
 def client(monkeypatch):
     """Build a FastAPI app with the settings router and auth bypass."""
     app = FastAPI()
+    # slowapi's ``@limiter.limit`` decorator on the PUT endpoints needs the
+    # limiter attached to app.state to resolve a key function.
+    app.state.limiter = limiter
     app.include_router(router)
 
     # Bypass the API-key dependency — we test router logic, not auth.
