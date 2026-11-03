@@ -158,7 +158,7 @@ export default function Fsma204ComplianceChecklistPage() {
             Pillar guide: <Link href="/fsma-204" className="text-re-brand underline underline-offset-[3px]">https://regengine.co/fsma-204</Link>
           </p>
           <p className="mt-4 max-w-[68ch] text-body text-re-text-secondary">
-            RegEngine helps with recordkeeping. It is not FDA approved, not FDA certified, not FDA endorsed, and it does not guarantee compliance. FDA will not enforce before July 20, 2028, which is time to get records right.
+            RegEngine is an independent recordkeeping tool. Operators remain responsible for their own compliance decisions. FDA will not enforce before July 20, 2028, which is time to get records right.
           </p>
           <p className="mt-4 max-w-[68ch] text-body text-re-text-secondary">
             Primary FDA source for the date: <a href="https://www.fda.gov/food/food-safety-modernization-act-fsma/fsma-final-rule-requirements-additional-traceability-records-certain-foods" className="text-re-brand underline underline-offset-[3px]" rel="noopener noreferrer" target="_blank">https://www.fda.gov/food/food-safety-modernization-act-fsma/fsma-final-rule-requirements-additional-traceability-records-certain-foods</a>

@@ -84,7 +84,7 @@ export default function TwentyFourHourRulePage() {
           </p>
           <h2 className="mt-10 text-heading text-re-text-primary">Where RegEngine fits</h2>
           <p className="mt-4 max-w-[68ch] text-body text-re-text-secondary">
-            RegEngine (Beta, pre-revenue) is FSMA 204 recordkeeping software. Live intake today is CSV upload and a JSON events API. Free tools live at <Link href="/tools" className="text-re-brand underline underline-offset-[3px]">https://regengine.co/tools</Link>. EPCIS shaped export is Preview. RegEngine helps with recordkeeping. It is not FDA approved, not FDA certified, not FDA endorsed, and it does not guarantee compliance.
+            RegEngine (Beta, pre-revenue) is FSMA 204 recordkeeping software. Live intake today is CSV upload and a JSON events API. Free tools live at <Link href="/tools" className="text-re-brand underline underline-offset-[3px]">https://regengine.co/tools</Link>. EPCIS shaped export is Preview. RegEngine is an independent recordkeeping tool. Operators remain responsible for their own compliance decisions.
           </p>
           <h2 className="mt-10 text-heading text-re-text-primary">Further reading</h2>
           <p className="mt-4 max-w-[68ch] text-body text-re-text-secondary">
