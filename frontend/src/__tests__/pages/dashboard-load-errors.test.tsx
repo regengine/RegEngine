@@ -68,6 +68,16 @@ function renderWithQuery(ui: React.ReactElement) {
 
 const failedResponse = Response.error();
 
+const complianceScoreFixture = {
+    tenant_id: 't',
+    overall_score: 82,
+    grade: 'B',
+    breakdown: {},
+    next_actions: [],
+    events_analyzed: 10,
+    last_chain_hash: null,
+};
+
 afterEach(() => vi.unstubAllEnvs());
 
 beforeEach(() => {
@@ -247,15 +257,7 @@ describe('shared dashboard load errors', () => {
     });
 
     it('rejects a 401 on readiness without showing placeholder readiness data (SEL-616)', async () => {
-        fetchComplianceScoreMock.mockResolvedValue({
-            tenant_id: 't',
-            overall_score: 82,
-            grade: 'B',
-            breakdown: {},
-            next_actions: [],
-            events_analyzed: 10,
-            last_chain_hash: null,
-        });
+        fetchComplianceScoreMock.mockResolvedValue(complianceScoreFixture);
         fetchWorkbenchSummaryMock.mockRejectedValue(apiError(401, 'Unauthorized', crypto.randomUUID()));
         renderWithQuery(<CompliancePage />);
 
@@ -266,6 +268,40 @@ describe('shared dashboard load errors', () => {
         expect(screen.queryByText('We could not load this page.')).not.toBeInTheDocument();
         expect(screen.queryByText('We could not load the compliance score.')).not.toBeInTheDocument();
         expect(fetchWorkbenchSummaryMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('shows readiness as loading, not empty, while it is in flight and the score failed (SEL-616)', async () => {
+        fetchComplianceScoreMock.mockRejectedValue(apiError(500, 'Internal Server Error', crypto.randomUUID()));
+        fetchWorkbenchSummaryMock.mockReturnValue(new Promise(() => {}));
+        renderWithQuery(<CompliancePage />);
+
+        expect(await screen.findByRole('alert')).toHaveTextContent('We could not load the compliance score.');
+        expect(screen.getByText('Loading import readiness…')).toBeInTheDocument();
+        expect(screen.queryByText('No saved preflight run yet')).not.toBeInTheDocument();
+        expect(screen.queryByText(/open fix/)).not.toBeInTheDocument();
+    });
+
+    it('shows readiness as loading, not empty, while it is in flight and the score loaded (SEL-616)', async () => {
+        fetchComplianceScoreMock.mockResolvedValue(complianceScoreFixture);
+        fetchWorkbenchSummaryMock.mockReturnValue(new Promise(() => {}));
+        renderWithQuery(<CompliancePage />);
+
+        expect(await screen.findByText('Loading import readiness…')).toBeInTheDocument();
+        expect(screen.queryByText('No saved preflight run yet')).not.toBeInTheDocument();
+        expect(screen.queryByText(/open fix/)).not.toBeInTheDocument();
+    });
+
+    it('keeps Import readiness visible when a score refetch fails after a good load (SEL-616)', async () => {
+        vi.stubEnv('NEXT_PUBLIC_POLL_SLOW_MS', '20');
+        fetchComplianceScoreMock
+            .mockResolvedValueOnce(complianceScoreFixture)
+            .mockRejectedValue(apiError(500, 'Internal Server Error', crypto.randomUUID()));
+        renderWithQuery(<CompliancePage />);
+
+        expect(await screen.findByText(/Based on/)).toBeInTheDocument();
+        expect(await screen.findByRole('alert')).toHaveTextContent('We could not load the compliance score.');
+        expect(screen.getByText('Import readiness')).toBeInTheDocument();
+        expect(screen.getByText('No saved preflight run yet')).toBeInTheDocument();
     });
 
     it('lets recall report retry a failed request in place', async () => {

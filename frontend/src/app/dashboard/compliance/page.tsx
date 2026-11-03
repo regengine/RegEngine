@@ -322,6 +322,7 @@ export default function ComplianceDashboardPage() {
     const {
         data: workbenchSummary = null,
         isError: readinessFailed,
+        isLoading: readinessLoading,
         refetch: fetchWorkbenchSummary,
     } = useQuery({
         queryKey: ['inflow-workbench-readiness', tenantId],
@@ -468,7 +469,7 @@ export default function ComplianceDashboardPage() {
                 )}
 
                 {/* Workbench-only strip when the score path is down so Import readiness still surfaces */}
-                {isLoggedIn && scoreError && !score && (
+                {isLoggedIn && scoreError && (
                     <Card className="border-[var(--re-border-default)]">
                         <CardHeader className="pb-2">
                             <CardTitle className="text-base">Import readiness</CardTitle>
@@ -488,6 +489,8 @@ export default function ComplianceDashboardPage() {
                                         Retry import readiness
                                     </Button>
                                 </>
+                            ) : readinessLoading ? (
+                                <p className="text-sm text-muted-foreground">Loading import readiness…</p>
                             ) : (
                                 <>
                                     <div className="flex items-end justify-between gap-3">
@@ -590,6 +593,8 @@ export default function ComplianceDashboardPage() {
                                                 Retry
                                             </Button>
                                         </>
+                                    ) : readinessLoading ? (
+                                        <p className="text-[11px] text-muted-foreground">Loading import readiness…</p>
                                     ) : (
                                         <>
                                             <div className="flex items-end justify-between gap-3">
