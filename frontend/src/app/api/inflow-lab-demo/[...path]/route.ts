@@ -14,6 +14,8 @@ const ALLOWED_METHODS = new Set(["GET", "POST"]);
 const JSON_CONTENT_TYPES = ["application/json", "application/problem+json"];
 const MAX_BODY_BYTES = 32 * 1024;
 const TENANT_LIKE_KEY = /^(tenant(_?id)?|tenantId|customer(_?id)?|customerId|organization(_?id)?|org_id|orgId)$/i;
+const TRAVERSAL_ENCODED = /%2e|%2f|%5c/i;
+const SEGMENT_ALLOW = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 
 // Best-effort per-instance token bucket (same posture as /api/client-errors).
 const DEFAULT_WINDOW_MS = 60_000;
@@ -29,7 +31,8 @@ type DemoContract =
     | "start"
     | "stop"
     | "reset"
-    | "fixture";
+    | "fixture"
+    | "export";
 
 function serviceBaseUrl() {
     return (
@@ -38,7 +41,7 @@ function serviceBaseUrl() {
     ).replace(/\/$/, "");
 }
 
-function demoProxyEnabled() {
+function publicProxyEnabled() {
     if (process.env.NODE_ENV !== "production") return true;
     const value = process.env.REGENGINE_ENABLE_INFLOW_LAB_DEMO_PROXY?.trim().toLowerCase();
     return value === "1" || value === "true";
@@ -66,10 +69,28 @@ export function __resetInflowLabDemoRateLimitForTests() {
     buckets.clear();
 }
 
-function clientIp(request: NextRequest): string {
+/**
+ * Bucket key for rate limiting. Prefer platform-trusted client IP headers
+ * (Vercel). Never key on the client-controlled first X-Forwarded-For hop.
+ */
+export function trustedClientIp(request: NextRequest): string {
+    const vercelForwarded = request.headers.get("x-vercel-forwarded-for")?.trim();
+    if (vercelForwarded) {
+        const hop = vercelForwarded.split(",")[0]?.trim();
+        if (hop) return hop;
+    }
+
+    const realIp = request.headers.get("x-real-ip")?.trim();
+    if (realIp) return realIp;
+
+    // Rightmost XFF hop is the one closest to our edge / added by a trusted proxy.
     const xff = request.headers.get("x-forwarded-for");
-    if (xff) return xff.split(",")[0]?.trim() || "unknown";
-    return request.headers.get("x-real-ip") || "unknown";
+    if (xff) {
+        const hops = xff.split(",").map((part) => part.trim()).filter(Boolean);
+        if (hops.length) return hops[hops.length - 1]!;
+    }
+
+    return "unknown";
 }
 
 function allowIp(ip: string): boolean {
@@ -91,22 +112,87 @@ function allowIp(ip: string): boolean {
     return bucket.count <= max;
 }
 
-function pathFromParams(path: string[] = []) {
-    if (path.some((segment) => segment === ".." || segment.includes("\0"))) {
+/** Decode + harden a single path segment against encoded traversal. */
+export function sanitizePathSegment(raw: string): string | null {
+    if (!raw || raw.includes("\0")) return null;
+    // Reject encoded dots/slashes/backslashes and raw traversal before decode.
+    if (TRAVERSAL_ENCODED.test(raw) || raw.includes("..") || /[\\/]/.test(raw)) return null;
+
+    let decoded: string;
+    try {
+        decoded = decodeURIComponent(raw);
+    } catch {
         return null;
     }
-    return `/${path.map(encodeURIComponent).join("/")}`;
+
+    if (
+        decoded.includes("\0")
+        || decoded.includes("..")
+        || /[\\/]/.test(decoded)
+        || TRAVERSAL_ENCODED.test(decoded)
+    ) {
+        return null;
+    }
+
+    // Double-encoded forms (%252e → %2e → .) must not survive.
+    try {
+        const twice = decodeURIComponent(decoded);
+        if (
+            twice !== decoded
+            && (
+                twice.includes("\0")
+                || twice.includes("..")
+                || /[\\/]/.test(twice)
+                || TRAVERSAL_ENCODED.test(twice)
+            )
+        ) {
+            return null;
+        }
+    } catch {
+        return null;
+    }
+
+    if (!SEGMENT_ALLOW.test(decoded)) return null;
+    return decoded;
 }
 
-function demoContract(path: string, method: string): DemoContract | null {
+function pathFromParams(path: string[] = []): string | null {
+    if (!path.length) return null;
+    const cleaned: string[] = [];
+    for (const segment of path) {
+        const safe = sanitizePathSegment(segment);
+        if (!safe) return null;
+        cleaned.push(safe);
+    }
+    return `/${cleaned.join("/")}`;
+}
+
+function upstreamPathFor(relativePath: string): string {
+    return relativePath
+        .split("/")
+        .map((segment) => (segment === "" ? "" : encodeURIComponent(segment)))
+        .join("/");
+}
+
+function contractFor(path: string, method: string): DemoContract | null {
     if (method === "GET" && path === "/api/healthz") return "health";
     if (method === "GET" && path === "/api/simulate/status") return "status";
     if (method === "GET" && path === "/api/events") return "events";
-    if (method === "GET" && /^\/api\/lineage\/[^/]+$/.test(path)) return "lineage";
+    if (method === "GET" && /^\/api\/lineage\/[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(path)) {
+        return "lineage";
+    }
     if (method === "POST" && path === "/api/simulate/start") return "start";
     if (method === "POST" && path === "/api/simulate/stop") return "stop";
     if (method === "POST" && path === "/api/simulate/reset") return "reset";
-    if (method === "POST" && /^\/api\/demo-fixtures\/[^/]+\/load$/.test(path)) return "fixture";
+    if (
+        method === "POST"
+        && /^\/api\/demo-fixtures\/[A-Za-z0-9][A-Za-z0-9._-]{0,127}\/load$/.test(path)
+    ) {
+        return "fixture";
+    }
+    // Preview export downloads (CSV / EPCIS Preview) for the public tools page.
+    if (method === "GET" && path === "/api/regengine/export/fda-request") return "export";
+    if (method === "GET" && path === "/api/regengine/export/epcis") return "export";
     return null;
 }
 
@@ -124,7 +210,7 @@ function isJsonResponse(response: Response) {
     return JSON_CONTENT_TYPES.some((type) => contentType.includes(type));
 }
 
-function stripTenantLike(value: unknown): unknown {
+export function stripTenantLike(value: unknown): unknown {
     if (Array.isArray(value)) return value.map(stripTenantLike);
     if (value && typeof value === "object") {
         const out: Record<string, unknown> = {};
@@ -223,16 +309,18 @@ async function readSanitizedBody(request: NextRequest): Promise<
 function responseHeaders(contract: DemoContract, upstream?: Response) {
     const headers = new Headers({
         "cache-control": "no-store",
-        "x-inflow-lab-demo-contract": contract,
-        "x-inflow-lab-boundary": "public-demo",
+        "x-inflow-lab-public-contract": contract,
+        "x-inflow-lab-boundary": "public-preview",
     });
     const contentType = upstream?.headers.get("content-type");
     if (contentType) headers.set("content-type", contentType);
+    const contentDisposition = upstream?.headers.get("content-disposition");
+    if (contentDisposition) headers.set("content-disposition", contentDisposition);
     return headers;
 }
 
-async function proxyDemo(request: NextRequest, params: Promise<{ path?: string[] }>) {
-    if (!demoProxyEnabled()) {
+async function proxyPublic(request: NextRequest, params: Promise<{ path?: string[] }>) {
+    if (!publicProxyEnabled()) {
         return new NextResponse(null, { status: 404 });
     }
 
@@ -256,7 +344,7 @@ async function proxyDemo(request: NextRequest, params: Promise<{ path?: string[]
     const csrfError = await enforceCsrf(request);
     if (csrfError) return csrfError;
 
-    if (!allowIp(clientIp(request))) {
+    if (!allowIp(trustedClientIp(request))) {
         return NextResponse.json(
             { ok: false, error: "Rate limit exceeded", code: "RATE_LIMITED" },
             {
@@ -271,14 +359,14 @@ async function proxyDemo(request: NextRequest, params: Promise<{ path?: string[]
 
     const { path } = await params;
     const relativePath = pathFromParams(path);
-    const contract = relativePath ? demoContract(relativePath, method) : null;
+    const contract = relativePath ? contractFor(relativePath, method) : null;
     if (!relativePath || !contract) {
         return NextResponse.json(
             {
                 ok: false,
                 error: "Not found",
                 code: "NOT_ALLOWLISTED",
-                hint: "This endpoint allows healthz, simulate status/start/stop/reset, events, lineage, and fixture loading only.",
+                hint: "This endpoint allows healthz, simulate status/start/stop/reset, events, lineage, fixture loading, and export previews only.",
             },
             { status: 404, headers: { "cache-control": "no-store" } },
         );
@@ -287,7 +375,7 @@ async function proxyDemo(request: NextRequest, params: Promise<{ path?: string[]
     const bodyResult = await readSanitizedBody(request);
     if (!bodyResult.ok) return bodyResult.response;
 
-    const upstreamUrl = new URL(`${serviceBaseUrl()}${relativePath}`);
+    const upstreamUrl = new URL(`${serviceBaseUrl()}${upstreamPathFor(relativePath)}`);
     copyAllowedSearchParams(request.nextUrl.searchParams, upstreamUrl.searchParams);
 
     // Fresh minimal headers only — never forward browser cookies, Authorization,
@@ -317,6 +405,14 @@ async function proxyDemo(request: NextRequest, params: Promise<{ path?: string[]
             );
         }
 
+        // Export previews are streamed (CSV / EPCIS Preview), not JSON.
+        if (contract === "export" && upstream.ok) {
+            return new NextResponse(upstream.body, {
+                status: upstream.status,
+                headers: responseHeaders(contract, upstream),
+            });
+        }
+
         if (!isJsonResponse(upstream)) {
             return NextResponse.json(
                 {
@@ -333,13 +429,15 @@ async function proxyDemo(request: NextRequest, params: Promise<{ path?: string[]
         }
 
         const payload = await upstream.json().catch(() => null);
-        return NextResponse.json(payload, {
+        // Strip tenant-like keys from reflected upstream JSON before anonymous callers see it.
+        const sanitized = stripTenantLike(payload);
+        return NextResponse.json(sanitized, {
             status: upstream.status,
             headers: responseHeaders(contract, upstream),
         });
     } catch (error) {
         const correlationId = crypto.randomUUID();
-        console.error("[inflow-lab-demo] Proxy request failed", { correlationId, error });
+        console.error("[inflow-lab-public] Proxy request failed", { correlationId, error });
         return NextResponse.json(
             {
                 ok: false,
@@ -353,9 +451,9 @@ async function proxyDemo(request: NextRequest, params: Promise<{ path?: string[]
 }
 
 export function GET(request: NextRequest, context: { params: Promise<{ path?: string[] }> }) {
-    return proxyDemo(request, context.params);
+    return proxyPublic(request, context.params);
 }
 
 export function POST(request: NextRequest, context: { params: Promise<{ path?: string[] }> }) {
-    return proxyDemo(request, context.params);
+    return proxyPublic(request, context.params);
 }
