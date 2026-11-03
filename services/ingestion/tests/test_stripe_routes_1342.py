@@ -618,6 +618,7 @@ class TestGetSubscription:
 
     @pytest.mark.asyncio
     async def test_mapping_with_subscription_id_refreshes_from_stripe(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("STRIPE_PRICE_LIST_MONTHLY", "price_list_m")
         monkeypatch.setattr(
             state_mod,
             "_get_subscription_mapping",
