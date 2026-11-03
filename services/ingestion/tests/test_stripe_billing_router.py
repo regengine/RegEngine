@@ -46,6 +46,7 @@ async def test_create_checkout_uses_stripe_and_normalizes_plan(monkeypatch):
     fake_redis = _FakeRedis()
     monkeypatch.setattr(stripe_billing, "_redis_client", lambda: fake_redis)
     monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_123")
+    monkeypatch.delenv("STRIPE_PRICE_LIST_MONTHLY", raising=False)
     monkeypatch.setenv("STRIPE_PRICE_GROWTH_MONTHLY", "price_growth_monthly")
     captured_funnel: dict[str, object] = {}
 
@@ -96,6 +97,7 @@ async def test_create_checkout_reuses_existing_customer_id_and_records_session(m
     tenant_id = "tenant-checkout-1"
     monkeypatch.setattr(stripe_billing, "_redis_client", lambda: fake_redis)
     monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_123")
+    monkeypatch.delenv("STRIPE_PRICE_LIST_MONTHLY", raising=False)
     monkeypatch.setenv("STRIPE_PRICE_GROWTH_MONTHLY", "price_growth_monthly")
 
     stripe_billing._store_subscription_mapping(

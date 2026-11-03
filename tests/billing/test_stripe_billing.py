@@ -198,7 +198,7 @@ class TestResolvePriceId:
         assert price_id == "price_founding_m"
         assert amount == 499
 
-    @patch.dict("os.environ", {"STRIPE_PRICE_GROWTH_MONTHLY": "price_growth_m"})
+    @patch.dict("os.environ", {"STRIPE_PRICE_GROWTH_MONTHLY": "price_growth_m"}, clear=True)
     def test_resolve_growth_monthly_still_works_alias_period(self):
         """Deprecated growth monthly env resolves to list during the alias
         period, until Railway carries STRIPE_PRICE_LIST_MONTHLY."""
@@ -268,9 +268,8 @@ class TestPlanForStripePrice:
         [
             ("STRIPE_PRICE_LIST_MONTHLY", "price_list_m", ("list", "monthly")),
             ("STRIPE_PRICE_FOUNDING_MONTHLY", "price_founding_m", ("founding", "monthly")),
-            ("STRIPE_PRICE_PILOT_STANDARD", "price_pilot_std", ("pilot", "one_time")),
-            ("STRIPE_PRICE_PILOT_CONVERT_30", "price_pilot_conv", ("pilot", "one_time")),
             ("STRIPE_PRICE_GROWTH_MONTHLY", "price_growth_m", ("list", "monthly")),
+            ("STRIPE_PRICE_SCALE_MONTHLY", "price_scale_m", ("list", "monthly")),
         ],
     )
     def test_reverse_maps_configured_prices(self, env_var, price_id, expected):
@@ -278,8 +277,29 @@ class TestPlanForStripePrice:
             assert _plan_for_stripe_price(price_id) == expected
 
     def test_old_annual_envs_do_not_invent_annual(self):
-        with patch.dict("os.environ", {"STRIPE_PRICE_GROWTH_ANNUAL": "price_growth_a"}, clear=True):
+        with patch.dict(
+            "os.environ",
+            {
+                "STRIPE_PRICE_GROWTH_ANNUAL": "price_growth_a",
+                "STRIPE_PRICE_SCALE_ANNUAL": "price_scale_a",
+            },
+            clear=True,
+        ):
             assert _plan_for_stripe_price("price_growth_a") is None
+            assert _plan_for_stripe_price("price_scale_a") is None
+
+    def test_pilot_prices_are_not_reverse_mapped(self):
+        """Pilot is one-time; reverse-mapping would entitle via checkout webhook."""
+        with patch.dict(
+            "os.environ",
+            {
+                "STRIPE_PRICE_PILOT_STANDARD": "price_pilot_std",
+                "STRIPE_PRICE_PILOT_CONVERT_30": "price_pilot_conv",
+            },
+            clear=True,
+        ):
+            assert _plan_for_stripe_price("price_pilot_std") is None
+            assert _plan_for_stripe_price("price_pilot_conv") is None
 
 
 # ── Checkout Session Creation ────────────────────────────────────
@@ -643,7 +663,7 @@ class TestHandleCheckoutCompleted:
             "customer_details": {"email": "user@example.com"},
             "metadata": {
                 "tenant_id": "tenant-abc",
-                "plan_id": "scale",  # claim richer than what was paid
+                "plan_id": "enterprise",  # claim richer than what was paid
                 "billing_period": "monthly",
             },
         }
