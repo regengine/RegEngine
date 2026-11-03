@@ -214,7 +214,7 @@ describe('Inflow Lab public proxy', () => {
         expect(response.headers.get('content-type')).toContain('text/csv');
         expect(await response.text()).toBe('lot,qty\nL1,10\n');
         expect(String(mockFetch.mock.calls[0][0])).toContain(
-            'http://inflow.test/api/regengine/export/fda-request',
+            'http://inflow.test/api/mock/regengine/export/fda-request',
         );
 
         mockFetch.mockResolvedValueOnce(
@@ -231,6 +231,42 @@ describe('Inflow Lab public proxy', () => {
         );
         expect(epcis.status).toBe(200);
         expect(await epcis.text()).toBe('<epcis/>');
+        expect(String(mockFetch.mock.calls[1][0])).toContain(
+            'http://inflow.test/api/mock/regengine/export/epcis',
+        );
+    });
+
+    it('maps fda-request export to upstream mock path and strips tenant JSON fields', async () => {
+        mockFetch.mockResolvedValueOnce(
+            new Response(
+                JSON.stringify({
+                    records: [{ lot: 'L1', tenant_id: 't-gone', qty: 3 }],
+                    tenantId: 'also-gone',
+                    customer_id: 'c-gone',
+                    ok: true,
+                }),
+                {
+                    status: 200,
+                    headers: { 'content-type': 'application/json' },
+                },
+            ),
+        );
+
+        const response = await GET(
+            makeRequest({
+                url: 'http://localhost/api/inflow-lab-demo/api/regengine/export/fda-request?preset=all_records',
+            }),
+            { params: Promise.resolve({ path: ['api', 'regengine', 'export', 'fda-request'] }) },
+        );
+
+        expect(response.status).toBe(200);
+        expect(String(mockFetch.mock.calls[0][0])).toBe(
+            'http://inflow.test/api/mock/regengine/export/fda-request?preset=all_records',
+        );
+        await expect(response.json()).resolves.toEqual({
+            records: [{ lot: 'L1', qty: 3 }],
+            ok: true,
+        });
     });
 
     it('strips tenant-like fields from JSON / JSON-LD export responses', async () => {
@@ -267,6 +303,9 @@ describe('Inflow Lab public proxy', () => {
 
         expect(response.status).toBe(200);
         expect(response.headers.get('content-type')).toMatch(/json/i);
+        expect(String(mockFetch.mock.calls[0][0])).toContain(
+            'http://inflow.test/api/mock/regengine/export/epcis',
+        );
         await expect(response.json()).resolves.toEqual({
             '@context': 'https://ref.gs1.org/epcis/epcis-context.jsonld',
             type: 'EPCISDocument',
@@ -274,6 +313,22 @@ describe('Inflow Lab public proxy', () => {
                 eventList: [{ type: 'ObjectEvent', bizStep: 'shipping' }],
             },
         });
+    });
+
+    it('does not allowlist the raw upstream mock export path on the public proxy', async () => {
+        const response = await GET(
+            makeRequest({
+                url: 'http://localhost/api/inflow-lab-demo/api/mock/regengine/export/fda-request',
+            }),
+            {
+                params: Promise.resolve({
+                    path: ['api', 'mock', 'regengine', 'export', 'fda-request'],
+                }),
+            },
+        );
+        expect(response.status).toBe(404);
+        await expect(response.json()).resolves.toMatchObject({ code: 'NOT_ALLOWLISTED' });
+        expect(mockFetch).not.toHaveBeenCalled();
     });
 
     it('rejects cross-origin requests', async () => {
