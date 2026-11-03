@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { inflowErrorMessage } from "@/lib/inflow-error";
-import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
     AlertTriangle,
     ArrowDownToLine,
@@ -1252,23 +1252,14 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
         setActiveTab(isStandalone ? "Event log" : "Record log");
     };
 
-    // The tour's walkthrough action reads through a ref so the step array stays
-    // referentially stable while the action always sees fresh state.
-    const startMachineDemoRef = useRef(startMachineDemo);
-    useEffect(() => {
-        startMachineDemoRef.current = startMachineDemo;
+    // Build tour steps each render. Avoid ref indirection: react-hooks/refs
+    // flags passing a ref-closing callback into the step builder during render.
+    const tutorialSteps = buildInflowLabClientTutorialSteps({
+        runDemo: () => {
+            void startMachineDemo();
+        },
+        isStandalone,
     });
-    const runTutorialDemo = useCallback(() => {
-        void startMachineDemoRef.current();
-    }, []);
-    const tutorialSteps = useMemo(
-        () =>
-            buildInflowLabClientTutorialSteps({
-                runDemo: runTutorialDemo,
-                isStandalone,
-            }),
-        [isStandalone, runTutorialDemo],
-    );
 
     const startTutorial = () => {
         // Reset to the primary tab so every step's anchor is where the copy
