@@ -171,6 +171,34 @@ describe('Inflow Lab API proxy', () => {
         expect(mockFetch).toHaveBeenCalledTimes(1);
     });
 
+    it('proxies GET /api/inflow-lab/scenarios to the simulator /api/scenarios list', async () => {
+        mockSessionThenUpstream(
+            new Response(JSON.stringify({ scenarios: [{ id: 'leafy_greens_supplier', label: 'Leafy greens supplier' }] }), {
+                status: 200,
+                headers: { 'content-type': 'application/json' },
+            }),
+        );
+
+        const response = await GET(
+            makeRequest({ url: 'http://localhost/api/inflow-lab/scenarios' }),
+            { params: Promise.resolve({ path: ['scenarios'] }) },
+        );
+
+        expect(response.status).toBe(200);
+        expect(mockFetch).toHaveBeenNthCalledWith(
+            2,
+            new URL('http://inflow.test/api/scenarios'),
+            expect.objectContaining({
+                method: 'GET',
+                cache: 'no-store',
+                redirect: 'manual',
+            }),
+        );
+        await expect(response.json()).resolves.toEqual({
+            scenarios: [{ id: 'leafy_greens_supplier', label: 'Leafy greens supplier' }],
+        });
+    });
+
     it('returns exact 404 in production unless the server-only proxy flag is enabled', async () => {
         vi.stubEnv('NODE_ENV', 'production');
         vi.stubEnv('REGENGINE_ENABLE_INFLOW_LAB_PROXY', '');

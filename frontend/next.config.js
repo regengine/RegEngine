@@ -110,6 +110,13 @@ const nextConfig = {
     async redirects() {
         return [
             // Existing redirects
+            // /demo workspace was removed with synthetic demo cleanup (#3543).
+            // Send partners to the restored Inflow Lab tool on purpose.
+            {
+                source: '/demo',
+                destination: '/tools/inflow-lab',
+                permanent: false,
+            },
             {
                 source: '/ftl-checker',
                 destination: '/tools/ftl-checker',
