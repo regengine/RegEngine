@@ -278,7 +278,7 @@ async function proxyDemo(request: NextRequest, params: Promise<{ path?: string[]
                 ok: false,
                 error: "Not found",
                 code: "NOT_ALLOWLISTED",
-                hint: "Public demo proxy allows healthz, simulate status/start/stop/reset, events, lineage, and demo-fixtures load only.",
+                hint: "This endpoint allows healthz, simulate status/start/stop/reset, events, lineage, and fixture loading only.",
             },
             { status: 404, headers: { "cache-control": "no-store" } },
         );
@@ -343,7 +343,7 @@ async function proxyDemo(request: NextRequest, params: Promise<{ path?: string[]
         return NextResponse.json(
             {
                 ok: false,
-                error: "Inflow Lab demo service unavailable",
+                error: "Inflow Lab service unavailable",
                 code: "SERVICE_UNAVAILABLE",
                 correlation_id: correlationId,
             },
