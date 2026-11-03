@@ -227,6 +227,8 @@ async def import_sensitech(
     cte_type: str = Form("cooling", description="CTE type: cooling or receiving"),
     location_name: str = Form(..., description="Facility name where logger was deployed"),
     location_gln: Optional[str] = Form(None, description="Facility GLN (optional)"),
+    location_phone: Optional[str] = Form(None, description="Facility phone (optional)"),
+    location_address: Optional[str] = Form(None, description="Facility address (optional)"),
     cold_threshold: float = Form(5.0, description="Max temperature threshold (°C)"),
     ctx: TenantContext = Depends(require_tenant_context),
     x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
@@ -280,6 +282,8 @@ async def import_sensitech(
             unit_of_measure="readings",
             location_gln=location_gln,
             location_name=location_name,
+            location_phone=location_phone,
+            location_address=location_address,
             timestamp=event_timestamp,
             kdes={
                 date_field: event_date,

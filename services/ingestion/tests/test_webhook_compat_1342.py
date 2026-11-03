@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import asyncio
 import sys
+from copy import copy
 from types import ModuleType, SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -102,6 +103,8 @@ def _make_event(
     timestamp="2026-01-01T00:00:00Z",
     location_gln=None,
     location_name="Farm",
+    location_phone=None,
+    location_address=None,
     kdes=None,
 ):
     """Build a SimpleNamespace that quacks like IngestEvent."""
@@ -114,6 +117,8 @@ def _make_event(
         timestamp=timestamp,
         location_gln=location_gln,
         location_name=location_name,
+        location_phone=location_phone,
+        location_address=location_address,
         kdes=kdes if kdes is not None else {},
     )
 
@@ -574,6 +579,16 @@ class TestEventProcessing:
         assert resp.accepted == 2
         assert resp.rejected == 0
         assert len(persist.store_calls) == 2
+
+    @pytest.mark.parametrize("field", ["location_phone", "location_address"])
+    def test_location_contact_fields_used_in_dedup_key(self, field):
+        event = _make_event(location_phone="A", location_address="X")
+        identical = copy(event)
+        assert wc._batch_dedup_key(event) == wc._batch_dedup_key(identical)
+
+        changed = copy(event)
+        setattr(changed, field, getattr(event, field) + "B")
+        assert wc._batch_dedup_key(event) != wc._batch_dedup_key(changed)
 
     def test_missing_location_fields_use_empty_string_in_dedup(self, monkeypatch):
         """location_gln=None and location_name=None → '' in dedup_key.

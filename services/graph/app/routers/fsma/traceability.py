@@ -12,6 +12,7 @@ from neo4j.exceptions import Neo4jError, ServiceUnavailable
 from pydantic import BaseModel
 from shared.auth import require_api_key
 from shared.fsma_validation import (
+    gln_for_export,
     validate_gln,
     validate_gtin,
     validate_tlc,
@@ -185,7 +186,7 @@ async def trace_forward_endpoint(
         return {
             "lot_id": result.lot_id,
             "direction": result.direction,
-            "facilities": result.facilities,
+            "facilities": [{**facility, "gln": gln_for_export(facility.get("gln"))} for facility in result.facilities],
             "events": result.events,
             "downstream_lots": result.lots,
             "total_quantity": result.total_quantity,
@@ -314,7 +315,7 @@ async def trace_backward_endpoint(
         return {
             "lot_id": result.lot_id,
             "direction": result.direction,
-            "facilities": result.facilities,
+            "facilities": [{**facility, "gln": gln_for_export(facility.get("gln"))} for facility in result.facilities],
             "events": result.events,
             "source_lots": result.lots,
             "total_quantity": result.total_quantity,

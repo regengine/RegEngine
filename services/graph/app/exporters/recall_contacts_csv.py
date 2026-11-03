@@ -30,6 +30,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
+from shared.fsma_validation import gln_for_export
+
 from .safe_text import csv_safe
 
 __all__ = ["RECALL_CONTACTS_HEADER", "RECEIVING_EVENT_TYPES", "build_recall_contacts_rows"]
@@ -68,7 +70,7 @@ def _row(
     event = event or {}
     return [
         csv_safe(facility.get("name") or ""),
-        csv_safe(facility.get("gln") or ""),
+        csv_safe(gln_for_export(facility.get("gln"))),
         csv_safe(facility.get("address") or ""),
         csv_safe(facility.get("facility_type") or ""),
         csv_safe(lot.get("tlc") or ""),

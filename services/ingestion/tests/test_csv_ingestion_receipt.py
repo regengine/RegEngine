@@ -7,6 +7,8 @@ the upload it came from.
 
 from __future__ import annotations
 
+import pytest
+
 # ---------------------------------------------------------------------------
 # /ingest/csv retains the upload as an ingestion run
 # ---------------------------------------------------------------------------
@@ -69,3 +71,8 @@ def test_csv_route_hands_ingest_events_a_receipt_for_the_whole_file(monkeypatch)
     body = resp.json()
     assert body["ingestion_run_id"] == "run-abc"
     assert body["rejected"] == 1 and body["accepted"] == 1
+
+
+# These tests cover parsing and pipeline flow; location validity is covered by
+# test_location_description_complete.py and test_webhook_models.py.
+pytestmark = pytest.mark.usefixtures("location_complete_for_pipeline")

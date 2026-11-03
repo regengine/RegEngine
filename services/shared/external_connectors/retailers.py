@@ -20,6 +20,8 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+from shared.fsma_validation import gln_for_export
+
 from .base import (
     AuthType,
     ConnectionStatus,
@@ -117,8 +119,8 @@ class WalmartGDSNConnector(IntegrationConnector):
                     "quantity": event.quantity,
                     "unitOfMeasure": event.unit_of_measure.upper(),
                     "productDescription": event.product_description,
-                    "shipFromGln": event.location_gln or event.kdes.get("ship_from_gln", ""),
-                    "shipToGln": event.kdes.get("ship_to_gln", ""),
+                    "shipFromGln": gln_for_export(event.location_gln or event.kdes.get("ship_from_gln", "")),
+                    "shipToGln": gln_for_export(event.kdes.get("ship_to_gln", "")),
                 }
             ],
         }

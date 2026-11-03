@@ -175,14 +175,16 @@ async def ingest_events(
         valid_events: list = []  # (event, alerts) tuples
         for event in payload.events:
             # Batch deduplication — skip identical events in same request
-            dedup_key = f"{event.cte_type.value}|{event.traceability_lot_code}|{event.timestamp}|{event.location_gln or event.location_name or ''}"
+            dedup_key = f"{event.cte_type.value}|{event.traceability_lot_code}|{event.timestamp}|{event.location_gln or event.location_name or ''}|{event.location_phone or ''}|{event.location_address or ''}"
             if dedup_key in seen_in_batch:
                 results.append(
                     EventResult(
                         traceability_lot_code=event.traceability_lot_code,
                         cte_type=event.cte_type.value,
                         status="rejected",
-                        errors=["Duplicate event in batch — same CTE type, TLC, timestamp, and location"],
+                        errors=[
+                            "Duplicate event in batch — same CTE type, TLC, timestamp, location, phone, and address"
+                        ],
                     )
                 )
                 rejected += 1
@@ -297,6 +299,8 @@ async def ingest_events(
                         "event_timestamp": event.timestamp,
                         "location_gln": event.location_gln,
                         "location_name": event.location_name,
+                        "location_phone": event.location_phone,
+                        "location_address": event.location_address,
                         "kdes": event.kdes,
                         # One ledger entry serves both persisted projections.
                         # Construct its canonical content on the server; never

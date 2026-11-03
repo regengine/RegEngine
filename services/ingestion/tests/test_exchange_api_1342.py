@@ -306,15 +306,15 @@ class TestBuildRecords:
         assert record["unit_of_measure"] == "case"
         # KDEs > row fallbacks.
         assert record["ship_from"] == {
-            "gln": "0810000000001",
+            "gln": "",
             "name": "Packhouse",
         }
         assert record["ship_to"] == {
-            "gln": "0810000000002",
+            "gln": "",
             "name": "Distributor",
         }
         assert record["tlc_source"] == {
-            "gln": "0810000000003",
+            "gln": "",
             "fda_registration": "FDA-123",
             "immediate_previous_source": "Upstream",
         }
@@ -333,13 +333,13 @@ class TestBuildRecords:
         records = _build_records([row])
         record = records[0]
         assert record["ship_from"] == {
-            "gln": row.location_gln,
+            "gln": "",
             "name": row.location_name,
         }
         # No ship_to_location / receiving_location -> both None.
-        assert record["ship_to"] == {"gln": None, "name": None}
+        assert record["ship_to"] == {"gln": "", "name": None}
         assert record["tlc_source"] == {
-            "gln": None,
+            "gln": "",
             "fda_registration": None,
             "immediate_previous_source": None,
         }
