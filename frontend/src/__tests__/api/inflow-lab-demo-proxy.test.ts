@@ -171,14 +171,11 @@ describe('Inflow Lab public proxy', () => {
         );
 
         expect(response.status).toBe(200);
-        const body = await response.json();
-        expect(body.ok).toBe(true);
-        expect(Array.isArray(body.events)).toBe(true);
-        expect(body.events.length).toBeGreaterThan(0);
-        expect(body).not.toHaveProperty('tenant_id');
-        expect(body.delivery).not.toHaveProperty('tenantId');
-        expect(body.events[0]).not.toHaveProperty('customer_id');
-        expect(body.delivery).toMatchObject({ mode: 'local', posted: 3 });
+        await expect(response.json()).resolves.toEqual({
+            ok: true,
+            delivery: { mode: 'local', posted: 3 },
+            events: [{ id: 'row', lot: 'seg' }],
+        });
     });
 
     it('rejects non-allowlisted paths without contacting upstream', async () => {
@@ -485,7 +482,6 @@ describe('Inflow Lab public proxy', () => {
     it('allowlists signed-out GET lineage for colon-bearing segments and strips tenant fields', async () => {
         // Structural fixture: exercises ':' in SEGMENT_ALLOW without inventing a realistic URN/TLC.
         const lot = ['seg', 'with', 'colons'].join(':');
-        const tenantKeys = ['tenant_id', 'organizationId', 'customer_id'] as const;
         mockFetch.mockResolvedValueOnce(
             new Response(
                 JSON.stringify({
@@ -510,15 +506,10 @@ describe('Inflow Lab public proxy', () => {
         );
 
         expect(response.status).toBe(200);
-        const body = await response.json();
-        expect(Array.isArray(body.events)).toBe(true);
-        expect(body.events.length).toBeGreaterThan(0);
-        expect(body.lotCode).toBe(lot);
-        expect(body.events[0]).toMatchObject({ keep: true });
-        for (const key of tenantKeys) {
-            expect(body).not.toHaveProperty(key);
-            expect(body.events[0]).not.toHaveProperty(key);
-        }
+        await expect(response.json()).resolves.toEqual({
+            lotCode: lot,
+            events: [{ id: 'row', keep: true }],
+        });
         expect(mockFetch).toHaveBeenCalledTimes(1);
         expect(String(mockFetch.mock.calls[0][0])).toBe(
             `http://inflow.test/api/lineage/${encodeURIComponent(lot)}`,
@@ -652,10 +643,9 @@ describe('Inflow Lab client export hrefs use the public proxy base', () => {
             '/api/inflow-lab-demo/api/regengine/export/fda-request?preset=all_records',
         );
         expect(defaultEpcis).toBe('/api/inflow-lab-demo/api/regengine/export/epcis');
-        expect(defaultCsv.includes('traceability_lot_code')).toBe(false);
-        expect(defaultCsv.includes('start_date')).toBe(false);
-        expect(defaultEpcis.includes('traceability_lot_code')).toBe(false);
-        expect(filteredCsv).toContain(`traceability_lot_code=${filterLot}`);
+        expect(filteredCsv).toBe(
+            `/api/inflow-lab-demo/api/regengine/export/fda-request?preset=all_records&traceability_lot_code=${filterLot}`,
+        );
         expect(defaultCsv.includes('://')).toBe(false);
         expect(defaultEpcis.includes('://')).toBe(false);
     });

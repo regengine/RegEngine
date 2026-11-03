@@ -37,11 +37,9 @@ describe("buildDemoExportQuery", () => {
             startDate: start,
             endDate: end,
         });
-        expect(query.startsWith("?")).toBe(true);
-        expect(query).toContain("preset=all_records");
-        expect(query).toContain(`traceability_lot_code=${lot}`);
-        expect(query).toContain(`start_date=${start}`);
-        expect(query).toContain(`end_date=${end}`);
+        expect(query).toBe(
+            `?preset=all_records&traceability_lot_code=${encodeURIComponent(lot)}&start_date=${encodeURIComponent(start)}&end_date=${encodeURIComponent(end)}`,
+        );
     });
 
     it("preserves nonblank lot codes without trimming", () => {

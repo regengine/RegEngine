@@ -1274,12 +1274,13 @@ export function InflowLabClient({
     };
 
     const traceLot = async () => {
-        // Keep export filters empty by default, but never hit /api/lineage/ with a blank segment.
-        const lot = traceInput.trim() || selectedLot;
+        // Lineage may fall back to selectedLot, but never copy that into traceInput —
+        // that field also drives CSV/EPCIS export filters (keep defaults unfiltered).
+        const typed = traceInput.trim();
+        const lot = typed || selectedLot;
         if (!lot) {
             return;
         }
-        setTraceInput(lot);
         setSelectedLot(lot);
         setActiveTab("Lineage");
         try {
