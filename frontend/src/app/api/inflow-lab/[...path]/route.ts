@@ -15,7 +15,7 @@ const JSON_CONTENT_TYPES = ["application/json", "application/problem+json"];
 
 type BoundaryMode = "simulator" | "live-export";
 type EndpointContract = {
-    name: "health" | "status" | "records" | "lineage" | "run" | "reset" | "fixture" | "export";
+    name: "health" | "status" | "records" | "lineage" | "run" | "reset" | "fixture" | "export" | "scenarios";
     boundary: BoundaryMode;
     stream: boolean;
 };
@@ -106,6 +106,10 @@ function endpointContract(path: string, method: string): EndpointContract | null
     if (method === "GET" && path === "/api/events") {
         return { name: "records", boundary: "simulator", stream: false };
     }
+    // Accept both /api/scenarios (service path) and /scenarios (short path).
+    if (method === "GET" && (path === "/api/scenarios" || path === "/scenarios")) {
+        return { name: "scenarios", boundary: "simulator", stream: false };
+    }
     if (method === "GET" && /^\/api\/lineage\/[^/]+$/.test(path)) {
         return { name: "lineage", boundary: "simulator", stream: false };
     }
@@ -126,6 +130,12 @@ function endpointContract(path: string, method: string): EndpointContract | null
     }
 
     return null;
+}
+
+/** Map short proxy paths onto the Inflow Lab service routes. */
+function upstreamPathFor(relativePath: string): string {
+    if (relativePath === "/scenarios") return "/api/scenarios";
+    return relativePath;
 }
 
 function copyAllowedSearchParams(source: URLSearchParams, target: URLSearchParams) {
@@ -193,7 +203,12 @@ function responseHeaders(contract: EndpointContract, upstream?: Response) {
 function isOptionalReadProbe(contract: EndpointContract, method: string) {
     return (
         method === "GET" &&
-        (contract.name === "health" || contract.name === "status" || contract.name === "records")
+        (
+            contract.name === "health"
+            || contract.name === "status"
+            || contract.name === "records"
+            || contract.name === "scenarios"
+        )
     );
 }
 
@@ -204,6 +219,7 @@ function optionalOfflineResponse(contract: EndpointContract, detail?: string, up
             available: false,
             offline: true,
             events: contract.name === "records" ? [] : undefined,
+            scenarios: contract.name === "scenarios" ? [] : undefined,
             status: contract.name === "status" ? "offline" : undefined,
             health: contract.name === "health" ? "offline" : undefined,
             detail,
@@ -273,12 +289,12 @@ async function proxyInflowLab(request: NextRequest, params: Promise<{ path?: str
             400,
             "INVALID_PATH",
             {
-                hint: "Allowed Inflow Lab routes are health, status, records, lineage, run/reset, fixture load, and export links.",
+                hint: "Allowed Inflow Lab routes are health, status, records, scenarios, lineage, run/reset, fixture load, and export links.",
             }
         );
     }
 
-    const upstreamUrl = new URL(`${serviceBaseUrl()}${relativePath}`);
+    const upstreamUrl = new URL(`${serviceBaseUrl()}${upstreamPathFor(relativePath)}`);
     copyAllowedSearchParams(request.nextUrl.searchParams, upstreamUrl.searchParams);
 
     const headers = new Headers();
