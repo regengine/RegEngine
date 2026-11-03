@@ -1151,10 +1151,18 @@ export function InflowLabClient({
                         }),
                     }),
                 ]);
+                // Re-check after the workbench round-trip — a scenario load / CSV edit
+                // during preview must not paint the previous run's score or gate.
+                if (evaluationRevision !== feederInputRevisionRef.current) {
+                    return;
+                }
                 setBackendReadiness(typeof readiness.score === "number" ? readiness : null);
                 setCommitGateDecision(Array.isArray(gate.reasons) ? gate : null);
                 setBackendFixQueue([]);
             } catch (workbenchIssue) {
+                if (evaluationRevision !== feederInputRevisionRef.current) {
+                    return;
+                }
                 setBackendReadiness(null);
                 setCommitGateDecision(null);
                 setWorkbenchError(
@@ -1165,6 +1173,12 @@ export function InflowLabClient({
             }
             trackToolRunCompleted("inflow-lab", "success");
         } catch (error) {
+            // Failed evaluate must honor the same revision guard as success —
+            // otherwise a late 4xx/network error from the previous CSV reappears
+            // after the user already edited, uploaded, or loaded another scenario.
+            if (evaluationRevision !== feederInputRevisionRef.current) {
+                return;
+            }
             setFeederError(error instanceof Error ? error.message : "Could not evaluate pasted data");
             trackToolRunCompleted("inflow-lab", "error");
         } finally {
@@ -1181,6 +1195,7 @@ export function InflowLabClient({
             setFeederResult(null);
             setFeederSavedAt(null);
             setFeederError(null);
+            setWorkbenchError(null);
             setBackendReadiness(null);
             setBackendFixQueue([]);
             setCommitGateDecision(null);
@@ -1199,6 +1214,7 @@ export function InflowLabClient({
         setFeederResult(null);
         setFeederSavedAt(null);
         setFeederError(null);
+        setWorkbenchError(null);
         setBackendReadiness(null);
         setBackendFixQueue([]);
         setCommitGateDecision(null);
@@ -1897,6 +1913,7 @@ export function InflowLabClient({
                                                     setFeederResult(null);
                                                     setFeederSavedAt(null);
                                                     setFeederError(null);
+                                                    setWorkbenchError(null);
                                                     setBackendReadiness(null);
                                                     setBackendFixQueue([]);
                                                     setCommitGateDecision(null);
