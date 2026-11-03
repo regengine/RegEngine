@@ -288,6 +288,20 @@ function servicePath(path: string) {
     return `${INFLOW_API}${path}`;
 }
 
+function safeHref(raw: string): string {
+    try {
+        const parsed = new URL(raw, "https://regengine.invalid");
+        if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+            return raw.startsWith("/") ? `${parsed.pathname}${parsed.search}${parsed.hash}` : parsed.toString();
+        }
+    } catch {
+        // fall through
+    }
+    return "#";
+}
+
+
+
 async function inflowJson<T>(path: string, init?: RequestInit): Promise<T> {
     const response = await fetch(servicePath(path), {
         cache: "no-store",
@@ -1268,8 +1282,16 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
         setIsTutorialOpen(true);
     };
 
-    const csvExportHref = `${servicePath(`/api/mock/regengine/export/fda-request?preset=${exportPreset}&traceability_lot_code=${encodeURIComponent(traceInput)}&start_date=${startDate}&end_date=${endDate}`)}`;
-    const epcisExportHref = `${servicePath(`/api/mock/regengine/export/epcis?traceability_lot_code=${encodeURIComponent(traceInput)}&start_date=${startDate}&end_date=${endDate}`)}`;
+    const csvExportHref = safeHref(
+        servicePath(
+            `/api/mock/regengine/export/fda-request?preset=${encodeURIComponent(exportPreset)}&traceability_lot_code=${encodeURIComponent(traceInput)}&start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}`,
+        ),
+    );
+    const epcisExportHref = safeHref(
+        servicePath(
+            `/api/mock/regengine/export/epcis?traceability_lot_code=${encodeURIComponent(traceInput)}&start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}`,
+        ),
+    );
     const engineConnected = Boolean(health?.ok && !serviceError);
     const connectionLabel = engineConnected ? "Connection ready" : serviceError ? "Connection needs attention" : "Checking connection";
     const connectionTone = engineConnected ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-800";
