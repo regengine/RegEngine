@@ -2,6 +2,7 @@ import { Metadata } from "next";
 import { isExperimentalToolHrefHidden } from "@/lib/experimental-features";
 import { ToolsLandingClient } from "./components/ToolsLandingClient";
 import { JSONLD } from "@/components/seo/json-ld";
+import { RelatedLinks } from "@/components/seo/related-links";
 
 export const metadata: Metadata = {
     title: "Free FSMA 204 Tools | RegEngine",
@@ -43,6 +44,14 @@ export default function ToolsLandingPage() {
         <>
             <JSONLD data={jsonLd} />
             <ToolsLandingClient />
+            <RelatedLinks
+              width="marketing"
+              links={[
+                { href: "/fsma-204", label: "FSMA 204 compliance guide" },
+                { href: "/fsma-204/harvesting", label: "Harvesting CTE requirements" },
+                { href: "/proof", label: "Verify a sample export" },
+              ]}
+            />
         </>
     );
 }

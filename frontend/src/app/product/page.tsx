@@ -19,6 +19,7 @@ import { Section } from "@/components/layout/section";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
+import { RelatedLinks } from "@/components/seo/related-links";
 
 export const metadata: Metadata = {
   title: "Product | RegEngine",
@@ -241,6 +242,14 @@ export default function ProductPage() {
           ))}
         </div>
       </Section>
+
+      <RelatedLinks
+        width="marketing"
+        links={[
+          { href: "/tools", label: "Free FSMA 204 tools" },
+          { href: "/proof", label: "Proof artifacts you can verify" },
+        ]}
+      />
     </div>
   );
 }

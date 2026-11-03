@@ -7,6 +7,7 @@ import { EmailGate } from "@/components/tools/EmailGate";
 import { RelatedTools } from "@/components/tools/RelatedTools";
 import { Container } from "@/components/layout/container";
 import { Skeleton } from "@/components/ui/skeleton";
+import { RelatedLinks } from "@/components/seo/related-links";
 
 export const metadata: Metadata = {
     title: "FSMA 204 Records Request Checklist | RegEngine",
@@ -67,6 +68,14 @@ export default function RecordsRequestChecklistPage() {
                 { href: "/tools/cte-mapper", title: "CTE Mapper", description: "Map the 7 Critical Tracking Event (CTE) types your supply chain must document." },
                 { href: "/tools/kde-checker", title: "KDE Field Checklist", description: "Check whether Key Data Element (KDE) fields are present for each FTL product and CTE type." },
             ]} />
+            <RelatedLinks
+              width="tool"
+              heading="Related"
+              links={[
+                { href: "/blog/24-hour-rule", label: "The FSMA 204 24 hour rule" },
+                { href: "/tools", label: "Free FSMA 204 tools hub" }
+              ]}
+            />
         </>
     );
 }
