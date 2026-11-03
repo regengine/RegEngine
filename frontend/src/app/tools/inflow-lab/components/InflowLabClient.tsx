@@ -230,7 +230,7 @@ type WorkbenchRunResponse = {
     saved_at: string;
 };
 
-const INFLOW_API = "/api/inflow-lab";
+const INFLOW_API = "/api/inflow-lab-demo";
 const WORKBENCH_API = "/api/ingestion/api/v1/inflow-workbench";
 const REQUIRED_CTES = ["harvesting", "cooling", "initial_packing", "shipping", "receiving"];
 const SANDBOX_CTE_TYPES = [
@@ -307,7 +307,7 @@ async function inflowJson<T>(path: string, init?: RequestInit): Promise<T> {
     if (!headers.has("content-type")) {
         headers.set("content-type", "application/json");
     }
-    // Mutating /api/inflow-lab calls are CSRF-protected by proxy.ts; match workbenchJson.
+    // Mutating /api/inflow-lab-demo calls are CSRF-protected by proxy.ts + the public route; match workbenchJson.
     const response = await fetchWithCsrf(servicePath(path), {
         cache: "no-store",
         ...init,
@@ -1306,7 +1306,7 @@ export function InflowLabClient({
         setActiveTab(isStandalone ? "Event log" : "Record log");
     };
 
-    // Rebuild steps each render (avoids react-hooks/refs on a demo callback).
+    // Rebuild steps each render (avoids react-hooks/refs on a tour callback).
     // Tutorial measures against currentStep + step.target, not step object
     // identity, so a fresh steps array no longer re-fires scrollIntoView.
     const tutorialSteps = buildInflowLabClientTutorialSteps({
@@ -2252,7 +2252,7 @@ export function InflowLabClient({
                                         <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 lg:col-span-3">
                                             <p className="text-sm font-semibold text-slate-950">Replay and regression testing</p>
                                             <p className="mt-1 text-xs leading-5 text-slate-500">
-                                                Scenarios are reusable preflight inputs for demos, supplier onboarding, implementation training, and contract regression checks before rules or mappings change.
+                                                Scenarios are reusable preflight inputs for walkthroughs, supplier onboarding, implementation training, and contract regression checks before rules or mappings change.
                                             </p>
                                         </div>
                                     </div>
@@ -2646,7 +2646,7 @@ export function InflowLabClient({
                                             </div>
                                             <div className="rounded-lg border border-slate-200 bg-white p-4">
                                                 <FileJson className="h-5 w-5 text-blue-700" />
-                                                <p className="mt-3 text-sm font-semibold text-slate-950">Test EPCIS preview</p>
+                                                <p className="mt-3 text-sm font-semibold text-slate-950">Test EPCIS Preview</p>
                                                 <p className="mt-1 text-xs leading-5 text-slate-500">
                                                     Uses the same lot and date filters for interoperability testing. It is not production evidence.
                                                 </p>
