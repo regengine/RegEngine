@@ -428,6 +428,39 @@ def _sanitize_ingest_events(events: list[dict[str, Any]]) -> list[dict[str, Any]
     return [_sanitize_value(event) for event in events]
 
 
+# Signature headers in the order connectors verify them. SafetyCulture
+# checks ``x-sc-signature`` then ``x-safetyculture-signature``
+# (shared/external_connectors/safetyculture.py), so those come first: a
+# decoy generic header must not change the nonce key of a replayed,
+# genuinely signed request.
+_WEBHOOK_SIGNATURE_HEADERS = (
+    "x-sc-signature",
+    "x-safetyculture-signature",
+    "x-hub-signature-256",
+    "x-signature",
+)
+
+
+def _webhook_signature_for_nonce(headers: dict[str, str]) -> str:
+    """Normalized signature used in the replay nonce key.
+
+    Header names are matched case-insensitively. The value is stripped,
+    lowercased and has any ``sha256=`` prefix removed, because the
+    connector accepts those variants as the same signature; otherwise a
+    replay could dodge the nonce cache by re-spelling it. Empty string if
+    no signature header is present, so the key is still stable per body.
+    """
+    lowered = {str(k).lower(): v for k, v in headers.items()}
+    for name in _WEBHOOK_SIGNATURE_HEADERS:
+        value = str(lowered.get(name) or "").strip()
+        if value:
+            value = value.lower()
+            if value.startswith("sha256="):
+                value = value[len("sha256="):].strip()
+            return value
+    return ""
+
+
 def _webhook_nonce_key(tenant_id: str, connector_id: str, payload: bytes, signature_header: str) -> str:
     """Stable digest for replay detection (tenant + connector + body + sig)."""
     material = b"|".join(
@@ -1043,14 +1076,7 @@ async def receive_webhook(
 
     payload = await request.body()
     headers = dict(request.headers)
-    # Prefer the common HMAC header names; empty string if absent so
-    # the nonce key is still stable for a given body.
-    signature_header = (
-        headers.get("x-signature")
-        or headers.get("x-hub-signature-256")
-        or headers.get("x-safetyculture-signature")
-        or ""
-    )
+    signature_header = _webhook_signature_for_nonce(headers)
     nonce_key = _webhook_nonce_key(tenant_id, connector_id, payload, signature_header)
     if _webhook_nonce_seen_before(nonce_key):
         # Replay inside the TTL — same uniform body as any other

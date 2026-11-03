@@ -444,6 +444,39 @@ def test_webhook_replay_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
     assert connector.handle_calls == 1
 
 
+def test_webhook_replay_with_decoy_header_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A replayed SafetyCulture request cannot dodge the nonce with a decoy x-signature."""
+    connector = _FakeConnector()
+    monkeypatch.setattr(registry_mod, "resolve_connector_id", lambda cid: cid)
+    monkeypatch.setattr(
+        registry_mod,
+        "get_tenant_connectors",
+        lambda tid: {CONNECTOR_ID: connector},
+    )
+    client = TestClient(_build_app())
+    body = b'{"event":"inspection.completed","id":"syn-1"}'
+    url = f"/api/v1/integrations/webhook/{TENANT_A}/{CONNECTOR_ID}"
+    first = client.post(url, content=body, headers={"x-sc-signature": "ab" * 32})
+    assert first.status_code == 200
+    for decoy in (
+        {"x-sc-signature": "ab" * 32, "x-signature": "decoy-1"},
+        {"x-sc-signature": "sha256=" + "AB" * 32},
+        {"X-SC-Signature": " " + "ab" * 32 + " ", "x-hub-signature-256": "decoy-2"},
+    ):
+        replay = client.post(url, content=body, headers=decoy)
+        assert replay.status_code == 401
+        assert replay.json()["detail"]["error"] == "webhook_rejected"
+    assert connector.handle_calls == 1
+
+
+def test_webhook_signature_for_nonce_prefers_connector_header() -> None:
+    sig = ir._webhook_signature_for_nonce
+    assert sig({"x-signature": "decoy", "x-sc-signature": "AbC"}) == "abc"
+    assert sig({"X-SafetyCulture-Signature": "sha256=Def"}) == "def"
+    assert sig({"x-signature": "sha256=zz"}) == "zz"
+    assert sig({}) == ""
+
+
 # ---------------------------------------------------------------------------
 # Finding 4 — sanitize_cell on CSV upload path
 # ---------------------------------------------------------------------------
