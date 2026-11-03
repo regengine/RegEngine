@@ -60,10 +60,10 @@ export default function CompareIFoodDSPage() {
           </p>
           <h3 className="mt-8 text-heading text-re-text-primary">Topic: Network vs self serve evidence</h3>
           <p className="mt-4 max-w-[68ch] text-body text-re-text-secondary">
-            iFoodDS: Value depends on trading partner participation and buyer onboarding paths. Public supplier pages describe sharing shipping data with customers and optional EDI add ons for named retail programs. Source: <a href="https://supplier-trace.ifoodds.com/suppliers/" className="text-re-brand underline underline-offset-[3px]" rel="noopener noreferrer" target="_blank">https://supplier-trace.ifoodds.com/suppliers/</a>
+            iFoodDS: Value depends on trading partner participation and buyer onboarding paths. Public supplier pages describe sharing shipping data with customers and optional electronic data-interchange add ons for named retail programs. Source: <a href="https://supplier-trace.ifoodds.com/suppliers/" className="text-re-brand underline underline-offset-[3px]" rel="noopener noreferrer" target="_blank">https://supplier-trace.ifoodds.com/suppliers/</a>
           </p>
           <p className="mt-4 max-w-[68ch] text-body text-re-text-secondary">
-            RegEngine: You can inspect synthetic proof artifacts without joining a network. Network interchange with any specific retailer is not claimed here.
+            RegEngine: You can inspect published proof artifacts without joining a network. Network interchange with any specific retailer is not claimed here.
           </p>
           <h3 className="mt-8 text-heading text-re-text-primary">Topic: FSMA 204 date posture</h3>
           <p className="mt-4 max-w-[68ch] text-body text-re-text-secondary">
