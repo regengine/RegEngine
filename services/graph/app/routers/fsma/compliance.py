@@ -406,7 +406,10 @@ async def export_epcis(
                     _skip("transformation_incomplete")
                     continue
                 if not valid_transformation_id and transformation_id:
-                    transformation_id = f"urn:uuid:{transformation_id}" if not str(transformation_id).startswith("urn:") else transformation_id
+                    try:
+                        transformation_id = f"urn:uuid:{uuid.UUID(str(transformation_id))}"
+                    except ValueError:
+                        transformation_id = f"urn:uuid:{transformation_id}"
                     valid_transformation_id = True
                 epcis_event = {"type": "TransformationEvent", **common, "bizStep": BIZ_STEP_MAP[event_type]}
                 if input_epc:

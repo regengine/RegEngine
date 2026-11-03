@@ -165,10 +165,8 @@ def test_graph_json_and_xml_conform(kind):
     assert schema.validate(tree), str(schema.error_log)
     node = tree.xpath("//*[local-name()='EventList']/*")[0]
     if kind == "TRANSFORMATION":
-        assert isinstance(event["transformationID"], str)
-        assert event["transformationID"].startswith("urn:uuid:")
-        assert event["transformationID"][len("urn:uuid:"):]
-        assert node.find("transformationID") is not None
+        assert event["transformationID"] == rows[0]["event_id"]
+        assert node.find("transformationID").text == rows[0]["event_id"]
     else:
         assert event["epcList"][0].endswith(rows[0]["tlc"])
         assert node.find("epcList") is not None
@@ -282,7 +280,7 @@ def test_graph_exports_transformation_with_input_tlc_and_gtin():
         assert epc_class.startswith("https://id.gs1.org/01/")
         assert f"/01/{row[gtin]}/10/" in epc_class
         assert epc_class.endswith(row[tlc])
-    assert event["transformationID"].startswith("urn:uuid:")
+    assert event["transformationID"] == f"urn:uuid:{uuid.UUID(row['event_id'])}"
 
 
 def test_graph_harvesting_uses_creating_class_instance_bizstep():
