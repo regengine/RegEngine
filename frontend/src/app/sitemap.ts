@@ -50,6 +50,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
         { url: `${baseUrl}/compare/foodlogiq`, changeFrequency: 'monthly' as const, priority: 0.8 },
         { url: `${baseUrl}/compare/repositrak`, changeFrequency: 'monthly' as const, priority: 0.8 },
         { url: `${baseUrl}/compare/tracegains`, changeFrequency: 'monthly' as const, priority: 0.8 },
+        { url: `${baseUrl}/compare/foodready`, changeFrequency: 'monthly' as const, priority: 0.8 },
+        { url: `${baseUrl}/compare/ifoodds`, changeFrequency: 'monthly' as const, priority: 0.8 },
         { url: `${baseUrl}/integrations`, changeFrequency: 'monthly' as const, priority: 0.8 },
         { url: `${baseUrl}/trust`, changeFrequency: 'monthly' as const, priority: 0.7 },
         { url: `${baseUrl}/contact`, changeFrequency: 'yearly' as const, priority: 0.5 },
@@ -91,8 +93,28 @@ export default function sitemap(): MetadataRoute.Sitemap {
     }));
 
     // Content pages (high SEO value)
+    // /proof and every marketing CTE URL. Depends on page PRs that publish
+    // hyphenated CTE slugs (initial-packing, first-land-based-receiving) and
+    // keep /proof live. Soft-404 redirect URLs (/case-studies, /tools/checklist)
+    // stay out of the sitemap on purpose.
+    const ctePages = [
+        'harvesting',
+        'cooling',
+        'initial-packing',
+        'first-land-based-receiving',
+        'shipping',
+        'receiving',
+        'transformation',
+    ].map((cte) => ({
+        url: `${baseUrl}/fsma-204/${cte}`,
+        changeFrequency: 'monthly' as const,
+        priority: 0.85,
+    }));
+
     const contentPages = [
         { url: `${baseUrl}/fsma-204`, changeFrequency: 'monthly' as const, priority: 0.9 },
+        ...ctePages,
+        { url: `${baseUrl}/proof`, changeFrequency: 'monthly' as const, priority: 0.8 },
         { url: `${baseUrl}/walkthrough`, changeFrequency: 'monthly' as const, priority: 0.9 },
         { url: `${baseUrl}/developers`, changeFrequency: 'monthly' as const, priority: 0.8 },
         { url: `${baseUrl}/blog`, changeFrequency: 'weekly' as const, priority: 0.8 },
