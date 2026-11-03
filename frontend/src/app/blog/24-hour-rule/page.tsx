@@ -74,7 +74,7 @@ export default function TwentyFourHourRulePage() {
             Write a response roster with backups.
           </p>
           <p className="mt-4 max-w-[68ch] text-body text-re-text-secondary">
-            Pre build the export path you will use for an FDA oriented sortable package. RegEngine publishes a synthetic sample CSV and a verifier on <Link href="/proof" className="text-re-brand underline underline-offset-[3px]">https://regengine.co/proof</Link> so you can see one layout and recompute hashes yourself. Regulatory acceptance remains with the operator.
+            Pre build the export path you will use for an FDA oriented sortable package. RegEngine publishes an illustrative CSV and a verifier on <Link href="/proof" className="text-re-brand underline underline-offset-[3px]">https://regengine.co/proof</Link> so you can see one layout and recompute hashes yourself. Regulatory acceptance remains with the operator.
           </p>
           <p className="mt-4 max-w-[68ch] text-body text-re-text-secondary">
             Run drills. Pair <Link href="/tools/records-request-checklist" className="text-re-brand underline underline-offset-[3px]">https://regengine.co/tools/records-request-checklist</Link> with a real lot from your own books. The checklist is self reported. It is not a 24 hour capability test and not a readiness score.
