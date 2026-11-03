@@ -1274,14 +1274,18 @@ export function InflowLabClient({
     };
 
     const traceLot = async () => {
-        if (traceInput) {
-            setSelectedLot(traceInput);
-            setActiveTab("Lineage");
+        // Keep export filters empty by default, but never hit /api/lineage/ with a blank segment.
+        const lot = traceInput.trim() || selectedLot;
+        if (!lot) {
+            return;
         }
+        setTraceInput(lot);
+        setSelectedLot(lot);
+        setActiveTab("Lineage");
         try {
-            const payload = await inflowJson<InflowLineagePayload>(`/api/lineage/${encodeURIComponent(traceInput)}`);
+            const payload = await inflowJson<InflowLineagePayload>(`/api/lineage/${encodeURIComponent(lot)}`);
             const lineageEvents = (payload.records || []).map(toTraceEvent);
-            setServiceLineage((current) => ({ ...current, [traceInput]: toLineage(lineageEvents) }));
+            setServiceLineage((current) => ({ ...current, [lot]: toLineage(lineageEvents) }));
             setServiceError(null);
         } catch (error) {
             setServiceError(error instanceof Error ? error.message : "Could not trace lot");
@@ -1539,7 +1543,7 @@ export function InflowLabClient({
                                     </Button>
                                     <Button
                                         variant="ghost"
-                                        className="h-10 border border-emerald-600 bg-emerald-700 text-white hover:bg-emerald-800 hover:text-white"
+                                        className="h-10 border border-emerald-600 !bg-emerald-700 !text-white hover:!bg-emerald-800 hover:!text-white"
                                         onClick={runPipeline}
                                         disabled={isBusy}
                                     >
@@ -1699,7 +1703,11 @@ export function InflowLabClient({
                                         className={cn("min-w-0 border-slate-300 text-xs sm:w-[290px]", isStandalone ? "h-10" : "h-9")}
                                         aria-label="Traceability lot code"
                                     />
-                                    <Button onClick={traceLot} className={cn("bg-slate-950 text-white hover:bg-slate-800", isStandalone ? "h-10" : "h-9")}>
+                                    <Button
+                                        onClick={traceLot}
+                                        disabled={!traceInput.trim() && !selectedLot}
+                                        className={cn("bg-slate-950 text-white hover:bg-slate-800", isStandalone ? "h-10" : "h-9")}
+                                    >
                                         <GitBranch className="mr-2 h-4 w-4" />
                                         Trace lot
                                     </Button>
@@ -2367,7 +2375,7 @@ export function InflowLabClient({
                                                     <div className="flex flex-wrap gap-2">
                                                         <Button
                                                             variant="ghost"
-                                                            className="h-9 border border-emerald-600 bg-emerald-700 text-white hover:bg-emerald-800 hover:text-white"
+                                                            className="h-9 border border-emerald-600 !bg-emerald-700 !text-white hover:!bg-emerald-800 hover:!text-white"
                                                             onClick={runPipeline}
                                                         >
                                                             <Play className="mr-2 h-4 w-4" />
