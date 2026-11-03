@@ -36,6 +36,14 @@ def test_secret_scans_cover_main_and_non_main_prs():
         )
 
 
+def test_main_secrets_audit_tolerates_baseline_line_drift():
+    # A bare detect-secrets-hook exits 3 when a merge only moves a baselined
+    # line, which failed security on main; the shared script passes that drift.
+    runs = [step.get("run", "") for step in jobs()["detect-secrets"]["steps"]]
+    assert any("scripts/ci/check_secrets_baseline.sh" in run for run in runs)
+    assert not any("detect-secrets-hook" in run for run in runs)
+
+
 def test_tenant_job_filters_pr_only_and_uses_only_disposable_role_targets():
     job = jobs()["tenant-isolation"]
     assert job["needs"] == "changes"

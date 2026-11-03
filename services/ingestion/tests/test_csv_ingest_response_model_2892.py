@@ -35,6 +35,7 @@ _HEADER = [
     "harvest_date",
     "location_name",
     "reference_document",
+    "immediate_subsequent_recipient",
 ]
 
 
@@ -135,7 +136,7 @@ class TestPublishedSchema:
 class TestWireShape:
     def test_warnings_still_returned_when_present(self):
         # 'L0T1O23' trips the lot-code character-swap heuristic.
-        rows = [["L0T1O23", "Kale", "10", "lbs", "2026-04-17", "Farm A", "REF"]]
+        rows = [["L0T1O23", "Kale", "10", "lbs", "2026-04-17", "Farm A", "REF", "Packhouse A"]]
         resp = _post(TestClient(_build_app()), _csv(rows))
         assert resp.status_code == 200, resp.text
         body = resp.json()
@@ -143,7 +144,7 @@ class TestWireShape:
         assert any("character swap" in w for w in body["kde_warnings"])
 
     def test_clean_upload_reports_zero_warnings_explicitly(self):
-        resp = _post(TestClient(_build_app()), _csv([["TLC1", "Kale", "10", "lbs", "2026-04-17", "Farm A", "REF"]]))
+        resp = _post(TestClient(_build_app()), _csv([["TLC1", "Kale", "10", "lbs", "2026-04-17", "Farm A", "REF", "Packhouse A"]]))
         assert resp.status_code == 200, resp.text
         body = resp.json()
         # An integrator should be able to read the field unconditionally
@@ -152,7 +153,7 @@ class TestWireShape:
         assert body["kde_warning_count"] == 0
 
     def test_base_fields_unchanged(self):
-        resp = _post(TestClient(_build_app()), _csv([["TLC1", "Kale", "10", "lbs", "2026-04-17", "Farm A", "REF"]]))
+        resp = _post(TestClient(_build_app()), _csv([["TLC1", "Kale", "10", "lbs", "2026-04-17", "Farm A", "REF", "Packhouse A"]]))
         body = resp.json()
         assert body["accepted"] == 1
         assert body["rejected"] == 0
