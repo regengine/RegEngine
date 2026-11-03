@@ -49,7 +49,7 @@ export default function ToolsLandingPage() {
               links={[
                 { href: "/fsma-204", label: "FSMA 204 compliance guide" },
                 { href: "/fsma-204/harvesting", label: "Harvesting CTE requirements" },
-                { href: "/proof", label: "Verify a sample export" },
+                { href: "/proof", label: "Verify a proof export" },
               ]}
             />
         </>

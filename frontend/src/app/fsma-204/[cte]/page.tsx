@@ -482,7 +482,7 @@ export default async function CTELandingPage({
           { href: "/tools", label: "Free FSMA 204 tools" },
           { href: "/tools/kde-checker", label: "KDE Field Checklist" },
           { href: "/tools/cte-mapper", label: "CTE Mapper" },
-          { href: "/proof", label: "Verify sample exports on /proof" },
+          { href: "/proof", label: "Verify proof exports on /proof" },
         ]}
       />
 

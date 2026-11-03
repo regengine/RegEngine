@@ -298,7 +298,7 @@ export default function HomePage() {
         links={[
           { href: "/tools", label: "Free FSMA 204 tools" },
           { href: "/fsma-204/harvesting", label: "Harvesting CTE" },
-          { href: "/proof", label: "Verify sample exports yourself" },
+          { href: "/proof", label: "Verify proof exports yourself" },
         ]}
       />
 
