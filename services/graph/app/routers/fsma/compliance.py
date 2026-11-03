@@ -405,9 +405,14 @@ async def export_epcis(
                         transformation_id = f"urn:uuid:{uuid.UUID(str(transformation_id))}"
                         valid_transformation_id = True
                     except ValueError:
-                        pass
+                        _skip("invalid_transformation_id")
+                        continue
                 has_output = bool(epc_urn or out_class)
                 has_input = bool(input_epc or input_class)
+                input_side_present = bool(event.get("input_tlc") or event.get("input_gtin"))
+                if input_side_present and not has_input:
+                    _skip("transformation_input_unencodable")
+                    continue
                 if not (has_input and has_output) and not (valid_transformation_id and (has_input or has_output)):
                     _skip("transformation_incomplete")
                     continue

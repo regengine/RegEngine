@@ -300,6 +300,35 @@ def test_graph_exports_output_only_transformation_with_raw_uuid():
     assert "transformation_incomplete" not in document["regengine:exportMetadata"]["skippedEventsByReason"]
 
 
+@pytest.mark.parametrize("include_input_gtin", [False, True])
+def test_graph_skips_transformation_with_unencodable_input(include_input_gtin):
+    row = graph_row("TRANSFORMATION")
+    row.update(input_tlc=lot_code(), tlc=lot_code(), gtin=gs1_number(14), event_id=uuid.uuid4().hex)
+    if include_input_gtin:
+        row["input_gtin"] = None
+
+    document = json.loads(asyncio.run(export("json-ld", [row])))
+    assert document["epcisBody"]["eventList"] == []
+    assert document["regengine:exportMetadata"]["skippedEventsByReason"] == {
+        "transformation_input_unencodable": 1
+    }
+
+
+def test_graph_skips_transformation_with_invalid_id():
+    row = graph_row("TRANSFORMATION")
+    row.update(
+        input_tlc=lot_code(), input_gtin=gs1_number(14),
+        tlc=lot_code(), gtin=gs1_number(14),
+        event_id=f"not-a-uuid-{uuid.uuid4().hex}",
+    )
+
+    document = json.loads(asyncio.run(export("json-ld", [row])))
+    assert document["epcisBody"]["eventList"] == []
+    assert document["regengine:exportMetadata"]["skippedEventsByReason"] == {
+        "invalid_transformation_id": 1
+    }
+
+
 def test_graph_harvesting_uses_creating_class_instance_bizstep():
     row = graph_row("HARVESTING")
     document = json.loads(asyncio.run(export("json-ld", [row])))
