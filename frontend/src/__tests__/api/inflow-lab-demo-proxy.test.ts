@@ -2,11 +2,14 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
     GET,
     POST,
+    PUT,
+    DELETE,
     __resetInflowLabDemoRateLimitForTests,
     trustedClientIp,
     sanitizePathSegment,
     stripTenantLike,
 } from '@/app/api/inflow-lab-demo/[...path]/route';
+import { buildDemoExportQuery } from '@/app/tools/inflow-lab/lib/demo-export-query';
 import { CSRF_HEADER, CSRF_SIG_COOKIE, signCsrfToken } from '@/lib/csrf';
 import type { NextRequest } from 'next/server';
 
@@ -154,9 +157,9 @@ describe('Inflow Lab public proxy', () => {
             new Response(
                 JSON.stringify({
                     ok: true,
-                    tenant_id: 'should-vanish',
-                    delivery: { mode: 'local', tenantId: 'also-vanish', posted: 3 },
-                    events: [{ id: 'e1', customer_id: 'c1', lot: 'L1' }],
+                    tenant_id: 'x',
+                    delivery: { mode: 'local', tenantId: 'y', posted: 3 },
+                    events: [{ id: 'row', customer_id: 'z', lot: 'seg' }],
                 }),
                 { status: 200, headers: { 'content-type': 'application/json' } },
             ),
@@ -171,7 +174,7 @@ describe('Inflow Lab public proxy', () => {
         await expect(response.json()).resolves.toEqual({
             ok: true,
             delivery: { mode: 'local', posted: 3 },
-            events: [{ id: 'e1', lot: 'L1' }],
+            events: [{ id: 'row', lot: 'seg' }],
         });
     });
 
@@ -194,7 +197,7 @@ describe('Inflow Lab public proxy', () => {
 
     it('allowlists export preview GETs under /api/inflow-lab-demo and streams the body', async () => {
         mockFetch.mockResolvedValueOnce(
-            new Response('lot,qty\nL1,10\n', {
+            new Response('lot,qty\nrow,10\n', {
                 status: 200,
                 headers: {
                     'content-type': 'text/csv',
@@ -212,7 +215,7 @@ describe('Inflow Lab public proxy', () => {
 
         expect(response.status).toBe(200);
         expect(response.headers.get('content-type')).toContain('text/csv');
-        expect(await response.text()).toBe('lot,qty\nL1,10\n');
+        expect(await response.text()).toBe('lot,qty\nrow,10\n');
         expect(String(mockFetch.mock.calls[0][0])).toContain(
             'http://inflow.test/api/mock/regengine/export/fda-request',
         );
@@ -240,7 +243,7 @@ describe('Inflow Lab public proxy', () => {
         mockFetch.mockResolvedValueOnce(
             new Response(
                 JSON.stringify({
-                    records: [{ lot: 'L1', tenant_id: 't-gone', qty: 3 }],
+                    records: [{ lot: 'seg', tenant_id: 't-gone', qty: 3 }],
                     tenantId: 'also-gone',
                     customer_id: 'c-gone',
                     ok: true,
@@ -264,7 +267,7 @@ describe('Inflow Lab public proxy', () => {
             'http://inflow.test/api/mock/regengine/export/fda-request?preset=all_records',
         );
         await expect(response.json()).resolves.toEqual({
-            records: [{ lot: 'L1', qty: 3 }],
+            records: [{ lot: 'seg', qty: 3 }],
             ok: true,
         });
     });
@@ -281,7 +284,7 @@ describe('Inflow Lab public proxy', () => {
                             {
                                 type: 'ObjectEvent',
                                 tenantId: 'also-vanish',
-                                customer_id: 'c1',
+                                customer_id: 'z',
                                 bizStep: 'shipping',
                             },
                         ],
@@ -296,7 +299,7 @@ describe('Inflow Lab public proxy', () => {
 
         const response = await GET(
             makeRequest({
-                url: 'http://localhost/api/inflow-lab-demo/api/regengine/export/epcis?traceability_lot_code=L1',
+                url: 'http://localhost/api/inflow-lab-demo/api/regengine/export/epcis?traceability_lot_code=seg',
             }),
             { params: Promise.resolve({ path: ['api', 'regengine', 'export', 'epcis'] }) },
         );
@@ -468,12 +471,107 @@ describe('Inflow Lab public proxy', () => {
             expect(mockFetch, path.join('/')).not.toHaveBeenCalled();
         }
 
-        expect(sanitizePathSegment('LOT-001')).toBe('LOT-001');
+        expect(sanitizePathSegment('seg-safe')).toBe('seg-safe');
         expect(sanitizePathSegment('%2e%2e')).toBeNull();
         expect(sanitizePathSegment('%252e%252e')).toBeNull();
         expect(sanitizePathSegment('..\\windows')).toBeNull();
         expect(sanitizePathSegment('a/b')).toBeNull();
         expect(stripTenantLike({ tenant_id: 't', keep: 1 })).toEqual({ keep: 1 });
+    });
+
+    it('allowlists signed-out GET lineage for colon-bearing segments and strips tenant fields', async () => {
+        // Structural fixture: exercises ':' in SEGMENT_ALLOW without inventing a realistic URN/TLC.
+        const lot = ['seg', 'with', 'colons'].join(':');
+        mockFetch.mockResolvedValueOnce(
+            new Response(
+                JSON.stringify({
+                    lotCode: lot,
+                    tenant_id: 'x',
+                    organizationId: 'y',
+                    events: [{ id: 'row', keep: true, customer_id: 'z' }],
+                }),
+                {
+                    status: 200,
+                    headers: { 'content-type': 'application/json' },
+                },
+            ),
+        );
+
+        const response = await GET(
+            makeRequest({
+                url: `http://localhost/api/inflow-lab-demo/api/lineage/${encodeURIComponent(lot)}`,
+                cookies: {},
+            }),
+            { params: Promise.resolve({ path: ['api', 'lineage', lot] }) },
+        );
+
+        expect(response.status).toBe(200);
+        await expect(response.json()).resolves.toEqual({
+            lotCode: lot,
+            events: [{ id: 'row', keep: true }],
+        });
+        expect(mockFetch).toHaveBeenCalledTimes(1);
+        expect(String(mockFetch.mock.calls[0][0])).toBe(
+            `http://inflow.test/api/lineage/${encodeURIComponent(lot)}`,
+        );
+        expect(sanitizePathSegment(lot)).toBe(lot);
+    });
+
+    it('rejects lineage POST, PUT, and DELETE while keeping GET allowlisted', async () => {
+        const lot = 'seg';
+        const path = ['api', 'lineage', lot];
+        const csrf = await csrfCookies();
+
+        mockFetch.mockResolvedValue(
+            new Response(JSON.stringify({ ok: true }), {
+                status: 200,
+                headers: { 'content-type': 'application/json' },
+            }),
+        );
+
+        const getResponse = await GET(
+            makeRequest({ url: `http://localhost/api/inflow-lab-demo/api/lineage/${lot}` }),
+            { params: Promise.resolve({ path }) },
+        );
+        expect(getResponse.status).toBe(200);
+
+        const postResponse = await POST(
+            makeRequest({
+                method: 'POST',
+                url: `http://localhost/api/inflow-lab-demo/api/lineage/${lot}`,
+                headers: csrf.headers,
+                cookies: csrf.cookies,
+                body: JSON.stringify({ noop: true }),
+            }),
+            { params: Promise.resolve({ path }) },
+        );
+        expect(postResponse.status).toBe(404);
+        await expect(postResponse.json()).resolves.toMatchObject({ code: 'NOT_ALLOWLISTED' });
+
+        const putResponse = await PUT(
+            makeRequest({
+                method: 'PUT',
+                url: `http://localhost/api/inflow-lab-demo/api/lineage/${lot}`,
+                headers: csrf.headers,
+                cookies: csrf.cookies,
+                body: JSON.stringify({ noop: true }),
+            }),
+            { params: Promise.resolve({ path }) },
+        );
+        expect(putResponse.status).toBe(405);
+        await expect(putResponse.json()).resolves.toMatchObject({ code: 'METHOD_NOT_ALLOWED' });
+
+        const deleteResponse = await DELETE(
+            makeRequest({
+                method: 'DELETE',
+                url: `http://localhost/api/inflow-lab-demo/api/lineage/${lot}`,
+                headers: csrf.headers,
+                cookies: csrf.cookies,
+            }),
+            { params: Promise.resolve({ path }) },
+        );
+        expect(deleteResponse.status).toBe(405);
+        await expect(deleteResponse.json()).resolves.toMatchObject({ code: 'METHOD_NOT_ALLOWED' });
     });
 
     it('returns exact 404 in production unless the public proxy flag is enabled', async () => {
@@ -491,9 +589,10 @@ describe('Inflow Lab public proxy', () => {
     });
 });
 
-describe('Inflow Lab client export hrefs use the public proxy base', () => {
-    it('documents the public base + safe relative export paths', async () => {
-        // Mirrors InflowLabClient: INFLOW_API + servicePath + safeHref.
+describe('Demo export query + public proxy path helpers', () => {
+    it('builds public-proxy-relative export paths from empty and filtered inputs', async () => {
+        // Documents INFLOW_API + servicePath + safeHref + buildDemoExportQuery shape
+        // (does not render InflowLabClient).
         const INFLOW_API = '/api/inflow-lab-demo';
         function servicePath(path: string) {
             return `${INFLOW_API}${path}`;
@@ -512,18 +611,43 @@ describe('Inflow Lab client export hrefs use the public proxy base', () => {
             return '#';
         }
 
-        const csv = safeHref(
+        const defaultCsv = safeHref(
             servicePath(
-                '/api/regengine/export/fda-request?preset=all_records&traceability_lot_code=L1',
+                `/api/regengine/export/fda-request${buildDemoExportQuery({
+                    preset: 'all_records',
+                    traceabilityLotCode: '',
+                    startDate: '',
+                    endDate: '',
+                })}`,
             ),
         );
-        const epcis = safeHref(
-            servicePath('/api/regengine/export/epcis?traceability_lot_code=L1'),
+        const defaultEpcis = safeHref(
+            servicePath(
+                `/api/regengine/export/epcis${buildDemoExportQuery({
+                    traceabilityLotCode: '',
+                    startDate: '',
+                    endDate: '',
+                })}`,
+            ),
+        );
+        const filterLot = 'seg';
+        const filteredCsv = safeHref(
+            servicePath(
+                `/api/regengine/export/fda-request${buildDemoExportQuery({
+                    preset: 'all_records',
+                    traceabilityLotCode: filterLot,
+                })}`,
+            ),
         );
 
-        expect(csv.startsWith('/api/inflow-lab-demo/api/regengine/export/fda-request')).toBe(true);
-        expect(epcis.startsWith('/api/inflow-lab-demo/api/regengine/export/epcis')).toBe(true);
-        expect(csv.includes('://')).toBe(false);
-        expect(epcis.includes('://')).toBe(false);
+        expect(defaultCsv).toBe(
+            '/api/inflow-lab-demo/api/regengine/export/fda-request?preset=all_records',
+        );
+        expect(defaultEpcis).toBe('/api/inflow-lab-demo/api/regengine/export/epcis');
+        expect(filteredCsv).toBe(
+            `/api/inflow-lab-demo/api/regengine/export/fda-request?preset=all_records&traceability_lot_code=${filterLot}`,
+        );
+        expect(defaultCsv.includes('://')).toBe(false);
+        expect(defaultEpcis.includes('://')).toBe(false);
     });
 });

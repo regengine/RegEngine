@@ -16,7 +16,8 @@ const MAX_BODY_BYTES = 32 * 1024;
 const MAX_EXPORT_JSON_BYTES = 2 * 1024 * 1024;
 const TENANT_LIKE_KEY = /^(tenant(_?id)?|tenantId|customer(_?id)?|customerId|organization(_?id)?|org_id|orgId)$/i;
 const TRAVERSAL_ENCODED = /%2e|%2f|%5c/i;
-const SEGMENT_ALLOW = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
+// Colon allowed so EPCIS URN lot codes (urn:epc:id:sgtin:...) survive the public lineage path.
+const SEGMENT_ALLOW = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 
 // Best-effort per-instance token bucket (same posture as /api/client-errors).
 const DEFAULT_WINDOW_MS = 60_000;
@@ -199,7 +200,7 @@ function contractFor(path: string, method: string): DemoContract | null {
     if (method === "GET" && path === "/api/healthz") return "health";
     if (method === "GET" && path === "/api/simulate/status") return "status";
     if (method === "GET" && path === "/api/events") return "events";
-    if (method === "GET" && /^\/api\/lineage\/[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(path)) {
+    if (method === "GET" && /^\/api\/lineage\/[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(path)) {
         return "lineage";
     }
     if (method === "POST" && path === "/api/simulate/start") return "start";
@@ -513,5 +514,13 @@ export function GET(request: NextRequest, context: { params: Promise<{ path?: st
 }
 
 export function POST(request: NextRequest, context: { params: Promise<{ path?: string[] }> }) {
+    return proxyPublic(request, context.params);
+}
+
+export function PUT(request: NextRequest, context: { params: Promise<{ path?: string[] }> }) {
+    return proxyPublic(request, context.params);
+}
+
+export function DELETE(request: NextRequest, context: { params: Promise<{ path?: string[] }> }) {
     return proxyPublic(request, context.params);
 }
