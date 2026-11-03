@@ -138,7 +138,7 @@ const CTE_DATA: Record<string, CTEData> = {
       "RegEngine (Beta, pre-revenue) checks uploaded packing rows for the §1.1330 KDE fields listed above before you build an export package.",
       "Flags missing TLC source location, TLC source reference, and harvest date range so you can fix gaps in your CSV or JSON events.",
       "Maps common packing CTE label aliases toward initial packing so mixed ERP vocabularies are easier to review.",
-      "Does not decide covered-person status and does not guarantee compliance. Confirm final records against 21 CFR 1.1330.",
+      "These checks do not determine whether your operation is covered by the rule. Verify the applicable record requirements under 21 CFR 1.1330.",
     ],
   },
   shipping: {
@@ -272,7 +272,7 @@ const CTE_DATA: Record<string, CTEData> = {
       "RegEngine (Beta, pre-revenue) checks uploaded first land-based receiving rows for the §1.1335 KDE fields listed above.",
       "Flags missing vessel identity, harvest area, landing date, and reference document fields so you can repair CSV or JSON events.",
       "Helps operators review dock-origin records before packaging an export; it does not replace your own dock log process.",
-      "Does not decide covered-person status and does not guarantee compliance. Confirm final records against 21 CFR 1.1335.",
+      "These checks do not determine whether your operation is covered by the rule. Verify the applicable record requirements under 21 CFR 1.1335.",
     ],
   },
 };
