@@ -230,7 +230,7 @@ type WorkbenchRunResponse = {
     saved_at: string;
 };
 
-const INFLOW_API = "/api/inflow-lab";
+const INFLOW_API = "/api/inflow-lab-demo";
 const WORKBENCH_API = "/api/ingestion/api/v1/inflow-workbench";
 const REQUIRED_CTES = ["harvesting", "cooling", "initial_packing", "shipping", "receiving"];
 const SANDBOX_CTE_TYPES = [
@@ -307,7 +307,7 @@ async function inflowJson<T>(path: string, init?: RequestInit): Promise<T> {
     if (!headers.has("content-type")) {
         headers.set("content-type", "application/json");
     }
-    // Mutating /api/inflow-lab calls are CSRF-protected by proxy.ts; match workbenchJson.
+    // Mutating /api/inflow-lab-demo calls are CSRF-protected by proxy.ts + the demo route; match workbenchJson.
     const response = await fetchWithCsrf(servicePath(path), {
         cache: "no-store",
         ...init,
