@@ -283,6 +283,23 @@ def test_graph_exports_transformation_with_input_tlc_and_gtin():
     assert event["transformationID"] == f"urn:uuid:{uuid.UUID(row['event_id'])}"
 
 
+def test_graph_exports_output_only_transformation_with_raw_uuid():
+    row = graph_row("TRANSFORMATION")
+    del row["input_tlc"]
+    row["tlc"] = lot_code()
+    row["gtin"] = gs1_number(14)
+    raw_uuid = uuid.uuid4().hex
+    row["event_id"] = raw_uuid
+
+    document = json.loads(asyncio.run(export("json-ld", [row])))
+    events = document["epcisBody"]["eventList"]
+    assert len(events) == 1
+    assert events[0]["type"] == "TransformationEvent"
+    assert events[0]["outputQuantityList"]
+    assert events[0]["transformationID"] == f"urn:uuid:{uuid.UUID(raw_uuid)}"
+    assert "transformation_incomplete" not in document["regengine:exportMetadata"]["skippedEventsByReason"]
+
+
 def test_graph_harvesting_uses_creating_class_instance_bizstep():
     row = graph_row("HARVESTING")
     document = json.loads(asyncio.run(export("json-ld", [row])))

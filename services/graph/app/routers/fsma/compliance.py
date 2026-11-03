@@ -400,17 +400,17 @@ async def export_epcis(
                 valid_transformation_id = isinstance(transformation_id, str) and transformation_id.startswith(
                     ("urn:", "https://")
                 )
+                if not valid_transformation_id and transformation_id:
+                    try:
+                        transformation_id = f"urn:uuid:{uuid.UUID(str(transformation_id))}"
+                        valid_transformation_id = True
+                    except ValueError:
+                        pass
                 has_output = bool(epc_urn or out_class)
                 has_input = bool(input_epc or input_class)
                 if not (has_input and has_output) and not (valid_transformation_id and (has_input or has_output)):
                     _skip("transformation_incomplete")
                     continue
-                if not valid_transformation_id and transformation_id:
-                    try:
-                        transformation_id = f"urn:uuid:{uuid.UUID(str(transformation_id))}"
-                    except ValueError:
-                        transformation_id = f"urn:uuid:{transformation_id}"
-                    valid_transformation_id = True
                 epcis_event = {"type": "TransformationEvent", **common, "bizStep": BIZ_STEP_MAP[event_type]}
                 if input_epc:
                     epcis_event["inputEPCList"] = [input_epc]
