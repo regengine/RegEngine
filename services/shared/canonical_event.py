@@ -32,6 +32,12 @@ from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, field_validator
+from shared.epcis_lot_identity import (
+    lossless_enabled,
+    lot_token_only,
+    normalize_epcis_lot,
+    parse_class_uri,
+)
 
 logger = logging.getLogger("canonical-event")
 
@@ -1038,8 +1044,7 @@ def _resolve_bizstep_to_cte_type(biz_step: Any) -> CTEType:
     raw = "" if biz_step is None else str(biz_step).strip()
     if not raw:
         raise UnmappedBizStepError(
-            "EPCIS event has no bizStep — cannot derive an FSMA 204 CTE type. "
-            "Supply a CBV or FSMA bizStep URI. (#2815)"
+            "EPCIS event has no bizStep — cannot derive an FSMA 204 CTE type. Supply a CBV or FSMA bizStep URI. (#2815)"
         )
 
     lowered = raw.lower()
@@ -1097,8 +1102,13 @@ def _epcis_list(epcis_data: Dict[str, Any], key: str) -> List[Any]:
     return list(value) if isinstance(value, list) else []
 
 
-def _epcis_traceability_lot_code(epcis_data: Dict[str, Any]) -> Tuple[str, Optional[str]]:
-    """Resolve ``(traceability_lot_code, gtin)`` for an EPCIS event.
+def _legacy_epcis_traceability_lot_code(epcis_data: Dict[str, Any]) -> Tuple[str, Optional[str]]:
+    """Pre-SEL-598 resolver, used while ``LOT_IDENTITY_LOSSLESS`` is off.
+
+    Kept byte-for-byte so flag-off writes keep the same TLC, GTIN KDE, event
+    hash and idempotency key as before H2.
+
+    Resolve ``(traceability_lot_code, gtin)`` for an EPCIS event.
 
     Precedence: ILMD ``fsma:traceabilityLotCode`` / ``cbvmda:lotNumber`` (the
     same order as ``epcis/extraction._extract_lot_data``), then the lot of an
@@ -1148,7 +1158,7 @@ def _epcis_traceability_lot_code(epcis_data: Dict[str, Any]) -> Tuple[str, Optio
     )
 
 
-def _epcis_transformation_inputs(epcis_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+def _legacy_epcis_transformation_inputs(epcis_data: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Per-input lot, quantity and unit for a TransformationEvent.
 
     ``inputQuantityList`` carries class-level (LGTIN) inputs with an explicit
@@ -1184,6 +1194,157 @@ def _epcis_transformation_inputs(epcis_data: Dict[str, Any]) -> List[Dict[str, A
             continue
         inputs.append({"traceability_lot_code": segment, "quantity": 1.0, "unit_of_measure": "each", "epc": str(epc)})
         seen.add(segment)
+    return inputs
+
+
+def _epcis_traceability_lot_code(epcis_data: Dict[str, Any]) -> Tuple[str, Optional[str]]:
+    """Resolve ``(traceability_lot_code, gtin)`` for an EPCIS event.
+
+    SEL-598 / H2: when ``LOT_IDENTITY_LOSSLESS`` is enabled (opt-in), the
+    stored ``traceability_lot_code`` is the full LGTIN or GS1 Digital Link
+    class URI when present. The bare lot token remains available via
+    ``lot_token_only`` / ``normalize_epcis_lot(...).lot_token``.
+
+    Precedence (H2 / SEL-598, intentional vs legacy extraction): a full class
+    URI among quantity classes / EPCs first (canonical stored identity), then
+    ILMD ``fsma:traceabilityLotCode`` / ``cbvmda:lotNumber`` as the bare partner
+    TLC when no class URI is present (preserve bare TLC — do not rebuild a
+    Digital Link from an SGTIN-derived GTIN at this boundary), then SGTIN
+    serial, then flat top-level keys. Legacy ``epcis/extraction`` prefers ILMD
+    first; canonical + export agree on class-URI-first after H2. Raises
+    ``ValueError`` when nothing identifies the lot.
+
+    With the flag off (default) this is the pre-H2 resolver unchanged: the
+    stored TLC, GTIN KDE, event hash and idempotency key do not move.
+    """
+    if not lossless_enabled():
+        return _legacy_epcis_traceability_lot_code(epcis_data)
+    ilmd = epcis_data.get("ilmd")
+    if not isinstance(ilmd, dict):
+        ilmd = {}
+    epcs = _epcis_list(epcis_data, "epcList") + _epcis_list(epcis_data, "outputEPCList")
+    extension = epcis_data.get("extension")
+    extension = extension if isinstance(extension, dict) else {}
+    classes = [
+        q.get("epcClass")
+        for q in (
+            _epcis_list(epcis_data, "outputQuantityList")
+            + _epcis_list(epcis_data, "quantityList")
+            + (list(extension.get("quantityList") or []) if isinstance(extension.get("quantityList"), list) else [])
+        )
+        if isinstance(q, dict) and q.get("epcClass")
+    ]
+    # Real GTIN-14 only (never the EPC company.item fragment from _epc_gtin).
+    gtin = None
+    for e in list(classes) + list(epcs):
+        parsed = parse_class_uri(e)
+        if parsed and parsed.gtin:
+            gtin = parsed.gtin
+            break
+        identity = normalize_epcis_lot(e, prefer_full=False)
+        if identity and identity.gtin:
+            gtin = identity.gtin
+            break
+
+    # Prefer full class URI from EPC / quantity class (SEL-598 canonical).
+    for epc in list(classes) + list(epcs):
+        parsed = parse_class_uri(epc)
+        if parsed:
+            if lossless_enabled():
+                return parsed.canonical_id, parsed.gtin or gtin
+            return parsed.lot_token, parsed.gtin or gtin
+
+    for key in ("fsma:traceabilityLotCode", "traceabilityLotCode", "cbvmda:lotNumber", "lotNumber"):
+        value = ilmd.get(key)
+        if value is not None and str(value).strip():
+            # Preserve bare partner TLC; do not rebuild Digital Link here.
+            identity = normalize_epcis_lot(value)
+            if identity:
+                return identity.canonical_id, identity.gtin or gtin
+            return str(value).strip(), gtin
+
+    for epc in epcs:
+        if "sgtin" in str(epc).lower():
+            identity = normalize_epcis_lot(epc)
+            if identity:
+                return identity.canonical_id, identity.gtin or gtin
+            segment = _epc_last_segment(epc)
+            if segment:
+                return segment, gtin
+
+    for key in ("traceability_lot_code", "lotNumber"):
+        value = epcis_data.get(key)
+        if value is not None and str(value).strip():
+            # Preserve bare flat TLC (same boundary rule as ILMD).
+            identity = normalize_epcis_lot(value)
+            if identity:
+                return identity.canonical_id, identity.gtin or gtin
+            return str(value).strip(), gtin
+
+    raise ValueError(
+        "EPCIS event carries no lot identifier (ILMD traceabilityLotCode or lotNumber, an LGTIN or SGTIN "
+        "EPC, or traceability_lot_code); refusing to fabricate one"
+    )
+
+
+def _epcis_transformation_inputs(epcis_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Per-input lot, quantity and unit for a TransformationEvent.
+
+    ``inputQuantityList`` carries class-level (LGTIN) inputs with an explicit
+    quantity; a quantityElement without ``uom`` is a count of instances in
+    EPCIS, recorded as ``each``. ``inputEPCList`` carries instance EPCs, each
+    of which is exactly one item. Lots are not merged or summed.
+    """
+    if not lossless_enabled():
+        return _legacy_epcis_transformation_inputs(epcis_data)
+    inputs: List[Dict[str, Any]] = []
+    seen: set = set()
+    for element in _epcis_list(epcis_data, "inputQuantityList"):
+        if not isinstance(element, dict):
+            continue
+        epc_class = element.get("epcClass")
+        identity = normalize_epcis_lot(epc_class)
+        if identity is not None:
+            lot_key = identity.canonical_id if lossless_enabled() else identity.lot_token
+            lot_token = identity.lot_token
+        else:
+            lot_token = _epc_last_segment(epc_class)
+            lot_key = lot_token
+        dedup_key = ("class", lot_key)
+        if not lot_token or dedup_key in seen:
+            continue
+        raw_quantity = element.get("quantity")
+        try:
+            quantity = float(raw_quantity) if raw_quantity is not None else None
+        except (TypeError, ValueError):
+            quantity = None
+        inputs.append(
+            {
+                "traceability_lot_code": lot_key,
+                "lot_token": lot_token,
+                "quantity": quantity,
+                "unit_of_measure": (element.get("uom") or "each") if quantity is not None else None,
+                "epc_class": epc_class,
+            }
+        )
+        seen.add(dedup_key)
+    for epc in _epcis_list(epcis_data, "inputEPCList"):
+        identity = normalize_epcis_lot(epc)
+        segment = identity.lot_token if identity else _epc_last_segment(epc)
+        dedup_key = ("epc", segment)
+        if not segment or dedup_key in seen:
+            continue
+        lot_key = identity.canonical_id if (identity and lossless_enabled()) else segment
+        inputs.append(
+            {
+                "traceability_lot_code": lot_key,
+                "lot_token": segment,
+                "quantity": 1.0,
+                "unit_of_measure": "each",
+                "epc": str(epc),
+            }
+        )
+        seen.add(dedup_key)
     return inputs
 
 

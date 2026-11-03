@@ -19,6 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from shared.database import get_db_safe
+from shared.epcis_lot_identity import is_full_class_uri, lot_token_only
 from shared.fsma_validation import normalize_gtin, verify_gs1_check_digit
 from shared.tenant_context import TenantContext
 from sqlalchemy import text
@@ -46,6 +47,53 @@ class ExportStorageUnavailable(RuntimeError):
     """The event store could not be read; never report this as "no data"."""
 
 
+def _lot_code_filter(lot_code: str | None) -> tuple[str | None, dict]:
+    """SQL predicate for an export lot filter that reads both TLC shapes (SEL-598).
+
+    Rows may store the bare lot token (pre-H2, or ``LOT_IDENTITY_LOSSLESS``
+    off) or the full LGTIN / GS1 Digital Link class URI (flag on). A bare
+    filter also matches URIs whose lot segment ends with that token; a URI
+    filter also matches the bare token. ``_row_matches_lot`` then keeps
+    only rows whose lot token is exactly the requested one.
+    """
+    if not lot_code:
+        return None, {}
+    params: dict = {"lot_code": lot_code}
+    clauses = ["e.traceability_lot_code = :lot_code"]
+    token = lot_token_only(lot_code)
+    if token and token != lot_code:
+        # Full URI requested: also match rows stored with the bare token.
+        params["lot_token"] = token
+        clauses.append("e.traceability_lot_code = :lot_token")
+    elif token:
+        # Bare lot requested: also match full class URIs carrying it.
+        suffixes = sorted({f"/10/{token}", f"/10/{quote(token, safe='-._~')}", f".{token}", f".{quote(token, safe='-._~')}"})
+        for index, suffix in enumerate(suffixes):
+            name = f"lot_suffix_{index}"
+            params[name] = suffix
+            clauses.append(
+                "((lower(e.traceability_lot_code) LIKE 'https://id.gs1.org/01/%'"
+                " OR lower(e.traceability_lot_code) LIKE 'urn:epc:class:lgtin:%')"
+                f" AND right(e.traceability_lot_code, char_length(:{name})) = :{name})"
+            )
+    return "(" + " OR ".join(clauses) + ")", params
+
+
+def _row_matches_lot(stored: object, lot_code: str) -> bool:
+    """Exact lot match across bare-token and full-class-URI storage."""
+    if not isinstance(stored, str):
+        return False
+    if stored == lot_code:
+        return True
+    wanted = lot_token_only(lot_code)
+    if not wanted:
+        return False
+    if is_full_class_uri(lot_code):
+        # A URI filter matches its own URI (above) or a bare historical row.
+        return stored == wanted
+    return lot_token_only(stored) == wanted and (stored == wanted or is_full_class_uri(stored))
+
+
 def _query_tenant_events(
     tenant_id: str, lot_code: str | None, date_from: str | None, date_to: str | None
 ) -> list[dict]:
@@ -59,9 +107,10 @@ def _query_tenant_events(
     try:
         where = []
         params: dict = {"tenant_id": tenant_id}
-        if lot_code:
-            where.append("e.traceability_lot_code = :lot_code")
-            params["lot_code"] = lot_code
+        lot_predicate, lot_params = _lot_code_filter(lot_code)
+        if lot_predicate:
+            where.append(lot_predicate)
+            params.update(lot_params)
         if date_from:
             where.append("e.event_timestamp >= :date_from")
             params["date_from"] = date_from
@@ -117,12 +166,15 @@ def _query_tenant_events(
             """),
             {**params, "row_limit": _MAX_EXPORT_EVENTS + 1},
         ).fetchall()
-        return [dict(row._mapping) for row in rows]
+        result = [dict(row._mapping) for row in rows]
     except Exception as exc:
         logger.error("db_query_failed_for_export", extra={"error": str(exc)})
         raise ExportStorageUnavailable(str(exc)) from exc
     finally:
         db.close()
+    if lot_code:
+        result = [row for row in result if _row_matches_lot(row.get("traceability_lot_code"), lot_code)]
+    return result
 
 
 def _load_export_rows(tenant_id: str, request: "ExportRequest") -> list[dict]:
@@ -332,13 +384,20 @@ def _valid_class_uri(value: object) -> bool:
 def _epc_class(row: dict) -> str | None:
     """Use an existing class URI, product_id, or a GTIN Digital Link.
 
+    SEL-598 / H2: if ``traceability_lot_code`` (or ``epc_class`` /
+    ``product_id``) already holds a full LGTIN / Digital Link, emit it
+    unchanged. Never pass a full class URI as the ``{lot}`` argument when
+    rebuilding from GTIN + lot token.
+
     GTIN/GLN digits do not reveal the company-prefix split required by EPC
-    URNs. A lot code alone cannot identify an EPC class — callers must
+    URNs. A lot code alone cannot identify an EPC class: callers must
     persist ``epc_class``, ``product_id`` (class URI), ``gtin``, or an
     embedded ``epcis_document_json`` quantity class.
     """
-    for key in ("epc_class", "product_id"):
+    for key in ("epc_class", "product_id", "traceability_lot_code", "canonical_epc_class"):
         value = _kde_scalar(row.get(key))
+        # Strict export gate only — do not emit URIs the lenient parser accepts
+        # but `_valid_class_uri` rejects (Codex P2 / CodeRabbit).
         if _valid_class_uri(value):
             return value
     raw = row.get("epcis_document_json")
@@ -354,7 +413,16 @@ def _epc_class(row: dict) -> str | None:
         except (TypeError, ValueError):
             pass
     gtin_raw = _kde_scalar(row.get("gtin")) or _kde_scalar(row.get("product_id"))
-    lot = _kde_scalar(row.get("traceability_lot_code"))
+    raw_lot = _kde_scalar(row.get("lot_token")) or _kde_scalar(row.get("traceability_lot_code"))
+    # Never pass a full URI as the lot argument (SEL-598).
+    lot = lot_token_only(raw_lot) or (
+        raw_lot
+        if raw_lot
+        and not is_full_class_uri(raw_lot)
+        and "://" not in raw_lot
+        and not str(raw_lot).lower().startswith("urn:epc:")
+        else None
+    )
     digits = re.sub(r"\D", "", gtin_raw)
     if digits and lot:
         try:

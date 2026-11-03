@@ -10,6 +10,7 @@ from urllib.parse import unquote
 
 from shared.epcis_lot_identity import parse_class_uri
 
+
 def _present_ilmd_text(value: object) -> str | None:
     """String form of an ILMD value, or None when the field is blank.
 
