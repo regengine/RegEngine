@@ -393,10 +393,13 @@ async def get_subscription(
             refreshed_period_end = _helpers_mod._extract_subscription_period_end(subscription)
             if refreshed_period_end:
                 current_period_end = refreshed_period_end
+            refreshed_qty = _helpers_mod._extract_subscription_facility_quantity(subscription)
 
             mapping["status"] = status
             if refreshed_period_end:
                 mapping["current_period_end"] = refreshed_period_end
+            if refreshed_qty:
+                mapping["facility_quantity"] = str(int(refreshed_qty))
             _state_mod._store_subscription_mapping(resolved_tenant_id, mapping)
         except HTTPException as exc:
             if getattr(exc, "status_code", None) != 500:
@@ -495,7 +498,7 @@ async def create_portal_session_for_tenant(
     if request.return_url:
         return_url = _helpers_mod._validate_redirect_url(request.return_url, field="return_url")
     else:
-        server_default = os.getenv("STRIPE_PORTAL_RETURN_URL", DEFAULT_PORTAL_RETURN_URL)
+        server_default = (os.getenv("STRIPE_PORTAL_RETURN_URL") or DEFAULT_PORTAL_RETURN_URL)
         return_url = _helpers_mod._validate_redirect_url(server_default, field="return_url")
 
     try:
@@ -707,7 +710,7 @@ async def create_portal_session_legacy(
     # doesn't accept a client override, but the env-var value is still
     # run through the allowlist so a misconfigured STRIPE_PORTAL_RETURN_URL
     # fails at request time rather than silently redirecting.
-    server_default = os.getenv("STRIPE_PORTAL_RETURN_URL", DEFAULT_PORTAL_RETURN_URL)
+    server_default = (os.getenv("STRIPE_PORTAL_RETURN_URL") or DEFAULT_PORTAL_RETURN_URL)
     return_url = _helpers_mod._validate_redirect_url(server_default, field="return_url")
 
     try:

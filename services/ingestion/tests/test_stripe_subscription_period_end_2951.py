@@ -192,3 +192,25 @@ class TestGetSubscriptionPeriodEnd_Issue2951:
             f"a GET must not overwrite the stored renewal date, got "
             f"{stored.get('current_period_end')!r}"
         )
+
+
+class TestExtractSubscriptionFacilityQuantity:
+    def test_prefers_item_quantity(self):
+        subscription = {
+            "items": {"data": [{"quantity": 7, "price": {"id": "price_x"}}]},
+            "metadata": {"facility_quantity": "2"},
+        }
+        assert helpers_mod._extract_subscription_facility_quantity(subscription) == 7
+
+    def test_falls_back_to_metadata(self):
+        subscription = {
+            "items": {"data": [{"price": {"id": "price_x"}}]},
+            "metadata": {"facility_quantity": "4"},
+        }
+        assert helpers_mod._extract_subscription_facility_quantity(subscription) == 4
+
+    def test_returns_none_when_unknown(self):
+        assert helpers_mod._extract_subscription_facility_quantity({"status": "active"}) is None
+        assert helpers_mod._extract_subscription_facility_quantity(
+            {"items": {"data": [{"quantity": 0}]}}
+        ) is None

@@ -198,7 +198,7 @@ class TestResolvePriceId:
         assert price_id == "price_founding_m"
         assert amount == 499
 
-    @patch.dict("os.environ", {"STRIPE_PRICE_GROWTH_MONTHLY": "price_growth_m"})
+    @patch.dict("os.environ", {"STRIPE_PRICE_GROWTH_MONTHLY": "price_growth_m"}, clear=True)
     def test_resolve_growth_monthly_still_works_alias_period(self):
         """Deprecated growth monthly env resolves to list during the alias
         period, until Railway carries STRIPE_PRICE_LIST_MONTHLY."""
@@ -268,9 +268,8 @@ class TestPlanForStripePrice:
         [
             ("STRIPE_PRICE_LIST_MONTHLY", "price_list_m", ("list", "monthly")),
             ("STRIPE_PRICE_FOUNDING_MONTHLY", "price_founding_m", ("founding", "monthly")),
-            ("STRIPE_PRICE_PILOT_STANDARD", "price_pilot_std", ("pilot", "one_time")),
-            ("STRIPE_PRICE_PILOT_CONVERT_30", "price_pilot_conv", ("pilot", "one_time")),
             ("STRIPE_PRICE_GROWTH_MONTHLY", "price_growth_m", ("list", "monthly")),
+            ("STRIPE_PRICE_SCALE_MONTHLY", "price_scale_m", ("list", "monthly")),
         ],
     )
     def test_reverse_maps_configured_prices(self, env_var, price_id, expected):
@@ -278,8 +277,29 @@ class TestPlanForStripePrice:
             assert _plan_for_stripe_price(price_id) == expected
 
     def test_old_annual_envs_do_not_invent_annual(self):
-        with patch.dict("os.environ", {"STRIPE_PRICE_GROWTH_ANNUAL": "price_growth_a"}, clear=True):
+        with patch.dict(
+            "os.environ",
+            {
+                "STRIPE_PRICE_GROWTH_ANNUAL": "price_growth_a",
+                "STRIPE_PRICE_SCALE_ANNUAL": "price_scale_a",
+            },
+            clear=True,
+        ):
             assert _plan_for_stripe_price("price_growth_a") is None
+            assert _plan_for_stripe_price("price_scale_a") is None
+
+    def test_pilot_prices_are_not_reverse_mapped(self):
+        """Pilot is one-time; reverse-mapping would entitle via checkout webhook."""
+        with patch.dict(
+            "os.environ",
+            {
+                "STRIPE_PRICE_PILOT_STANDARD": "price_pilot_std",
+                "STRIPE_PRICE_PILOT_CONVERT_30": "price_pilot_conv",
+            },
+            clear=True,
+        ):
+            assert _plan_for_stripe_price("price_pilot_std") is None
+            assert _plan_for_stripe_price("price_pilot_conv") is None
 
 
 # ── Checkout Session Creation ────────────────────────────────────
@@ -550,7 +570,8 @@ class TestHandleCheckoutCompleted:
         mock_stripe.Subscription.retrieve.return_value = {
             "status": "active",
             "current_period_end": 1700000000,
-            "items": {"data": [{"price": {"id": "price_growth_m"}}]},
+            "items": {"data": [{"price": {"id": "price_growth_m"}, "quantity": 7}]},
+            "metadata": {"facility_quantity": "3"},  # item quantity wins
         }
 
         session = {
@@ -565,6 +586,7 @@ class TestHandleCheckoutCompleted:
                 "tenant_id": "tenant-abc",
                 "plan_id": "growth",
                 "billing_period": "monthly",
+                "facility_quantity": "3",
             },
         }
 
@@ -578,6 +600,7 @@ class TestHandleCheckoutCompleted:
         assert payload["status"] == "active"
         assert payload["subscription_id"] == "sub_test_456"
         assert payload["customer_id"] == "cus_test_789"
+        assert payload["facility_quantity"] == "7"
 
     @pytest.mark.asyncio
     @patch("services.ingestion.app.stripe_billing._create_tenant_via_admin")
@@ -643,7 +666,7 @@ class TestHandleCheckoutCompleted:
             "customer_details": {"email": "user@example.com"},
             "metadata": {
                 "tenant_id": "tenant-abc",
-                "plan_id": "scale",  # claim richer than what was paid
+                "plan_id": "enterprise",  # claim richer than what was paid
                 "billing_period": "monthly",
             },
         }
@@ -692,6 +715,47 @@ class TestHandleCheckoutCompleted:
         payload = mock_store.call_args[0][1]
         assert payload["plan_id"] == ""
         assert payload["status"] == "incomplete"  # gate denies; alert fired
+
+    @pytest.mark.asyncio
+    @patch.dict("os.environ", {"STRIPE_PRICE_LIST_MONTHLY": "price_list_m"})
+    @patch("services.ingestion.app.stripe_billing._store_subscription_mapping")
+    @patch("services.ingestion.app.stripe_billing._redis_client")
+    @patch("services.ingestion.app.stripe_billing.stripe")
+    async def test_checkout_persists_facility_quantity_from_metadata_fallback(
+        self, mock_stripe, mock_redis_client, mock_store
+    ):
+        """When Stripe items omit quantity, checkout metadata still lands."""
+        mock_client = MagicMock()
+        mock_client.get.side_effect = ["tenant-abc", None]
+        mock_client.getdel.return_value = None
+        mock_redis_client.return_value = mock_client
+
+        mock_stripe.Subscription.retrieve.return_value = {
+            "status": "active",
+            "current_period_end": 1700000000,
+            "items": {"data": [{"price": {"id": "price_list_m"}}]},
+        }
+
+        session = {
+            "id": "cs_test_qty",
+            "subscription": "sub_qty",
+            "customer": "cus_qty",
+            "payment_status": "paid",
+            "customer_details": {"email": "user@example.com"},
+            "metadata": {
+                "tenant_id": "tenant-abc",
+                "plan_id": "list",
+                "billing_period": "monthly",
+                "facility_quantity": "5",
+            },
+        }
+
+        await _handle_checkout_completed(session)
+
+        payload = mock_store.call_args[0][1]
+        assert payload["facility_quantity"] == "5"
+        assert payload["plan_id"] == "list"
+        assert payload["status"] == "active"
 
 
 # ── Webhook Event: customer.subscription.deleted ─────────────────

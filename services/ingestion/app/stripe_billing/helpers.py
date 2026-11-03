@@ -356,6 +356,29 @@ def _extract_subscription_price_ids(subscription: Any) -> list[str]:
     return price_ids
 
 
+def _extract_subscription_facility_quantity(subscription: Any) -> Optional[int]:
+    """Resolve the billed facility count for a Stripe subscription.
+
+    Prefer the subscription item ``quantity`` (what Stripe bills). Fall back
+    to ``metadata.facility_quantity`` stamped at checkout when items omit a
+    quantity — never invent a default here; callers treat ``None`` as unknown.
+    """
+    items = _stripe_get(subscription, "items", None)
+    data = _stripe_get(items, "data", None) if items is not None else None
+    if isinstance(data, (list, tuple)):
+        for item in data:
+            qty = _coerce_optional_int(_stripe_get(item, "quantity", None))
+            if qty:
+                return qty
+
+    metadata = _stripe_get(subscription, "metadata", None) or {}
+    if isinstance(metadata, dict):
+        qty = _coerce_optional_int(metadata.get("facility_quantity"))
+        if qty:
+            return qty
+    return None
+
+
 def _extract_paid_at(invoice_payload: dict[str, Any]) -> Optional[str]:
     status_transitions = invoice_payload.get("status_transitions") or {}
     paid_at = _coerce_optional_int(status_transitions.get("paid_at"))

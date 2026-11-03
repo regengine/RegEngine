@@ -91,17 +91,20 @@ class TestListPlans:
         result = await routes_mod.list_plans()
         assert "plans" in result
         by_id = {plan["id"]: plan for plan in result["plans"]}
-        assert {"list", "founding", "enterprise", "base"} <= set(by_id)
+        assert set(by_id) == {"list", "founding", "enterprise", "base"}
+        core_keys = {
+            "id",
+            "name",
+            "price_monthly",
+            "price_annual",
+            "features",
+            "limits",
+            "product_status",
+        }
+        compat_keys = {"ga_monthly", "partner_monthly", "ga_annual", "partner_annual"}
         for plan in result["plans"]:
-            assert {
-                "id",
-                "name",
-                "price_monthly",
-                "price_annual",
-                "features",
-                "limits",
-                "product_status",
-            } <= set(plan.keys())
+            expected = core_keys | compat_keys if plan["id"] in ("list", "base") else core_keys
+            assert set(plan.keys()) == expected
             assert plan["product_status"] == "Beta"
             assert any("epcis" in f.lower() and "preview" in f.lower() for f in plan["features"])
 
@@ -639,6 +642,7 @@ class TestGetSubscription:
                 "status": "active",
                 # Epoch seconds → helpers._format_period_end → ISO string.
                 "current_period_end": 1_800_000_000,
+                "items": {"data": [{"quantity": 6, "price": {"id": "price_list_m"}}]},
             },
         )
 
@@ -649,6 +653,8 @@ class TestGetSubscription:
         assert "2027" in result.current_period_end  # 1_800_000_000 ≈ 2027
         # The refreshed state was persisted.
         assert stored["status"] == "active"
+        assert stored["facility_quantity"] == "6"
+        assert result.facilities_limit == 6
 
     @pytest.mark.asyncio
     async def test_missing_stripe_config_keeps_stored_subscription_snapshot(
@@ -847,6 +853,33 @@ class TestCreatePortalSessionForTenant:
             principal=_principal(),
         )
         assert captured["return_url"] == "https://app.regengine.co/settings"
+
+    @pytest.mark.asyncio
+    async def test_empty_portal_return_url_env_falls_back_to_default(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """An empty STRIPE_PORTAL_RETURN_URL must not beat DEFAULT_PORTAL_RETURN_URL."""
+        from app.stripe_billing.plans import DEFAULT_PORTAL_RETURN_URL
+
+        monkeypatch.setenv("STRIPE_PORTAL_RETURN_URL", "")
+        monkeypatch.setattr(customers_mod, "_ensure_customer_mapping", lambda **_: "cus_empty")
+        captured: dict[str, Any] = {}
+
+        class _Portal:
+            url = "https://billing.stripe.com/session/empty"
+
+        def _create(customer_id: str, return_url: str) -> Any:
+            captured["return_url"] = return_url
+            return _Portal()
+
+        monkeypatch.setattr(customers_mod, "_create_portal_session", _create)
+
+        await routes_mod.create_portal_session_for_tenant(
+            self._req(),
+            x_tenant_id=None,
+            principal=_principal(),
+        )
+        assert captured["return_url"] == DEFAULT_PORTAL_RETURN_URL
 
     @pytest.mark.asyncio
     async def test_redis_error_on_ensure_customer_raises_503(self, monkeypatch: pytest.MonkeyPatch) -> None:
