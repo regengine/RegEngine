@@ -303,10 +303,15 @@ function safeHref(raw: string): string {
 
 
 async function inflowJson<T>(path: string, init?: RequestInit): Promise<T> {
-    const response = await fetch(servicePath(path), {
+    const headers = new Headers(init?.headers);
+    if (!headers.has("content-type")) {
+        headers.set("content-type", "application/json");
+    }
+    // Mutating /api/inflow-lab calls are CSRF-protected by proxy.ts; match workbenchJson.
+    const response = await fetchWithCsrf(servicePath(path), {
         cache: "no-store",
-        headers: { "content-type": "application/json" },
         ...init,
+        headers,
     });
     if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
@@ -812,9 +817,14 @@ function LineageStatusIcon({ state }: { state: CteState }) {
 
 type InflowLabClientProps = {
     mode?: "standalone" | "dashboard";
+    /** When false, CSV evaluate stays disabled (sandbox router not in this deploy). */
+    csvEvaluateEnabled?: boolean;
 };
 
-export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
+export function InflowLabClient({
+    mode = "standalone",
+    csvEvaluateEnabled = true,
+}: InflowLabClientProps) {
     const { isAuthenticated, isHydrated } = useAuth();
     const { tenantId: activeTenantId } = useTenant();
     const isStandalone = mode === "standalone";
@@ -852,6 +862,9 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
     const [workbenchRunId, setWorkbenchRunId] = useState<string | null>(null);
     const [workbenchError, setWorkbenchError] = useState<string | null>(null);
     const feederFileInputRef = useRef<HTMLInputElement>(null);
+    // Bumped whenever the CSV input changes so a late evaluate response cannot
+    // overwrite the current feederCsv / saved-run pairing.
+    const feederInputRevisionRef = useRef(0);
 
     useEffect(() => {
         if (!isHydrated || !isAuthenticated || !activeTenantId) {
@@ -1072,6 +1085,10 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
     };
 
     const evaluateFeederData = async () => {
+        if (!csvEvaluateEnabled) {
+            setFeederError("CSV evaluation needs the experimental sandbox evaluator on this deployment.");
+            return;
+        }
         if (!feederCsv.trim()) {
             setFeederError("Paste CSV text or upload a CSV file before evaluating.");
             return;
@@ -1080,6 +1097,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
         trackToolRunStarted("inflow-lab");
         setIsFeederEvaluating(true);
         setFeederError(null);
+        const evaluationRevision = feederInputRevisionRef.current;
         try {
             const response = await fetchWithCsrf("/api/ingestion/api/v1/sandbox/evaluate", {
                 method: "POST",
@@ -1094,6 +1112,10 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
             }
 
             const result = (await response.json()) as SandboxEvaluationResult;
+            if (evaluationRevision !== feederInputRevisionRef.current) {
+                // CSV changed while this request was in flight — drop the stale result.
+                return;
+            }
             const evaluatedEvents = result.events.map(sandboxEventToTraceEvent);
             setFeederResult(result);
             setFeederSavedAt(null);
@@ -1154,6 +1176,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
         if (!file) return;
         const reader = new FileReader();
         reader.onload = () => {
+            feederInputRevisionRef.current += 1;
             setFeederCsv(String(reader.result || ""));
             setFeederResult(null);
             setFeederSavedAt(null);
@@ -1171,6 +1194,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
         const scenario = workbenchScenarios.find((item) => item.id === scenarioId) || scenarioLibrary.find((item) => item.id === scenarioId);
         if (!scenario) return;
         setActiveScenarioId(scenario.id);
+        feederInputRevisionRef.current += 1;
         setFeederCsv(scenario.csv);
         setFeederResult(null);
         setFeederSavedAt(null);
@@ -1266,8 +1290,9 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
         setActiveTab(isStandalone ? "Event log" : "Record log");
     };
 
-    // Build tour steps each render. Avoid ref indirection: react-hooks/refs
-    // flags passing a ref-closing callback into the step builder during render.
+    // Rebuild steps each render (avoids react-hooks/refs on a demo callback).
+    // Tutorial measures against currentStep + step.target, not step object
+    // identity, so a fresh steps array no longer re-fires scrollIntoView.
     const tutorialSteps = buildInflowLabClientTutorialSteps({
         runDemo: () => {
             void startMachineDemo();
@@ -1284,12 +1309,12 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
 
     const csvExportHref = safeHref(
         servicePath(
-            `/api/mock/regengine/export/fda-request?preset=${encodeURIComponent(exportPreset)}&traceability_lot_code=${encodeURIComponent(traceInput)}&start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}`,
+            `/api/regengine/export/fda-request?preset=${encodeURIComponent(exportPreset)}&traceability_lot_code=${encodeURIComponent(traceInput)}&start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}`,
         ),
     );
     const epcisExportHref = safeHref(
         servicePath(
-            `/api/mock/regengine/export/epcis?traceability_lot_code=${encodeURIComponent(traceInput)}&start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}`,
+            `/api/regengine/export/epcis?traceability_lot_code=${encodeURIComponent(traceInput)}&start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}`,
         ),
     );
     const engineConnected = Boolean(health?.ok && !serviceError);
@@ -1867,6 +1892,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                             <Textarea
                                                 value={feederCsv}
                                                 onChange={(event) => {
+                                                    feederInputRevisionRef.current += 1;
                                                     setFeederCsv(event.target.value);
                                                     setFeederResult(null);
                                                     setFeederSavedAt(null);
@@ -1884,7 +1910,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                 <p className="text-xs leading-5 text-slate-500">
                                                     Best for ERP exports, supplier CSVs, and messy column names. The evaluator accepts up to 500 events per run.
                                                 </p>
-                                                <Button className="h-9 bg-emerald-700 text-white hover:bg-emerald-800" onClick={evaluateFeederData} disabled={isFeederEvaluating}>
+                                                <Button className="h-9 bg-emerald-700 text-white hover:bg-emerald-800" onClick={evaluateFeederData} disabled={isFeederEvaluating || !csvEvaluateEnabled}>
                                                     {isFeederEvaluating ? (
                                                         <>
                                                             <RefreshCcw className="mr-2 h-4 w-4 animate-spin" />

@@ -11,4 +11,12 @@ describe('Inflow connection errors', () => {
     it('reports other status failures', () => {
         expect(inflowErrorMessage(502, {})).toBe('Inflow Lab request failed: 502');
     });
+    it('preserves a session recovery hint', () => {
+        expect(
+            inflowErrorMessage(401, {
+                error: 'Authenticated browser session required',
+                hint: 'Refresh the page and sign in again before using live Inflow Lab actions.',
+            }),
+        ).toContain('Refresh the page and sign in again');
+    });
 });

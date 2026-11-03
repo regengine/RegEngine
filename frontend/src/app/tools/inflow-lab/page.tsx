@@ -1,7 +1,10 @@
 import { Metadata } from "next";
 import { InflowLabClient } from "./components/InflowLabClient";
 import { FeatureNotEnabled } from "@/components/experimental/FeatureNotEnabled";
-import { isExperimentalToolEnabled } from "@/lib/experimental-features";
+import {
+    experimentalFeaturesEnabled,
+    isExperimentalToolEnabled,
+} from "@/lib/experimental-features";
 
 export const metadata: Metadata = {
     title: "RegEngine Inflow Lab | Supplier Data Preflight Workbench",
@@ -25,5 +28,8 @@ export default function InflowLabPage() {
             />
         );
     }
-    return <InflowLabClient />;
+    // Simulator/demo path works with the per-tool flag alone. CSV evaluate hits
+    // the experimental sandbox router, so keep that control off unless the
+    // broader experimental surface (and matching backend routers) is enabled.
+    return <InflowLabClient csvEvaluateEnabled={experimentalFeaturesEnabled()} />;
 }
