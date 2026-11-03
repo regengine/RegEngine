@@ -28,8 +28,8 @@ export default function InflowLabPage() {
             />
         );
     }
-    // Simulator/demo path works with the per-tool flag alone. CSV evaluate hits
-    // the experimental sandbox router, so keep that control off unless the
+    // Simulator path works with the per-tool flag alone. CSV evaluate hits an
+    // experimental evaluator route, so keep that control off unless the
     // broader experimental surface (and matching backend routers) is enabled.
     return <InflowLabClient csvEvaluateEnabled={experimentalFeaturesEnabled()} />;
 }

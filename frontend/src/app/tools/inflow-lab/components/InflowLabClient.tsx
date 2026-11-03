@@ -817,7 +817,7 @@ function LineageStatusIcon({ state }: { state: CteState }) {
 
 type InflowLabClientProps = {
     mode?: "standalone" | "dashboard";
-    /** When false, CSV evaluate stays disabled (sandbox router not in this deploy). */
+    /** When false, CSV evaluate stays disabled (experimental evaluator not in this deploy). */
     csvEvaluateEnabled?: boolean;
 };
 
@@ -1086,7 +1086,7 @@ export function InflowLabClient({
 
     const evaluateFeederData = async () => {
         if (!csvEvaluateEnabled) {
-            setFeederError("CSV evaluation needs the experimental sandbox evaluator on this deployment.");
+            setFeederError("CSV evaluation needs experimental features enabled on this deployment.");
             return;
         }
         if (!feederCsv.trim()) {
