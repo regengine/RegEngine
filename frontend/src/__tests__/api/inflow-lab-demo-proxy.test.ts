@@ -2,11 +2,14 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
     GET,
     POST,
+    PUT,
+    DELETE,
     __resetInflowLabDemoRateLimitForTests,
     trustedClientIp,
     sanitizePathSegment,
     stripTenantLike,
 } from '@/app/api/inflow-lab-demo/[...path]/route';
+import { buildDemoExportQuery } from '@/app/tools/inflow-lab/lib/demo-export-query';
 import { CSRF_HEADER, CSRF_SIG_COOKIE, signCsrfToken } from '@/lib/csrf';
 import type { NextRequest } from 'next/server';
 
@@ -476,6 +479,100 @@ describe('Inflow Lab public proxy', () => {
         expect(stripTenantLike({ tenant_id: 't', keep: 1 })).toEqual({ keep: 1 });
     });
 
+    it('allowlists signed-out GET lineage for EPCIS URN lots and strips tenant fields', async () => {
+        const lot = 'urn:epc:id:sgtin:0614141.107346.2026';
+        mockFetch.mockResolvedValueOnce(
+            new Response(
+                JSON.stringify({
+                    lotCode: lot,
+                    tenant_id: 'secret-tenant',
+                    organizationId: 'org-9',
+                    events: [{ id: 'e1', keep: true, customer_id: 'c1' }],
+                }),
+                {
+                    status: 200,
+                    headers: { 'content-type': 'application/json' },
+                },
+            ),
+        );
+
+        const response = await GET(
+            makeRequest({
+                url: `http://localhost/api/inflow-lab-demo/api/lineage/${encodeURIComponent(lot)}`,
+                cookies: {},
+            }),
+            { params: Promise.resolve({ path: ['api', 'lineage', lot] }) },
+        );
+
+        expect(response.status).toBe(200);
+        await expect(response.json()).resolves.toEqual({
+            lotCode: lot,
+            events: [{ id: 'e1', keep: true }],
+        });
+        expect(mockFetch).toHaveBeenCalledTimes(1);
+        expect(String(mockFetch.mock.calls[0][0])).toBe(
+            `http://inflow.test/api/lineage/${encodeURIComponent(lot)}`,
+        );
+        expect(sanitizePathSegment(lot)).toBe(lot);
+    });
+
+    it('rejects lineage POST, PUT, and DELETE while keeping GET allowlisted', async () => {
+        const lot = 'LOT-SAFE-001';
+        const path = ['api', 'lineage', lot];
+        const csrf = await csrfCookies();
+
+        mockFetch.mockResolvedValue(
+            new Response(JSON.stringify({ ok: true }), {
+                status: 200,
+                headers: { 'content-type': 'application/json' },
+            }),
+        );
+
+        const getResponse = await GET(
+            makeRequest({ url: `http://localhost/api/inflow-lab-demo/api/lineage/${lot}` }),
+            { params: Promise.resolve({ path }) },
+        );
+        expect(getResponse.status).toBe(200);
+
+        const postResponse = await POST(
+            makeRequest({
+                method: 'POST',
+                url: `http://localhost/api/inflow-lab-demo/api/lineage/${lot}`,
+                headers: csrf.headers,
+                cookies: csrf.cookies,
+                body: JSON.stringify({ noop: true }),
+            }),
+            { params: Promise.resolve({ path }) },
+        );
+        expect(postResponse.status).toBe(404);
+        await expect(postResponse.json()).resolves.toMatchObject({ code: 'NOT_ALLOWLISTED' });
+
+        const putResponse = await PUT(
+            makeRequest({
+                method: 'PUT',
+                url: `http://localhost/api/inflow-lab-demo/api/lineage/${lot}`,
+                headers: csrf.headers,
+                cookies: csrf.cookies,
+                body: JSON.stringify({ noop: true }),
+            }),
+            { params: Promise.resolve({ path }) },
+        );
+        expect(putResponse.status).toBe(405);
+        await expect(putResponse.json()).resolves.toMatchObject({ code: 'METHOD_NOT_ALLOWED' });
+
+        const deleteResponse = await DELETE(
+            makeRequest({
+                method: 'DELETE',
+                url: `http://localhost/api/inflow-lab-demo/api/lineage/${lot}`,
+                headers: csrf.headers,
+                cookies: csrf.cookies,
+            }),
+            { params: Promise.resolve({ path }) },
+        );
+        expect(deleteResponse.status).toBe(405);
+        await expect(deleteResponse.json()).resolves.toMatchObject({ code: 'METHOD_NOT_ALLOWED' });
+    });
+
     it('returns exact 404 in production unless the public proxy flag is enabled', async () => {
         vi.stubEnv('NODE_ENV', 'production');
         vi.stubEnv('REGENGINE_ENABLE_INFLOW_LAB_DEMO_PROXY', '');
@@ -512,18 +609,43 @@ describe('Inflow Lab client export hrefs use the public proxy base', () => {
             return '#';
         }
 
-        const csv = safeHref(
+        const defaultCsv = safeHref(
             servicePath(
-                '/api/regengine/export/fda-request?preset=all_records&traceability_lot_code=L1',
+                `/api/regengine/export/fda-request${buildDemoExportQuery({
+                    preset: 'all_records',
+                    traceabilityLotCode: '',
+                    startDate: '',
+                    endDate: '',
+                })}`,
             ),
         );
-        const epcis = safeHref(
-            servicePath('/api/regengine/export/epcis?traceability_lot_code=L1'),
+        const defaultEpcis = safeHref(
+            servicePath(
+                `/api/regengine/export/epcis${buildDemoExportQuery({
+                    traceabilityLotCode: '',
+                    startDate: '',
+                    endDate: '',
+                })}`,
+            ),
+        );
+        const filteredCsv = safeHref(
+            servicePath(
+                `/api/regengine/export/fda-request${buildDemoExportQuery({
+                    preset: 'all_records',
+                    traceabilityLotCode: 'L1',
+                })}`,
+            ),
         );
 
-        expect(csv.startsWith('/api/inflow-lab-demo/api/regengine/export/fda-request')).toBe(true);
-        expect(epcis.startsWith('/api/inflow-lab-demo/api/regengine/export/epcis')).toBe(true);
-        expect(csv.includes('://')).toBe(false);
-        expect(epcis.includes('://')).toBe(false);
+        expect(defaultCsv).toBe(
+            '/api/inflow-lab-demo/api/regengine/export/fda-request?preset=all_records',
+        );
+        expect(defaultEpcis).toBe('/api/inflow-lab-demo/api/regengine/export/epcis');
+        expect(defaultCsv.includes('traceability_lot_code')).toBe(false);
+        expect(defaultCsv.includes('start_date')).toBe(false);
+        expect(defaultEpcis.includes('traceability_lot_code')).toBe(false);
+        expect(filteredCsv).toContain('traceability_lot_code=L1');
+        expect(defaultCsv.includes('://')).toBe(false);
+        expect(defaultEpcis.includes('://')).toBe(false);
     });
 });

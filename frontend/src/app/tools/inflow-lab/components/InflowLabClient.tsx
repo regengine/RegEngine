@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { inflowErrorMessage } from "@/lib/inflow-error";
+import { buildDemoExportQuery } from "@/app/tools/inflow-lab/lib/demo-export-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
     AlertTriangle,
@@ -833,7 +834,7 @@ export function InflowLabClient({
     const [activeTab, setActiveTab] = useState(primaryTab);
     const [isTutorialOpen, setIsTutorialOpen] = useState(false);
     const [selectedLot, setSelectedLot] = useState(lotCodes[0]);
-    const [traceInput, setTraceInput] = useState(lotCodes[0]);
+    const [traceInput, setTraceInput] = useState("");
     const [runStage, setRunStage] = useState<RunStage>("complete");
     const [health, setHealth] = useState<InflowHealth | null>(null);
     const [serviceStatus, setServiceStatus] = useState<InflowStatus | null>(null);
@@ -847,8 +848,8 @@ export function InflowLabClient({
     const [deliveryMode, setDeliveryMode] = useState("mock");
     const [source, setSource] = useState("codex-simulator");
     const [exportPreset, setExportPreset] = useState("all_records");
-    const [startDate, setStartDate] = useState("2026-04-26");
-    const [endDate, setEndDate] = useState("2026-04-27");
+    const [startDate, setStartDate] = useState("");
+    const [endDate, setEndDate] = useState("");
     const [feederCsv, setFeederCsv] = useState(FEEDER_SAMPLE_CSV);
     const [feederResult, setFeederResult] = useState<SandboxEvaluationResult | null>(null);
     const [feederError, setFeederError] = useState<string | null>(null);
@@ -889,9 +890,10 @@ export function InflowLabClient({
         setServiceError(optionalOfflineDetail(healthPayload, statusPayload, eventsPayload));
 
         const firstLot = nextEvents[0]?.lotCode;
-        if (firstLot && (!traceInput || traceInput === lotCodes[0])) {
+        // Keep export lot/date filters empty by default so CSV/EPCIS cover all demo events.
+        // Only sync the selected lot for lineage / lot cards.
+        if (firstLot && (selectedLot === lotCodes[0] || !selectedLot)) {
             setSelectedLot(firstLot);
-            setTraceInput(firstLot);
         }
     };
 
@@ -1325,12 +1327,21 @@ export function InflowLabClient({
 
     const csvExportHref = safeHref(
         servicePath(
-            `/api/regengine/export/fda-request?preset=${encodeURIComponent(exportPreset)}&traceability_lot_code=${encodeURIComponent(traceInput)}&start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}`,
+            `/api/regengine/export/fda-request${buildDemoExportQuery({
+                preset: exportPreset,
+                traceabilityLotCode: traceInput,
+                startDate,
+                endDate,
+            })}`,
         ),
     );
     const epcisExportHref = safeHref(
         servicePath(
-            `/api/regengine/export/epcis?traceability_lot_code=${encodeURIComponent(traceInput)}&start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}`,
+            `/api/regengine/export/epcis${buildDemoExportQuery({
+                traceabilityLotCode: traceInput,
+                startDate,
+                endDate,
+            })}`,
         ),
     );
     const engineConnected = Boolean(health?.ok && !serviceError);
@@ -1527,7 +1538,8 @@ export function InflowLabClient({
                                         Load mock scenario
                                     </Button>
                                     <Button
-                                        className="h-10 bg-emerald-700 text-white hover:bg-emerald-800"
+                                        variant="ghost"
+                                        className="h-10 border border-emerald-600 bg-emerald-700 text-white hover:bg-emerald-800 hover:text-white"
                                         onClick={runPipeline}
                                         disabled={isBusy}
                                     >
@@ -1864,14 +1876,14 @@ export function InflowLabClient({
                                                         Preview test CSV or EPCIS JSON-LD filters. Formal production records are generated only from imported production data.
                                                     </p>
                                                     <div className={cn("grid grid-cols-1 gap-2 sm:grid-cols-2", isStandalone ? "mt-4" : "mt-3")}>
-                                                        <Button asChild className="h-9 bg-emerald-600 text-white hover:bg-emerald-700">
-                                                            <a href={csvExportHref}>Preview test CSV</a>
+                                                        <Button asChild variant="ghost" className="h-9 border border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700 hover:text-white">
+                                                            <a href={csvExportHref}>FDA export (CSV)</a>
                                                         </Button>
                                                         <a
                                                             href={epcisExportHref}
                                                             className="inline-flex h-9 items-center justify-center rounded-md border border-slate-600 bg-slate-800 px-3 text-[13px] font-semibold text-white transition-colors hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
                                                         >
-                                                            Preview test EPCIS
+                                                            EPCIS export<span className="sr-only"> Preview</span>
                                                         </a>
                                                     </div>
                                                 </div>
@@ -2353,7 +2365,11 @@ export function InflowLabClient({
                                                         <p className="mt-1 text-xs leading-5 text-slate-600">Harvest, cool, pack, ship, and receive one mock scenario through the test gateway. Production evidence stays in export jobs.</p>
                                                     </div>
                                                     <div className="flex flex-wrap gap-2">
-                                                        <Button className="h-9 bg-emerald-700 text-white hover:bg-emerald-800" onClick={runPipeline}>
+                                                        <Button
+                                                            variant="ghost"
+                                                            className="h-9 border border-emerald-600 bg-emerald-700 text-white hover:bg-emerald-800 hover:text-white"
+                                                            onClick={runPipeline}
+                                                        >
                                                             <Play className="mr-2 h-4 w-4" />
                                                             Start loop
                                                         </Button>
@@ -2430,14 +2446,14 @@ export function InflowLabClient({
                                                         {exportReadyCount} lots are test complete. {exceptionLots.length} exception lots remain visible. Formal production records require signed-in imports.
                                                     </p>
                                                     <div className="mt-4 grid grid-cols-2 gap-2">
-                                                        <Button asChild className="h-9 bg-emerald-600 text-white hover:bg-emerald-700">
-                                                            <a href={csvExportHref}>Preview test CSV</a>
+                                                        <Button asChild variant="ghost" className="h-9 border border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700 hover:text-white">
+                                                            <a href={csvExportHref}>FDA export (CSV)</a>
                                                         </Button>
                                                         <a
                                                             href={epcisExportHref}
                                                             className="inline-flex h-9 items-center justify-center rounded-md border border-slate-600 bg-slate-800 px-3 text-[13px] font-semibold text-white transition-colors hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
                                                         >
-                                                            Preview test EPCIS
+                                                            EPCIS export<span className="sr-only"> Preview</span>
                                                         </a>
                                                     </div>
                                                 </div>
@@ -2640,8 +2656,8 @@ export function InflowLabClient({
                                                 <p className="mt-1 text-xs leading-5 text-slate-500">
                                                     Includes {exportReadyCount} test-complete lots. {exceptionLots.length} exception lots are flagged for review. Formal production records are generated only from imported production data.
                                                 </p>
-                                                <Button asChild className="mt-4 h-9 bg-emerald-700 text-white hover:bg-emerald-800">
-                                                    <a href={csvExportHref}>Preview test CSV</a>
+                                                <Button asChild variant="ghost" className="mt-4 h-9 border border-emerald-600 bg-emerald-700 text-white hover:bg-emerald-800 hover:text-white">
+                                                    <a href={csvExportHref}>FDA export (CSV)</a>
                                                 </Button>
                                             </div>
                                             <div className="rounded-lg border border-slate-200 bg-white p-4">
@@ -2651,7 +2667,7 @@ export function InflowLabClient({
                                                     Uses the same lot and date filters for interoperability testing. It is not production evidence.
                                                 </p>
                                                 <Button asChild variant="outline" className="mt-4 h-9 border-slate-300 bg-white">
-                                                    <a href={epcisExportHref}>Preview test EPCIS</a>
+                                                    <a href={epcisExportHref}>EPCIS export<span className="sr-only"> Preview</span></a>
                                                 </Button>
                                             </div>
                                         </div>
