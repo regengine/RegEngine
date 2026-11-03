@@ -175,6 +175,26 @@ function upstreamPathFor(relativePath: string): string {
         .join("/");
 }
 
+/**
+ * Public clients keep calling /api/regengine/export/* on the demo proxy.
+ * Upstream Inflow Lab serves the sandbox exports under /api/mock/regengine/export/*.
+ */
+function upstreamRelativePath(relativePath: string, contract: DemoContract): string {
+    if (
+        contract === "export"
+        && (
+            relativePath === "/api/regengine/export/fda-request"
+            || relativePath === "/api/regengine/export/epcis"
+        )
+    ) {
+        return relativePath.replace(
+            "/api/regengine/export/",
+            "/api/mock/regengine/export/",
+        );
+    }
+    return relativePath;
+}
+
 function contractFor(path: string, method: string): DemoContract | null {
     if (method === "GET" && path === "/api/healthz") return "health";
     if (method === "GET" && path === "/api/simulate/status") return "status";
@@ -376,7 +396,7 @@ async function proxyPublic(request: NextRequest, params: Promise<{ path?: string
     const bodyResult = await readSanitizedBody(request);
     if (!bodyResult.ok) return bodyResult.response;
 
-    const upstreamUrl = new URL(`${serviceBaseUrl()}${upstreamPathFor(relativePath)}`);
+    const upstreamUrl = new URL(`${serviceBaseUrl()}${upstreamPathFor(upstreamRelativePath(relativePath, contract))}`);
     copyAllowedSearchParams(request.nextUrl.searchParams, upstreamUrl.searchParams);
 
     // Fresh minimal headers only — never forward browser cookies, Authorization,
