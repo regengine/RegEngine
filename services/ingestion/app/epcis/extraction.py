@@ -6,15 +6,9 @@ EPCIS event payloads.
 
 from __future__ import annotations
 
-import re
 from urllib.parse import unquote
 
 from shared.epcis_lot_identity import parse_class_uri
-
-# EPCIS 1.x class-level lot id. The lot is everything after the second dot;
-# GS1 percent-encodes reserved characters inside it.
-_LGTIN_RE = re.compile(r"^urn:epc:class:lgtin:\d+\.\d+\.(.+)$", re.IGNORECASE)
-
 
 def _present_ilmd_text(value: object) -> str | None:
     """String form of an ILMD value, or None when the field is blank.
