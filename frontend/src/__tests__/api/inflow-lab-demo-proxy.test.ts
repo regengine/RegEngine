@@ -589,9 +589,10 @@ describe('Inflow Lab public proxy', () => {
     });
 });
 
-describe('Inflow Lab client export hrefs use the public proxy base', () => {
-    it('documents the public base + safe relative export paths', async () => {
-        // Mirrors InflowLabClient: INFLOW_API + servicePath + safeHref.
+describe('Demo export query + public proxy path helpers', () => {
+    it('builds public-proxy-relative export paths from empty and filtered inputs', async () => {
+        // Documents INFLOW_API + servicePath + safeHref + buildDemoExportQuery shape
+        // (does not render InflowLabClient).
         const INFLOW_API = '/api/inflow-lab-demo';
         function servicePath(path: string) {
             return `${INFLOW_API}${path}`;

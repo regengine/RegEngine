@@ -27,7 +27,7 @@ describe("buildDemoExportQuery", () => {
         ).toBe("");
     });
 
-    it("includes provided filters by shape without inventing lot or date values", () => {
+    it("includes provided filters with an exact query string", () => {
         const lot = "seg";
         const start = "d0";
         const end = "d1";
@@ -42,10 +42,18 @@ describe("buildDemoExportQuery", () => {
         );
     });
 
-    it("preserves nonblank lot codes without trimming", () => {
+    it("omits whitespace-only lots and preserves nonblank padding exactly", () => {
+        expect(
+            buildDemoExportQuery({
+                preset: "all_records",
+                traceabilityLotCode: "   ",
+            }),
+        ).toBe("?preset=all_records");
         const lot = "  padded  ";
         const query = buildDemoExportQuery({ traceabilityLotCode: lot });
-        expect(query).toContain("traceability_lot_code=");
+        const expected = new URLSearchParams();
+        expected.set("traceability_lot_code", lot);
+        expect(query).toBe(`?${expected.toString()}`);
         const params = new URLSearchParams(query.slice(1));
         expect(params.get("traceability_lot_code")).toBe(lot);
     });

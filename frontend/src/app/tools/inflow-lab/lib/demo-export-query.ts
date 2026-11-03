@@ -1,7 +1,8 @@
 /**
  * Build export query strings for the public Inflow Lab demo.
- * Empty lot / date filters are omitted so downloads default to all demo events.
- * Nonblank TLCs are passed through exactly as received (no trim/case-fold).
+ * Empty / whitespace-only lot and empty date filters are omitted so downloads
+ * default to all demo events. Nonblank TLCs are passed through exactly (no
+ * trim/case-fold of the stored value).
  */
 export function buildDemoExportQuery(params: {
     preset?: string;
@@ -15,7 +16,8 @@ export function buildDemoExportQuery(params: {
     const startDate = params.startDate?.trim();
     const endDate = params.endDate?.trim();
     if (preset) search.set("preset", preset);
-    if (lot != null && lot !== "") search.set("traceability_lot_code", lot);
+    // Whitespace-only is empty; nonblank TLCs keep exact padding/spacing.
+    if (lot != null && lot.trim() !== "") search.set("traceability_lot_code", lot);
     if (startDate) search.set("start_date", startDate);
     if (endDate) search.set("end_date", endDate);
     const query = search.toString();

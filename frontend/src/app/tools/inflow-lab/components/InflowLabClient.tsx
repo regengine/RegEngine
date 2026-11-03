@@ -1276,8 +1276,8 @@ export function InflowLabClient({
     const traceLot = async () => {
         // Lineage may fall back to selectedLot, but never copy that into traceInput —
         // that field also drives CSV/EPCIS export filters (keep defaults unfiltered).
-        const typed = traceInput.trim();
-        const lot = typed || selectedLot;
+        // Trim only to detect blank; keep nonblank TLC padding for lineage.
+        const lot = traceInput.trim() ? traceInput : selectedLot;
         if (!lot) {
             return;
         }
