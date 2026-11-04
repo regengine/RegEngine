@@ -1047,12 +1047,14 @@ def _generate_csv_before_open_gaps(events: list[dict], *, include_pii: bool, v2:
     Only ``/export/verify`` uses this, to reproduce exports logged back then.
     """
     columns = FDA_COLUMNS_V2_WITHOUT_OPEN_GAPS if v2 else FDA_COLUMNS_WITHOUT_OPEN_GAPS
-    to_row = _event_to_fda_row_v2 if v2 else _event_to_fda_row
     output = io.StringIO()
     writer = csv.DictWriter(output, fieldnames=columns, quoting=csv.QUOTE_ALL, extrasaction="ignore")
     writer.writeheader()
 
     for event in events:
-        writer.writerow(to_row(event, include_pii=include_pii))
+        if v2:
+            writer.writerow(_event_to_fda_row_v2(event, include_pii=include_pii))
+        else:
+            writer.writerow(_event_to_fda_row(event, include_pii=include_pii))
 
     return output.getvalue()
