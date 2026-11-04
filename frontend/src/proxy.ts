@@ -484,6 +484,41 @@ function shouldUpgradeInsecureRequests(request: NextRequest): boolean {
     return process.env.NODE_ENV === 'production' && isHttps && !isLocalHost;
 }
 
+// One or more backslashes at the end of a path, raw or percent-encoded.
+// Over-escaped links and crawlers request paths like `/pricing%5C%5C%5C`;
+// Next.js looks for a page module with that name, throws MODULE_NOT_FOUND,
+// and answers 500 instead of serving the page.
+//
+// Scans backward from the end instead of using a regex: this runs before auth
+// on every read, and an unanchored `(?:%5C|\\)+$` is quadratic on a long run of
+// `%5C` that does not reach the end of the path.
+/** The path with trailing backslashes removed, or null when there are none. */
+export function stripTrailingBackslashes(pathname: string): string | null {
+    let end = pathname.length;
+    for (;;) {
+        if (end >= 1 && pathname[end - 1] === '\\') {
+            end -= 1;
+        } else if (end >= 3 && pathname.slice(end - 3, end).toUpperCase() === '%5C') {
+            end -= 3;
+        } else {
+            break;
+        }
+    }
+    if (end === pathname.length) return null;
+    return pathname.slice(0, end) || '/';
+}
+
+// Paths whose last segment can be data rather than a page name. A traceability
+// lot code or serial must reach its handler exactly as sent:
+// `/api/v1/fda/trace/LOT%5C` redirected to `/api/v1/fda/trace/LOT` would answer
+// for a different lot. `/01/...` is the GS1 Digital Link page, which carries a
+// lot and serial in the path.
+function pathCarriesIdentifiers(pathname: string): boolean {
+    // Next.js rewrites match case-insensitively, so `/API/...` reaches the same handler.
+    const lower = pathname.toLowerCase();
+    return lower.startsWith('/api/') || lower.startsWith('/01/');
+}
+
 function isReleaseDisabledApiSurface(pathname: string): boolean {
     const isGraphSurface = pathname === '/api/graph' || pathname.startsWith('/api/graph/');
     return (
@@ -537,6 +572,21 @@ export async function proxy(request: NextRequest) {
     // exists by returning a middleware-generated 403 instead of exact 404.
     if (isReleaseDisabledApiSurface(pathname)) {
         return withCsp(new NextResponse(null, { status: 404 }));
+    }
+
+    // Send `/pricing\` (and `/pricing%5C%5C%5C`) to `/pricing` instead of
+    // letting the page lookup fail with a 500. Reads only: a redirected write
+    // would be replayed somewhere the caller did not ask for.
+    if (
+        (request.method === 'GET' || request.method === 'HEAD') &&
+        !pathCarriesIdentifiers(pathname)
+    ) {
+        const cleanPath = stripTrailingBackslashes(pathname);
+        if (cleanPath !== null) {
+            const target = request.nextUrl.clone();
+            target.pathname = cleanPath;
+            return withCsp(NextResponse.redirect(target, 308));
+        }
     }
 
     // -----------------------------------------------------------------------

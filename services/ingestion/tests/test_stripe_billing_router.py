@@ -46,7 +46,8 @@ async def test_create_checkout_uses_stripe_and_normalizes_plan(monkeypatch):
     fake_redis = _FakeRedis()
     monkeypatch.setattr(stripe_billing, "_redis_client", lambda: fake_redis)
     monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_123")
-    monkeypatch.setenv("STRIPE_PRICE_LIST_MONTHLY", "price_list_monthly")
+    monkeypatch.delenv("STRIPE_PRICE_LIST_MONTHLY", raising=False)
+    monkeypatch.setenv("STRIPE_PRICE_GROWTH_MONTHLY", "price_growth_monthly")
     captured_funnel: dict[str, object] = {}
 
     captured = {}
@@ -82,7 +83,7 @@ async def test_create_checkout_uses_stripe_and_normalizes_plan(monkeypatch):
 
     assert response.session_id == "cs_test_123"
     assert response.plan == "list"
-    assert captured["line_items"][0]["price"] == "price_list_monthly"
+    assert captured["line_items"][0]["price"] == "price_growth_monthly"
     # Omitted facility_count defaults to a single facility (quantity 1).
     assert captured["line_items"][0]["quantity"] == 1
     assert captured["metadata"]["tenant_id"] == "tenant-1"
@@ -149,7 +150,8 @@ async def test_create_checkout_reuses_existing_customer_id_and_records_session(m
     tenant_id = "tenant-checkout-1"
     monkeypatch.setattr(stripe_billing, "_redis_client", lambda: fake_redis)
     monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_123")
-    monkeypatch.setenv("STRIPE_PRICE_LIST_MONTHLY", "price_list_monthly")
+    monkeypatch.delenv("STRIPE_PRICE_LIST_MONTHLY", raising=False)
+    monkeypatch.setenv("STRIPE_PRICE_GROWTH_MONTHLY", "price_growth_monthly")
 
     stripe_billing._store_subscription_mapping(
         tenant_id,
