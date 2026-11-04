@@ -324,6 +324,19 @@ any module does.
 
 ### WI-03 — Widen ruff; stage mypy
 
+**Status 2026-11-04:** in progress in PR #3699. Delivered: `services/shared/ruff.toml`
+with the rule set (per-directory *select* is not a ruff feature, so the
+override is a hierarchical config file that extends `pyproject.toml`;
+`fastapi.Depends` and friends are declared immutable so B008 does not fire on
+dependency injection); `lint-shared` runs `ruff check services/shared` with it;
+`mypy-shared` is a `continue-on-error` report job uploading an artifact
+(local run: 561 findings); `scripts/check_noqa_ratchet.py` with tests and
+`scripts/noqa_baseline.txt`, wired into `lint-repo-roots`; CONTRIBUTING.md
+Code Guidelines describe the rule set, the `-- reason` convention and the
+one-directory-per-PR adoption. Remaining in this PR: fixing the findings the
+new config reports under `services/shared` and lowering the baseline.
+
+
 **Problem.** CI runs `ruff --select E9,F63,F7,F82`; `pyproject.toml`
 selects only `I`. mypy is configured but not a gate. 766 `noqa` and 223
 `type: ignore` markers in non-test backend code. Two of the five commits
@@ -470,6 +483,35 @@ production image.
 **Rollback.** Revert the PR, which restores the lock.
 
 ### WI-06 — Split dev and experimental requirements from the production lock
+
+**Status 2026-11-04:** delivered in PR #3699. `requirements-dev.in` (pytest,
+pytest-asyncio, pytest-cov, pytest-mock, pytest-xdist, hypothesis, aiosqlite,
+testcontainers) and `requirements-experimental.in` are constrained by
+`requirements.lock`; all three locks compiled under Python 3.11 with
+`pip==24.3.1` and `pip-tools==7.5.2`, in place, so no production pin moved.
+`requirements.lock` went from 200 to 187 pinned distributions (dropped:
+aiosqlite, docker, execnet, hypothesis, iniconfig, pluggy, pytest and its four
+plugins, pyzbar, sortedcontainers). The import trace (a static transitive walk
+from `server/main.py` over the repository, in the PR) reaches every other
+third-party distribution from an always-mounted module too: langchain and
+langchain-* through `services/ingestion/app/regulation_parser.py` and
+`services/graph/app/mapping_engine.py`, openai through
+`services/ingestion/regengine_ingestion/llm/client.py`, llama-cloud through
+`services/shared/document_extract/`, pytesseract and pdf2image through
+`services/ingestion/app/normalization.py`; only `pyzbar` is experimental-only.
+The `find … test_*.py -delete` line stays: `scripts/utilities/test_redis_sessions.py`
+sits outside a `tests/` tree and is still copied. Every pytest-running CI job
+installs `requirements-dev.lock` too (backend-ci, test-suite-check, qa-health,
+security, factory-local-ci); the frontend e2e backend and inflow-contract-ci
+stay on the production lock since they run no pytest; no job installs the
+experimental lock because the QR tests exercise the 503 fallback. The
+freshness gate and `dependabot-lock-sync.yml` recompile all three locks.
+`image-import-check` builds a venv from `requirements.lock` alone and imports
+`server.main` with placeholder database URLs; `ci-status` depends on it.
+`tests/scripts/test_requirements_layout.py` keeps the split honest. Dependabot's
+pip entry scans the directory, so the sibling `.in` files are covered without a
+config change; the lock-sync workflow now triggers on them.
+
 
 **Problem.** `requirements.in` includes pytest, pytest-asyncio, pytest-cov,
 pytest-mock, pytest-xdist, hypothesis, aiosqlite and testcontainers;

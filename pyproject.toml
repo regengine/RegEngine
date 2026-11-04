@@ -35,6 +35,9 @@ combine-as-imports = true
 python_version = "3.11"
 warn_unused_configs = true
 ignore_missing_imports = true
+# frontend/public/sdk ships a copy of regengine/verify_chain.py for browser
+# download; two modules with one name stop mypy before it reports anything.
+exclude = ["^frontend/public/sdk/", "^docs/archive/"]
 # Non-blocking: mypy is available for local use but is not yet a CI gate.
 # Tighten incrementally (e.g. disallow_untyped_defs) per-module via overrides.
 

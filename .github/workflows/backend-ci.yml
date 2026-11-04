@@ -450,6 +450,11 @@ jobs:
       - name: Guard the scripts/ registry
         run: python scripts/check_scripts_registered.py
 
+      # Unexplained `# noqa` markers under services/ never exceed the committed
+      # baseline (WI-03). A suppression needs `-- <reason>`.
+      - name: Ratchet unexplained noqa markers
+        run: python scripts/check_noqa_ratchet.py
+
   # ── RLS fallback-UUID guard (hard gate) ──────────────────
   # Scans migrations for the fail-open RLS pattern that #1091 fixed.
   # Any new migration that reintroduces `COALESCE(..., <fallback-UUID>)`

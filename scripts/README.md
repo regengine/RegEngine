@@ -36,6 +36,7 @@ remediation PRD). The 14 candidates stay in place until then; the move is
 | `check_fda_spreadsheet_headers.py` | manual | manual: compare our FDA sortable-spreadsheet headers with FDA's template when FDA republishes it |
 | `check_legacy_dead_code.py` | used | Guardrail for high-confidence legacy and dead-code drift. — invoked by `.github/workflows/legacy-code-scan.yml` |
 | `check_no_kernel_control_imports.py` | used | Guard: forbid imports of ``kernel.control`` from production code. — invoked by `.github/workflows/backend-ci.yml` |
+| `check_noqa_ratchet.py` | used | unexplained `# noqa` markers under `services/` never exceed `scripts/noqa_baseline.txt` — invoked by `.github/workflows/backend-ci.yml` (lint-repo-roots); tested in `tests/scripts/` |
 | `check_orphan_migrations.py` | used | CI guard: keep orphan migrations at zero. — invoked by `.github/workflows/backend-ci.yml`, `README.md` |
 | `check_public_api_surface.mjs` | used | check_public_api_surface.mjs — invoked by `.github/workflows/public-api-surface.yml` |
 | `check_rls_fallback.py` | used | CI guard — reject RLS policies that fall back to a constant tenant. — invoked by `.github/workflows/backend-ci.yml`, `docs/engineering/TEARDOWN_FOLLOWUP_2026_09_05.md` |
@@ -72,6 +73,7 @@ remediation PRD). The 14 candidates stay in place until then; the move is
 | `jev_review_eval.py` | manual | Jev historical-control replay and synthetic holdout evaluation (`docs/engineering/JEV_PILOT_DIAGNOSTIC.md`); tested by `services/shared/tests/test_jev_review_eval.py` |
 | `lifecycle_test_results.json` | data | captured output of an old lifecycle run; named in `scripts/check_trust_safety_copy.py`; archive candidate once that reference is dropped |
 | `lint_response_models.py` | manual | manual lint: every FastAPI route declares `response_model`; candidate for CI (WI-03 follow-up) |
+| `noqa_baseline.txt` | data | the committed ceiling read by `scripts/check_noqa_ratchet.py` |
 | `okr_pilots_ingesting_weekly.sql` | used | okr_pilots_ingesting_weekly.sql — invoked by `docs/runbooks/design_partner_funnel_operating_rhythm.md`, `docs/runbooks/first_pilot_session.md` |
 | `orphan_migrations_allowlist.txt` | data | allowlist read by `scripts/check_orphan_migrations.py` (backend-ci) |
 | `phone_test_quickstart.sh` | manual | run the published quickstart curl against prod to catch docs/contract drift; companion to `scripts/smoke_test_ingest.sh` |
