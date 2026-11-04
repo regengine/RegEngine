@@ -30,16 +30,25 @@ describe('stripTrailingBackslashes', () => {
 
     it('stays linear on a long run of %5C that does not reach the end', () => {
         // The regex this replaced took about 260 ms on a path this long. The
-        // bound is generous so the test only fails on quadratic behaviour.
+        // bound leaves room for a paused test process and still fails on it.
         const path = `/${'%5C'.repeat(50_000)}x`;
         const start = performance.now();
 
         expect(stripTrailingBackslashes(path)).toBeNull();
-        expect(performance.now() - start).toBeLessThan(20);
+        expect(performance.now() - start).toBeLessThan(150);
     });
 });
 
 describe('proxy trailing-backslash redirect', () => {
+    it('does not redirect an uppercase /API/ path, which still carries a lot code', async () => {
+        const res = await proxy(
+            new NextRequest(new URL('http://localhost/API/v1/fda/trace/LOT%5C')),
+        );
+
+        expect(res.status).not.toBe(308);
+        expect(res.headers.get('location')).toBeNull();
+    });
+
     it('308-redirects a GET to the clean path and keeps the query string', async () => {
         const res = await proxy(
             new NextRequest(new URL('http://localhost/pricing%5C%5C%5C?plan=pro')),

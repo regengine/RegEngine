@@ -514,7 +514,9 @@ export function stripTrailingBackslashes(pathname: string): string | null {
 // for a different lot. `/01/...` is the GS1 Digital Link page, which carries a
 // lot and serial in the path.
 function pathCarriesIdentifiers(pathname: string): boolean {
-    return pathname.startsWith('/api/') || pathname.startsWith('/01/');
+    // Next.js rewrites match case-insensitively, so `/API/...` reaches the same handler.
+    const lower = pathname.toLowerCase();
+    return lower.startsWith('/api/') || lower.startsWith('/01/');
 }
 
 function isReleaseDisabledApiSurface(pathname: string): boolean {
