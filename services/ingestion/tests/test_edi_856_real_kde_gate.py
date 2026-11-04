@@ -191,6 +191,24 @@ def test_missing_tlc_source_is_rejected_before_the_isa13_is_reserved(
     assert reserved == []
 
 
+def test_strict_false_does_not_downgrade_a_missing_tlc_source(
+    client: TestClient, stored: list[dict[str, Any]], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    reserved: list[Any] = []
+    monkeypatch.setattr(
+        edi_routes,
+        "check_and_record_interchange",
+        lambda **kwargs: (reserved.append(kwargs), (False, None))[1],
+    )
+
+    response = _post(client, "/document?strict=false")
+
+    assert response.status_code == 422, response.text
+    assert response.json()["detail"]["missing_kdes"] == ["tlc_source_reference"]
+    assert stored == []
+    assert reserved == []
+
+
 @pytest.mark.parametrize("route", ROUTES)
 def test_tlc_source_is_not_taken_from_the_ship_from_party(client: TestClient, route: str) -> None:
     response = _post(client, route)
