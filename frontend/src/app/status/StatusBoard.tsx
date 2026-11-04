@@ -5,6 +5,7 @@ import { RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
 import { Card } from '@/components/ui/card';
+import { rawFetch } from '@/lib/api-client';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StatusBadge, type ComplianceState } from '@/components/ui/status-badge';
 
@@ -34,7 +35,7 @@ export function StatusBoard() {
 
   async function load() {
     try {
-      const res = await fetch('/api/health', { cache: 'no-store' });
+      const res = await rawFetch('/api/health', { cache: 'no-store' });
       const data = (await res.json()) as HealthPayload;
       setState({ kind: 'ok', data, fetchedAt: new Date() });
     } catch (err) {

@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { rawFetch } from "@/lib/api-client";
 
 export interface ComplianceAlert {
     id: string;
@@ -163,7 +164,7 @@ export function ComplianceStatusWidget({ tenantId, onAlertClick }: ComplianceSta
     useEffect(() => {
         async function fetchStatus() {
             try {
-                const response = await fetch(`/api/v1/compliance/status/${tenantId}`);
+                const response = await rawFetch(`/api/v1/compliance/status/${tenantId}`);
                 if (!response.ok) throw new Error("API unavailable");
                 const data = await response.json();
                 setStatus(data);
