@@ -28,6 +28,7 @@ from app.edi_ingestion import (
 from app.webhook_models import EventResult, IngestResponse  # noqa: E402
 from fastapi import FastAPI  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
+from shared.error_handling import install_exception_handlers  # noqa: E402
 
 FIXTURE = service_dir / "tests" / "fixtures" / "edi_corpus" / "asn_856.edi"
 FIXTURE_BSN = "BSN*00*ASN-12345*20260310*1200~"
@@ -44,22 +45,28 @@ class _NxStore:
 
     def __init__(self) -> None:
         self.keys: dict[str, str] = {}
+        self.ttls: dict[str, int | None] = {}
 
     def set(self, key, value, nx=False, ex=None):
         if nx and key in self.keys:
             return None
         self.keys[key] = value
+        self.ttls[key] = ex
         return True
 
     def get(self, key):
         return self.keys.get(key)
 
-    def eval(self, script, numkeys, key, token):
-        assert script == dedup_mod._RELEASE_IF_OWNER_LUA
-        if self.keys.get(key) == token:
+    def eval(self, script, numkeys, key, *args):
+        if self.keys.get(key) != args[0]:
+            return 0
+        if script == dedup_mod._RELEASE_IF_OWNER_LUA:
             del self.keys[key]
             return 1
-        return 0
+        assert script == dedup_mod._MARK_STORED_IF_OWNER_LUA
+        self.keys[key] = args[1]
+        self.ttls[key] = int(args[2])
+        return 1
 
 
 @pytest.fixture()
@@ -97,17 +104,30 @@ def ingested(monkeypatch: pytest.MonkeyPatch) -> list:
     return calls
 
 
+def _edi_app() -> FastAPI:
+    app = FastAPI()
+    app.include_router(edi_router)
+    app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
+        key_id="test-key", scopes=["*"], auth_mode="test"
+    )
+    return app
+
+
 @pytest.fixture()
 def client(monkeypatch: pytest.MonkeyPatch, ingested: list) -> TestClient:
     monkeypatch.delenv("EDI_REQUIRE_PARTNER_ID", raising=False)
     monkeypatch.delenv(ALLOWLIST_ENV, raising=False)
     monkeypatch.delenv("EDI_PARTNER_ALLOWLIST", raising=False)
     rejection_log.reset_edi_rejections()
-    app = FastAPI()
-    app.include_router(edi_router)
-    app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
-        key_id="test-key", scopes=["*"], auth_mode="test"
-    )
+    with TestClient(_edi_app()) as test_client:
+        yield test_client
+
+
+@pytest.fixture()
+def production_client(client: TestClient) -> TestClient:
+    """The same router behind the handlers both production apps install."""
+    app = _edi_app()
+    install_exception_handlers(app)
     with TestClient(app) as test_client:
         yield test_client
 
@@ -284,9 +304,15 @@ def test_rejection_frees_claim_when_set_landed_but_reply_was_lost(client, store,
 def test_release_is_a_noop_without_a_matching_token(store):
     dedup_mod.check_and_record_interchange("tenant", "sender", "receiver", "isa-13-1", "claim-a")
     dedup_mod.release_interchange("tenant", "sender", "receiver", "isa-13-1", "claim-b")
-    assert list(store.keys.values()) == ["claim-a"]
+    assert list(store.keys.values()) == ["pending:claim-a"]
     dedup_mod.release_interchange("tenant", "sender", "receiver", "isa-13-1", "claim-a")
     assert store.keys == {}
+
+
+def test_mark_stored_is_a_noop_without_a_matching_token(store):
+    dedup_mod.check_and_record_interchange("tenant", "sender", "receiver", "isa-13-1", "claim-a")
+    dedup_mod.mark_interchange_stored("tenant", "sender", "receiver", "isa-13-1", "claim-b")
+    assert list(store.keys.values()) == ["pending:claim-a"]
 
 
 @pytest.mark.parametrize("route", ["", "/document"])
@@ -325,3 +351,149 @@ def test_one_tenants_rejection_leaves_the_other_tenants_claim(client, store, ing
 
     replay = _post(client, FIXTURE.read_bytes(), route, tenant=TENANT)
     assert replay.status_code == 409, replay.json()
+
+
+def _partial_ingest(payload, *, principal_tenant_id=None, x_regengine_api_key=None):
+    """One event stored, one rejected: the shape a multi-event interchange can return."""
+
+    async def _result():
+        return IngestResponse(accepted=1, rejected=1, total=2, events=[])
+
+    return _result()
+
+
+@pytest.mark.parametrize("route", ["", "/document"])
+def test_partly_accepted_interchange_keeps_its_claim(client, store, ingested, monkeypatch, route):
+    """Not released: event keys include line position, so a resend can double-store."""
+    monkeypatch.setattr(edi_routes, "ingest_events", _partial_ingest)
+    first = _post(client, FIXTURE.read_bytes(), route)
+    assert first.status_code == 201, first.json()
+    assert [value.split(":")[0] for value in store.keys.values()] == ["stored"]
+
+    resend = _post(client, FIXTURE.read_bytes(), route)
+    assert resend.status_code == 409, resend.json()
+
+
+@pytest.mark.parametrize("route", ["", "/document"])
+def test_claim_is_short_lived_until_events_are_stored(client, store, ingested, monkeypatch, route):
+    """A worker killed mid-ingest must not leave a 7-day false 409 behind."""
+    working = edi_routes.ingest_events
+    during: list[tuple[str, int | None]] = []
+
+    async def _observing(payload, **kwargs):
+        key = next(iter(store.keys))
+        during.append((store.keys[key], store.ttls[key]))
+        return await working(payload, **kwargs)
+
+    monkeypatch.setattr(edi_routes, "ingest_events", _observing)
+    response = _post(client, FIXTURE.read_bytes(), route)
+    assert response.status_code == 201, response.json()
+
+    assert len(during) == 1
+    value, ttl = during[0]
+    assert value.startswith("pending:")
+    assert ttl == dedup_mod._PENDING_TTL_SECONDS
+    assert ttl < dedup_mod._DEDUP_TTL_SECONDS
+
+    key = next(iter(store.keys))
+    assert store.keys[key].startswith("stored:")
+    assert store.ttls[key] == dedup_mod._DEDUP_TTL_SECONDS
+
+
+def _seed_key(client, store, route: str, value: str) -> str:
+    """Learn the key from a real post, then give it ``value``."""
+    assert _post(client, FIXTURE.read_bytes(), route).status_code == 201
+    key = next(iter(store.keys))
+    store.keys[key] = value
+    return key
+
+
+@pytest.mark.parametrize("route", ["", "/document"])
+def test_retransmit_during_in_flight_claim_is_told_to_retry(production_client, store, ingested, route):
+    """An unfinished claim must not be reported as already processed."""
+    key = _seed_key(production_client, store, route, "pending:other-request")
+
+    retransmit = _post(production_client, FIXTURE.read_bytes(), route)
+    assert retransmit.status_code == 503, retransmit.json()
+    assert retransmit.headers["Retry-After"] == str(dedup_mod._IN_PROGRESS_RETRY_AFTER_SECONDS)
+    error = retransmit.json()["error"]
+    assert error["type"] == "http_503"
+    assert "still being processed" in error["message"]
+    assert "Retry-After" in error["message"]
+    assert len(ingested) == 1
+    assert store.keys[key] == "pending:other-request", "the retransmit must not touch the owner's claim"
+
+    # The owner then fails and releases, and the partner's retry goes through.
+    del store.keys[key]
+    retry = _post(production_client, FIXTURE.read_bytes(), route)
+    assert retry.status_code == 201, retry.json()
+    assert len(ingested) == 2
+
+
+@pytest.mark.parametrize("route", ["", "/document"])
+def test_key_gone_between_set_and_get_is_retryable(production_client, store, ingested, monkeypatch, route):
+    """SET NX lost to a claim that was released before the GET: nothing is known stored."""
+    _seed_key(production_client, store, route, "pending:other-request")
+    monkeypatch.setattr(store, "get", lambda key: None)
+
+    response = _post(production_client, FIXTURE.read_bytes(), route)
+    assert response.status_code == 503, response.json()
+    assert "still being processed" in response.json()["error"]["message"]
+
+
+@pytest.mark.parametrize("route", ["", "/document"])
+def test_key_written_by_the_previous_format_counts_as_stored(client, store, ingested, route):
+    """Keys live for up to 7 days across a deploy, and hold a bare token."""
+    _seed_key(client, store, route, "0123456789abcdef0123456789abcdef")
+
+    replay = _post(client, FIXTURE.read_bytes(), route)
+    assert replay.status_code == 409, replay.json()
+    assert replay.json()["detail"]["idempotent_replay"] is True
+    assert len(ingested) == 1
+
+
+@pytest.mark.parametrize("route", ["", "/document"])
+def test_redis_error_on_mark_stored_keeps_the_response(client, store, ingested, monkeypatch, route):
+    """Events are committed. The claim just lapses and event idempotency takes over."""
+
+    def _boom(*args, **kwargs):
+        raise TimeoutError("redis timed out")
+
+    monkeypatch.setattr(store, "eval", _boom)
+    response = _post(client, FIXTURE.read_bytes(), route)
+    assert response.status_code == 201, response.json()
+    assert list(store.ttls.values()) == [dedup_mod._PENDING_TTL_SECONDS]
+
+
+def test_advisory_rejection_frees_isa13(client, store, ingested):
+    """``?strict=false`` answers 201 rejected with no ingestion_result: nothing stored."""
+    advisory = client.post(
+        "/api/v1/ingest/edi/document",
+        params={"strict": "false"},
+        data={"traceability_lot_code": "A" * 2, "tenant_id": TENANT},
+        files={"file": ("asn_856.edi", FIXTURE.read_bytes(), "application/edi-x12")},
+    )
+    assert advisory.status_code == 201, advisory.json()
+    assert advisory.json()["status"] == "rejected"
+    assert advisory.json()["ingestion_result"] is None
+    assert store.keys == {}, "an advisory rejection must not burn its ISA13"
+    assert ingested == []
+
+    resend = _post(client, FIXTURE.read_bytes(), "/document")
+    assert resend.status_code == 201, resend.json()
+    assert len(ingested) == 1
+
+
+def test_document_route_zero_quantity_writes_a_rejection_record(client, store, ingested):
+    """A refused FSMA document needs an audit record, and its claim is freed."""
+    rejected = _post(client, _zero_quantity_variant(), "/document")
+    assert rejected.status_code == 422, rejected.json()
+    detail = rejected.json()["detail"]
+    assert detail["error"] == "edi_non_positive_quantity"
+    assert detail["needs_review"] is True
+
+    records = rejection_log.list_edi_rejections(TENANT)
+    assert [record["rejection_id"] for record in records] == [detail["rejection_id"]]
+    assert records[0]["reason"] == "edi_non_positive_quantity"
+    assert records[0]["needs_review"] is True
+    assert ingested == []
