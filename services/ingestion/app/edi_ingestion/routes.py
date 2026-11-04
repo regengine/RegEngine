@@ -935,6 +935,7 @@ def _build_ingest_event_for_set(
                 "receiving_advice_number": extracted.get("receiving_advice_number"),
                 "po_number": extracted.get("po_number"),
                 "ship_from_location": extracted.get("ship_from_name"),
+                "immediate_previous_source": extracted.get("ship_from_name") or extracted.get("ship_from_gln"),
                 "receiving_location": extracted.get("receiving_location_name"),
                 "receiving_location_gln": extracted.get("receiving_location_gln"),
                 "condition_code": extracted.get("condition_code"),

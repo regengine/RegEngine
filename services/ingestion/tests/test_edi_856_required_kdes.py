@@ -1,4 +1,4 @@
-"""EDI 856 events must carry the KDEs that shipping validation requires.
+"""EDI 856 and 861 events must carry the KDEs that validation requires.
 
 Both EDI routes built 856 events with ``reference_document_number`` only and
 never set ``tlc_source_reference``, while ``REQUIRED_KDES_BY_CTE[SHIPPING]``
@@ -48,7 +48,7 @@ def captured(monkeypatch: pytest.MonkeyPatch) -> list[WebhookPayload]:
     return payloads
 
 
-def _post(route: str, data: dict[str, str]):
+def _post(route: str, data: dict[str, str], body: bytes | None = None):
     app = FastAPI()
     app.include_router(edi_router)
     app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
@@ -58,7 +58,7 @@ def _post(route: str, data: dict[str, str]):
         return client.post(
             f"/api/v1/ingest/edi{route}",
             data=data,
-            files={"file": ("asn_856.edi", _ASN_856.read_bytes(), "application/edi-x12")},
+            files={"file": ("document.edi", body or _ASN_856.read_bytes(), "application/edi-x12")},
         )
 
 
@@ -83,6 +83,61 @@ def test_856_without_tlc_source_reference_only_misses_that_kde(route: str, captu
     events = [event for payload in captured for event in payload.events]
     assert events
     for event in events:
-        assert _validate_event_kdes(event) == [
-            "Missing required KDE 'tlc_source_reference' for shipping CTE"
-        ]
+        assert _validate_event_kdes(event) == ["Missing required KDE 'tlc_source_reference' for shipping CTE"]
+
+
+def _receiving_advice_861(*ship_from: str) -> bytes:
+    body = [
+        "ST*861*0001",
+        "BRA*RA-861-1*20260311*00",
+        *ship_from,
+        "N1*ST*Metro Distribution Center*92*6141410000069",
+        "RCD**200*CA",
+        "REF*LT*00012345678901-LOT861",
+        f"SE*{len(ship_from) + 6}*0001",
+    ]
+    segments = [
+        "ISA*00*          *00*          *ZZ*SENDERID       *ZZ*RECEIVERID     *260311*1200*U*00401*000000861*0*P*>",
+        "GS*RE*SENDERID*RECEIVERID*20260311*1200*1*X*004010",
+        *body,
+        "GE*1*1",
+        "IEA*1*000000861",
+    ]
+    return ("~".join(segments) + "~").encode()
+
+
+@pytest.mark.parametrize(
+    ("ship_from", "expected"),
+    [
+        ("N1*SF*Valley Fresh Farms*92*6141410000014", "Valley Fresh Farms"),
+        ("N1*SF**92*6141410000014", "6141410000014"),
+    ],
+)
+def test_861_takes_immediate_previous_source_from_ship_from(ship_from: str, expected: str, captured) -> None:
+    response = _post(
+        "/document",
+        {"traceability_lot_code": "LOT-861-KDE", "tlc_source_reference": "PACK-0311"},
+        _receiving_advice_861(ship_from),
+    )
+
+    assert response.status_code == 201, response.text
+    events = [event for payload in captured for event in payload.events]
+    assert events
+    for event in events:
+        assert event.kdes["immediate_previous_source"] == expected
+        assert _validate_event_kdes(event) == []
+
+
+def test_861_without_ship_from_only_misses_immediate_previous_source(captured) -> None:
+    response = _post(
+        "/document",
+        {"traceability_lot_code": "LOT-861-KDE", "tlc_source_reference": "PACK-0311"},
+        _receiving_advice_861(),
+    )
+
+    assert response.status_code == 201, response.text
+    events = [event for payload in captured for event in payload.events]
+    assert events
+    for event in events:
+        assert "immediate_previous_source" not in event.kdes
+        assert _validate_event_kdes(event) == ["Missing required KDE 'immediate_previous_source' for receiving CTE"]
