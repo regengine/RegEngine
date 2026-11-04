@@ -41,10 +41,10 @@ _CHILD_ENV = {
     "DATABASE_URL": "sqlite:///:memory:",
     "ADMIN_DATABASE_URL": "sqlite:///:memory:",
     "ADMIN_FALLBACK_SQLITE": "1",
-    "AUTH_SECRET_KEY": "route-snapshot-import-only-not-a-real-secret-4f2b",
-    "JWT_SECRET": "route-snapshot-import-only-not-a-real-jwt-secret-9c7e",
-    "REGENGINE_API_KEY": "route-snapshot-import-only-not-a-real-key-1a3d",
-    "TOOL_ACCESS_SECRET": "route-snapshot-import-only-not-a-real-tool-8e5c",
+    "AUTH_SECRET_KEY": "route-snapshot-import-only-not-a-real-secret-4f2b",  # pragma: allowlist secret -- synthetic import-only value
+    "JWT_SECRET": "route-snapshot-import-only-not-a-real-jwt-secret-9c7e",  # pragma: allowlist secret -- synthetic import-only value
+    "REGENGINE_API_KEY": "route-snapshot-import-only-not-a-real-key-1a3d",  # pragma: allowlist secret -- synthetic import-only value
+    "TOOL_ACCESS_SECRET": "route-snapshot-import-only-not-a-real-tool-8e5c",  # pragma: allowlist secret -- synthetic import-only value
 }
 
 _CHILD_SCRIPT = """
