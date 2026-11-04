@@ -12,7 +12,7 @@ assertion and must match that principal.
 | EPCIS 2.0 upload on `/ingest` | `POST /api/v1/epcis/events`, `/events/batch`, `/events/xml` | tenant context (`require_tenant_context`) | The dashboard tab posts JSON or XML to those routes |
 | ASN and receiving advice lines | `POST /api/v1/ingest/edi` and `POST /api/v1/ingest/edi/document` | `edi.ingest` | X12 856 and 861, one CTE per item line |
 | Warehouse advices | `POST /api/v1/ingest/edi/document` | `edi.ingest` | X12 944 and 945, one CTE per item line |
-| Purchase order and invoice | `POST /api/v1/ingest/edi/document` | `edi.ingest` | X12 850 and 810, one event per ST/SE set, quantities summed |
+| Purchase order and invoice | `POST /api/v1/ingest/edi/document` | `edi.ingest` | X12 850 and 810 parse, then return 422: they have no ship date or shipping locations, so nothing is stored |
 
 `POST /api/v1/ingest/edi` accepts a single 856 transaction set. 861, 944,
 945, 850, and 810 belong on `/document`.

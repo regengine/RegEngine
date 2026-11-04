@@ -1,9 +1,12 @@
-"""A valid 856 must get through the real required-KDE gate on both EDI routes.
+"""Valid EDI must get through the real required-KDE gate, or fail before ISA13.
 
 Every other EDI route test stubs ``ingest_events``, so nothing ran the gate in
 ``_validate_event_kdes`` against what the routes actually build. That is how a
 valid ASN came to return HTTP 201 with ``accepted: 0``. Only storage is faked
 here: ``ingest_events`` and the gate are the real ones.
+
+The later tests cover every set on ``/document``. Each one either stores, or gets
+a logged 422 before the ISA13 is reserved so a corrected resend is not a replay.
 """
 
 from __future__ import annotations
@@ -222,3 +225,280 @@ def test_856_with_no_reference_document_at_all_is_rejected(
     assert response.status_code == 422, response.text
     assert response.json()["detail"]["missing_kdes"] == ["reference_document"]
     assert stored == []
+
+
+def _document(transaction_set: str, *body: str) -> bytes:
+    segments = [f"ST*{transaction_set}*0001", *body]
+    segments.append(f"SE*{len(segments) + 1}*0001")
+    return (
+        "ISA*00*          *00*          *ZZ*SENDERID       *ZZ*RECEIVERID     "
+        "*260310*1200*U*00401*000000001*0*P*>~GS*SH*SENDERID*RECEIVERID*20260310*1200*1*X*004010~"
+        + "~".join(segments)
+        + "~GE*1*1~IEA*1*000000001~"
+    ).encode()
+
+
+SHIP_FROM = "N1*SF*Valley Fresh Farms*92*6141410000014"
+SHIP_TO = "N1*ST*Metro Distribution Center*92*6141410000069"
+PRODUCT = "PID*F****Romaine Hearts"
+WAREHOUSE_PRODUCT = "G69*Romaine Hearts"
+ASN_LINE = ("LIN**SK*ROMAINE-12CT", "SN1**200*CA")
+ASN_HEADER = ("BSN*00*ASN-12345*20260310*1200", "HL*1**S")
+RECEIPT_LINE = (PRODUCT, "RCD**200*CA")
+PO_HEADER = "BEG*00*NE*PO-1**20260310"
+INVOICE_HEADER = "BIG*20260310*INV-1**PO-1"
+
+VALID_DOCUMENTS = {
+    "861": ("BRA*RA-77*20260311*00", "REF*PO*PO-1", SHIP_FROM, SHIP_TO, *RECEIPT_LINE),
+    "944": (
+        "W17*F*20260311*R-1*ORD-1",
+        SHIP_FROM,
+        "N1*WH*Metro Warehouse*92*6141410000069",
+        "W07*200*CA**UP*012345678905***LOT-ROMAINE-A",
+        WAREHOUSE_PRODUCT,
+    ),
+    "945": (
+        "W06*N*ORD-1*20260310*SHIP-1",
+        SHIP_FROM,
+        SHIP_TO,
+        "W12*CC*200*200*0*CA****LOT-ROMAINE-A",
+        WAREHOUSE_PRODUCT,
+    ),
+}
+
+
+def _without(transaction_set: str, segment: str) -> bytes:
+    body = VALID_DOCUMENTS[transaction_set]
+    assert segment in body
+    return _document(transaction_set, *(item for item in body if item != segment))
+
+
+@pytest.fixture()
+def reserved(stored: list[dict[str, Any]], monkeypatch: pytest.MonkeyPatch) -> list[Any]:
+    """Record ISA13 reservations. ``stored`` first, as it stubs the same name."""
+    calls: list[Any] = []
+    monkeypatch.setattr(
+        edi_routes,
+        "check_and_record_interchange",
+        lambda **kwargs: (calls.append(kwargs), (False, None))[1],
+    )
+    return calls
+
+
+def _assert_rejected_before_reservation(
+    response: Any,
+    transaction_set: str,
+    missing: list[str],
+    stored: list[dict[str, Any]],
+    reserved: list[Any],
+) -> None:
+    assert response.status_code == 422, response.text
+    detail = response.json()["detail"]
+    assert detail["error"] == f"edi_{transaction_set}_missing_required_kdes"
+    assert detail["missing_kdes"] == missing
+    assert detail["rejection_id"]
+    assert stored == []
+    assert reserved == []
+
+
+@pytest.mark.parametrize("transaction_set", VALID_DOCUMENTS)
+def test_valid_document_stores_through_the_real_gate(
+    client: TestClient, stored: list[dict[str, Any]], reserved: list[Any], transaction_set: str
+) -> None:
+    raw = _document(transaction_set, *VALID_DOCUMENTS[transaction_set])
+
+    response = _post(client, "/document", raw, tlc_source_reference=TLC_SOURCE)
+
+    assert response.status_code == 201, response.text
+    result = response.json()["ingestion_result"]
+    assert (result["accepted"], result["rejected"]) == (1, 0), result
+    assert len(stored) == 1
+    assert len(reserved) == 1
+    assert stored[0]["kdes"]["tlc_source_reference"] == TLC_SOURCE
+
+
+def test_861_kdes_come_from_the_document(client: TestClient, stored: list[dict[str, Any]]) -> None:
+    raw = _document("861", *VALID_DOCUMENTS["861"])
+
+    response = _post(client, "/document", raw, tlc_source_reference=TLC_SOURCE)
+
+    assert response.status_code == 201, response.text
+    kdes = stored[0]["kdes"]
+    assert kdes["receive_date"] == "2026-03-11"
+    assert kdes["receiving_location"] == "Metro Distribution Center"
+    assert kdes["immediate_previous_source"] == "Valley Fresh Farms"
+    assert kdes["reference_document"] == "RA-77"
+
+
+def test_861_previous_source_can_be_the_ship_from_gln(client: TestClient, stored: list[dict[str, Any]]) -> None:
+    body = ["N1*SF**92*6141410000014" if item == SHIP_FROM else item for item in VALID_DOCUMENTS["861"]]
+
+    response = _post(client, "/document", _document("861", *body), tlc_source_reference=TLC_SOURCE)
+
+    assert response.status_code == 201, response.text
+    assert stored[0]["kdes"]["immediate_previous_source"] == "6141410000014"
+
+
+@pytest.mark.parametrize(
+    ("body", "missing"),
+    [
+        (("N1*SF**92*6141410000014", SHIP_TO), ["ship_from_location"]),
+        ((SHIP_FROM, "N1*ST**92*6141410000069"), ["ship_to_location"]),
+        (("N1*SF**92*6141410000014", "N1*ST**92*6141410000069"), ["ship_from_location", "ship_to_location"]),
+    ],
+    ids=["no_ship_from_name", "no_ship_to_name", "neither_name"],
+)
+def test_856_party_with_no_name_is_rejected_before_reservation(
+    client: TestClient,
+    stored: list[dict[str, Any]],
+    reserved: list[Any],
+    body: tuple[str, ...],
+    missing: list[str],
+) -> None:
+    raw = _document("856", *ASN_HEADER, *body, *ASN_LINE, "REF*BM*BOL-9001")
+
+    response = _post(client, "/document", raw, tlc_source_reference=TLC_SOURCE)
+
+    _assert_rejected_before_reservation(response, "856", missing, stored, reserved)
+
+
+def test_location_override_does_not_supply_the_ship_from_kde(
+    client: TestClient, stored: list[dict[str, Any]], reserved: list[Any]
+) -> None:
+    raw = _document("856", *ASN_HEADER, "N1*SF**92*6141410000014", SHIP_TO, *ASN_LINE, "REF*BM*BOL-9001")
+
+    response = _post(client, "/document", raw, tlc_source_reference=TLC_SOURCE, location_override="Dock 4")
+
+    _assert_rejected_before_reservation(response, "856", ["ship_from_location"], stored, reserved)
+
+
+def test_856_line_with_no_product_id_is_rejected_before_reservation(
+    client: TestClient, stored: list[dict[str, Any]], reserved: list[Any]
+) -> None:
+    raw = _document("856", *ASN_HEADER, SHIP_FROM, SHIP_TO, "SN1**200*CA", "REF*BM*BOL-9001")
+
+    response = _post(client, "/document", raw, tlc_source_reference=TLC_SOURCE)
+
+    _assert_rejected_before_reservation(response, "856", ["product_description"], stored, reserved)
+
+
+def test_one_856_line_with_no_product_id_rejects_the_document(
+    client: TestClient, stored: list[dict[str, Any]], reserved: list[Any]
+) -> None:
+    raw = _document("856", *ASN_HEADER, SHIP_FROM, SHIP_TO, *ASN_LINE, "LIN*2", "SN1**100*CA", "REF*BM*BOL-9001")
+
+    response = _post(client, "/document", raw, tlc_source_reference=TLC_SOURCE)
+
+    _assert_rejected_before_reservation(response, "856", ["product_description"], stored, reserved)
+
+
+def test_product_description_override_supplies_the_missing_product(
+    client: TestClient, stored: list[dict[str, Any]]
+) -> None:
+    raw = _document("856", *ASN_HEADER, SHIP_FROM, SHIP_TO, "SN1**200*CA", "REF*BM*BOL-9001")
+
+    response = _post(client, "/document", raw, tlc_source_reference=TLC_SOURCE, product_description="Romaine Hearts")
+
+    assert response.status_code == 201, response.text
+    assert stored[0]["product_description"] == "Romaine Hearts"
+
+
+@pytest.mark.parametrize("transaction_set", VALID_DOCUMENTS)
+def test_document_with_no_tlc_source_is_rejected_before_reservation(
+    client: TestClient, stored: list[dict[str, Any]], reserved: list[Any], transaction_set: str
+) -> None:
+    raw = _document(transaction_set, *VALID_DOCUMENTS[transaction_set])
+
+    response = _post(client, "/document", raw)
+
+    _assert_rejected_before_reservation(response, transaction_set, ["tlc_source_reference"], stored, reserved)
+
+
+@pytest.mark.parametrize(
+    ("transaction_set", "segment", "missing"),
+    [
+        ("861", SHIP_FROM, ["immediate_previous_source"]),
+        ("861", SHIP_TO, ["receiving_location"]),
+        ("861", PRODUCT, ["product_description"]),
+        ("944", SHIP_FROM, ["immediate_previous_source"]),
+        ("944", "N1*WH*Metro Warehouse*92*6141410000069", ["receiving_location"]),
+        ("944", WAREHOUSE_PRODUCT, ["product_description"]),
+        ("945", SHIP_FROM, ["ship_from_location"]),
+        ("945", SHIP_TO, ["ship_to_location"]),
+        ("945", WAREHOUSE_PRODUCT, ["product_description"]),
+    ],
+)
+def test_missing_kde_is_rejected_before_reservation(
+    client: TestClient,
+    stored: list[dict[str, Any]],
+    reserved: list[Any],
+    transaction_set: str,
+    segment: str,
+    missing: list[str],
+) -> None:
+    raw = _without(transaction_set, segment)
+
+    response = _post(client, "/document", raw, tlc_source_reference=TLC_SOURCE)
+
+    _assert_rejected_before_reservation(response, transaction_set, missing, stored, reserved)
+
+
+@pytest.mark.parametrize(
+    ("transaction_set", "body"),
+    [
+        (
+            "850",
+            (
+                PO_HEADER,
+                "N1*BY*Metro Distribution Center*92*6141410000069",
+                "N1*SE*Valley Fresh Farms*92*6141410000014",
+                "PO1*1*200*CA*2.50**UP*012345678905",
+                PRODUCT,
+            ),
+        ),
+        (
+            "810",
+            (
+                INVOICE_HEADER,
+                "N1*RI*Metro Distribution Center*92*6141410000069",
+                "N1*SF*Valley Fresh Farms*92*6141410000014",
+                "IT1*1*200*CA*2.50**UP*012345678905",
+                PRODUCT,
+                "TDS*50000",
+            ),
+        ),
+    ],
+)
+def test_commercial_documents_supply_no_shipping_kdes(
+    client: TestClient,
+    stored: list[dict[str, Any]],
+    reserved: list[Any],
+    transaction_set: str,
+    body: tuple[str, ...],
+) -> None:
+    """The PO or invoice date is not a ship date, and buyer and seller are not locations."""
+    raw = _document(transaction_set, *body)
+
+    response = _post(client, "/document", raw, tlc_source_reference=TLC_SOURCE)
+
+    _assert_rejected_before_reservation(
+        response,
+        transaction_set,
+        ["ship_date", "ship_from_location", "ship_to_location"],
+        stored,
+        reserved,
+    )
+
+
+def test_one_bad_set_in_a_batch_rejects_the_interchange(
+    client: TestClient, stored: list[dict[str, Any]], reserved: list[Any]
+) -> None:
+    good = ("ST*856*0001", *ASN_HEADER, SHIP_FROM, SHIP_TO, *ASN_LINE, "REF*BM*BOL-9001", "SE*10*0001")
+    bad = ("ST*856*0002", *ASN_HEADER, SHIP_FROM, *ASN_LINE, "REF*BM*BOL-9002", "SE*9*0002")
+    single = _document("856", *ASN_HEADER).decode()
+    envelope, _, _ = single.partition("ST*856")
+    raw = (envelope + "~".join((*good, *bad)) + "~GE*2*1~IEA*1*000000001~").encode()
+
+    response = _post(client, "/document", raw, tlc_source_reference=TLC_SOURCE)
+
+    _assert_rejected_before_reservation(response, "856", ["ship_to_location"], stored, reserved)
