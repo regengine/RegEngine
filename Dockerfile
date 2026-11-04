@@ -88,8 +88,12 @@ COPY server /app/server
 # identity reaches the image.
 COPY build-sha.txt /app/build-sha.txt
 
-# Set PYTHONPATH so all service imports resolve
-ENV PYTHONPATH=/app:/app/services:/app/services/ingestion:/app/services/admin:/app/services/graph:/app/services/nlp:/app/services/compliance
+# Set PYTHONPATH so service imports resolve. Only the repo root and services/
+# are on it: production code imports the service packages as
+# services.<svc>.app.<module> (WI-02, 2026-11-04), so no single service's
+# app/ directory shadows the others. scripts/check_legacy_dead_code.py fails
+# CI on a bare `from app.` import under services/.
+ENV PYTHONPATH=/app:/app/services
 
 # services/shared/paths.py documents PROJECT_ROOT as "set automatically in
 # Docker". It was not (#2965), so project_root() fell through to a heuristic

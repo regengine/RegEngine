@@ -82,7 +82,10 @@ def _record_edi_rejection(**kwargs):
     Looking up the recorder lazily keeps the route and the test helpers
     pointed at the same in-memory rejection store.
     """
-    rejection_log = importlib.import_module("app.edi_ingestion.rejection_log")
+    # ``__package__`` keeps this bound to whichever name this package was
+    # imported under (``services.ingestion.app.edi_ingestion`` in production,
+    # the bare ``app.edi_ingestion`` in the service-local tests).
+    rejection_log = importlib.import_module(f"{__package__}.rejection_log")
     return rejection_log.record_edi_rejection(**kwargs)
 
 

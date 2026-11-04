@@ -253,6 +253,51 @@ BANNED_PATTERNS = (
 )
 
 
+# WI-02 (2026-11-04): the six ``services/<svc>/app`` packages share one import
+# name. Production code must import them as ``services.<svc>.app.<module>``
+# (or relatively from inside the package); the bare ``from app.X`` form only
+# resolves through sys.path tricks and double-imports the module under test.
+BARE_APP_IMPORT = re.compile(r"^\s*(?:from\s+app(?:\.[\w.]*)?\s+import\b|import\s+app(?:\s*$|\s*,|\s+as\b|\s*#))")
+BARE_APP_IMPORT_ROOTS = ("services/",)
+
+
+def is_bare_app_import_candidate(relative: str) -> bool:
+    """Production Python under services/: not a test file, not a tests/ tree."""
+    if not relative.startswith(BARE_APP_IMPORT_ROOTS) or not relative.endswith(".py"):
+        return False
+    parts = relative.split("/")
+    if "tests" in parts or parts[-1].startswith("test_") or parts[-1] == "conftest.py":
+        return False
+    return True
+
+
+def check_bare_app_imports(files: Iterable[Path], root: Path) -> list[Finding]:
+    findings: list[Finding] = []
+    for path in files:
+        relative = relpath(path, root)
+        if should_skip(path, root) or not is_bare_app_import_candidate(relative):
+            continue
+        try:
+            lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
+        except OSError:
+            continue
+        service = relative.split("/")[1] if relative.count("/") >= 2 else "<svc>"
+        for line_number, line in enumerate(lines, start=1):
+            if BARE_APP_IMPORT.search(line):
+                findings.append(
+                    Finding(
+                        code="bare-app-import",
+                        path=relative,
+                        line=line_number,
+                        message=(
+                            f"Bare `app` import; use `services.{service}.app.<module>` or a relative import "
+                            "(docs/plans/TECH_DEBT_REMEDIATION_PRD_2026-10-28.md, WI-02)."
+                        ),
+                    )
+                )
+    return findings
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Check for high-confidence legacy/dead-code drift.")
     parser.add_argument(
@@ -479,6 +524,7 @@ def main() -> int:
         files = git_files(root)
         findings.extend(check_banned_files(files, root))
         findings.extend(check_patterns(files, root))
+        findings.extend(check_bare_app_imports(files, root))
         findings.extend(check_manual_agent_sweep(root))
 
     if args.knip_json:

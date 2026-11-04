@@ -226,7 +226,7 @@ def _get_verification_fallback(tenant_id: str, limit: int) -> list[dict]:
 
     # Pull from the chain_verification_job in-memory store
     try:
-        from app.chain_verification_job import _verification_jobs, _verification_lock
+        from .chain_verification_job import _verification_jobs, _verification_lock
 
         with _verification_lock:
             for job_id, job in _verification_jobs.items():

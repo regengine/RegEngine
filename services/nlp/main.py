@@ -50,12 +50,12 @@ logger = _structlog.get_logger("nlp")
 
 # Local package imports (using absolute-style imports from services root)
 # Refers to services/nlp/app/...
-from app.config import settings
+from services.nlp.app.config import settings
 
 # DEPRECATED: Kafka consumer import — will be removed once EVENT_BACKBONE=pg is
 # default (see #1159 #1240). Gated by EVENT_BACKBONE=kafka env flag below.
-from app.consumer import run_consumer, stop_consumer
-from app.routes import router as nlp_router
+from services.nlp.app.consumer import run_consumer, stop_consumer
+from services.nlp.app.routes import router as nlp_router
 from fastapi import FastAPI
 
 
