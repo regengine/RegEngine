@@ -681,10 +681,10 @@ WHERE source = 'data_repair' AND tenant_id = '<tenant_id>'
 COMMIT;
 ```
 
-For large repairs (50+ events), use the Python script with batch commits:
+The historical batch example below is shown in dry-run mode. It is not a validated repair procedure; a current, reviewed plan must determine whether and how to write changes:
 
 ```python
-# Commit every 100 events to avoid holding long transactions
+# Historical example: inspect batches in dry-run mode
 BATCH_SIZE = 100
 for i in range(0, len(affected_ids), BATCH_SIZE):
     batch = affected_ids[i:i + BATCH_SIZE]
@@ -694,7 +694,7 @@ for i in range(0, len(affected_ids), BATCH_SIZE):
         build_corrected_event=fix_function,
         reason=reason,
         operator=operator,
-        dry_run=False,
+        dry_run=True,
     )
     logger.info(f"Batch {i // BATCH_SIZE + 1} complete: {result}")
 ```
@@ -974,6 +974,8 @@ WHERE created_at > NOW() - interval '1 hour';
 
 ### 9.4 Multi-Tenant Repair (Same Bug, Multiple Tenants)
 
+The historical example below is dry-run only; it does not constitute a current or verified repair procedure.
+
 ```python
 # ALWAYS repair one tenant at a time, never in a shared transaction
 affected_tenants = ["tenant-uuid-1", "tenant-uuid-2", "tenant-uuid-3"]
@@ -988,7 +990,7 @@ for tenant_id in affected_tenants:
         build_corrected_event=fix_function,
         reason=reason,
         operator=operator,
-        dry_run=False,
+        dry_run=True,
     )
 
     # Verify chain for THIS tenant before moving to next

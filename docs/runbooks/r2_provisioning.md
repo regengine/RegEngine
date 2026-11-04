@@ -45,8 +45,9 @@ railway variables set OBJECT_STORAGE_ACCESS_KEY_ID="<from step 1>"
 railway variables set OBJECT_STORAGE_SECRET_ACCESS_KEY="<from step 1>"
 ```
 
-Railway auto-redeploys after env changes. Watch the deploy with
-`railway logs --follow`.
+The historical procedure expected environment changes to trigger a Railway
+redeploy. Verify the target environment and its current release behavior before
+changing variables or interpreting deployment logs.
 
 ## Step 3 — Verify
 
@@ -59,10 +60,14 @@ railway variables --json | python3 -c "import json,sys,re; v=json.load(sys.stdin
 REGENGINE_API_BASE=https://regengine.co/api/ingestion REGENGINE_API_KEY=rge_live_... ./scripts/smoke_test_ingest.sh --allow-production
 ```
 
-Expected: all `/v1/ingest/*` endpoints return 200 (not 503). The smoke
-test script already encodes this — exit 0 means provisioning succeeded.
-A localhost pass does not count for this step: without REGENGINE_API_BASE
-and --allow-production the script probes the operator laptop, not Railway.
+The historical expectation was that the tested ingest endpoints would return
+200 rather than 503. Verify the currently enabled route set, target environment,
+response bodies, and behavior before interpreting a result as successful
+provisioning. The script also exits 0 when all probes return 503, so its exit
+code alone does not establish that R2 is provisioned. Without
+`REGENGINE_API_BASE`, the script defaults to localhost. For a non-loopback
+target it requires `--allow-production` or `REGENGINE_ALLOW_PRODUCTION=1`;
+otherwise it exits without probing.
 
 ## Step 4 — Lifespan probe
 
@@ -72,15 +77,18 @@ to disappear from logs after redeploy.
 
 ## Rollback
 
-If R2 misbehaves and you need to revert to the 503 gate:
+The historical procedure removed credentials to restore a 503 gate. Do not
+assume the current route set or deployed configuration behaves the same way;
+verify the rollback plan and expected effects before changing credentials.
+The old commands were:
 
 ```bash
 railway variables remove OBJECT_STORAGE_ACCESS_KEY_ID
 railway variables remove OBJECT_STORAGE_SECRET_ACCESS_KEY
 ```
 
-The endpoints return 503 (not 500) automatically — no code rollback
-needed. See #2348.
+The earlier record expected a 503 response after credential removal (#2348);
+this is not a verified guarantee for the current deployment.
 
 ## Cost guard
 

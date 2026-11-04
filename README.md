@@ -242,12 +242,16 @@ Frontend setup:
 ```bash
 cd frontend
 npm ci
-# Point all three server-side proxies at the local consolidated backend.
+# Point the server-side service URLs at the local consolidated backend.
 export ADMIN_SERVICE_URL=http://localhost:8000
 export INGESTION_SERVICE_URL=http://localhost:8000
 export COMPLIANCE_SERVICE_URL=http://localhost:8000
+export GRAPH_SERVICE_URL=http://localhost:8000
+export NLP_SERVICE_URL=http://localhost:8000
 npm run dev
 ```
+
+Setting these URLs does not enable routers excluded by the applicable runtime policy.
 
 ## Testing
 
