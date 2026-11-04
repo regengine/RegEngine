@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
 import { Card } from "@/components/ui/card";
 import { Container } from "@/components/layout/container";
+import { PILOT_TERMS, PRICING_BASIS, PRICING_CONTACT } from "@/lib/pricing-terms";
 
 export const metadata: Metadata = {
   title: "Buyer traceability programs | RegEngine",
@@ -82,8 +83,7 @@ export default function BuyerProgramsPage() {
                 <li>• ASN containing KDEs</li>
                 <li>• SSCC-18 on food pallets</li>
                 <li>• GS1-128 on food cases</li>
-                <li>• As of August 1, 2025 Walmart and Sam's Club require all food and beverage ASN+packaging</li>
-                <li>• FTL by that date; other products ASAP</li>
+                <li>• Confirm current scope and timing with Walmart directly</li>
               </ul>
               <p className="mt-4 text-small leading-relaxed text-re-text-tertiary">
                 We do not make you Walmart-ready, transmit ASN on Retail Link, certify labels, or assess chargebacks.
@@ -92,28 +92,14 @@ export default function BuyerProgramsPage() {
 
             <Card padding="spacious">
               <h3 className="mb-3 text-subheading text-re-text-primary">
-                Albertsons Companies
-              </h3>
-              <p className="mb-3 text-ui leading-relaxed text-re-text-secondary">
-                Source: Letter dated 17 September 2025 (PDF at suppliers.safeway.com)
-              </p>
-              <ul className={factList}>
-                <li>• All food and non-alcoholic beverages</li>
-                <li>• Albertsons deadline January 1, 2027</li>
-                <li>• FDA enforcement not before July 20, 2028</li>
-              </ul>
-            </Card>
-
-            <Card padding="spacious">
-              <h3 className="mb-3 text-subheading text-re-text-primary">
                 Kroger Food Traceability Policy
               </h3>
               <p className="mb-3 text-ui leading-relaxed text-re-text-secondary">
-                Source: December 2023 first-party letter
+                Source: first-party Kroger supplier letter
               </p>
               <Callout tone="warning">
                 <p className="font-medium leading-relaxed text-re-text-primary">
-                  A December 2023 first-party Kroger letter stated a June 30, 2025 supplier transition. We have not found a later first-party update. The compliance date under the rule remains January 20, 2026 (87 FR 70910); the extension is only proposed (90 FR 38084). FDA has said it will not enforce the Food Traceability Rule before July 20, 2028, following a Congressional directive. This is not a claim that anyone is Kroger-ready.
+                  Kroger has sent suppliers a first-party traceability letter. Confirm current scope and timing with Kroger directly. FDA has said it will not enforce the Food Traceability Rule before July 20, 2028, following a Congressional directive. This is not a claim that anyone is Kroger-ready.
                 </p>
               </Callout>
             </Card>
@@ -165,12 +151,12 @@ export default function BuyerProgramsPage() {
             Pricing
           </h2>
           <Card padding="spacious">
-            <div className="mb-4 flex flex-wrap items-baseline gap-3">
-              <span className="text-title tabular-nums text-re-text-primary">$425</span>
-              <span className="text-ui text-re-text-tertiary">per month, billed annually</span>
-            </div>
+            <ul className={`mb-4 ${factList}`}>
+              <li>• {PRICING_BASIS} {PRICING_CONTACT}</li>
+              <li>• {PILOT_TERMS}</li>
+            </ul>
             <p className="text-ui leading-relaxed text-re-text-secondary">
-              No facility/CTE cap. No SLA. No retailer-specific benchmark. No quarterly compliance review. No audit. No readiness score. No FDA/buyer approval. No three-tier ladder or strikethrough list prices.
+              No CTE cap. No SLA. No retailer-specific benchmark. No quarterly compliance review. No audit. No readiness score. No FDA/buyer approval. No three-tier ladder or strikethrough list prices.
             </p>
           </Card>
         </Container>

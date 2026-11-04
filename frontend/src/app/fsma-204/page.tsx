@@ -11,7 +11,7 @@ import { Card } from "@/components/ui/card";
 export const metadata: Metadata = {
   title: "FSMA 204 Compliance Guide: What Your Farm Needs to Know | RegEngine",
   description:
-    "Plain-English guide to the FDA Food Traceability Rule. Learn what FSMA 204 requires, whether your products are covered, and how to get compliant. No developer needed.",
+    "Plain-English guide to the FDA Food Traceability Rule. Learn what FSMA 204 requires, whether your products are covered, and how to organize your traceability records. No developer needed.",
   openGraph: {
     title: 'FSMA 204 Compliance Guide: What Your Farm Needs to Know',
     description: 'Plain-English guide to the FDA Food Traceability Rule: what it requires, whether your products are covered, and how to comply.',

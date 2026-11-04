@@ -40,17 +40,6 @@ export const ROI_CALCULATOR_CONFIG: ToolConfig = {
                     { label: 'Over 100 hours', value: 150 }
                 ]
             },
-            {
-                id: 'annual-revenue',
-                text: 'What is your approximate annual revenue?',
-                type: 'select',
-                options: [
-                    { label: 'Under $10M', value: 5000000 },
-                    { label: '$10M - $100M', value: 50000000 },
-                    { label: '$100M - $1B', value: 500000000 },
-                    { label: 'Over $1B', value: 2000000000 }
-                ]
-            }
         ],
         leadGate: {
             title: 'Your Illustrative Savings Estimate is Ready',
@@ -63,45 +52,25 @@ export const ROI_CALCULATOR_CONFIG: ToolConfig = {
 export const calculateROI = (answers: Record<string, any>) => {
     const weeklyRecords = Number(answers['weekly-records'] || 0);
     const manualHours = Number(answers['manual-hours'] || 0);
-    const annualRevenue = Number(answers['annual-revenue'] || 0);
 
     // ILLUSTRATIVE COEFFICIENTS - not forecasts, not industry benchmarks. Surfaced
-    // honestly in the user-facing Methodology Note. Adjust here if assumptions change.
+    // honestly in the user-facing Methodology Note. Results are hours per year,
+    // never dollars: the public site carries no dollar amounts (A-2169).
     //
-    // 1. Modeled labor-time avoided: ManualHours * $75/hr loaded rate * 52 weeks * 0.85 capture rate
-    const laborSavings = manualHours * 75 * 52 * 0.85;
+    // 1. Modeled labor time avoided: ManualHours * 52 weeks * 0.85 capture rate
+    const laborHours = manualHours * 52 * 0.85;
 
-    // 2. Modeled risk concentration placeholder: Revenue * 0.05% * 0.90. There is no
-    //    public FSMA 204 fine schedule; this is a small fraction of revenue used as a
-    //    rough placeholder, NOT an expected violation cost.
-    const riskReduction = annualRevenue * 0.0005 * 0.90;
+    // 2. Modeled operational time: WeeklyRecords * 0.5 min saved * 52 weeks * 0.95
+    const rawOperationalHours = (weeklyRecords * 0.5 / 60) * 52 * 0.95;
 
-    // 3. Modeled operational time: WeeklyRecords * 0.5 min saved * $75/hr * 52 weeks * 0.95
-    const rawOperationalEfficiency = (weeklyRecords * 0.5 / 60) * 75 * 52 * 0.95;
+    // Cap operational time at 35% of labor time to avoid overly optimistic results
+    const operationalHours = Math.min(rawOperationalHours, laborHours * 0.35);
 
-    // Cap operational efficiency at 35% of the total benefit to avoid overly optimistic results
-    const baseBenefit = laborSavings + riskReduction;
-    const operationalEfficiency = Math.min(rawOperationalEfficiency, baseBenefit * 0.35);
-
-    const totalBenefit = baseBenefit + operationalEfficiency;
-
-    // Estimated platform cost
-    let platformCost = 25000;
-    if (annualRevenue > 1000000000) platformCost = 150000;
-    else if (annualRevenue > 100000000) platformCost = 75000;
-
-    const netBenefit = totalBenefit - platformCost;
-    const paybackMonths = (platformCost / totalBenefit) * 12;
-    const roi = (netBenefit / platformCost) * 100;
+    const totalHours = laborHours + operationalHours;
 
     return {
-        laborSavings,
-        riskReduction,
-        operationalEfficiency,
-        totalBenefit,
-        platformCost,
-        netBenefit,
-        paybackMonths,
-        roi
+        laborHours,
+        operationalHours,
+        totalHours,
     };
 };
