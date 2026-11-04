@@ -53,8 +53,8 @@ The three `absent_*` signatures (v088, v090 `4c5d6e7f8a9b`, v132) read
 `true` on any database that never had the object, so they appear in
 `present_beyond_first_gap` on a v079 database. That is expected; read them
 with their neighbours. Verified on a scratch PostgreSQL 16 cluster on
-2026-10-30: the script runs with `ON_ERROR_STOP`, returns 71 signature rows
-and the summary, and leaves no writes.
+2026-10-30: the script runs with `ON_ERROR_STOP`, returns the signature rows
+(74 as of 2026-11-04) and the summary, and leaves no writes.
 
 Save the output next to the run date under
 `docs/operations/` as ALEMBIC_RECONCILE_(date).txt. It contains no
@@ -94,7 +94,8 @@ supported runner, not editing the row. The procedure is already written:
    ownership, extension ownership, memberships.
 2. `docs/operations/MIGRATION_V079_TO_V120_2026_09_05.md` "Controlled
    execution sequence": steps 1 to 8, with the target now
-   `a3f7ce361b0e` (v137) instead of `c6a120b4e901`.
+   the current head (`08c7cf36ddbe`, v141, as of 2026-11-04) instead of
+   `c6a120b4e901`.
 3. Before step 4 of that sequence, resolve decisions B1 to B7 in the
    decision record. The hand-applied changes without an Alembic
    counterpart must be back-ported first, or the chain's last word on
@@ -106,7 +107,7 @@ supported runner, not editing the row. The procedure is already written:
    "Hand-applied revisions and their idempotency"). If any raises
    "already exists", repair that revision's guard in a PR before touching
    production.
-5. After the production run, `alembic current` must print `a3f7ce361b0e`,
+5. After the production run, `alembic current` must print the head revision,
    and a second run of `scripts/run-migrations.sh` must be a no-op.
 
 ## 5. Outcome B: set the row to X
@@ -117,7 +118,7 @@ precheck again.
 ```sql
 BEGIN;
 SET LOCAL statement_timeout = '5s';
-UPDATE public.alembic_version SET version_num = '<X>' WHERE version_num = '267d8053ced5';
+UPDATE public.alembic_version SET version_num = '<X>' WHERE version_num = '267d8053ced5';  -- pragma: allowlist secret
 -- Expect: UPDATE 1. If 0, another session changed the row; ROLLBACK and re-run §2.
 COMMIT;
 ```

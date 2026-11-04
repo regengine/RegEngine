@@ -88,6 +88,9 @@ GRANDFATHERED: frozenset[str] = frozenset(
         "supabase/migrations/20261025100300_data_gap_close_receipt_not_null.sql",
         "supabase/migrations/20261026132000_sel399_rls_split_api_keys_sessions_users.sql",
         "sql/prod-apply/rollback_sel399_rls_split_api_keys_sessions_users.sql",
+        # Landed on main on 2026-10-28, before this decision merged. Supabase
+        # storage bucket only (storage schema); auxiliary object, decision B1.
+        "supabase/migrations/20261028100010_partner_uploads_bucket.sql",
     }
 )
 

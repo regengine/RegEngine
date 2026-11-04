@@ -50,7 +50,9 @@ the header or with a revision id that does not exist.
 Measured against the tree at `f87ed2a` on 2026-10-30.
 
 - Alembic: 105 revision files, one head `a3f7ce361b0e` (v137). The
-  revision DAG is clean (`scripts/check_alembic_revisions.py`).
+  revision DAG is clean (`scripts/check_alembic_revisions.py`). On the
+  2026-11-04 merge of `main` the chain is 108 files with head `08c7cf36ddbe`
+  (v141); v139 to v141 are inventoried below.
 - Production was last observed at `267d8053ced5` (v079), on 2026-09-05
   (`docs/operations/MIGRATION_V079_TO_V120_2026_09_05.md`) and again on
   2026-10-20 (`DEVOPS_NOTES.md`). 71 revisions sit between that row and
@@ -169,6 +171,9 @@ decision in Appendix B applies.
 | `20261025100200_task_queue_fail_closed_tenant_policy.sql` | none; **conflicts** with v090 `a128f7f95db8` and v096 `c3a51e2f7b90`, which define `tenant_isolation_tasks` differently | Decision B6: back-port as v138 so the chain's last word matches production. |
 | `20261025100300_data_gap_close_receipt_not_null.sql` | none; post-v135 fix | Decision B6: back-port as a revision after v135. |
 | `20261026132000_sel399_rls_split_api_keys_sessions_users.sql` | none; file says "PREP ONLY. Do not apply without C.Lee's yes" | Decision B7: record whether it was applied; if yes, back-port; if no, move to a `proposed/` subdirectory. |
+| `20261028100000_partner_files_storage_retention.sql` | v140 (`b8c1e4f2a901`) | Render; landed on `main` 2026-10-28 (#3759 line). Header added 2026-11-04. File says "Do not apply to prod without C.Lee yes". |
+| `20261028100010_partner_uploads_bucket.sql` | none | Auxiliary: Supabase `storage.buckets` row and `storage.objects` policies, which Alembic cannot own on Railway Postgres. Grandfathered 2026-11-04 (landed before this decision merged). Decision B1. |
+| `20261028120000_v139_tenants_status_select_grant.sql` | v139 (`e7a1c9d2f4b0`) | Render; landed on `main` 2026-10-28. Header added 2026-11-04. |
 
 ### `sql/prod-apply/`
 

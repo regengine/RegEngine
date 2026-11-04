@@ -30,6 +30,7 @@ remediation PRD). The 14 candidates stay in place until then; the move is
 | `check_api_host_strings.py` | used | Guard against api.regengine.co (no DNS) in user-visible code samples. — invoked by `.github/workflows/frontend-ci.yml` |
 | `check_dep_versions.py` | used | CI guard — reject dependency version drift between the declared floors and the lock. — invoked by `.github/workflows/backend-ci.yml` |
 | `check_docs_links.py` | used | Fail CI when documentation references a repo path that does not exist. — invoked by `docs/CODEBASE_MAP.md` |
+| `check_edi_event_time_mismatch.py` | manual | read-only count of EDI events whose stored timestamp and EDI event date disagree (two-clocks bug); tested by `tests/migrations/test_edi_event_time_mismatch_jsonb.py` |
 | `check_enabled_outbound_http.py` | used | Reject raw HTTP clients in release-enabled outbound-fetch paths. — invoked by `.github/workflows/backend-ci.yml` |
 | `check_fda_spreadsheet_headers.py` | manual | manual: compare our FDA sortable-spreadsheet headers with FDA's template when FDA republishes it |
 | `check_legacy_dead_code.py` | used | Guardrail for high-confidence legacy and dead-code drift. — invoked by `.github/workflows/legacy-code-scan.yml` |
@@ -67,6 +68,7 @@ remediation PRD). The 14 candidates stay in place until then; the move is
 | `jev_ask.py` | used | Ask TypeSafe Jev typed questions from the command line. — invoked by `docs/engineering/JEV_HEADER_MAPPING.md`, `docs/engineering/JEV_LAB.md` |
 | `jev_eval.py` | used | Measure TypeSafe Jev on RegEngine's own CSV header rows. — invoked by `docs/engineering/JEV_HEADER_MAPPING.md`, `docs/engineering/JEV_LAB.md` |
 | `jev_header_preview.py` | used | Preview TypeSafe Jev header-mapping suggestions for a local CSV file. — invoked by `docs/engineering/JEV_HEADER_MAPPING.md` |
+| `jev_review_eval.py` | manual | Jev historical-control replay and synthetic holdout evaluation (`docs/engineering/JEV_PILOT_DIAGNOSTIC.md`); tested by `services/shared/tests/test_jev_review_eval.py` |
 | `lifecycle_test_results.json` | data | captured output of an old lifecycle run; named in `scripts/check_trust_safety_copy.py`; archive candidate once that reference is dropped |
 | `lint_response_models.py` | manual | manual lint: every FastAPI route declares `response_model`; candidate for CI (WI-03 follow-up) |
 | `okr_pilots_ingesting_weekly.sql` | used | okr_pilots_ingesting_weekly.sql — invoked by `docs/runbooks/design_partner_funnel_operating_rhythm.md`, `docs/runbooks/first_pilot_session.md` |

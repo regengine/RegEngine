@@ -26,14 +26,16 @@ def _load_module():
 
 _mod = _load_module()
 
-_REV = "0a329588b824"
+_REV = "0a329588b824"  # pragma: allowlist secret
 _REV_FILE = "20261016_0a329588b824_v131_tool_leads_utm.py"
 
 
 def _fake_repo(tmp_path: Path) -> Path:
     versions = tmp_path / "alembic" / "versions"
     versions.mkdir(parents=True)
-    (versions / _REV_FILE).write_text(f'revision = "{_REV}"\ndown_revision = "a5e7c9b2d341"\n')
+    (versions / _REV_FILE).write_text(
+        f'revision = "{_REV}"\ndown_revision = "a5e7c9b2d341"\n'  # pragma: allowlist secret
+    )
     (tmp_path / "supabase" / "migrations").mkdir(parents=True)
     (tmp_path / "sql" / "prod-apply").mkdir(parents=True)
     return tmp_path
@@ -168,8 +170,8 @@ def test_revision_regex_matches_both_assignment_styles():
 @pytest.mark.parametrize(
     "line,expected",
     [
-        ("-- alembic-revision: 0a329588b824", "0a329588b824"),
-        ("--   alembic-revision:   0A329588B824  ", "0a329588b824"),
+        ("-- alembic-revision: 0a329588b824", "0a329588b824"),  # pragma: allowlist secret
+        ("--   alembic-revision:   0A329588B824  ", "0a329588b824"),  # pragma: allowlist secret
         ("-- alembic-revision: 0a32", None),
         ("# alembic-revision: 0a329588b824", None),
     ],
