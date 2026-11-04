@@ -395,7 +395,7 @@ def _preflight_document_required_kdes(
             message = f"Provide the tlc_source_reference form field; EDI {transaction_set} does not carry it."
         elif kde == "product_description":
             # Lines replace header values, as in the route's line expansion.
-            lines = extracted.get("line_items", [{}])
+            lines = extracted.get("line_items") or [{}]
             present = bool(product_description_override) or all(
                 {**extracted, **line}.get("product_description") for line in lines
             )

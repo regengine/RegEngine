@@ -382,6 +382,16 @@ def test_856_line_with_no_product_id_is_rejected_before_reservation(
     _assert_rejected_before_reservation(response, "856", ["product_description"], stored, reserved)
 
 
+def test_856_with_no_item_line_is_rejected_before_reservation(
+    client: TestClient, stored: list[dict[str, Any]], reserved: list[Any]
+) -> None:
+    raw = _document("856", *ASN_HEADER, SHIP_FROM, SHIP_TO, "REF*BM*BOL-9001")
+
+    response = _post(client, "/document", raw, tlc_source_reference=TLC_SOURCE)
+
+    _assert_rejected_before_reservation(response, "856", ["product_description"], stored, reserved)
+
+
 def test_one_856_line_with_no_product_id_rejects_the_document(
     client: TestClient, stored: list[dict[str, Any]], reserved: list[Any]
 ) -> None:
