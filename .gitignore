@@ -270,3 +270,7 @@ output/*
 !output/pilots/
 output/pilots/*
 !output/pilots/README.md
+.env*
+# Keep the safe templates tracked: this must stay after the .env* rule above.
+!.env.example
+!.env.*.example
