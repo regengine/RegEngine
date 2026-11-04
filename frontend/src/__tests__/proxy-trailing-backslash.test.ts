@@ -23,6 +23,20 @@ describe('stripTrailingBackslashes', () => {
     it.each(['/pricing', '/', '/docs/a%5Cb', '/tools/'])('leaves %s alone', (input) => {
         expect(stripTrailingBackslashes(input)).toBeNull();
     });
+
+    it('strips a mixed run of raw and encoded backslashes', () => {
+        expect(stripTrailingBackslashes('/docs%5C\\%5c')).toBe('/docs');
+    });
+
+    it('stays linear on a long run of %5C that does not reach the end', () => {
+        // The regex this replaced took about 260 ms on a path this long. The
+        // bound is generous so the test only fails on quadratic behaviour.
+        const path = `/${'%5C'.repeat(50_000)}x`;
+        const start = performance.now();
+
+        expect(stripTrailingBackslashes(path)).toBeNull();
+        expect(performance.now() - start).toBeLessThan(20);
+    });
 });
 
 describe('proxy trailing-backslash redirect', () => {
@@ -60,6 +74,17 @@ describe('proxy trailing-backslash redirect', () => {
 
         expect(res.status).toBe(308);
         expect(new URL(res.headers.get('location')!).host).toBe('localhost');
+    });
+
+    it.each([
+        '/api/v1/fda/trace/LOT%5C',
+        '/api/v1/fda/trace/LOT%5C%5C',
+        '/01/00012345678905/10/LOT%5C/21/SERIAL%5C',
+    ])('keeps identifiers exact: does not redirect %s', async (pathname) => {
+        const res = await proxy(new NextRequest(new URL(`http://localhost${pathname}`)));
+
+        expect(res.status).not.toBe(308);
+        expect(res.headers.get('location')).toBeNull();
     });
 
     it('does not touch normal paths', async () => {
