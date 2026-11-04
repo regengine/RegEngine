@@ -191,6 +191,42 @@ def test_missing_tlc_source_is_rejected_before_the_isa13_is_reserved(
     assert reserved == []
 
 
+@pytest.mark.parametrize(
+    ("old", "new", "missing"),
+    [
+        (b"LIN**SK*ROMAINE-12CT~", b"", "product_description"),
+        (b"SN1**200*CA~", b"SN1**200~", "unit_of_measure"),
+        (b"SN1**200*CA~", b"", "quantity"),
+        (b"N1*SF*Valley Fresh Farms*92", b"N1*SF**92", "ship_from_location"),
+        (b"N1*ST*Metro Distribution Center*92", b"N1*ST**92", "ship_to_location"),
+    ],
+    ids=["product", "unit", "quantity", "ship_from", "ship_to"],
+)
+def test_document_route_does_not_store_synthesized_856_kdes(
+    client: TestClient,
+    stored: list[dict[str, Any]],
+    monkeypatch: pytest.MonkeyPatch,
+    old: bytes,
+    new: bytes,
+    missing: str,
+) -> None:
+    """The gate cannot catch these: the route's placeholder would pass it."""
+    reserved: list[Any] = []
+    monkeypatch.setattr(
+        edi_routes,
+        "check_and_record_interchange",
+        lambda **kwargs: (reserved.append(kwargs), (False, None))[1],
+    )
+    raw = FIXTURE.read_bytes().replace(old, new)
+
+    response = _post(client, "/document", raw, tlc_source_reference=TLC_SOURCE)
+
+    assert response.status_code == 422, response.text
+    assert missing in response.json()["detail"]["missing_kdes"]
+    assert stored == []
+    assert reserved == []
+
+
 def test_strict_false_does_not_downgrade_a_missing_tlc_source(
     client: TestClient, stored: list[dict[str, Any]], monkeypatch: pytest.MonkeyPatch
 ) -> None:

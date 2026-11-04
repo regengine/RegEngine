@@ -293,6 +293,7 @@ def _preflight_856_required_kdes(
     traceability_lot_code: str,
     partner_id: str | None,
     source: str,
+    placeholder_errors: list[dict[str, Any]] | None = None,
 ) -> None:
     """Reject an 856 the required-KDE gate would refuse, before ISA13 is reserved.
 
@@ -301,8 +302,11 @@ def _preflight_856_required_kdes(
     assigned the lot, so the TLC source reference must come from the caller.
     It is never derived from the ship-from party: a pass-through distributor
     ships lots it did not assign.
+
+    ``placeholder_errors`` carries KDEs the caller's route would otherwise
+    synthesize, which the gate cannot catch because the invented value passes.
     """
-    errors: list[dict[str, Any]] = []
+    errors: list[dict[str, Any]] = list(placeholder_errors or [])
     if not tlc_source_reference:
         errors.append(
             {
@@ -1258,6 +1262,16 @@ async def ingest_edi_document(
                     traceability_lot_code=traceability_lot_code,
                     partner_id=x_partner_id,
                     source=source,
+                    # location_override sets the event location only, so it
+                    # cannot supply the ship-from or ship-to KDE here.
+                    placeholder_errors=_legacy_856_placeholder_errors(
+                        extracted=slice_extracted,
+                        product_description_override=product_description,
+                        quantity_override=quantity_override,
+                        unit_override=unit_of_measure_override,
+                        ship_from_override=None,
+                        ship_to_override=None,
+                    ),
                 )
 
     # Content rejections run after the allowlist and before the ISA13 is

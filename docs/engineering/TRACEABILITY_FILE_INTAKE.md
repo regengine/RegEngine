@@ -202,6 +202,12 @@ rules below apply: one transaction-set type, GE01 must match the ST/SE
 count, and any FSMA failure keeps the whole interchange out of the
 canonical stream.
 
+An 856 on this route follows the same line rules as `POST
+/api/v1/ingest/edi`: a missing or bad quantity or unit, a line with no
+product, or a set with no ship-from or ship-to name is HTTP 422
+`edi_856_missing_required_kdes` before the ISA13 is reserved. The rules
+below apply to the other sets.
+
 On this route a present quantity that is zero or not numeric is HTTP 422
 `edi_non_positive_quantity`. A present unit is HTTP 422
 `edi_unmapped_unit_of_measure` unless it is an element-355 code this
