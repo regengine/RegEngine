@@ -114,7 +114,7 @@ def _future_variant() -> bytes:
 def _post(client: TestClient, raw: bytes, route: str):
     return client.post(
         f"/api/v1/ingest/edi{route}",
-        data={"traceability_lot_code": VALID_TLC, "tenant_id": TENANT},
+        data={"traceability_lot_code": VALID_TLC, "tenant_id": TENANT, "tlc_source_reference": "0061414100001"},
         files={"file": ("asn_856.edi", raw, "application/edi-x12")},
     )
 

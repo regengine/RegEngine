@@ -176,6 +176,16 @@ rejection is logged, and nothing is persisted. The route does not fill
 quantity `1.0`, unit `units`, product `EDI 856 Shipment`, an unknown
 location, or today's date.
 
+X12 856 does not say who assigned the lot code, so the
+`tlc_source_reference` form field is required (§1.1340(a)(7)) and applies
+to every line. The route does not derive it from the ship-from party: a
+pass-through distributor ships lots it did not assign. A missing or blank
+value is HTTP 422 `edi_856_missing_required_kdes`, the rejection is
+logged, and the ISA13 is not reserved, so the corrected resend is not a
+409 replay. `/document` applies the same rule to every 856 set, including
+with `?strict=false`. The same rejection covers a set with no reference
+document: no `REF` `BM`, `SI`, `CN`, `PO`, or `PK`, and no ASN number.
+
 `product_description`, `quantity_override`, `unit_of_measure_override`,
 `ship_from_location_override`, and `ship_to_location_override` apply to
 every line. More than one SN1 plus any of those fields is HTTP 422
@@ -221,7 +231,8 @@ curl -X POST "$BASE/api/v1/ingest/edi/document" \
   -H "X-RegEngine-API-Key: $REGENGINE_API_KEY" \
   -H "X-Partner-ID: $PARTNER_ID" \
   -F "file=@asn_856.edi;type=application/edi-x12" \
-  -F "traceability_lot_code=FALLBACK-TLC-WHEN-A-LINE-HAS-NO-LOT" # pragma: allowlist secret
+  -F "traceability_lot_code=FALLBACK-TLC-WHEN-A-LINE-HAS-NO-LOT" \
+  -F "tlc_source_reference=$TLC_SOURCE_GLN_OR_REFERENCE" # pragma: allowlist secret
 ```
 
 ## X12 944 and 945 on `POST /api/v1/ingest/edi/document`

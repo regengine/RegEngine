@@ -184,6 +184,7 @@ def _post(
         "/api/v1/ingest/edi/document",
         data={
             "traceability_lot_code": _VALID_FSMA_TLC,
+            "tlc_source_reference": "0061414100001",
             "tenant_id": TEST_TENANT_ID,
             **(extra_data or {}),
         },
@@ -461,7 +462,7 @@ def test_856_blank_sn1_quantity_is_rejected(client: TestClient, captured_payload
         b"HL*1**S~"
         b"N1*SF*~"
         b"SN1***CA~"
-        b"REF*BM*~"
+        b"REF*BM*BOL-1~"
         b"SE*7*1~"
         b"GE*1*1~"
         b"IEA*1*~"
@@ -474,6 +475,7 @@ def test_856_blank_sn1_quantity_is_rejected(client: TestClient, captured_payload
         "/api/v1/ingest/edi/document",
         data={
             "traceability_lot_code": _VALID_FSMA_TLC,
+            "tlc_source_reference": "0061414100001",
             "tenant_id": TEST_TENANT_ID,
         },
         files={"file": ("document.edi", raw, "application/edi-x12")},
@@ -524,6 +526,7 @@ def test_2976_legacy_856_endpoint_refuses_a_batched_interchange(client: TestClie
         "/api/v1/ingest/edi",
         data={
             "traceability_lot_code": "LOT-2026-EDI-BATCH",
+            "tlc_source_reference": "0061414100001",
             "tenant_id": TEST_TENANT_ID,
         },
         files={"file": ("batch.edi", raw, "application/edi-x12")},
@@ -565,6 +568,7 @@ def test_2976_batched_interchange_never_half_lands(client: TestClient, captured_
         data={
             # Below the shared TLC minimum for every set; pattern misses only warn.
             "traceability_lot_code": "A" * 2,
+            "tlc_source_reference": "0061414100001",
             "tenant_id": TEST_TENANT_ID,
         },
         files={"file": ("batch.edi", raw, "application/edi-x12")},

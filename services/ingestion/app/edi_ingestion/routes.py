@@ -81,8 +81,12 @@ def _record_edi_rejection(**kwargs):
     Tests swap ``app.edi_ingestion`` modules in and out of ``sys.modules``.
     Looking up the recorder lazily keeps the route and the test helpers
     pointed at the same in-memory rejection store.
+
+    Resolved relative to this package: in the consolidated server the
+    top-level ``app`` is another service's package (services/graph/app),
+    so ``app.edi_ingestion`` does not exist there.
     """
-    rejection_log = importlib.import_module("app.edi_ingestion.rejection_log")
+    rejection_log = importlib.import_module(".rejection_log", __package__)
     return rejection_log.record_edi_rejection(**kwargs)
 
 
@@ -279,6 +283,51 @@ def _reject_legacy_856_placeholders(
             "errors": errors,
         },
     )
+
+
+def _preflight_856_required_kdes(
+    *,
+    extracted: dict[str, Any],
+    tlc_source_reference: str | None,
+    sender_tenant_id: str,
+    traceability_lot_code: str,
+    partner_id: str | None,
+    source: str,
+) -> None:
+    """Reject an 856 the required-KDE gate would refuse, before ISA13 is reserved.
+
+    Without this the gate drops every event inside ``ingest_events`` and the
+    route answers 201 with ``accepted: 0``. X12 856 has no element naming who
+    assigned the lot, so the TLC source reference must come from the caller.
+    It is never derived from the ship-from party: a pass-through distributor
+    ships lots it did not assign.
+    """
+    errors: list[dict[str, Any]] = []
+    if not tlc_source_reference:
+        errors.append(
+            {
+                "loc": ["tlc_source_reference"],
+                "msg": "Provide the tlc_source_reference form field; EDI 856 does not carry it.",
+                "type": "missing_required_kde",
+            }
+        )
+    if not extracted.get("reference_document_number"):
+        errors.append(
+            {
+                "loc": ["reference_document"],
+                "msg": "EDI 856 has no REF segment with a BM, SI, CN, PO or PK reference document number.",
+                "type": "missing_required_kde",
+            }
+        )
+    if errors:
+        _reject_legacy_856_placeholders(
+            errors=errors,
+            sender_tenant_id=sender_tenant_id,
+            traceability_lot_code=traceability_lot_code,
+            extracted=extracted,
+            partner_id=partner_id,
+            source=source,
+        )
 
 
 # Event-date field (and optional time field) per transaction set.
@@ -518,6 +567,14 @@ def _enforce_interchange_structure(
 async def ingest_edi_856(
     file: UploadFile = File(..., description="X12 EDI file (856 ASN)"),
     traceability_lot_code: str = Form(..., description="FSMA Traceability Lot Code"),
+    # Form(None), not Form(...): the preflight logs the rejection and returns its id.
+    tlc_source_reference: Optional[str] = Form(
+        None,
+        description=(
+            "Required: location description or reference for who assigned the TLC, "
+            "§1.1340(a)(7). Applies to every line. Missing returns 422."
+        ),
+    ),
     tenant_id: Optional[str] = Form(None, description="Optional tenant override"),
     source: str = Form("edi_856_inbound", description="Source system identifier"),
     product_description: Optional[str] = Form(None, description="Optional product description override"),
@@ -609,22 +666,29 @@ async def ingest_edi_856(
         )
 
     extracted = _extract_856_fields(segments)
+    tlc_source = tlc_source_reference.strip() if tlc_source_reference else None
 
-    # Event-date rejections run after the allowlist and before the ISA13
-    # is reserved, so a corrected resend is not refused as a 409 replay.
-    _enforce_envelope_integrity(
-        extracted,
-        sender_tenant_id,
-        "856",
-        before_reserve=lambda: _preflight_event_date(
+    def _preflight_856() -> None:
+        _preflight_event_date(
             transaction_set="856",
             extracted=extracted,
             sender_tenant_id=sender_tenant_id,
             traceability_lot_code=traceability_lot_code,
             partner_id=x_partner_id,
             source=source,
-        ),
-    )
+        )
+        _preflight_856_required_kdes(
+            extracted=extracted,
+            tlc_source_reference=tlc_source,
+            sender_tenant_id=sender_tenant_id,
+            traceability_lot_code=traceability_lot_code,
+            partner_id=x_partner_id,
+            source=source,
+        )
+
+    # Content rejections run after the allowlist and before the ISA13 is
+    # reserved, so a corrected resend is not refused as a 409 replay.
+    _enforce_envelope_integrity(extracted, sender_tenant_id, "856", before_reserve=_preflight_856)
 
     lines = extracted.get("line_items") or []
     if len(lines) > 1:
@@ -698,6 +762,9 @@ async def ingest_edi_856(
             "ship_from_gln": ship_from_gln or ship_from_gln_raw,
             "ship_to_gln": ship_to_gln or ship_to_gln_raw,
             "reference_document_number": extracted.get("reference_document_number"),
+            # The name the required-KDE gate checks (§1.1340(a)(8)).
+            "reference_document": extracted.get("reference_document_number"),
+            "tlc_source_reference": tlc_source,
             "carrier": extracted.get("carrier"),
             "asn_number": extracted.get("asn_number"),
             "edi_transaction_set": "856",
@@ -888,6 +955,10 @@ def _build_ingest_event_for_set(
     if transaction_set == "856":
         kdes.update(
             {
+                # The names the required-KDE gate checks (§1.1340(a)(6)-(8)).
+                "ship_date": event_date,
+                "reference_document": extracted.get("reference_document_number"),
+                "tlc_source_reference": extracted.get("tlc_source_reference"),
                 "ship_from_location": extracted.get("ship_from_name"),
                 "ship_to_location": extracted.get("ship_to_name"),
                 "ship_from_gln": extracted.get("ship_from_gln"),
@@ -1040,7 +1111,11 @@ async def ingest_edi_document(
         description="FSMA Traceability Lot Code for 856/850/810/861; required but ignored for 944/945 event TLCs, which use each line's lot code",
     ),
     tlc_source_reference: Optional[str] = Form(
-        None, description="Optional TLC source reference copied to 944/945 KDEs"
+        None,
+        description=(
+            "TLC source reference copied to the KDEs of every 856/944/945 line. "
+            "Required for 856, §1.1340(a)(7): missing returns 422."
+        ),
     ),
     tenant_id: Optional[str] = Form(None, description="Optional tenant override"),
     source: str = Form("edi_inbound", description="Source system identifier"),
@@ -1161,6 +1236,7 @@ async def ingest_edi_document(
         extractions.append(_extract_fields_for_set(slice_set, slice_segments))
 
     extracted = extractions[0]
+    tlc_source = tlc_source_reference.strip() if tlc_source_reference else None
 
     # #1160 + #1165: validate and reserve the shared envelope once per
     # document, before validating any transaction set or warehouse line.
@@ -1174,9 +1250,18 @@ async def ingest_edi_document(
                 partner_id=x_partner_id,
                 source=source,
             )
+            if slice_set == "856":
+                _preflight_856_required_kdes(
+                    extracted=slice_extracted,
+                    tlc_source_reference=tlc_source,
+                    sender_tenant_id=sender_tenant_id,
+                    traceability_lot_code=traceability_lot_code,
+                    partner_id=x_partner_id,
+                    source=source,
+                )
 
-    # Event-date rejections run after the allowlist and before the ISA13
-    # is reserved, so a corrected resend is not refused as a 409 replay.
+    # Content rejections run after the allowlist and before the ISA13 is
+    # reserved, so a corrected resend is not refused as a 409 replay.
     _enforce_envelope_integrity(extracted, sender_tenant_id, transaction_set, before_reserve=_preflight_all_sets)
 
     # 856 SN1, 861 RCD, and warehouse W07/W12 lines are each one CTE.
@@ -1188,8 +1273,9 @@ async def ingest_edi_document(
         first_event_indexes.append(len(event_inputs))
         if slice_set in ("856", "861", "944", "945"):
             header = {key: value for key, value in slice_extracted.items() if key != "line_items"}
+            if slice_set in ("856", "944", "945"):
+                header["tlc_source_reference"] = tlc_source
             if slice_set in ("944", "945"):
-                header["tlc_source_reference"] = tlc_source_reference.strip() if tlc_source_reference else None
                 date_field = "receive_date_raw" if slice_set == "944" else "ship_date_raw"
                 header["_event_timestamp"], header["_event_date"] = _ship_timestamp_and_date(
                     header.get(date_field), None
