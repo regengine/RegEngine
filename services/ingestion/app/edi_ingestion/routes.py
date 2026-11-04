@@ -28,6 +28,7 @@ import functools
 import importlib
 import logging
 import os
+import uuid
 from collections.abc import Callable
 from typing import Any, Optional
 
@@ -93,8 +94,9 @@ def _record_edi_rejection(**kwargs):
 
 
 # ISA13 claims taken by ``_enforce_envelope_integrity`` during the current
-# request. ``_release_isa13_unless_stored`` installs the list.
-_reserved_interchanges: contextvars.ContextVar[list[tuple[Any, Any, Any]] | None] = contextvars.ContextVar(
+# request, as ``release_interchange`` arguments. ``_release_isa13_unless_stored``
+# installs the list.
+_reserved_interchanges: contextvars.ContextVar[list[tuple[Any, Any, Any, str]] | None] = contextvars.ContextVar(
     "edi_reserved_interchanges", default=None
 )
 
@@ -106,11 +108,17 @@ def _release_isa13_unless_stored(endpoint):
     rejection, a server error, or a result with no accepted events stores
     nothing, and keeping the claim would turn the partner's corrected
     resend into a 409 "already processed" for the full dedup TTL.
+
+    Releasing on an exception or cancellation assumes nothing was committed.
+    That does not hold if ``ingest_events`` commits and then raises (session
+    cleanup) or the response cannot be built: the claim is freed for stored
+    events. The ``(tenant_id, idempotency_key)`` unique key on the event
+    tables is then what stops an identical resend from storing them twice.
     """
 
     @functools.wraps(endpoint)
     async def wrapper(*args, **kwargs):
-        reserved: list[tuple[Any, Any, Any]] = []
+        reserved: list[tuple[Any, Any, Any, str]] = []
         token = _reserved_interchanges.set(reserved)
         try:
             response = await endpoint(*args, **kwargs)
@@ -459,10 +467,12 @@ def _enforce_envelope_integrity(
         before_reserve()
 
     # #1165: retransmission dedup on ISA13.
+    claim_token = uuid.uuid4().hex
     is_duplicate, _prev = check_and_record_interchange(
         sender_id=extracted.get("sender_id"),
         receiver_id=extracted.get("receiver_id"),
         isa13=extracted.get("isa13"),
+        claim_token=claim_token,
     )
     if is_duplicate:
         logger.info(
@@ -487,7 +497,7 @@ def _enforce_envelope_integrity(
 
     reserved = _reserved_interchanges.get()
     if reserved is not None:
-        reserved.append((extracted.get("sender_id"), extracted.get("receiver_id"), extracted.get("isa13")))
+        reserved.append((extracted.get("sender_id"), extracted.get("receiver_id"), extracted.get("isa13"), claim_token))
 
 
 def _enforce_interchange_structure(

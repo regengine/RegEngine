@@ -53,8 +53,12 @@ class _NxStore:
     def get(self, key):
         return self.keys.get(key)
 
-    def delete(self, key):
-        return 1 if self.keys.pop(key, None) is not None else 0
+    def eval(self, script, numkeys, key, token):
+        assert script == dedup_mod._RELEASE_IF_OWNER_LUA
+        if self.keys.get(key) == token:
+            del self.keys[key]
+            return 1
+        return 0
 
 
 @pytest.fixture()
@@ -239,3 +243,46 @@ def test_all_events_rejected_frees_isa13(client, store, monkeypatch, route):
     assert first.status_code == 201, first.json()
     assert first.json()["ingestion_result"]["accepted"] == 0
     assert store.keys == {}, "an all-rejected interchange must not burn its ISA13"
+
+
+def _zero_quantity_variant() -> bytes:
+    """Rejected only after the ISA13 step, as in the content-rejection test."""
+    raw = FIXTURE.read_text(encoding="utf-8")
+    assert "SN1**200*CA~" in raw
+    return raw.replace("SN1**200*CA~", "SN1**0*CA~").encode()
+
+
+@pytest.mark.parametrize("route", ["", "/document"])
+def test_failed_open_rejection_keeps_concurrent_claim(client, store, ingested, monkeypatch, route):
+    """A request that never got the claim must not delete the retry's claim."""
+
+    def _claimed_elsewhere_then_timeout(key, value, nx=False, ex=None):
+        store.keys[key] = "concurrent-retry"
+        raise TimeoutError("redis timed out")
+
+    monkeypatch.setattr(store, "set", _claimed_elsewhere_then_timeout)
+    rejected = _post(client, _zero_quantity_variant(), route)
+    assert 400 <= rejected.status_code < 500 and rejected.status_code != 409, rejected.json()
+    assert list(store.keys.values()) == ["concurrent-retry"]
+
+
+@pytest.mark.parametrize("route", ["", "/document"])
+def test_rejection_frees_claim_when_set_landed_but_reply_was_lost(client, store, ingested, monkeypatch, route):
+    """SET applied server-side and the client timed out: the claim is still ours."""
+
+    def _landed_then_timeout(key, value, nx=False, ex=None):
+        store.keys[key] = value
+        raise TimeoutError("redis timed out")
+
+    monkeypatch.setattr(store, "set", _landed_then_timeout)
+    rejected = _post(client, _zero_quantity_variant(), route)
+    assert 400 <= rejected.status_code < 500 and rejected.status_code != 409, rejected.json()
+    assert store.keys == {}
+
+
+def test_release_is_a_noop_without_a_matching_token(store):
+    dedup_mod.check_and_record_interchange("sender", "receiver", "isa-13-1", "claim-a")
+    dedup_mod.release_interchange("sender", "receiver", "isa-13-1", "claim-b")
+    assert list(store.keys.values()) == ["claim-a"]
+    dedup_mod.release_interchange("sender", "receiver", "isa-13-1", "claim-a")
+    assert store.keys == {}
