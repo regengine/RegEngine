@@ -3,9 +3,12 @@
 #1165: X12 ISA[13] is the unique interchange control number. Receivers
 MUST deduplicate retransmissions so a partner's ACK-timeout resend
 does not double-ingest CTEs. We key dedup on
-``(sender_id, receiver_id, isa13)`` — with the caveat that
+``(tenant_id, sender_id, receiver_id, isa13)`` — with the caveat that
 ``sender_id`` / ``receiver_id`` are taken from the GS segment
-(application-level trading partner IDs) per #1160, not ISA.
+(application-level trading partner IDs) per #1160, not ISA. The tenant
+is part of the key because ISA13 is only unique per sender: two tenants
+receiving from one partner can see the same envelope IDs, and one must
+not be refused on the strength of the other's interchange.
 
 #1160: The GS segment identifies the actual trading partner. If the
 ISA envelope claims Tenant A but the GS claims Tenant B, reject the
@@ -32,17 +35,18 @@ _DEDUP_TTL_SECONDS = 7 * 24 * 3600  # 7 days
 _RELEASE_IF_OWNER_LUA = "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) end return 0"
 
 
-def _dedup_key(sender_id: Optional[str], receiver_id: Optional[str], isa13: Optional[str]) -> str:
+def _dedup_key(tenant_id: str, sender_id: Optional[str], receiver_id: Optional[str], isa13: Optional[str]) -> str:
     """Compose the Redis dedup key.
 
     None components are replaced with an empty string so that a partially
     malformed envelope still produces a distinct key (rather than coalescing
     to a shared null bucket).
     """
+    t = tenant_id.strip()
     s = (sender_id or "").strip()
     r = (receiver_id or "").strip()
     i = (isa13 or "").strip()
-    return f"{_DEDUP_KEY_PREFIX}{s}:{r}:{i}"
+    return f"{_DEDUP_KEY_PREFIX}{t}:{s}:{r}:{i}"
 
 
 def _redis_client():
@@ -60,6 +64,7 @@ def _redis_client():
 
 
 def check_and_record_interchange(
+    tenant_id: str,
     sender_id: Optional[str],
     receiver_id: Optional[str],
     isa13: Optional[str],
@@ -88,7 +93,7 @@ def check_and_record_interchange(
     if client is None:
         return False, None
 
-    key = _dedup_key(sender_id, receiver_id, isa13)
+    key = _dedup_key(tenant_id, sender_id, receiver_id, isa13)
     try:
         # SET NX EX — atomic "create if absent". Returns True iff we
         # set the key (first time we saw this interchange), False if
@@ -100,7 +105,8 @@ def check_and_record_interchange(
         return True, previous
     except Exception as exc:
         logger.warning(
-            "edi_dedup_redis_error sender=%s isa13=%s error=%s",
+            "edi_dedup_redis_error tenant=%s sender=%s isa13=%s error=%s",
+            tenant_id,
             sender_id,
             isa13,
             str(exc),
@@ -109,6 +115,7 @@ def check_and_record_interchange(
 
 
 def release_interchange(
+    tenant_id: str,
     sender_id: Optional[str],
     receiver_id: Optional[str],
     isa13: Optional[str],
@@ -135,10 +142,11 @@ def release_interchange(
         return
 
     try:
-        client.eval(_RELEASE_IF_OWNER_LUA, 1, _dedup_key(sender_id, receiver_id, isa13), claim_token)
+        client.eval(_RELEASE_IF_OWNER_LUA, 1, _dedup_key(tenant_id, sender_id, receiver_id, isa13), claim_token)
     except Exception as exc:
         logger.warning(
-            "edi_dedup_release_error sender=%s isa13=%s error=%s",
+            "edi_dedup_release_error tenant=%s sender=%s isa13=%s error=%s",
+            tenant_id,
             sender_id,
             isa13,
             str(exc),
