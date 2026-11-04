@@ -17,6 +17,11 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 service_dir = Path(__file__).parent.parent
+sys.path.insert(0, str(service_dir.parent))
+
+from shared.paths import ensure_shared_importable  # noqa: E402
+
+ensure_shared_importable()
 sys.path.insert(0, str(service_dir))
 
 pytest.importorskip("fastapi")
