@@ -22,6 +22,7 @@ sys.path.insert(0, str(service_dir))
 
 pytest.importorskip("fastapi")
 
+import app.edi_ingestion.rejection_log as rejection_log  # noqa: E402
 import app.edi_ingestion.routes as edi_ingestion_routes  # noqa: E402
 from app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
 from app.edi_ingestion import router as edi_router  # noqa: E402
@@ -131,6 +132,7 @@ def _post_two_lots(route: str, data: dict[str, str]):
 
 @pytest.mark.parametrize("route", ["", "/document"])
 def test_one_reference_cannot_cover_distinct_lots(route: str, monkeypatch: pytest.MonkeyPatch, captured) -> None:
+    rejection_log.reset_edi_rejections()
     claims: list[tuple] = []
 
     def _claim(*args, **kwargs):
@@ -145,6 +147,9 @@ def test_one_reference_cannot_cover_distinct_lots(route: str, monkeypatch: pytes
     assert response.json()["detail"]["error"] == "edi_tlc_source_reference_with_multiple_lots"
     assert captured == []
     assert claims == [], "a refused document must not reserve its ISA13"
+    recorded = rejection_log.list_edi_rejections(_TENANT)
+    assert [record["reason"] for record in recorded] == ["edi_tlc_source_reference_with_multiple_lots"]
+    assert response.json()["detail"]["rejection_id"] == recorded[0]["rejection_id"]
 
 
 @pytest.mark.parametrize("route", ["", "/document"])
@@ -155,3 +160,16 @@ def test_distinct_lots_without_a_reference_are_ingested(route: str, captured) ->
     events = [event for payload in captured for event in payload.events]
     assert {event.traceability_lot_code for event in events} == {"LOT-A", "LOT-B"}
     assert all(event.kdes.get("tlc_source_reference") is None for event in events)
+
+
+@pytest.mark.parametrize("transaction_set", ["861", "944"])
+def test_multi_lot_receipt_may_share_a_reference(transaction_set: str) -> None:
+    """Receiving requires the KDE, so refusing it would leave no way in."""
+    edi_ingestion_routes._reject_shared_tlc_source_for_distinct_lots(
+        tlc_source_reference="PACK-0310",
+        transaction_sets=[(transaction_set, {"line_items": [{"lot_number": "LOT-A"}, {"lot_number": "LOT-B"}]})],
+        traceability_lot_code="LOT-FORM",
+        sender_tenant_id=_TENANT,
+        partner_id=None,
+        source="edi_inbound",
+    )

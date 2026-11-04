@@ -316,6 +316,7 @@ async def ingest_events(
     seen_in_batch: set[str] = set()
     # Data gap time to fix: written after the ingest commit, fail-open.
     gap_outcomes: list[ValidationOutcome] = []
+    closes_queued: set[tuple[str, str]] = set()
 
     try:
         if source_file is not None:
@@ -524,20 +525,31 @@ async def ingest_events(
                     )
                 )
                 accepted += 1
-                # A record with deferred KDEs is stored but incomplete: it
-                # must not close the lot's existing gaps. Its gaps stay queued
-                # as well, so a complete record earlier in this batch can't
-                # close them when outcomes are applied in arrival order.
-                gap_outcomes.append(
-                    ValidationOutcome(
-                        order=event_index,
-                        lot_code=event.traceability_lot_code,
-                        cte_type=event.cte_type.value,
-                        gaps=open_gaps,
-                        closing_record_id=None if open_gaps else store_result.event_id,
-                        closing_record_hash=None if open_gaps else store_result.sha256_hash,
+                # A record with deferred KDEs is stored but incomplete, so it
+                # must not close the lot's existing gaps. Its gaps are already
+                # written; requeue them only to follow a close queued earlier
+                # in this batch, as a replay could reopen another request's.
+                gap_scope = (event.traceability_lot_code.strip(), event.cte_type.value)
+                if not open_gaps:
+                    closes_queued.add(gap_scope)
+                    gap_outcomes.append(
+                        ValidationOutcome(
+                            order=event_index,
+                            lot_code=event.traceability_lot_code,
+                            cte_type=event.cte_type.value,
+                            closing_record_id=store_result.event_id,
+                            closing_record_hash=store_result.sha256_hash,
+                        )
                     )
-                )
+                elif gap_scope in closes_queued:
+                    gap_outcomes.append(
+                        ValidationOutcome(
+                            order=event_index,
+                            lot_code=event.traceability_lot_code,
+                            cte_type=event.cte_type.value,
+                            gaps=open_gaps,
+                        )
+                    )
                 _publish_graph_sync(store_result.event_id, event, tenant_id)
 
                 # Non-blocking failures → exception queue. Separate

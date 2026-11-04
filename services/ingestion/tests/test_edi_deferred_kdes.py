@@ -131,7 +131,11 @@ def _receipt() -> IngestEvent:
 
 
 def _ingest(event: IngestEvent, *, source: str = "edi_856_inbound", **kwargs: Any):
-    payload = WebhookPayload(tenant_id=TENANT, source=source, events=[event])
+    return _ingest_batch([event], source=source, **kwargs)
+
+
+def _ingest_batch(events: list[IngestEvent], *, source: str = "edi_856_inbound", **kwargs: Any):
+    payload = WebhookPayload(tenant_id=TENANT, source=source, events=events)
     return asyncio.run(
         wc.ingest_events(
             payload,
@@ -150,11 +154,31 @@ def test_deferred_kde_stores_event_and_keeps_gap_open(harness) -> None:
     assert len(harness.stored) == 1
     assert harness.inline_gaps == ["tlc_source_reference"]
 
-    outcome = harness.outcomes[0]
-    assert outcome.gaps == (TLC_SOURCE_GAP,)
-    # A receipt would close every open gap on this lot, including its own.
-    assert outcome.closing_record_id is None
-    assert outcome.closing_record_hash is None
+    # Nothing queued: no receipt to close the lot's gaps, and no replay that
+    # could reopen a gap another request closes after this commit.
+    assert harness.outcomes == []
+
+
+def test_batch_keeps_arrival_order_for_a_lot(harness) -> None:
+    """A later incomplete record keeps its gap; a later complete one closes it."""
+    complete = _shipment(tlc_source_reference="PACK-0310")
+    incomplete = _shipment().model_copy(update={"timestamp": "2026-03-10T13:00:00Z"})
+
+    _ingest_batch([complete, incomplete], deferred_kdes=edi_routes._EDI_DEFERRED_KDES)
+
+    assert [outcome.gaps for outcome in harness.outcomes] == [(), (TLC_SOURCE_GAP,)]
+    assert harness.outcomes[0].closing_record_id == "ev-1"
+    assert harness.outcomes[1].closing_record_id is None
+
+
+def test_incomplete_then_complete_in_a_batch_closes_the_gap(harness) -> None:
+    incomplete = _shipment()
+    complete = _shipment(tlc_source_reference="PACK-0310").model_copy(update={"timestamp": "2026-03-10T13:00:00Z"})
+
+    _ingest_batch([incomplete, complete], deferred_kdes=edi_routes._EDI_DEFERRED_KDES)
+
+    assert harness.inline_gaps == ["tlc_source_reference"]
+    assert [outcome.closing_record_id for outcome in harness.outcomes] == ["ev-1"]
 
 
 def test_event_is_not_accepted_when_its_gap_cannot_be_written(harness) -> None:

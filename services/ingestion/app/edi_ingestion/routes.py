@@ -93,35 +93,61 @@ def _record_edi_rejection(**kwargs):
 
 
 def _reject_shared_tlc_source_for_distinct_lots(
+    *,
     tlc_source_reference: str | None,
-    extractions: Iterable[dict[str, Any]],
+    transaction_sets: Iterable[tuple[str, dict[str, Any]]],
     traceability_lot_code: str,
+    sender_tenant_id: str,
+    partner_id: str | None,
+    source: str,
 ) -> None:
-    """Refuse one TLC source reference across several lots.
+    """Refuse one TLC source reference across several shipped lots.
 
     The form field is a single value copied to every event. On a document with
     several lots it could link a lot to a source that never assigned its code,
-    which is worse than the open gap the lot gets without the field.
+    which is worse than the open gap the lot gets without the field. Receiving
+    has no open gap to fall back on, as the field is required there, so
+    refusing it would leave a multi-lot receipt no way in.
     """
     if not (tlc_source_reference and tlc_source_reference.strip()):
         return
+    shipping_sets = [
+        (transaction_set, extracted)
+        for transaction_set, extracted in transaction_sets
+        if _CTE_TYPE_BY_SET.get(transaction_set, WebhookCTEType.SHIPPING) == WebhookCTEType.SHIPPING
+    ]
     lots: set[str] = set()
-    for extracted in extractions:
+    for _, extracted in shipping_sets:
         for line in extracted.get("line_items") or [{}]:
             lot = line.get("lot_number")
             lots.add(lot.strip() if isinstance(lot, str) and lot.strip() else traceability_lot_code)
-    if len(lots) > 1:
-        raise HTTPException(
-            status_code=422,
-            detail={
-                "error": "edi_tlc_source_reference_with_multiple_lots",
-                "message": (
-                    "tlc_source_reference applies to one lot, but this document has several. "
-                    "Send each lot separately, or resubmit without the field."
-                ),
-                "lot_count": len(lots),
-            },
-        )
+    if len(lots) <= 1:
+        return
+    error = "edi_tlc_source_reference_with_multiple_lots"
+    message = (
+        "tlc_source_reference applies to one lot, but this document has several. "
+        "Send each lot separately, or resubmit without the field."
+    )
+    first_set, first_extracted = shipping_sets[0]
+    record = _record_edi_rejection(
+        tenant_id=sender_tenant_id,
+        transaction_set=first_set,
+        traceability_lot_code=traceability_lot_code,
+        errors=[{"loc": ["tlc_source_reference"], "type": error, "msg": message}],
+        extracted=first_extracted,
+        partner_id=partner_id,
+        source=source,
+        reason=error,
+    )
+    raise HTTPException(
+        status_code=422,
+        detail={
+            "error": error,
+            "message": message,
+            "lot_count": len(lots),
+            "rejection_id": record["rejection_id"],
+        },
+    )
 
 
 def _decode_edi_bytes(raw_bytes: bytes) -> str:
@@ -666,7 +692,14 @@ async def ingest_edi_856(
             partner_id=x_partner_id,
             source=source,
         )
-        _reject_shared_tlc_source_for_distinct_lots(tlc_source_reference, [extracted], traceability_lot_code)
+        _reject_shared_tlc_source_for_distinct_lots(
+            tlc_source_reference=tlc_source_reference,
+            transaction_sets=[("856", extracted)],
+            traceability_lot_code=traceability_lot_code,
+            sender_tenant_id=sender_tenant_id,
+            partner_id=x_partner_id,
+            source=source,
+        )
 
     _enforce_envelope_integrity(extracted, sender_tenant_id, "856", before_reserve=_preflight)
 
@@ -1231,7 +1264,14 @@ async def ingest_edi_document(
                 partner_id=x_partner_id,
                 source=source,
             )
-        _reject_shared_tlc_source_for_distinct_lots(tlc_source_reference, extractions, traceability_lot_code)
+        _reject_shared_tlc_source_for_distinct_lots(
+            tlc_source_reference=tlc_source_reference,
+            transaction_sets=list(zip(slice_sets, extractions)),
+            traceability_lot_code=traceability_lot_code,
+            sender_tenant_id=sender_tenant_id,
+            partner_id=x_partner_id,
+            source=source,
+        )
 
     # Event-date rejections run after the allowlist and before the ISA13
     # is reserved, so a corrected resend is not refused as a 409 replay.
