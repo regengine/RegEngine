@@ -68,10 +68,11 @@ from .formatters import (
 from .merkle import get_merkle_proof_handler, get_merkle_root_handler
 from .queries import (
     AuditLogWriteError,
+    ExportOverflowError,
     _verify_chain_for_export,
+    attach_open_gaps,
     build_recall_where_clause,
     build_v2_where_clause,
-    attach_open_gaps,
     fetch_export_log_history,
     fetch_recall_events,
     fetch_trace_graph_data,
@@ -79,7 +80,6 @@ from .queries import (
     format_export_log_rows,
     log_recall_export,
     log_v2_export,
-    ExportOverflowError,
     reconstruct_full_export_events,
     rows_to_event_dicts,
     v2_rows_to_event_dicts,
@@ -643,6 +643,7 @@ def export_all_events(
                 export_type="fda_export_all_package" if format == "package" else "fda_export_all",
                 include_pii=include_pii,
                 query_event_type=event_type,
+                generated_at=generated_at,
             )
             db_session.commit()
         except Exception as exc:

@@ -12,6 +12,7 @@ Locks:
 
 from __future__ import annotations
 
+import ast
 import asyncio
 import csv
 import hashlib
@@ -20,6 +21,7 @@ import json
 import sys
 import zipfile
 from datetime import datetime, timezone
+from pathlib import Path
 from types import ModuleType, SimpleNamespace
 
 import pytest
@@ -273,6 +275,24 @@ def test_package_counts_marked_rows_in_the_hashed_evidence() -> None:
 # ---------------------------------------------------------------------------
 # /export/verify
 # ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("module", ["router.py", "recall.py"])
+def test_every_export_stores_the_moment_its_gaps_describe(module) -> None:
+    """Verify reads gaps as of the audit row, so each audit write must carry that moment."""
+    tree = ast.parse((Path(v.__file__).parent / module).read_text(encoding="utf-8"))
+    writers = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and (getattr(node.func, "attr", None) == "log_export" or getattr(node.func, "id", "").endswith("_export"))
+        and getattr(node.func, "id", "log_export").startswith("log_")
+    ]
+
+    assert writers
+    for call in writers:
+        assert "generated_at" in {keyword.arg for keyword in call.keywords}, f"line {call.lineno}"
+
 
 
 def _audit_row(export_hash: str) -> tuple:
