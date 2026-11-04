@@ -70,7 +70,7 @@ export default function CompareFoodReadyPage() {
             FoodReady: Guided implementation with food safety specialists; public FAQ says most teams move through mapping, import, and a validating mock recall in weeks, not months, scaling with facilities and SKUs. Source: <a href="https://foodready.ai/fsma-204-software/" className="text-re-brand underline underline-offset-[3px]" rel="noopener noreferrer" target="_blank">https://foodready.ai/fsma-204-software/</a>
           </p>
           <p className="mt-4 max-w-[68ch] text-body text-re-text-secondary">
-            RegEngine: Self serve free tools with no account required for the tool pages, plus design partner Beta product work. Upload path for product records is CSV. JSON events API is also live. EPCIS shaped export is Preview. Sources: <Link href="/tools" className="text-re-brand underline underline-offset-[3px]">https://regengine.co/tools</Link> and <Link href="/proof" className="text-re-brand underline underline-offset-[3px]">https://regengine.co/proof</Link> and prior published RegEngine copy that matches live /verify and /proof
+            RegEngine: Self serve free tools with no account required for the tool pages, plus design partner Beta product work. Upload path for product records is CSV. JSON events API is also live. EPCIS shaped export is Preview. Sources: <Link href="/tools" className="text-re-brand underline underline-offset-[3px]">https://regengine.co/tools</Link> and <Link href="/proof" className="text-re-brand underline underline-offset-[3px]">https://regengine.co/proof</Link>.
           </p>
           <h3 className="mt-8 text-heading text-re-text-primary">Topic: Proof you can inspect without a sales call</h3>
           <p className="mt-4 max-w-[68ch] text-body text-re-text-secondary">
@@ -84,14 +84,14 @@ export default function CompareFoodReadyPage() {
             FoodReady: No public dollar list. Packages are Restaurant / Grocery / Food Service, Manufacturer / Processor, and Enterprise, each with Get A Quote. Annual plans and multi facility via sales. Source: <a href="https://foodready.ai/pricing/" className="text-re-brand underline underline-offset-[3px]" rel="noopener noreferrer" target="_blank">https://foodready.ai/pricing/</a>
           </p>
           <p className="mt-4 max-w-[68ch] text-body text-re-text-secondary">
-            RegEngine: Pre-revenue Beta. Do not treat older compare pages as a live price sheet. Ask for current design partner terms on <Link href="/contact" className="text-re-brand underline underline-offset-[3px]">https://regengine.co/contact</Link> if you need commercial terms.
+            RegEngine: Pre-revenue Beta. Ask for current design partner terms on <Link href="/contact" className="text-re-brand underline underline-offset-[3px]">https://regengine.co/contact</Link> if you need commercial terms.
           </p>
           <h3 className="mt-8 text-heading text-re-text-primary">Topic: Free tools</h3>
           <p className="mt-4 max-w-[68ch] text-body text-re-text-secondary">
             FoodReady: Not positioned as a free FSMA 204 tool hub on the pages reviewed.
           </p>
           <p className="mt-4 max-w-[68ch] text-body text-re-text-secondary">
-            RegEngine: <Link href="/tools" className="text-re-brand underline underline-offset-[3px]">https://regengine.co/tools</Link> ranks for free FSMA 204 tools in the 2026-11-03 SERP read and lists FTL List Checker, CTE Mapper, KDE Field Checklist, TLC Format Check, Self Reported Checklist, and Records Request Checklist.
+            RegEngine: <Link href="/tools" className="text-re-brand underline underline-offset-[3px]">https://regengine.co/tools</Link> offers free FSMA 204 tools, including FTL List Checker, CTE Mapper, KDE Field Checklist, TLC Format Check, Self Reported Checklist, and Records Request Checklist.
           </p>
           <h2 className="mt-12 text-heading text-re-text-primary">When FoodReady is the better fit</h2>
           <p className="mt-4 max-w-[68ch] text-body text-re-text-secondary">
@@ -132,12 +132,6 @@ export default function CompareFoodReadyPage() {
           </p>
           <p className="mt-4 max-w-[68ch] text-body text-re-text-secondary">
             FDA Food Traceability Rule page (July 20, 2028 enforcement direction): <a href="https://www.fda.gov/food/food-safety-modernization-act-fsma/fsma-final-rule-requirements-additional-traceability-records-certain-foods" className="text-re-brand underline underline-offset-[3px]" rel="noopener noreferrer" target="_blank">https://www.fda.gov/food/food-safety-modernization-act-fsma/fsma-final-rule-requirements-additional-traceability-records-certain-foods</a>
-          </p>
-          <p className="mt-4 max-w-[68ch] text-body text-re-text-secondary">
-            Workspace competitor baseline (checked 2026-10-08, updated 2026-10-12): /workspace/competitors/regengine-foodready.md
-          </p>
-          <p className="mt-4 max-w-[68ch] text-body text-re-text-secondary">
-            SEO plan SERP note for free FSMA 204 tools: /workspace/seo/regengine-google-page-one-2026-11-03.md
           </p>
           <p className="mt-4 max-w-[68ch] text-body text-re-text-secondary">
             FoodReady and its marks belong to their owners. This comparison reflects publicly available information and RegEngine interpretation.

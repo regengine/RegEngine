@@ -137,9 +137,6 @@ export default function CompareIFoodDSPage() {
             FDA Food Traceability Rule page: <a href="https://www.fda.gov/food/food-safety-modernization-act-fsma/fsma-final-rule-requirements-additional-traceability-records-certain-foods" className="text-re-brand underline underline-offset-[3px]" rel="noopener noreferrer" target="_blank">https://www.fda.gov/food/food-safety-modernization-act-fsma/fsma-final-rule-requirements-additional-traceability-records-certain-foods</a>
           </p>
           <p className="mt-4 max-w-[68ch] text-body text-re-text-secondary">
-            Workspace competitor baseline (checked 2026-10-08, updated 2026-10-12): /workspace/competitors/regengine-ifoodds.md
-          </p>
-          <p className="mt-4 max-w-[68ch] text-body text-re-text-secondary">
             iFoodDS, Trace Exchange, TraceApproved, and related marks belong to their owners. This comparison reflects publicly available information and RegEngine interpretation.
           </p>
       </article>
