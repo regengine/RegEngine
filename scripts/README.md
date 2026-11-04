@@ -29,6 +29,7 @@ remediation PRD). The 14 candidates stay in place until then; the move is
 | `check_alembic_revisions.py` | used | CI guard — reject Alembic migrations that would corrupt the revision DAG. — invoked by `.github/workflows/backend-ci.yml`, `README.md` |
 | `check_api_host_strings.py` | used | Guard against api.regengine.co (no DNS) in user-visible code samples. — invoked by `.github/workflows/frontend-ci.yml` |
 | `check_dep_versions.py` | used | CI guard — reject dependency version drift between the declared floors and the lock. — invoked by `.github/workflows/backend-ci.yml` |
+| `check_docs_counts.py` | used | counts and lists in `docs/CODEBASE_MAP.md` and `ARCHITECTURE.md` match the tree — invoked by `.github/workflows/pr-gate.yml` (PR Gate: Docs); tested in `tests/scripts/` |
 | `check_docs_links.py` | used | Fail CI when documentation references a repo path that does not exist. — invoked by `docs/CODEBASE_MAP.md` |
 | `check_edi_event_time_mismatch.py` | manual | read-only count of EDI events whose stored timestamp and EDI event date disagree (two-clocks bug); tested by `tests/migrations/test_edi_event_time_mismatch_jsonb.py` |
 | `check_enabled_outbound_http.py` | used | Reject raw HTTP clients in release-enabled outbound-fetch paths. — invoked by `.github/workflows/backend-ci.yml` |

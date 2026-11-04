@@ -25,14 +25,14 @@ below is tracked there yet.
 | # | Item | Category | Impact | Risk | Effort | Priority | Status |
 |--:|---|---|:-:|:-:|:-:|--:|---|
 | 1 | Three schema-change channels and a stale production `alembic_version` row | Infrastructure | 4 | 5 | 3 | **27** | delivered in PR #3699 (ADR, inventory, precheck, runbook, CI guard); Appendix B decisions open |
-| 2 | Six `app` packages collide; bare `from app.` imports; 347-line `sys.path` conftest | Architecture | 4 | 4 | 3 | **24** | open |
+| 2 | Six `app` packages collide; bare `from app.` imports; 347-line `sys.path` conftest | Architecture | 4 | 4 | 3 | **24** | first half delivered in PR #3699 (production imports, Dockerfile PYTHONPATH, guard); tests and conftest shim are the second half |
 | 3 | Lint and type gates are near-empty (ruff selects 4 rule groups, mypy not a gate) | Code | 3 | 3 | 2 | **24** | open |
 | 4 | 33 CI workflows, four of them over 850 lines, plus a workflow that exists to re-run flaky gates | Infrastructure | 4 | 3 | 3 | **21** | open |
 | 5 | Legacy Kafka backbone still in tree and in the production image | Architecture | 2 | 3 | 2 | **20** | open |
 | 6 | Production image carries test and optional AI dependencies | Infrastructure | 2 | 3 | 2 | **20** | open |
-| 7 | Orientation docs disagree with the tree; duplicate doc directories; one-off reports at repo root | Documentation | 3 | 2 | 2 | **20** | open |
+| 7 | Orientation docs disagree with the tree; duplicate doc directories; one-off reports at repo root | Documentation | 3 | 2 | 2 | **20** | delivered in PR #3699 (`scripts/check_docs_counts.py`, directory merges, root reports moved) |
 | 8 | 31 of 87 top-level scripts are referenced by nothing | Code | 2 | 2 | 1 | **20** | delivered in PR #3699 (registry `scripts/README.md`, guard `scripts/check_scripts_registered.py` in backend-ci); 16 archive candidates await Christopher's approval by name |
-| 9 | Retired six-service topology still has entrypoints, k8s manifests, a PR-time CI job, and legacy runbooks | Infrastructure | 2 | 2 | 1 | **20** | open |
+| 9 | Retired six-service topology still has entrypoints, k8s manifests, a PR-time CI job, and legacy runbooks | Infrastructure | 2 | 2 | 1 | **20** | delivered in PR #3699 (moved to `docs/archive/retired-topology/`) |
 | 10 | DB-dependent tests skip vacuously without a migrated Postgres | Test | 3 | 3 | 3 | **18** | open |
 | 11 | Frontend API access split three ways; 8 hand-rolled proxy routes | Code | 3 | 2 | 3 | **15** | open |
 | 12 | Legacy `cte_events` dual-write still live, with 12 non-legacy readers | Architecture | 3 | 4 | 4 | **14** | open |

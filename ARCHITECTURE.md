@@ -1,9 +1,12 @@
 # RegEngine Architecture
 
-Last verified: 2026-07-31 — deployment model, runtime shape, infrastructure,
-dependency management, and the debt table were re-checked against code on
-this date. Sections carry their own dates where a claim was verified
-earlier and not re-checked.
+Last verified: 2026-11-04 — every repository path named in this file resolves
+(`scripts/check_docs_links.py`), the Large Modules table is regenerated from the
+tree and checked by `scripts/check_docs_counts.py`, and the edge/gateway
+paragraph follows the 2026-10-30 archive of the retired topology. The
+deployment model, runtime shape, infrastructure and dependency-management prose
+was last re-read against code on 2026-07-31; sections carry their own dates
+where a claim was verified earlier and not re-checked.
 
 Partial re-verification 2026-08-26 (#2871): only the Alembic schema-head
 claim in **Infrastructure** below was re-checked against
@@ -125,24 +128,33 @@ application is validated in its own workflow.
 
 ### Large Modules
 
-Source modules above 1,000 lines, re-measured 2026-07-31 (`wc -l`,
-excluding tests):
+Source modules above 1,000 lines, re-measured 2026-11-04 (`wc -l`,
+excluding tests; `scripts/check_docs_counts.py` fails CI when this table
+drifts from the tree):
 
 | File | Lines | Area | Likely split direction |
 | --- | ---: | --- | --- |
-| `services/ingestion/app/fda_export/router.py` | 1312 | export API | separate query, bundle assembly, and format writers |
-| `services/scheduler/service.py` | 1268 | scheduler runtime | split scrape orchestration, emission/ack, and job registration |
-| `services/shared/canonical_persistence/writer.py` | 1228 | shared persistence | extract write-path helpers and transaction orchestration |
-| `services/ingestion/app/inflow_workbench.py` | 1216 | ingestion preflight | split preflight, readiness scoring, fix queue, and commit gate |
-| `services/shared/api_key_store.py` | 1180 | shared auth | split storage adapters from validation helpers |
-| `services/ingestion/app/routes_ingest.py` | 1118 | ingestion API | separate route wiring from validation and persistence |
-| `services/graph/app/routers/fsma/compliance.py` | 1094 | graph API | split query builders from response shaping |
-| `server/main.py` | 1088 | app composition | extract router registration and startup checks from lifespan |
-| `services/shared/canonical_event.py` | 1074 | shared model | split schema, hashing, and conversion helpers |
-| `server/workers/task_processor.py` | 1063 | async worker | separate queue polling, dispatch, and retry policy |
-| `services/admin/app/metrics.py` | 1046 | admin observability | separate metric definitions from collectors/endpoints |
-| `services/admin/app/session_store.py` | 1042 | admin auth | split Redis and in-memory backends from session policy |
-| `services/graph/app/fsma_audit.py` | 1020 | graph audit | separate traversal from audit-record assembly |
+| `services/ingestion/app/csv_templates.py` | 2502 | ingestion CSV | split header mapping, template catalogue, and Jev-assisted suggestions |
+| `services/scheduler/service.py` | 1544 | scheduler runtime | split scrape orchestration, emission/ack, and job registration |
+| `services/shared/api_key_store.py` | 1488 | shared auth | split storage adapters from validation helpers |
+| `services/ingestion/app/edi_ingestion/routes.py` | 1470 | ingestion EDI | separate upload handling from parsing and rejection logging |
+| `services/shared/canonical_event.py` | 1466 | shared model | split schema, hashing, and conversion helpers |
+| `services/shared/canonical_persistence/writer.py` | 1378 | shared persistence | extract write-path helpers and transaction orchestration |
+| `services/ingestion/app/fda_export/router.py` | 1340 | export API | separate query, bundle assembly, and format writers |
+| `services/graph/app/routers/fsma/compliance.py` | 1284 | graph API | split query builders from response shaping |
+| `server/main.py` | 1271 | app composition | extract router registration and startup checks from lifespan |
+| `services/ingestion/app/inflow_workbench.py` | 1271 | ingestion preflight | split preflight, readiness scoring, fix queue, and commit gate |
+| `services/graph/app/fsma_audit.py` | 1249 | graph audit | separate traversal from audit-record assembly |
+| `services/ingestion/app/compliance_score.py` | 1209 | compliance scoring | split rule evaluation from report shaping |
+| `services/ingestion/app/epcis/persistence.py` | 1181 | EPCIS persistence | separate document parsing from row writes |
+| `services/shared/data_retention.py` | 1138 | shared retention | split policy table from purge execution |
+| `services/ingestion/app/routes_ingest.py` | 1137 | ingestion API | separate route wiring from validation and persistence |
+| `server/workers/task_processor.py` | 1126 | async worker | separate queue polling, dispatch, and retry policy |
+| `services/nlp/app/consumer/__init__.py` | 1118 | nlp consumer | move handlers out of the package __init__ |
+| `services/admin/app/metrics.py` | 1118 | admin observability | separate metric definitions from collectors/endpoints |
+| `services/admin/app/session_store.py` | 1047 | admin auth | split Redis and in-memory backends from session policy |
+| `services/ingestion/app/fda_export_service.py` | 1019 | export service | separate query assembly from writers |
+| `services/ingestion/app/remediation/service.py` | 1013 | remediation | split case lifecycle from notification side effects |
 
 These are refactor candidates, not proof of broken behavior by
 themselves.

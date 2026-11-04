@@ -26,9 +26,10 @@ on Vercel; `ARCHITECTURE.md` and `docs/CODEBASE_MAP.md` describe it. The
 | `swarm/compliance_sweep.py` | `scripts/compliance_sweep.py` | The only importer of the runtime. |
 | `workflows/infra-k8s-ci.yml` | `.github/workflows/infra-k8s-ci.yml` | Rendered the production overlay and ran the k8s and gateway tests. Removed from `scripts/workflow_inventory.txt`. |
 
-Not moved: the five `runbooks/*.md` files with a `LEGACY:` banner. They are
-still linked from operational docs and are covered by `scripts/check_docs_links.py`;
-their `kubectl` examples refer to the manifests now under `k8s/`.
+The five narrative runbooks with a `LEGACY:` banner moved to
+`docs/runbooks/legacy/` (WI-07, 2026-11-04); `scripts/check_docs_links.py`
+still covers them, and their `kubectl` examples refer to the manifests now
+under `k8s/`.
 
 ## Restoring something
 

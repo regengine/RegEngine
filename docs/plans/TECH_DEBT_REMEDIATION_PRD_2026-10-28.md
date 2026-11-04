@@ -235,6 +235,36 @@ revisions. Changing `scripts/run-migrations.sh`.
 
 ### WI-02 — Remove the `app` package collision
 
+**Status 2026-11-04:** first half delivered in PR #3699 as the PRD's split
+rule directs (366 test files use the bare form, above the 150 threshold).
+Done: every bare `app` import in non-test code rewritten to
+`services.<svc>.app.<module>` (28 files: the three kept entrypoints, five
+`services/ingestion/app` modules, the admin logging shim's docstring, four
+`services/graph/scripts`, three `services/admin/scripts`, eight under
+`scripts/`), with each script's `sys.path` setup pointed at the repo root
+instead of a service directory; the one dynamic import
+(`services/ingestion/app/edi_ingestion/routes.py`) resolves through
+`__package__` so it works under either name. `Dockerfile` `PYTHONPATH` is
+`/app:/app/services`. `pyproject.toml` `testpaths` lost the non-existent
+`services/test_data/tests`. `scripts/check_legacy_dead_code.py` gained a
+`bare-app-import` rule (tests in `tests/scripts/`) so the form cannot return
+under `services/`. Appendix A command A2 returns zero files.
+
+Service suites before and after, same tree, no database (counts from the
+progress output; the two graph failures are the `ADMIN_DATABASE_URL`
+requirement in this environment and fail identically before and after):
+admin 1758 passed / 1 skipped / 3 xfailed; ingestion see the PR; graph 823 /
+8 / 3 / 2 failed; nlp 604; compliance 282 / 1 / 8 xfailed (not re-run: no
+file under `services/compliance` changed); scheduler 460 (same).
+
+Deferred to the second half (PR B): requirement 2, because every one of the
+seven legacy entrypoints is imported by a service-local test
+(`services/<svc>/tests` import `main` or `services.<svc>.main`) and
+`inflow-contract-ci.yml` runs `services.ingestion.main:app`, so they stay in
+place with their imports rewritten; requirement 5 (the `conftest.py`
+`sys.path` shim stays until the 366 test files are rewritten).
+
+
 **Problem.** `services/{admin,compliance,graph,ingestion,nlp,scheduler}/app/`
 are six packages with one import name. Root `conftest.py` (347 lines)
 rewrites `sys.path` per service so tests resolve `from app.X`. 20
@@ -494,6 +524,29 @@ steps, `dependabot.yml`, `supply-chain.yml`.
 
 ### WI-07 — Make orientation docs count-checked
 
+**Status 2026-11-04:** delivered in PR #3699 with two deviations.
+`scripts/check_docs_counts.py` (10 tests) checks the workflow count (§2, §7),
+the `include_owned_router` count (§4; the sentence now describes the owned
+form, since bare `include_router` has two uses), the experimental router block
+(rendered from the frozenset, which added `agent_org`) and the
+`ARCHITECTURE.md` large-module table (regenerated: 21 modules, eight new since
+2026-07-31). It runs with the link checker as `PR Gate: Docs` in
+`pr-gate.yml`, not `pr-guards.yml` (that workflow holds the three JavaScript
+blocker/review gates); no workflow had been running the link checker at all,
+and §8 now says where it runs. Moves: `docs/_archive/*` → `docs/archive/`,
+`docs/schemas/evolution-policy.md` → `docs/schema/`, `nfr/fsma_slos.yaml` →
+`docs/nfr/`, the five `LEGACY:` runbooks → `docs/runbooks/legacy/`,
+`BREAK-REPORT.md` → `docs/engineering/cli-break-report-2026-10.md`,
+`FIX-REPORT.md` → `docs/engineering/about-copy-fix-report-2026-10.md`. The
+six operator `.sql` files stay in `runbooks/` with a README, because tests
+and the v098/v126 revisions name them by that path; so `ls runbooks` is not
+empty. Two code comments (`services/graph/app/routers/regulations.py`,
+`tests/security/test_tenant_scope_gate.py`) cite a `FIX-REPORT.md` about
+tenant scoping that never existed at the root; left for their owners.
+`ARCHITECTURE.md` "Last verified" is re-stamped for what was re-checked
+(paths, the table, the gateway paragraph) and says the prose was not.
+
+
 **Problem.** `docs/CODEBASE_MAP.md` claims every line was checked against
 the tree, and says 23 workflows (there are 33), 81 `include_router` calls
 in `server/main.py` (there are 2; registration moved to
@@ -598,6 +651,19 @@ CONTRIBUTING or DEVOPS_NOTES. Largest:
 **Rollback.** Revert the PR.
 
 ### WI-09 — Archive the retired six-service topology
+
+**Status 2026-11-04:** delivered in PR #3699 (commit "chore(archive): move
+the retired six-service topology under docs/archive"). Requirements 1 to 6
+done: `docs/archive/retired-topology/README.md`; `infra/k8s/`,
+`infra/gateway/` (reference-only claim verified), `regengine/swarm/` (renamed
+`regengine_swarm` so it is not importable), `tests/swarm/`,
+`scripts/compliance_sweep.py` (the only importer) and the three k8s tests from
+`tests/infra/` moved with `git mv`; `infra-k8s-ci.yml` archived and removed
+from the workflow inventory; `pyproject.toml`, `test-suite-check.yml`,
+`CODEBASE_MAP.md`, `AGENTS.md`, `ARCHITECTURE.md` and the supply-chain and
+secrets baselines updated; `regengine/setup.py` already packages only
+`regengine`. The five LEGACY runbooks stay (not in the requirements).
+
 
 **Problem.** `infra/k8s/` (`base/`, `overlays/`) plus `infra-k8s-ci.yml`;
 five root `runbooks/` with `LEGACY:` banners; `regengine/swarm/` (about

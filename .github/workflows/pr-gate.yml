@@ -570,6 +570,28 @@ jobs:
           fi
           echo "All gate dependencies green."
 
+  # Orientation docs stay true to the tree (WI-07, 2026-11-04): every
+  # backticked path in the scoped documents exists, and the counts and lists
+  # docs/CODEBASE_MAP.md and ARCHITECTURE.md state match the code. Both
+  # scripts are stdlib-only. Not a CI Status Gate dependency: a docs drift
+  # should block the PR on its own name, not masquerade as a backend failure.
+  docs-guards:
+    permissions:
+      contents: read
+    name: "PR Gate: Docs"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.11"
+      - name: Documentation links resolve
+        run: python scripts/check_docs_links.py
+      - name: Documentation counts match the tree
+        run: python scripts/check_docs_counts.py
+
   # Shared PR file detection. Required gate jobs above remain unconditional.
   changes:
     name: "PR Gate: Path Detection"

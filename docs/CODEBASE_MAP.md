@@ -27,7 +27,7 @@ Neo4j (optional graph mirror — see §6).
 The `services/*` directories are **router domains and code paths inside that
 one process**, not separate deployments. Any document, manifest or runbook that
 describes a six-service topology is describing the retired architecture; all
-five files in `runbooks/` carry an explicit `LEGACY:` banner saying so. The
+five narrative runbooks under `docs/runbooks/legacy/` carry an explicit `LEGACY:` banner saying so. The
 manifests, gateway config, swarm runtime and workflow of that topology live
 under `docs/archive/retired-topology/` (moved 2026-10-30) and are loaded by
 no build, test or deploy.
@@ -47,9 +47,9 @@ written to local disk is lost on every deploy.
 | `regengine/` | The published Python SDK/CLI (`regengine-verify` etc.), packaged separately from the platform. |
 | `tests/` | Cross-cutting suites: data integrity, SDK, scripts, shared. |
 | `scripts/` | Operational and CI helper scripts. |
-| `.github/workflows/` | 23 workflows (see §7). |
+| `.github/workflows/` | 33 workflows (see §7). |
 | `docs/` | Reference documentation. **`docs/archive/` is historical** — those files describe the tree as it was on their date and are deliberately not kept current. |
-| `runbooks/` | Operational runbooks; all five currently carry a `LEGACY:` banner. |
+| `runbooks/` | Six operator SQL files named by docs, tests and the v098/v126 revisions (see its README). Current narrative runbooks are under `docs/runbooks/`; the five legacy ones under `docs/runbooks/legacy/`. |
 | `infra/` | `otel-collector-config.yaml` (pinned by `tests/infra/`), monitoring dashboards and module READMEs. The k8s manifests moved to `docs/archive/retired-topology/k8s/`. |
 
 ## 3. `services/` — domain code inside the monolith
@@ -69,14 +69,16 @@ relative weight, not a contract.
 
 ## 4. Router gating — what is actually reachable in production
 
-`server/main.py` has 81 `include_router` calls, but **not all of them are live
-in production.** `_EXPERIMENTAL_ROUTERS` names domains that are auto-disabled
-unless `ENABLE_EXPERIMENTAL_ROUTERS` is set:
+`server/main.py` makes 82 `include_owned_router` calls (router registration
+moved from bare `include_router` to `server/router_policy.py`'s owned form), but
+**not all of them are live in production.** `EXPERIMENTAL_ROUTERS` names domains
+that are auto-disabled unless `ENABLE_EXPERIMENTAL_ROUTERS` is set (this block
+is rendered from the frozenset and checked by `scripts/check_docs_counts.py`):
 
 ```
-scraping   discovery  sources   sandbox    sensitech  audit   sop
-export     qr_decoder label_vision  exchange  recall_simulations
-graph      nlp
+agent_org  audit  discovery  exchange  export  graph  label_vision
+nlp  qr_decoder  recall_simulations  sandbox  scraping  sensitech  sop
+sources
 ```
 
 This is the single most common source of confusion in this codebase: **a route
@@ -120,22 +122,24 @@ clicking a button. Two facts that are load-bearing during an incident:
 Backend tests run under pytest from the repo root. `pyproject.toml` sets
 `--import-mode=importlib` and `asyncio_mode = "auto"`.
 
-**Known blind spot:** `testpaths` in `pyproject.toml` does not include
-`services/shared/tests`, so those 54 test files are not collected by a default
-repo-wide run even though `services/shared` is the second-largest source
-directory. Run them explicitly by path. This is tracked as #2923.
+`services/shared/tests` joined `testpaths` with #2923, so a default repo-wide
+run collects it; `test-suite-check.yml` asserts every `testpaths` root is
+represented in the collection.
 
-CI is 23 workflows under `.github/workflows/`; `backend-ci.yml`,
+CI is 33 workflows under `.github/workflows/`; `backend-ci.yml`,
 `frontend-ci.yml`, `pr-gate.yml` and `security.yml` are the ones that gate a
 normal change.
 
 ## 8. Keeping this file honest
 
 `scripts/check_docs_links.py` fails CI when a document in the live set — root
-`*.md`, `runbooks/`, and this file — references a repo path that does not
-exist. It runs as the `docs-link-check` hard gate in `backend-ci.yml`. Paths
-named deliberately *because* they were removed are declared in
-`.docs-link-allowlist` with a reason, so the exemption is auditable.
+`*.md`, `runbooks/`, `docs/runbooks/legacy/`, `docs/compliance/` and this file — references a repo path that does not
+exist. It runs as `PR Gate: Docs` in `pr-gate.yml` next to
+`scripts/check_docs_counts.py`, which fails when the counts and lists this
+file and `ARCHITECTURE.md` state differ from the tree; `tests/scripts/` runs
+both over the real tree as well. Paths named deliberately *because* they were
+removed are declared in `.docs-link-allowlist` with a reason, so the exemption
+is auditable.
 
 The check does not currently cover `docs/**`; that tree carries a substantial
 backlog of stale references, concentrated in `docs/archive/` where staleness is
