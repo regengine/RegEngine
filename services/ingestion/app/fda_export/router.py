@@ -71,6 +71,7 @@ from .queries import (
     _verify_chain_for_export,
     build_recall_where_clause,
     build_v2_where_clause,
+    attach_open_gaps,
     fetch_export_log_history,
     fetch_recall_events,
     fetch_trace_graph_data,
@@ -305,6 +306,7 @@ def export_fda_spreadsheet(
         # flag flows from the query string → authorization gate → CSV
         # generator; the generated hash covers the redacted (or full)
         # content exactly, so ``verify_export`` can reproduce it.
+        generated_at = attach_open_gaps(db_session, tenant_id, events)
         csv_content = _generate_csv(events, include_pii=include_pii)
         export_hash = hashlib.sha256(csv_content.encode("utf-8")).hexdigest()
         chain_verification = _verify_chain_for_export(persistence, db_session, tenant_id)
@@ -339,6 +341,7 @@ def export_fda_spreadsheet(
                 generated_by=generated_by,
                 export_type="fda_spreadsheet_package" if format == "package" else "fda_spreadsheet",
                 include_pii=include_pii,
+                generated_at=generated_at,
             )
             db_session.commit()
         except Exception as exc:
@@ -611,6 +614,7 @@ def export_all_events(
                 ),
             )
 
+        generated_at = attach_open_gaps(db_session, tenant_id, deduped)
         csv_content = _generate_csv(deduped, include_pii=include_pii)
         export_hash = hashlib.sha256(csv_content.encode("utf-8")).hexdigest()
         chain_verification = _verify_chain_for_export(persistence, db_session, tenant_id)
@@ -1061,6 +1065,7 @@ def export_fda_spreadsheet_v2(
         events = v2_rows_to_event_dicts(rows)
 
         # ----- Generate CSV with compliance columns -----
+        generated_at = attach_open_gaps(db_session, tenant_id, events)
         csv_content, export_hash = generate_csv_v2_and_hash(events, include_pii=include_pii)
         chain_verification = _verify_chain_for_export(persistence, db_session, tenant_id)
         completeness_summary = _build_completeness_summary(events)
@@ -1111,6 +1116,7 @@ def export_fda_spreadsheet_v2(
             source_ip=identity["source_ip"],
             include_pii=include_pii,
             event_type=event_type,
+            generated_at=generated_at,
         )
 
         timestamp = make_timestamp()

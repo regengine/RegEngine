@@ -176,7 +176,7 @@ section included, fails both the browser verifier and `services/admin/scripts/ve
 
 ### 3.3 FDA CSV Column Specification
 
-The export uses 34 columns defined in `FDA_COLUMNS` (`fda_export_service.py:29-65`):
+The export uses 35 columns defined in `FDA_COLUMNS` (`fda_export_service.py`):
 
 **Core fields:** TLC, Product Description, Quantity, UOM, Event Type (CTE), Event Date/Time, Location GLN/Name, Ship From/To, Immediate Previous Source, TLC Source, Source Document
 
@@ -185,6 +185,8 @@ The export uses 34 columns defined in `FDA_COLUMNS` (`fda_export_service.py:29-6
 **KDE fields:** Reference Document Number, Receive/Ship/Harvest/Cooling/Packing/Transformation/Landing Date, Receiving Location, Temperature, Carrier, Growing Area, Additional KDEs (JSON)
 
 **FSMA 204 required:** System Entry Timestamp (when the record was entered into the system, maps to `ingested_at` column)
+
+**Open Data Gaps:** always the last column. It names the data gaps open on that row's lot and CTE when the export was generated, for example `missing_kde: tlc_source_reference`. Blank means none was open. If the gaps cannot be read, the export stops with a 503.
 
 ### 3.4 Check Response Headers
 
