@@ -208,6 +208,9 @@ describe('overview derivations', () => {
     expect(nextActions(all, {}).map((a) => a.view)).toEqual(['fix', 'export', 'ledger']);
     expect(nextActions(all, everything).map((a) => a.view)).toEqual(['export', 'ledger']);
     expect(nextActions(all, {})[0].n).toBe('01');
+    // No chain is complete before any fix, so the export action must not offer "0 packages".
+    expect(nextActions(all, {})[1].label).not.toMatch(/\b0\b/);
+    expect(nextActions(all, { [first.id]: true })[1].label).toBe('Export the 1 complete package');
   });
 
   it('parses the view from the location hash', () => {

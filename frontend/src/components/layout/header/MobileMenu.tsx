@@ -3,6 +3,7 @@
 import { filterExperimentalLinks } from '@/lib/experimental-features';
 import Link from 'next/link';
 import { X } from 'lucide-react';
+import { useTheme } from 'next-themes';
 import { MARKETING_ALL_TOOLS_LINK, MARKETING_PRIMARY_NAV, MARKETING_FREE_TOOLS } from '@/components/layout/marketing-nav';
 import { RegEngineWordmark } from '@/components/layout/regengine-wordmark';
 import { ThemeToggle } from '@/components/layout/theme-toggle';
@@ -30,6 +31,8 @@ const LOGGED_IN_LINKS = [
 ];
 
 export function MobileMenu({ user, showLoggedIn, pathname, mobileOpen, setMobileOpen }: MobileMenuProps) {
+    // ThemeToggle renders nothing on routes with a forced theme; drop its row too.
+    const { forcedTheme } = useTheme();
     return (
         <>
             {/* Drawer scrim */}
@@ -124,13 +127,17 @@ export function MobileMenu({ user, showLoggedIn, pathname, mobileOpen, setMobile
                     ))}
                 </div>
 
-                <div aria-hidden="true" className="mx-5 h-px bg-[var(--re-mobile-border)]" />
+                {!forcedTheme && (
+                    <>
+                        <div aria-hidden="true" className="mx-5 h-px bg-[var(--re-mobile-border)]" />
 
-                {/* Theme */}
-                <div className="flex items-center justify-between px-6 py-3">
-                    <span className="text-ui text-re-text-secondary">Theme</span>
-                    <ThemeToggle />
-                </div>
+                        {/* Theme */}
+                        <div className="flex items-center justify-between px-6 py-3">
+                            <span className="text-ui text-re-text-secondary">Theme</span>
+                            <ThemeToggle />
+                        </div>
+                    </>
+                )}
 
                 <div className="flex-1" />
 

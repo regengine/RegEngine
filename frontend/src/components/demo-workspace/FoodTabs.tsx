@@ -11,10 +11,16 @@ interface FoodTabsProps {
   onPick: (index: number) => void;
   size?: 'sm' | 'md';
   className?: string;
+  /** id of the tabpanel these tabs control; the panel labels itself with tabId(). */
+  panelId: string;
+}
+
+export function tabId(panelId: string, scenarioId: string): string {
+  return `${panelId}-tab-${scenarioId}`;
 }
 
 /** One pill per FTL food. Roving tabindex, arrow keys move the selection. */
-export function FoodTabs({ all, selected, onPick, size = 'md', className }: FoodTabsProps) {
+export function FoodTabs({ all, selected, onPick, size = 'md', className, panelId }: FoodTabsProps) {
   const refs = useRef<Array<HTMLButtonElement | null>>([]);
 
   const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
@@ -41,6 +47,8 @@ export function FoodTabs({ all, selected, onPick, size = 'md', className }: Food
             }}
             type="button"
             role="tab"
+            id={tabId(panelId, scenario.id)}
+            aria-controls={panelId}
             aria-selected={active}
             tabIndex={active ? 0 : -1}
             onClick={() => onPick(index)}

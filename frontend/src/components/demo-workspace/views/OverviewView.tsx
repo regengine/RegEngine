@@ -1,6 +1,5 @@
 'use client';
 
-import type { KeyboardEvent } from 'react';
 import { HueDot } from '@/components/demo-workspace/HueDot';
 import { Card } from '@/components/ui/card';
 import { StatusBadge } from '@/components/ui/status-badge';
@@ -21,16 +20,10 @@ const HEAD = 'h-10 bg-transparent font-mono text-label uppercase tracking-[0.08e
 export function OverviewView({ stats, attention, actions, onOpenRecord, onNavigate }: OverviewViewProps) {
   const tiles = [
     { label: 'Records imported', value: String(stats.total), note: `${stats.chains} supplier files · 5 FTL foods`, tone: 'text-re-text-primary' },
-    { label: 'Committed to ledger', value: String(stats.committed), note: 'hash-chained, append-only', tone: 'text-re-success' },
+    { label: 'Committed to ledger', value: String(stats.committed), note: 'hash-chained, clears on reset', tone: 'text-re-success' },
     { label: 'Open fixes', value: String(stats.open), note: stats.open ? 'each has an owner' : 'queue is clear', tone: stats.open ? 'text-re-warning' : 'text-re-success' },
     { label: 'Packages ready', value: `${stats.ready} / ${stats.chains}`, note: 'FDA-shaped CSV + manifest', tone: 'text-re-brand' },
   ];
-
-  const onRowKey = (event: KeyboardEvent<HTMLTableRowElement>, row: AttentionRow) => {
-    if (event.key !== 'Enter' && event.key !== ' ') return;
-    event.preventDefault();
-    onOpenRecord(row.scenarioIndex, row.rowIndex);
-  };
 
   return (
     <>
@@ -63,19 +56,21 @@ export function OverviewView({ stats, attention, actions, onOpenRecord, onNaviga
                   {attention.map((row) => (
                     <TableRow
                       key={row.scenarioId}
-                      tabIndex={0}
                       onClick={() => onOpenRecord(row.scenarioIndex, row.rowIndex)}
-                      onKeyDown={(event) => onRowKey(event, row)}
-                      className="cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-re-focus-ring"
+                      className="cursor-pointer"
                     >
                       <TableCell className="whitespace-nowrap">
                         <StatusBadge state="needs-correction" size="sm" />
                       </TableCell>
                       <TableCell className="text-re-text-secondary">
-                        <span className="inline-flex items-center gap-2">
+                        {/* The click bubbles to the row's handler; a native button gives keyboard and screen-reader access. */}
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-2 rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring"
+                        >
                           <HueDot hue={row.hue} />
                           {row.item}
-                        </span>
+                        </button>
                       </TableCell>
                       <TableCell className="whitespace-nowrap text-re-text-tertiary">{row.owner}</TableCell>
                       <TableCell className="whitespace-nowrap font-mono text-small text-re-text-muted">{row.source}</TableCell>

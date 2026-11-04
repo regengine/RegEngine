@@ -283,7 +283,7 @@ export function heroStatus(scenario: Scenario, fixed: FixedMap): HeroStatus {
     ledgerLine: `${committed.length} of ${total} records committed`,
     exportBadge: open ? `${committed.length} of ${total} ready` : 'Ready to export',
     exportLine: open
-      ? `${open} record still open. Export lists it separately until corrected.`
+      ? `${open} record still open. Export marks it OPEN in the sheet until corrected.`
       : `All ${committed.length} records committed. Hash manifest attached.`,
     exportReady: open === 0,
   };
@@ -482,12 +482,10 @@ export function nextActions(all: readonly Scenario[], fixed: FixedMap): NextActi
   if (open) {
     actions.push({ label: `Resolve ${open} open ${open === 1 ? 'fix' : 'fixes'} in imported records`, view: 'fix' });
   }
-  actions.push({
-    label: open
-      ? `Export the ${ready} complete ${ready === 1 ? 'package' : 'packages'}`
-      : 'Export all five packages',
-    view: 'export',
-  });
+  let exportLabel = 'Export all five packages';
+  if (open && ready === 0) exportLabel = 'See what each export package will hold';
+  else if (open) exportLabel = `Export the ${ready} complete ${ready === 1 ? 'package' : 'packages'}`;
+  actions.push({ label: exportLabel, view: 'export' });
   actions.push({ label: 'Review the evidence ledger', view: 'ledger' });
   return actions.map((action, i) => ({ ...action, n: String(i + 1).padStart(2, '0') }));
 }

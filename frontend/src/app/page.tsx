@@ -28,7 +28,7 @@ const ruleStats = [
   {
     value: "24 hrs",
     detail:
-      "Time the FDA gives you to produce an electronic sortable spreadsheet under 21 CFR 1.1455(c)(3)(ii), unless it agrees to more.",
+      "Time the FDA gives you to produce an electronic sortable spreadsheet under 21 CFR 1.1455(c)(3)(ii) when it asks for one during an outbreak, a recall or another public-health threat, unless it agrees to more.",
   },
   {
     value: "7 CTEs",

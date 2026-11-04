@@ -1,6 +1,5 @@
 'use client';
 
-import type { KeyboardEvent } from 'react';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { Row } from '@/lib/demo-workspace/model';
@@ -22,12 +21,6 @@ const HEAD = 'h-9 bg-transparent font-mono text-label uppercase tracking-[0.08em
 export function RecordTable({ rows, hue, selected, onPick, variant, caption }: RecordTableProps) {
   const hero = variant === 'hero';
 
-  const onKeyDown = (event: KeyboardEvent<HTMLTableRowElement>, index: number) => {
-    if (event.key !== 'Enter' && event.key !== ' ') return;
-    event.preventDefault();
-    onPick(index);
-  };
-
   return (
     <Table className={cn(hero ? 'text-[0.8125rem]' : 'text-ui')}>
       <caption className="sr-only">{caption}</caption>
@@ -45,14 +38,11 @@ export function RecordTable({ rows, hue, selected, onPick, variant, caption }: R
           return (
             <TableRow
               key={row.index}
-              tabIndex={0}
-              aria-selected={isSelected}
               data-state={isSelected ? 'selected' : undefined}
               data-gap={row.openGap ? 'open' : undefined}
               onClick={() => onPick(row.index)}
-              onKeyDown={(event) => onKeyDown(event, row.index)}
               className={cn(
-                'cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-re-focus-ring',
+                'cursor-pointer',
                 row.openGap && 'bg-re-warning-bg/40',
                 isSelected && 'ring-1 ring-inset ring-re-brand data-[state=selected]:bg-transparent',
               )}
@@ -63,10 +53,15 @@ export function RecordTable({ rows, hue, selected, onPick, variant, caption }: R
                   row.openGap ? 'border-l-re-warning' : 'border-l-transparent',
                 )}
               >
-                <span className="flex items-center gap-2">
+                {/* The click bubbles to the row's handler; a native button gives keyboard and screen-reader access. */}
+                <button
+                  type="button"
+                  aria-pressed={isSelected}
+                  className="flex items-center gap-2 rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring"
+                >
                   <HueDot hue={hue} />
                   <span>{row.cte}</span>
-                </span>
+                </button>
                 {hero && (
                   <span className="block max-w-[170px] truncate pl-4 text-small font-normal text-re-text-muted">
                     {row.firm}

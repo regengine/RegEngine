@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { HeroWorkbench } from '@/components/marketing/HeroWorkbench';
 import { gapIndex, scenarios } from '@/lib/demo-workspace/model';
@@ -39,7 +39,17 @@ describe('HeroWorkbench', () => {
     render(<HeroWorkbench />);
     expect(screen.getByText(/of \d+ ready/i)).toBeInTheDocument();
 
-    fireEvent.keyDown(gapRow(), { key: 'Enter' });
+    // The status strip names the file the Export view downloads for this chain.
+    expect(screen.getByText(`fda_sortable_${first.id}.csv`)).toBeInTheDocument();
+    // Each food tab controls the labelled panel that holds the records.
+    const panel = screen.getByRole('tabpanel');
+    expect(screen.getAllByRole('tab')[0]).toHaveAttribute('aria-controls', panel.id);
+    expect(panel).toHaveAttribute('aria-labelledby', screen.getAllByRole('tab')[0].id);
+
+    const gapButton = within(gapRow()).getByRole('button');
+    expect(gapButton).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(gapButton);
+    expect(within(gapRow()).getByRole('button')).toHaveAttribute('aria-pressed', 'true');
     fireEvent.click(screen.getByRole('button', { name: /send correction link to supplier/i }));
 
     expect(screen.getByText(/supplier corrected the record/i)).toBeInTheDocument();

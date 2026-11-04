@@ -1,6 +1,7 @@
 'use client';
 
-import { FoodTabs } from '@/components/demo-workspace/FoodTabs';
+import { useId } from 'react';
+import { FoodTabs, tabId } from '@/components/demo-workspace/FoodTabs';
 import { RecordDetail } from '@/components/demo-workspace/RecordDetail';
 import { RecordTable } from '@/components/demo-workspace/RecordTable';
 import { WorkbenchHeader } from '@/components/demo-workspace/WorkbenchHeader';
@@ -22,26 +23,29 @@ interface ImportViewProps {
 export function ImportView({ all, scenario, selected, row, fixed, onPickScenario, onPickRow, onFix }: ImportViewProps) {
   const rows = deriveRows(scenario, fixed);
   const detail = detailFor(scenario, row, fixed, 'workspace');
+  const panelId = useId();
 
   return (
     <>
-      <FoodTabs all={all} selected={selected} onPick={onPickScenario} className="mb-3.5" />
-      <Card className="mb-4 overflow-hidden">
-        <WorkbenchHeader file={fileName(scenario)} checkLine={`checked ${rows.length} of ${rows.length} records`} />
-        <RecordTable
-          rows={rows}
-          hue={scenario.hue}
-          selected={row}
-          onPick={onPickRow}
-          variant="workspace"
-          caption={`${shortLabel(scenario)} supplier records`}
-        />
-      </Card>
-      {detail && (
-        <Card className={cn('px-5 py-4', detail.kind === 'gap' && 'border-re-warning-border')}>
-          <RecordDetail detail={detail} surface="workspace" onFix={onFix} />
+      <FoodTabs all={all} selected={selected} onPick={onPickScenario} className="mb-3.5" panelId={panelId} />
+      <div role="tabpanel" id={panelId} aria-labelledby={tabId(panelId, scenario.id)}>
+        <Card className="mb-4 overflow-hidden">
+          <WorkbenchHeader file={fileName(scenario)} checkLine={`checked ${rows.length} of ${rows.length} records`} />
+          <RecordTable
+            rows={rows}
+            hue={scenario.hue}
+            selected={row}
+            onPick={onPickRow}
+            variant="workspace"
+            caption={`${shortLabel(scenario)} supplier records`}
+          />
         </Card>
-      )}
+        {detail && (
+          <Card className={cn('px-5 py-4', detail.kind === 'gap' && 'border-re-warning-border')}>
+            <RecordDetail detail={detail} surface="workspace" onFix={onFix} />
+          </Card>
+        )}
+      </div>
     </>
   );
 }

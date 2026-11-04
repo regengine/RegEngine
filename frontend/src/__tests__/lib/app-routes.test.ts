@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isAuthenticatedAppRoute, isForcedDarkRoute, shouldHideMarketingChrome } from '@/lib/app-routes';
+import { isAuthenticatedAppRoute, isForcedDarkRoute, shouldHideCookieBanner, shouldHideMarketingChrome } from '@/lib/app-routes';
 
 describe('app route ownership', () => {
     it('treats operational root routes as authenticated app routes', () => {
@@ -41,5 +41,13 @@ describe('app route ownership', () => {
         expect(isForcedDarkRoute('/demo')).toBe(true);
         expect(isForcedDarkRoute('/pricing')).toBe(false);
         expect(isForcedDarkRoute('/demo/anything')).toBe(false);
+    });
+
+    it('keeps the cookie consent banner on the public demo but not in the app or the developer portal', () => {
+        expect(shouldHideCookieBanner('/demo')).toBe(false);
+        expect(shouldHideCookieBanner('/')).toBe(false);
+        expect(shouldHideCookieBanner('/developer/portal')).toBe(true);
+        expect(shouldHideCookieBanner('/dashboard')).toBe(true);
+        expect(shouldHideCookieBanner('/login')).toBe(true);
     });
 });

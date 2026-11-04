@@ -81,7 +81,7 @@ export function DemoShell({ view, onNavigate, openCount, title, subtitle, legend
         </div>
       </aside>
 
-      <main className="flex min-w-0 flex-col">
+      <div className="flex min-w-0 flex-col">
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-re-brand-muted bg-re-brand-muted/60 px-6 py-2.5 text-small text-re-text-secondary">
           <span>
             <strong className="font-semibold text-re-text-primary">Demo workspace.</strong> No account needed. Five supply chains of
@@ -118,7 +118,7 @@ export function DemoShell({ view, onNavigate, openCount, title, subtitle, legend
           </div>
           {children}
         </div>
-      </main>
+      </div>
     </div>
   );
 }

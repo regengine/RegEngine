@@ -58,7 +58,7 @@ describe('/demo public workspace', () => {
   it('jumps from an attention row to the import view with that record selected', () => {
     render(<DemoWorkspacePage />);
     const rows = screen.getAllByRole('row').filter((row) => within(row).queryByText('Needs correction'));
-    fireEvent.keyDown(rows[1], { key: 'Enter' });
+    fireEvent.click(within(rows[1]).getByRole('button'));
     expect(screen.getByRole('heading', { level: 1, name: /import/i })).toBeInTheDocument();
     expect(screen.getAllByRole('tab')[1]).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('button', { name: /send correction link to supplier/i })).toBeInTheDocument();

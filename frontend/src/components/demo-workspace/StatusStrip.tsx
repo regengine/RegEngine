@@ -3,12 +3,12 @@ import type { HeroStatus } from '@/lib/demo-workspace/model';
 import { cn } from '@/lib/utils';
 
 /** Ledger and export cells under the hero workbench table. */
-export function StatusStrip({ status }: { status: HeroStatus }) {
+export function StatusStrip({ status, file }: { status: HeroStatus; file: string }) {
   return (
     <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))]">
       <div className="border-r border-re-border-subtle px-4 py-3">
         <p className="mb-1.5 font-mono text-label uppercase tracking-[0.1em] text-re-text-muted">
-          Evidence ledger · append-only
+          Evidence ledger · hash-chained
         </p>
         <p className="text-[0.8125rem] font-semibold text-re-text-primary">{status.ledgerLine}</p>
         <p className="truncate font-mono text-small text-re-text-muted">latest {status.latestHash}</p>
@@ -25,7 +25,7 @@ export function StatusStrip({ status }: { status: HeroStatus }) {
             {status.exportBadge}
           </Badge>
         </div>
-        <p className="font-mono text-small font-semibold text-re-text-primary">fda_sortable_export.csv</p>
+        <p className="font-mono text-small font-semibold text-re-text-primary">{file}</p>
         <p className="text-small leading-snug text-re-text-tertiary">{status.exportLine}</p>
       </div>
     </div>

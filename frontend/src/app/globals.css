@@ -1013,6 +1013,11 @@ body.barcode-scanner-active .barcode-scanner-ui {
         flex-wrap: wrap;
     }
 
+    /* The nav buttons are full width in the sidebar; let them share a row here. */
+    .re-demo-shell [data-demo-nav] > button {
+        width: auto;
+    }
+
     .re-demo-shell [data-demo-aside-foot] {
         display: none;
     }

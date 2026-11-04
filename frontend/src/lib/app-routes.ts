@@ -78,3 +78,17 @@ export function shouldHideMarketingChrome(pathname: string): boolean {
     matchesRoutePrefix(pathname, SELF_CHROMED_ROUTE_PREFIXES)
   );
 }
+
+/**
+ * Self-chromed routes that are public, indexed pages. They replace the
+ * marketing header and footer but still owe a first-time visitor the cookie
+ * consent prompt, because their analytics events are consent-gated.
+ */
+const PUBLIC_SELF_CHROMED_ROUTE_PREFIXES = ["/demo"] as const;
+
+export function shouldHideCookieBanner(pathname: string): boolean {
+  return (
+    shouldHideMarketingChrome(pathname) &&
+    !matchesRoutePrefix(pathname, PUBLIC_SELF_CHROMED_ROUTE_PREFIXES)
+  );
+}
