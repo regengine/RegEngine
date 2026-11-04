@@ -86,15 +86,9 @@ describe('pre-revenue public copy', () => {
         for (const file of pages) {
             const source = read(file);
             expect(source, `${file} still contains "$425"`).not.toContain('$425');
+            expect(source, `${file} still contains "$849"`).not.toContain('$849');
             expect(source, `${file} missing founding $499`).toContain('$499');
-        }
-        // Pages that state both approved figures (not the compare rows that still show $849 list)
-        for (const file of [
-            'src/app/why-regengine/page.tsx',
-            'src/app/buyer-programs/page.tsx',
-            'src/app/supplier-compliance/page.tsx',
-        ]) {
-            expect(read(file), `${file} missing list $999`).toContain('$999/mo per facility');
+            expect(source, `${file} missing list $999`).toContain('$999/mo per facility');
         }
     });
 
