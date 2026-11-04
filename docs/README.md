@@ -11,6 +11,10 @@ context. Their presence here does not establish that their recommendations were
 implemented or that their observations remain current. Check each document's
 date and status against the code and current operational evidence before acting.
 
+The default `python3 scripts/check_docs_links.py` check covers root Markdown,
+`runbooks/`, `docs/CODEBASE_MAP.md`, and `docs/compliance/`; it does not scan
+the entire documentation tree.
+
 ## Architecture
 - [System Architecture](architecture/ARCHITECTURE.md)
 - [Database Topology](architecture/DATABASE_TOPOLOGY.md)
