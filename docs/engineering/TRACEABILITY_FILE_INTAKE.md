@@ -231,8 +231,8 @@ curl -X POST "$BASE/api/v1/ingest/edi/document" \
   -H "X-RegEngine-API-Key: $REGENGINE_API_KEY" \
   -H "X-Partner-ID: $PARTNER_ID" \
   -F "file=@asn_856.edi;type=application/edi-x12" \
-  -F "traceability_lot_code=FALLBACK-TLC-WHEN-A-LINE-HAS-NO-LOT" \
-  -F "tlc_source_reference=$TLC_SOURCE_GLN_OR_REFERENCE" # pragma: allowlist secret
+  -F "tlc_source_reference=$TLC_SOURCE_GLN_OR_REFERENCE" \
+  -F "traceability_lot_code=FALLBACK-TLC-WHEN-A-LINE-HAS-NO-LOT" # pragma: allowlist secret
 ```
 
 ## X12 944 and 945 on `POST /api/v1/ingest/edi/document`
