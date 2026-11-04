@@ -444,7 +444,7 @@ def test_key_gone_between_set_and_get_is_retryable(production_client, store, ing
 @pytest.mark.parametrize("route", ["", "/document"])
 def test_key_written_by_the_previous_format_counts_as_stored(client, store, ingested, route):
     """Keys live for up to 7 days across a deploy, and hold a bare token."""
-    _seed_key(client, store, route, "0123456789abcdef0123456789abcdef")
+    _seed_key(client, store, route, "f" * 32)
 
     replay = _post(client, FIXTURE.read_bytes(), route)
     assert replay.status_code == 409, replay.json()
