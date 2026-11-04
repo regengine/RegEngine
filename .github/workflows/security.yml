@@ -547,23 +547,14 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
 
-      - name: Setup Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+      - name: Set up Python with the requirement locks
+        uses: ./.github/actions/setup-python-locks
         with:
           python-version: "3.11"
-          cache: "pip"
 
-      - name: Install dependencies
+      - name: Install the extra report plugin
         run: |
-          # Install from the root requirements.lock (pip-compile output; #1139).
-          # Falls back silently if the file isn't present so tenant-isolation
-          # tests still run on branches predating this migration. If the file
-          # IS present, hash-verified install must succeed — fail loud on
-          # hash mismatch or missing dep instead of silently swallowing.
-          if [ -f requirements.lock ]; then
-            pip install --require-hashes -r requirements.lock -r requirements-dev.lock
-          fi
-          pip install pytest httpx pytest-json-report pytest-asyncio requests sqlalchemy "psycopg[binary]"
+          pip install pytest-json-report
 
       - name: Create scratch database (dedicated migration + runtime roles)
         env:

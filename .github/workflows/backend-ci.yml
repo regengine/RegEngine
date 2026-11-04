@@ -239,11 +239,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
 
-      - name: Setup Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
       - name: Create additional databases
         env:
           PGPASSWORD: postgres
@@ -251,25 +246,10 @@ jobs:
           psql -h localhost -U postgres -c "CREATE DATABASE regengine_admin;"
           psql -h localhost -U postgres -c "CREATE DATABASE test_db;"
 
-      - name: Cache pip packages
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v5
+      - name: Set up Python with the requirement locks
+        uses: ./.github/actions/setup-python-locks
         with:
-          path: ~/.cache/pip
-          # Key off the root requirements.lock — the single source of truth.
-          # Per-service requirements.txt files are DEPRECATED (see #1429)
-          # and match root, so caching on root invalidates correctly.
-          key: pip-${{ hashFiles('requirements.lock', 'requirements-dev.lock') }}
-          restore-keys: |
-            pip-
-
-      - name: Install dependencies
-        run: |
-          # Install from the root requirements.lock (pip-compile output; see
-          # requirements.in for the human-edited top-level spec). --require-hashes
-          # guarantees reproducible builds and rejects CVE-shifted artifacts.
-          # Per-service stubs are DEPRECATED and will be removed with
-          # docker-compose (#1429).
-          pip install --require-hashes -r requirements.lock -r requirements-dev.lock
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Run tests with coverage
         env:
@@ -615,11 +595,6 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
 
-      - name: Setup Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
       - name: Create test database
         env:
           PGPASSWORD: postgres
@@ -658,17 +633,10 @@ jobs:
           $fn$ LANGUAGE plpgsql STABLE;
           EOSQL
 
-      - name: Cache pip packages
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v5
+      - name: Set up Python with the requirement locks
+        uses: ./.github/actions/setup-python-locks
         with:
-          path: ~/.cache/pip
-          key: pip-${{ hashFiles('requirements.lock', 'requirements-dev.lock') }}
-          restore-keys: |
-            pip-
-
-      - name: Install dependencies
-        run: |
-          pip install --require-hashes -r requirements.lock -r requirements-dev.lock
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Migrate remediation database to alembic head
         env:
@@ -905,21 +873,10 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
 
-      - name: Setup Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+      - name: Set up Python with the requirement locks
+        uses: ./.github/actions/setup-python-locks
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Cache pip packages
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v5
-        with:
-          path: ~/.cache/pip
-          key: pip-${{ hashFiles('requirements.lock', 'requirements-dev.lock') }}
-          restore-keys: |
-            pip-
-
-      - name: Install dependencies
-        run: pip install --require-hashes -r requirements.lock -r requirements-dev.lock
 
       - name: Route-complete security manifest and disabled-router gate
         run: |
@@ -1293,21 +1250,10 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
 
-      - name: Setup Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+      - name: Set up Python with the requirement locks
+        uses: ./.github/actions/setup-python-locks
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Cache pip packages
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v5
-        with:
-          path: ~/.cache/pip
-          key: pip-${{ hashFiles('requirements.lock', 'requirements-dev.lock') }}
-          restore-keys: |
-            pip-
-
-      - name: Install dependencies
-        run: pip install --require-hashes -r requirements.lock -r requirements-dev.lock
 
       - name: Create dedicated-owner rehearsal database
         env:
@@ -1379,21 +1325,10 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
 
-      - name: Setup Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+      - name: Set up Python with the requirement locks
+        uses: ./.github/actions/setup-python-locks
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Cache pip packages
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v5
-        with:
-          path: ~/.cache/pip
-          key: pip-${{ hashFiles('requirements.lock', 'requirements-dev.lock') }}
-          restore-keys: |
-            pip-
-
-      - name: Install dependencies
-        run: pip install --require-hashes -r requirements.lock -r requirements-dev.lock
 
       - name: Create scratch database (dedicated migration + runtime roles)
         env:

@@ -201,8 +201,8 @@
     {
       "rule": "pip-pin",
       "file": ".github/workflows/security.yml",
-      "match": "pip install pytest httpx pytest-json-report pytest-asyncio requests sqlalchemy \"psycopg[binary]\"",
-      "reason": "Test-only dependencies in a scanner job. This file is owned by in-flight work, so it is baselined, not edited here. Pin on the next touch.",
+      "match": "pip install pytest-json-report",
+      "reason": "Report plugin for the tenant-isolation job only; the locks cover everything else since WI-04/WI-06 (2026-11-04). Not digest-pinned; accepted debt matching the prior entry.",
       "exact": true
     },
     {

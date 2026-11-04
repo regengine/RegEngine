@@ -397,6 +397,27 @@ under `services/shared/` for the first pass.
 
 ### WI-04 — CI consolidation
 
+**Status 2026-11-04:** delivered in PR #3699, with requirement 3 deferred by
+the measurement. `docs/engineering/CI_TIMING_2026-11.md` holds the last 30
+`pull_request` runs of the five workflows (per job: median, p90, failures,
+first failing step), produced by `scripts/ci/ci_timing_report.py`. The
+shared setup is a composite action, `.github/actions/setup-python-locks`
+(Python, pip cache keyed on both locks, hash-verified install), used by the
+ten pytest jobs across `backend-ci.yml`, `test-suite-check.yml`,
+`security.yml` and `qa-health.yml`; a `workflow_call` workflow cannot share
+steps inside a job, which is where the duplication was, and Node setup is
+already one `setup-node` step reading `.nvmrc` (WI-13). Requirement 3: the
+four `PR Gate: Frontend` failures all end in the 12-minute wait on the
+frontend run, and no single spec fails more than once in 30 runs, so there
+is no flaky spec to fix and `pr-gate-frontend-rerun.yml` stays. Requirement
+4 landed in WI-09. Requirement 5 already held: every pull-request workflow
+has a concurrency group with `cancel-in-progress` except `pr-guards.yml`
+(marked must-not-cancel in #3792) and the PR-close cache cleanup.
+Requirement 6 is enforced by WI-07's checker. The follow-up measurement is
+owed after the change has run on pull requests; the ingestion test leg
+(median 20.2 of a 24.1-minute run) sets the floor and is untouched.
+
+
 **Problem.** 33 workflows. `backend-ci.yml` 1,530 lines, `pr-guards.yml`
 1,401, `pr-gate.yml` 1,123, `security.yml` 875.
 `pr-gate-frontend-rerun.yml` exists to re-run flaky frontend gates. The
@@ -808,6 +829,27 @@ graph 60, ingestion 48, shared 35.
 **Rollback.** Revert the PR.
 
 ### WI-11 — One frontend API path
+
+**Status 2026-11-04:** delivered in PR #3699. On this tree the count was 9
+bare `fetch(` calls in 8 files (the audit's 33 included files `main` has
+since retired). `src/lib/api-client.ts` now exports `rawFetch` (a documented
+passthrough for requests that must not carry the session's Authorization or
+X-Tenant-ID headers, or need Next.js fetch options) and `requestPublicJson`
+(the supplier portal helper, moved verbatim); every call site goes through
+one of them, so each request shape is byte-for-byte what it was, which the
+existing `scan-history-widget` test (asserts no `X-Tenant-ID`) and the new
+`src/__tests__/lib/wi11-fetch-call-sites.test.tsx` (six sites: `rawFetch`,
+the portal helper, StatusBoard, ComplianceStatusWidget, `useSystemStatus`,
+`apiClient.getSystemStatus`) pin. The ESLint rule (`no-restricted-syntax` on
+`fetch(` under `src/app`, `src/components`, `src/hooks`, excluding
+`src/app/api` and tests) names api-client.ts in its message. Requirement 3:
+`tools/check-access`, `tools/verify` and `inflow-lab/[...path]` all carry
+local logic (cookie clearing, cookie minting from the backend's TTL,
+endpoint contracts and Basic-auth injection), so none converts to
+`proxy-factory.ts`; each of the nine hand-rolled handlers (including
+`inflow-lab-demo`) now says at its top why. `npm run lint`, `npm run
+test:run` (1696 passed) and `npm run build` pass.
+
 
 **Problem.** `frontend/src/lib/api-client.ts` (1,163 lines) is imported by
 15 files under `app/`, `components/`, `hooks/`; 33 non-test files in those
