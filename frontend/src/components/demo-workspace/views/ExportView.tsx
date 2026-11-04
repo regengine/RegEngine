@@ -53,9 +53,10 @@ export function ExportView({ packages }: { packages: Package[] }) {
       </div>
       <p className="mt-5 max-w-[760px] text-small leading-relaxed text-re-text-muted">
         Packages are FDA-shaped sortable spreadsheets built from the committed records of each chain. Open records are
-        listed in a separate sheet, never silently dropped. The manifest lists every file with its SHA-256; check it on
-        your own machine with <span className="font-mono">verify_chain.py</span>. A package is a record of what you
-        hold, not a certification and not a statement that any request has been met.
+        marked OPEN in the sheet, never silently dropped. The hashes on this page are stand-ins, not SHA-256, and the
+        downloads here are a CSV and a plain-text manifest. A real export is an audit bundle with SHA-256 hashes that
+        you check on your own machine with <span className="font-mono">verify_chain.py</span>. A package is a record
+        of what you hold, not a certification and not a statement that any request has been met.
       </p>
     </>
   );

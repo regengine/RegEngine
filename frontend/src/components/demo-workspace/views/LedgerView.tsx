@@ -12,9 +12,9 @@ export function LedgerView({ entries }: { entries: LedgerEntry[] }) {
     <Card className="overflow-hidden">
       <div className="flex flex-wrap justify-between gap-3 border-b border-re-border-subtle bg-re-surface-elevated px-4 py-2.5">
         <span className="font-mono text-label uppercase tracking-[0.1em] text-re-text-tertiary">
-          Evidence ledger · append-only · chain_hash = SHA-256(previous ‖ event)
+          Evidence ledger · append-only · chain_hash = hash(previous ‖ event) · stand-in hashes, not SHA-256
         </span>
-        <span className="font-mono text-label text-re-brand">{entries.length} entries · chain verified</span>
+        <span className="font-mono text-label text-re-brand">{entries.length} entries · hash-chained</span>
       </div>
       <Table className="text-[0.8125rem]">
         <caption className="sr-only">Evidence ledger entries</caption>

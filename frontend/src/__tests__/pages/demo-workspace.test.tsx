@@ -52,7 +52,7 @@ describe('/demo public workspace', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Evidence ledger' })).toBeInTheDocument();
     expect(window.location.hash).toBe('#ledger');
     const total = all.reduce((sum, s) => sum + s.chain.length, 0);
-    expect(screen.getByText(`${total - all.length} entries · chain verified`)).toBeInTheDocument();
+    expect(screen.getByText(`${total - all.length} entries · hash-chained`)).toBeInTheDocument();
   });
 
   it('jumps from an attention row to the import view with that record selected', () => {

@@ -3,6 +3,7 @@ import {
   CSV_HEADER,
   attentionRows,
   buildCsv,
+  buildManifest,
   deriveLedger,
   derivePackages,
   deriveRows,
@@ -102,6 +103,61 @@ describe('hashes, ledger and packages', () => {
     }
     expect(new Set(after.map((e) => e.chainHash)).size).toBe(after.length);
   });
+
+  it('appends corrections in fix order without rewriting committed entries', () => {
+    const open = deriveLedger(all, {});
+    const peppers = all.find((s) => s.id === 'peppers')!;
+    const after = deriveLedger(all, { peppers: true });
+    expect(after.slice(0, open.length)).toEqual(open);
+    const appended = after[after.length - 1];
+    expect(appended.scenarioId).toBe('peppers');
+    expect(appended.lot).toBe(peppers.lot);
+    expect(appended.n).toBe(open[open.length - 1].n + 1);
+
+    const twoFixes = deriveLedger(all, { cheese: true, peppers: true });
+    expect(twoFixes.slice(0, open.length)).toEqual(open);
+    expect(twoFixes.slice(open.length).map((e) => e.scenarioId)).toEqual(['cheese', 'peppers']);
+  });
+});
+
+describe('lot codes on gap records', () => {
+  const byId = (id: string) => all.find((s) => s.id === id)!;
+
+  it('shows a missing lot only when the lot itself is the gap', () => {
+    const peppers = byId('peppers');
+    const idx = gapIndex(peppers);
+    expect(deriveRows(peppers, {})[idx].lot).toBe('missing');
+    expect(deriveRows(peppers, { peppers: true })[idx].lot).toBe(peppers.lot);
+  });
+
+  it('keeps the record lot when another field is the gap', () => {
+    const cantaloupe = byId('cantaloupe');
+    const idx = gapIndex(cantaloupe);
+    const ownLot = cantaloupe.chain[idx].kdes.lot;
+    expect(ownLot).not.toBe(cantaloupe.lot);
+    for (const fixed of [{}, { cantaloupe: true }]) {
+      expect(deriveRows(cantaloupe, fixed)[idx].lot).toBe(ownLot);
+      expect(buildCsv(cantaloupe, fixed).split('\n')[idx + 1]).toContain(`"${ownLot}"`);
+    }
+    const detail = detailFor(cantaloupe, idx, { cantaloupe: true }, 'workspace')!;
+    expect(detail.kv).toContainEqual(['Lot', ownLot]);
+    const ledger = deriveLedger(all, { cantaloupe: true });
+    expect(ledger[ledger.length - 1].lot).toBe(ownLot);
+
+    for (const id of ['cucumbers', 'cheese']) {
+      const scenario = byId(id);
+      expect(deriveRows(scenario, {})[gapIndex(scenario)].lot).not.toBe('missing');
+    }
+  });
+});
+
+describe('csv and packages', () => {
+  it('labels the manifest hash as a stand-in and gives no unusable verify command', () => {
+    const manifest = buildManifest('fda_sortable_peppers.csv', stableHash('x'));
+    expect(manifest).toContain('not SHA-256');
+    expect(manifest).not.toMatch(/^verify:/m);
+  });
+
 
   it('writes an OPEN row instead of dropping the gap from the CSV', () => {
     const csv = buildCsv(first, {});

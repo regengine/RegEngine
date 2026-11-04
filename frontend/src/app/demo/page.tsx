@@ -34,7 +34,7 @@ const TITLES: Record<ViewId, [string, string]> = {
     'Every gap with a reason, a rule, an owner and a recovery path. Sending the correction link lets the supplier answer without an account.',
   ],
   ledger: ['Evidence ledger', 'Accepted records, hashed against the one before them. Nothing is edited in place; corrections append.'],
-  export: ['Export packages', 'One FDA-shaped sortable spreadsheet per chain, with a SHA-256 manifest you can verify yourself.'],
+  export: ['Export packages', 'One FDA-shaped sortable spreadsheet per chain, with a hash manifest. Hashes here are stand-ins, not SHA-256.'],
 };
 
 function subscribeHash(onChange: () => void) {

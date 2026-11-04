@@ -130,6 +130,19 @@ export function eventHash(scenario: Pick<Scenario, 'id'>, record: ChainRecord): 
   return stableHash(scenario.id + record.cte + record.date);
 }
 
+/** The dataset marks a record with no traceability lot code with an em dash. */
+const NO_LOT = '—';
+
+/**
+ * The lot code to show for a record. Only a record whose own lot is missing
+ * borrows the scenario's lot once corrected; a gap on another field (quantity,
+ * location, reference document) leaves the record's lot code untouched.
+ */
+export function lotFor(scenario: Pick<Scenario, 'lot'>, record: ChainRecord, open: boolean): string {
+  if (record.kdes.lot !== NO_LOT) return record.kdes.lot;
+  return open ? MISSING_LOT : scenario.lot;
+}
+
 export interface Row {
   index: number;
   cte: string;
@@ -157,7 +170,7 @@ export function deriveRows(scenario: Scenario, fixed: FixedMap): Row[] {
       date: record.date,
       qty: record.kdes.qty,
       location: record.kdes.location,
-      lot: openGap ? MISSING_LOT : isGap ? scenario.lot : record.kdes.lot,
+      lot: lotFor(scenario, record, openGap),
       state: recordState(record, scenarioFixed),
       isGap,
       openGap,
@@ -221,7 +234,7 @@ export function detailFor(
 
   const corrected = Boolean(record.gap);
   const kv: Array<[string, string]> = [
-    ['Lot', corrected ? scenario.lot : record.kdes.lot],
+    ['Lot', lotFor(scenario, record, false)],
     ['Quantity', record.kdes.qty],
     ['Location', record.kdes.location],
     ['Date', record.date],
@@ -271,7 +284,7 @@ export function heroStatus(scenario: Scenario, fixed: FixedMap): HeroStatus {
     exportBadge: open ? `${committed.length} of ${total} ready` : 'Ready to export',
     exportLine: open
       ? `${open} record still open. Export lists it separately until corrected.`
-      : `All ${committed.length} records committed. SHA-256 manifest attached.`,
+      : `All ${committed.length} records committed. Hash manifest attached.`,
     exportReady: open === 0,
   };
 }
@@ -289,30 +302,44 @@ export interface LedgerEntry {
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
 
-/** Every committed record across all chains, hashed against the one before. */
+/**
+ * Every committed record across all chains, hashed against the one before.
+ * Append-only: records committed at import keep their position, sequence
+ * number and hashes; each correction is appended after them, in the order the
+ * visitor fixed the scenarios (FixedMap key order, since fixes add keys).
+ */
 export function deriveLedger(all: readonly Scenario[], fixed: FixedMap): LedgerEntry[] {
   let prev = 'genesis';
   let n = 1040;
   const entries: LedgerEntry[] = [];
+  const append = (scenario: Scenario, record: ChainRecord) => {
+    const eh = eventHash(scenario, record);
+    const ch = stableHash(prev + eh);
+    prev = ch;
+    n += 1;
+    entries.push({
+      n,
+      ts: `${record.date}T${pad2(8 + (n % 9))}:${pad2((n * 7) % 60)}:00-07:00`,
+      scenarioId: scenario.id,
+      hue: scenario.hue,
+      label: `${shortLabel(scenario)} · ${record.cte}`,
+      lot: lotFor(scenario, record, false),
+      eventHash: eh,
+      chainHash: ch,
+    });
+  };
+
   for (const scenario of all) {
-    const scenarioFixed = isFixed(scenario, fixed);
     for (const record of scenario.chain) {
-      if (record.gap && !scenarioFixed) continue;
-      const eh = eventHash(scenario, record);
-      const ch = stableHash(prev + eh);
-      prev = ch;
-      n += 1;
-      entries.push({
-        n,
-        ts: `${record.date}T${pad2(8 + (n % 9))}:${pad2((n * 7) % 60)}:00-07:00`,
-        scenarioId: scenario.id,
-        hue: scenario.hue,
-        label: `${shortLabel(scenario)} · ${record.cte}`,
-        lot: record.gap ? scenario.lot : record.kdes.lot,
-        eventHash: eh,
-        chainHash: ch,
-      });
+      if (!record.gap) append(scenario, record);
     }
+  }
+
+  for (const id of Object.keys(fixed)) {
+    if (!fixed[id]) continue;
+    const scenario = all.find((s) => s.id === id);
+    const record = scenario && gapRecord(scenario);
+    if (scenario && record) append(scenario, record);
   }
   return entries;
 }
@@ -327,7 +354,8 @@ export function buildCsv(scenario: Scenario, fixed: FixedMap): string {
   const scenarioFixed = isFixed(scenario, fixed);
   const rows = scenario.chain.map((record) => {
     const open = Boolean(record.gap) && !scenarioFixed;
-    const lot = open ? '' : record.gap ? scenario.lot : record.kdes.lot;
+    const shown = lotFor(scenario, record, open);
+    const lot = shown === MISSING_LOT ? '' : shown;
     return [
       scenario.ftlCategory,
       record.cte,
@@ -349,7 +377,11 @@ export function packageFileName(scenario: Pick<Scenario, 'id'>): string {
 }
 
 export function buildManifest(file: string, hash: string): string {
-  return `${file}\tstand-in-hash\t${hash}\nverify: python verify_chain.py ${file}\n`;
+  return (
+    `${file}\tstand-in-hash\t${hash}\n` +
+    'note: stand-in hash, not SHA-256. This file cannot be checked with verify_chain.py, ' +
+    'which reads a RegEngine audit bundle ZIP.\n'
+  );
 }
 
 export interface Package {
