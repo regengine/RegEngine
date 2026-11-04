@@ -38,6 +38,7 @@ from ..shared.tenant_resolution import resolve_principal_tenant_id, resolve_tena
 from ..shared.upload_limits import MAX_EDI_FILE_SIZE_BYTES, read_upload_with_limit
 from ..webhook_compat import ingest_events
 from ..webhook_models import (
+    REQUIRED_KDES_BY_CTE,
     IngestEvent,
     WebhookCTEType,
     WebhookPayload,
@@ -251,7 +252,7 @@ def _legacy_856_placeholder_errors(
     return errors
 
 
-def _reject_legacy_856_placeholders(
+def _reject_missing_required_kdes(
     *,
     errors: list[dict[str, Any]],
     sender_tenant_id: str,
@@ -259,10 +260,11 @@ def _reject_legacy_856_placeholders(
     extracted: dict[str, Any],
     partner_id: str | None,
     source: str,
+    transaction_set: str = "856",
 ) -> None:
     rejection_record = _record_edi_rejection(
         tenant_id=sender_tenant_id,
-        transaction_set="856",
+        transaction_set=transaction_set,
         traceability_lot_code=traceability_lot_code,
         errors=errors,
         extracted=extracted,
@@ -272,11 +274,10 @@ def _reject_legacy_856_placeholders(
     raise HTTPException(
         status_code=422,
         detail={
-            "error": "edi_856_missing_required_kdes",
+            "error": f"edi_{transaction_set}_missing_required_kdes",
             "message": (
-                "EDI 856 is missing required FSMA KDEs. No events were "
-                "persisted; fix the supplier document or provide explicit "
-                "operator-reviewed overrides."
+                f"EDI {transaction_set} is missing required FSMA KDEs. No events "
+                "were persisted; each entry in errors says what the KDE needs."
             ),
             "missing_kdes": [err["loc"][0] for err in errors],
             "rejection_id": rejection_record["rejection_id"],
@@ -324,13 +325,115 @@ def _preflight_856_required_kdes(
             }
         )
     if errors:
-        _reject_legacy_856_placeholders(
+        _reject_missing_required_kdes(
             errors=errors,
             sender_tenant_id=sender_tenant_id,
             traceability_lot_code=traceability_lot_code,
             extracted=extracted,
             partner_id=partner_id,
             source=source,
+        )
+
+
+# Extracted fields that can honestly supply a required KDE, by transaction set.
+# The route copies these fields into the KDEs in ``_build_ingest_event_for_set``.
+_REFERENCE_DOCUMENT_SOURCE = ("reference_document_number",)
+_SHIPMENT_KDE_SOURCES: dict[str, tuple[str, ...]] = {
+    "ship_from_location": ("ship_from_name",),
+    "ship_to_location": ("ship_to_name",),
+    "reference_document": _REFERENCE_DOCUMENT_SOURCE,
+}
+_RECEIPT_KDE_SOURCES: dict[str, tuple[str, ...]] = {
+    "receiving_location": ("receiving_location_name",),
+    "immediate_previous_source": ("ship_from_name", "ship_from_gln"),
+    "reference_document": _REFERENCE_DOCUMENT_SOURCE,
+}
+_KDE_SOURCES_BY_SET: dict[str, dict[str, tuple[str, ...]]] = {
+    "945": _SHIPMENT_KDE_SOURCES,
+    "861": _RECEIPT_KDE_SOURCES,
+    "944": _RECEIPT_KDE_SOURCES,
+    "850": {"reference_document": _REFERENCE_DOCUMENT_SOURCE},
+    "810": {"reference_document": _REFERENCE_DOCUMENT_SOURCE},
+}
+
+# 850 and 810 map to the shipping CTE but do not record a shipment. BEG05 is the
+# PO date and BIG01 the invoice date, and N1 BY/SE/RI name commercial parties,
+# not shipping locations. None of these may stand in for a shipping KDE.
+_SHIPPING_KDES_WITH_NO_SOURCE = frozenset({"ship_date", "ship_from_location", "ship_to_location"})
+_KDES_WITH_NO_SOURCE_BY_SET: dict[str, frozenset[str]] = {
+    "850": _SHIPPING_KDES_WITH_NO_SOURCE,
+    "810": _SHIPPING_KDES_WITH_NO_SOURCE,
+}
+
+
+def _preflight_document_required_kdes(
+    *,
+    transaction_set: str,
+    extracted: dict[str, Any],
+    tlc_source_reference: str | None,
+    product_description_override: str | None,
+    quantity_override: float | None,
+    unit_override: str | None,
+    sender_tenant_id: str,
+    traceability_lot_code: str,
+    partner_id: str | None,
+    source: str,
+) -> None:
+    """Reject a document the required-KDE gate would refuse, before ISA13 is reserved.
+
+    Without this the gate drops the events inside ``ingest_events`` and
+    ``/document`` answers 201 with ``accepted: 0``. Event dates have their own
+    check. X12 has no element naming who assigned a lot, so the TLC source
+    reference comes from the caller on every set. Each line needs a product, a
+    positive quantity and a valid unit here, because the route would otherwise
+    synthesize ``EDI <set> Item``, ``1.0`` or ``units`` and the gate cannot catch
+    an invented value. An 856 uses ``_legacy_856_placeholder_errors`` instead.
+    """
+    sources = _KDE_SOURCES_BY_SET[transaction_set]
+    no_source = _KDES_WITH_NO_SOURCE_BY_SET.get(transaction_set, frozenset())
+    errors: list[dict[str, Any]] = []
+    # Lines replace header values, as in the route's line expansion.
+    lines = [{**extracted, **line} for line in extracted.get("line_items") or [{}]]
+
+    for kde in REQUIRED_KDES_BY_CTE[_CTE_TYPE_BY_SET[transaction_set]]:
+        if kde in no_source:
+            present = False
+            message = f"EDI {transaction_set} does not record a shipment, so it has no source for {kde}."
+        elif kde == "tlc_source_reference":
+            present = bool(tlc_source_reference)
+            message = f"Provide the tlc_source_reference form field; EDI {transaction_set} does not carry it."
+        elif kde == "product_description":
+            present = bool(product_description_override) or all(line.get("product_description") for line in lines)
+            message = f"EDI {transaction_set} line has no product identification or description."
+        elif kde == "quantity" and not no_source:
+            present = quantity_override is not None or all(
+                _positive_float_or_none(line.get("quantity")) is not None for line in lines
+            )
+            message = f"EDI {transaction_set} line has no positive quantity."
+        elif kde == "unit_of_measure" and not no_source:
+            present = all(
+                _valid_unit_or_none(unit_override if unit_override is not None else line.get("unit_of_measure"))
+                is not None
+                for line in lines
+            )
+            message = f"EDI {transaction_set} line has no recognized X12 unit of measure."
+        elif kde in sources:
+            present = any(extracted.get(field) for field in sources[kde])
+            message = f"EDI {transaction_set} has no value for {kde}."
+        else:
+            continue
+        if not present:
+            errors.append({"loc": [kde], "msg": message, "type": "missing_required_kde"})
+
+    if errors:
+        _reject_missing_required_kdes(
+            errors=errors,
+            sender_tenant_id=sender_tenant_id,
+            traceability_lot_code=traceability_lot_code,
+            extracted=extracted,
+            partner_id=partner_id,
+            source=source,
+            transaction_set=transaction_set,
         )
 
 
@@ -987,6 +1090,11 @@ def _build_ingest_event_for_set(
     elif transaction_set == "861":
         kdes.update(
             {
+                # The names the required-KDE gate checks (§1.1345(a)(4), (7), (8)).
+                "receive_date": event_date,
+                "immediate_previous_source": extracted.get("ship_from_name") or extracted.get("ship_from_gln"),
+                "reference_document": extracted.get("reference_document_number"),
+                "tlc_source_reference": extracted.get("tlc_source_reference"),
                 "receiving_advice_number": extracted.get("receiving_advice_number"),
                 "po_number": extracted.get("po_number"),
                 "ship_from_location": extracted.get("ship_from_name"),
@@ -1095,7 +1203,9 @@ def _build_ingest_event_for_set(
         "(856 ASN, 850 Purchase Order, 810 Invoice, 861 Receiving Advice, "
         "944 Warehouse Stock Transfer Receipt Advice, "
         "945 Warehouse Shipping Advice) "
-        "and extracts FSMA-relevant KDEs for CTE creation."
+        "and extracts FSMA-relevant KDEs for CTE creation. "
+        "850 and 810 do not record a shipment, so they currently return 422 "
+        "listing the shipping KDEs they cannot supply."
     ),
 )
 async def ingest_edi_document(
@@ -1107,8 +1217,8 @@ async def ingest_edi_document(
     tlc_source_reference: Optional[str] = Form(
         None,
         description=(
-            "TLC source reference copied to the KDEs of every 856/944/945 line. "
-            "Required for 856, §1.1340(a)(7): missing returns 422."
+            "Required: who assigned the TLC, §1.1340(a)(7). Copied to the KDEs of "
+            "every line; X12 does not carry it. Missing returns 422."
         ),
     ),
     tenant_id: Optional[str] = Form(None, description="Optional tenant override"),
@@ -1263,6 +1373,19 @@ async def ingest_edi_document(
                         ship_to_override=None,
                     ),
                 )
+            else:
+                _preflight_document_required_kdes(
+                    transaction_set=slice_set,
+                    extracted=slice_extracted,
+                    tlc_source_reference=tlc_source,
+                    product_description_override=product_description,
+                    quantity_override=quantity_override,
+                    unit_override=unit_of_measure_override,
+                    sender_tenant_id=sender_tenant_id,
+                    traceability_lot_code=traceability_lot_code,
+                    partner_id=x_partner_id,
+                    source=source,
+                )
 
     # Content rejections run after the allowlist and before the ISA13 is
     # reserved, so a corrected resend is not refused as a 409 replay.
@@ -1277,8 +1400,7 @@ async def ingest_edi_document(
         first_event_indexes.append(len(event_inputs))
         if slice_set in ("856", "861", "944", "945"):
             header = {key: value for key, value in slice_extracted.items() if key != "line_items"}
-            if slice_set in ("856", "944", "945"):
-                header["tlc_source_reference"] = tlc_source
+            header["tlc_source_reference"] = tlc_source
             if slice_set in ("944", "945"):
                 date_field = "receive_date_raw" if slice_set == "944" else "ship_date_raw"
                 header["_event_timestamp"], header["_event_date"] = _ship_timestamp_and_date(

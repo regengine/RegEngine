@@ -12,7 +12,7 @@ assertion and must match that principal.
 | EPCIS 2.0 upload on `/ingest` | `POST /api/v1/epcis/events`, `/events/batch`, `/events/xml` | tenant context (`require_tenant_context`) | The dashboard tab posts JSON or XML to those routes |
 | ASN and receiving advice lines | `POST /api/v1/ingest/edi` and `POST /api/v1/ingest/edi/document` | `edi.ingest` | X12 856 and 861, one CTE per item line |
 | Warehouse advices | `POST /api/v1/ingest/edi/document` | `edi.ingest` | X12 944 and 945, one CTE per item line |
-| Purchase order and invoice | `POST /api/v1/ingest/edi/document` | `edi.ingest` | X12 850 and 810, one event per ST/SE set, quantities summed |
+| Purchase order and invoice | `POST /api/v1/ingest/edi/document` | `edi.ingest` | X12 850 and 810 parse, then return 422: they have no ship date or shipping locations, so nothing is stored |
 
 `POST /api/v1/ingest/edi` accepts a single 856 transaction set. 861, 944,
 945, 850, and 810 belong on `/document`.
@@ -202,24 +202,19 @@ rules below apply: one transaction-set type, GE01 must match the ST/SE
 count, and any FSMA failure keeps the whole interchange out of the
 canonical stream.
 
-An 856 on this route follows the same line rules as `POST
-/api/v1/ingest/edi`: a missing or bad quantity or unit, a line with no
-product, or a set with no ship-from or ship-to name is HTTP 422
-`edi_856_missing_required_kdes` before the ISA13 is reserved. The rules
-below apply to the other sets.
+An 856, 861, 944 or 945 on this route needs a positive quantity, a
+recognized unit and a product on every line, plus the set's party names.
+Anything missing or bad is HTTP 422 `edi_<set>_missing_required_kdes`
+before the ISA13 is reserved, so a corrected resend is not a replay.
 
-On this route a present quantity that is zero or not numeric is HTTP 422
-`edi_non_positive_quantity`. A present unit is HTTP 422
-`edi_unmapped_unit_of_measure` unless it is an element-355 code this
-route maps (`CA` and `CS` cases, `CT` cartons, `BX` boxes, `BG` bags,
-`LB` lbs, `KG` kg, `EA` each, `UN` units, `PL` pallets, `PC` and `PK`
-pieces), a tolerated non-X12 alias (`CAS`, `CTN`, `BOX`, `LBR`,
-`KGM`), or a value that is already an FSMA unit name (`cases`,
-`cartons`, `lbs`, and the rest of `VALID_UNITS_OF_MEASURE`). A blank
-unit is stored as `units`. A set with no SN1 or RCD
-still produces one event: the quantity element is absent, so the
-persisted quantity is `1.0`, a missing product becomes `EDI 856 Item`
-or `EDI 861 Item`, and a missing location name becomes `Unknown`.
+A recognized unit is an element-355 code this route maps (`CA` and `CS`
+cases, `CT` cartons, `BX` boxes, `BG` bags, `LB` lbs, `KG` kg, `EA`
+each, `UN` units, `PL` pallets, `PC` and `PK` pieces), a tolerated
+non-X12 alias (`CAS`, `CTN`, `BOX`, `LBR`, `KGM`), or a value that is
+already an FSMA unit name (`cases`, `cartons`, `lbs`, and the rest of
+`VALID_UNITS_OF_MEASURE`). None of these are synthesized: a blank unit
+is rejected rather than stored as `units`, and a set with no SN1 or RCD
+is rejected rather than stored with quantity `1.0`.
 
 Header KDEs are copied onto every line. 856 copies the ASN number
 (BSN02), carrier (TD5), and the reference document (`REF` `BM`, `SI`,
