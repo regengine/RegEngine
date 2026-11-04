@@ -36,4 +36,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # Destructive: deletes every stored facility phone. Back up
+    # supplier_facilities.phone first if those values must be kept.
     op.drop_column("supplier_facilities", "phone")

@@ -90,8 +90,8 @@ class Facility:
     gln: str
     name: str
     address: Optional[str] = None
-    phone: Optional[str] = None
     facility_type: Optional[str] = None
+    phone: Optional[str] = None
 
     @classmethod
     def from_api(cls, payload: Dict[str, Any]) -> "Facility":
