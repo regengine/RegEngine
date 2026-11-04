@@ -20,6 +20,11 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 service_dir = Path(__file__).parent.parent
+sys.path.insert(0, str(service_dir.parent))
+
+from shared.paths import ensure_shared_importable  # noqa: E402
+
+ensure_shared_importable()
 sys.path.insert(0, str(service_dir))
 
 pytest.importorskip("fastapi")
@@ -186,6 +191,24 @@ def test_missing_tlc_source_is_rejected_before_the_isa13_is_reserved(
     assert detail["rejection_id"]
     assert stored == []
     # The corrected resend must not come back as a 409 replay.
+    assert reserved == []
+
+
+def test_strict_false_does_not_downgrade_a_missing_tlc_source(
+    client: TestClient, stored: list[dict[str, Any]], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    reserved: list[Any] = []
+    monkeypatch.setattr(
+        edi_routes,
+        "check_and_record_interchange",
+        lambda **kwargs: (reserved.append(kwargs), (False, None))[1],
+    )
+
+    response = _post(client, "/document?strict=false")
+
+    assert response.status_code == 422, response.text
+    assert response.json()["detail"]["missing_kdes"] == ["tlc_source_reference"]
+    assert stored == []
     assert reserved == []
 
 
