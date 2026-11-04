@@ -23,8 +23,8 @@ from __future__ import annotations
 import socket
 import ssl
 from ipaddress import ip_address
-from typing import Any, Callable, Dict, Iterable, Mapping, Optional
-from urllib.parse import urlparse, urlunparse
+from typing import Any, Callable, Dict, Mapping, Optional
+from urllib.parse import urlparse
 
 import httpx
 import structlog
@@ -75,7 +75,10 @@ class ResponseTooLargeError(ValueError):
 # Standard browser-like headers used by upstream fetchers. Kept here so callers
 # that want a single SSRF-safe entry point don't have to redefine them.
 STANDARD_BROWSER_HEADERS: Dict[str, str] = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/120.0.0.0 Safari/537.36"
+    ),
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,application/pdf,*/*;q=0.8",
     "Accept-Language": "en-US,en;q=0.9",
     "Accept-Encoding": "gzip, deflate, br",
@@ -109,9 +112,6 @@ class _IPPinnedAsyncTransport(httpx.AsyncHTTPTransport):
         original_url = request.url
         # Bracket IPv6 literals
         ip_literal = f"[{self._pinned_ip}]" if ":" in self._pinned_ip else self._pinned_ip
-        new_netloc = ip_literal
-        if original_url.port is not None:
-            new_netloc = f"{ip_literal}:{original_url.port}"
         rewritten = original_url.copy_with(host=ip_literal)
         request.url = rewritten
         # Preserve Host header so the remote server routes correctly.

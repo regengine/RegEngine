@@ -26,7 +26,7 @@ from typing import Optional
 
 import httpx
 import structlog
-from shared.circuit_breaker import CircuitBreaker, CircuitOpenError
+from shared.circuit_breaker import CircuitBreaker
 
 logger = structlog.get_logger("resilient_http")
 

@@ -335,8 +335,6 @@ def test_validate_uuid_rejects_non_string() -> None:
 
 def test_db_usage_record_failure_returns_response(monkeypatch) -> None:
     """validate_key returns metadata even when the usage UPDATE fails."""
-    import hashlib
-    import hmac
     from contextlib import asynccontextmanager
     from datetime import datetime, timezone
 

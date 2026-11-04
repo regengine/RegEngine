@@ -26,7 +26,7 @@ below is tracked there yet.
 |--:|---|---|:-:|:-:|:-:|--:|---|
 | 1 | Three schema-change channels and a stale production `alembic_version` row | Infrastructure | 4 | 5 | 3 | **27** | delivered in PR #3699 (ADR, inventory, precheck, runbook, CI guard); Appendix B decisions open |
 | 2 | Six `app` packages collide; bare `from app.` imports; 347-line `sys.path` conftest | Architecture | 4 | 4 | 3 | **24** | first half delivered in PR #3699 (production imports, Dockerfile PYTHONPATH, guard); tests and conftest shim are the second half |
-| 3 | Lint and type gates are near-empty (ruff selects 4 rule groups, mypy not a gate) | Code | 3 | 3 | 2 | **24** | open |
+| 3 | Lint and type gates are near-empty (ruff selects 4 rule groups, mypy not a gate) | Code | 3 | 3 | 2 | **24** | delivered in PR #3699 (services/shared on the wider rule set, noqa ratchet, mypy report job) |
 | 4 | 33 CI workflows, four of them over 850 lines, plus a workflow that exists to re-run flaky gates | Infrastructure | 4 | 3 | 3 | **21** | open |
 | 5 | Legacy Kafka backbone still in tree and in the production image | Architecture | 2 | 3 | 2 | **20** | open |
 | 6 | Production image carries test and optional AI dependencies | Infrastructure | 2 | 3 | 2 | **20** | delivered in PR #3699 (dev and experimental locks, image-import-check) |

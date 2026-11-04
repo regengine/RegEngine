@@ -1,4 +1,4 @@
 # scripts/check_noqa_ratchet.py: the number of `# noqa` markers without a
 # `-- reason` in production code under services/. Lower it when a PR removes
 # markers; never raise it in a PR that adds one (WI-03, 2026-11-04).
-217
+138

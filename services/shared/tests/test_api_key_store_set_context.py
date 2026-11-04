@@ -11,7 +11,7 @@ the rendered SQL so a future refactor that reintroduces ``SET LOCAL``
 trips CI.
 """
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 from shared.api_key_store import DatabaseAPIKeyStore

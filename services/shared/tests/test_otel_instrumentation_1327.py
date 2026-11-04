@@ -19,9 +19,7 @@ import importlib.util
 import sys
 import types
 from pathlib import Path
-from unittest.mock import MagicMock, call, patch
-
-import pytest
+from unittest.mock import MagicMock
 
 # ---------------------------------------------------------------------------
 # Minimal stubs for opentelemetry packages (may not be installed in CI)

@@ -6,7 +6,6 @@ to ensure consistent env loading, logging, and model_config behavior.
 
 from __future__ import annotations
 
-from functools import lru_cache
 from typing import Optional
 
 from pydantic import Field

@@ -10,13 +10,10 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
-from uuid import UUID, uuid4
 
 from shared.canonical_event import (
     IngestionRun,
-    IngestionRunStatus,
     RawPayloadTooLargeError,
     TraceabilityEvent,
     _raw_payload_max_bytes,
@@ -121,7 +118,7 @@ class CanonicalEventStore(CanonicalChainVerificationMixin):
         """
         if self._session_dialect_name() == "sqlite":
             return
-        from shared.tenant_context import set_tenant_guc  # noqa: PLC0415
+        from shared.tenant_context import set_tenant_guc  # noqa: PLC0415 -- lazy import, avoids a module-load cycle
 
         set_tenant_guc(self.session, tenant_id)
 
@@ -377,7 +374,7 @@ class CanonicalEventStore(CanonicalChainVerificationMixin):
         # persist back, keeping the usage counter and the canonical write
         # atomically in sync.
         if self.meter_usage:
-            from services.ingestion.app.stripe_billing.usage import (  # noqa: PLC0415
+            from services.ingestion.app.stripe_billing.usage import (  # noqa: PLC0415 -- lazy cross-service import, keeps the shared layer free of a service dependency at load
                 increment_usage_for_event,
             )
 
@@ -681,7 +678,7 @@ class CanonicalEventStore(CanonicalChainVerificationMixin):
         # Only ``inserted_events`` — never ``lost_race_events``, which the
         # winning concurrent writer already counted.
         if self.meter_usage and inserted_events:
-            from services.ingestion.app.stripe_billing.usage import (  # noqa: PLC0415
+            from services.ingestion.app.stripe_billing.usage import (  # noqa: PLC0415 -- lazy cross-service import, keeps the shared layer free of a service dependency at load
                 increment_usage_for_event,
             )
 

@@ -28,7 +28,7 @@ def _is_production_environment(environment: Optional[str] = None) -> bool:
     """
     if environment is not None:
         return environment.strip().lower() == "production"
-    from shared.env import is_production  # noqa: PLC0415
+    from shared.env import is_production  # noqa: PLC0415 -- lazy import, avoids a module-load cycle
 
     return is_production()
 
@@ -49,7 +49,7 @@ class SecretsManager:
             source="environment_variables",
         )
 
-    @lru_cache(maxsize=128)
+    @lru_cache(maxsize=128)  # noqa: B019 -- process-wide singleton; the cache is bounded
     def get_secret(self, secret_name: str) -> dict:
         """Retrieve a namespaced secret from environment variables (cached).
 
@@ -79,7 +79,7 @@ class SecretsManager:
                 secret_name=secret_name,
                 error=str(exc),
             )
-            raise RuntimeError(f"Failed to retrieve secret {secret_name}: {exc}")
+            raise RuntimeError(f"Failed to retrieve secret {secret_name}: {exc}") from exc
 
     def invalidate_cache(self) -> None:
         """Drop all cached secrets so the next read sees rotated values.
@@ -323,7 +323,7 @@ KAFKA_PRODUCTION_CREDENTIALS: tuple[tuple[str, ...], ...] = (("KAFKA_BOOTSTRAP_S
 
 def _production_env_label() -> str:
     """Best-effort environment label for validation log lines."""
-    from shared.env import get_environment  # noqa: PLC0415
+    from shared.env import get_environment  # noqa: PLC0415 -- lazy import, avoids a module-load cycle
 
     return get_environment()
 
@@ -352,7 +352,7 @@ def validate_production_secrets() -> None:
 
     # DATABASE_URL is always required; subsystem credentials join the list
     # only when their subsystem is actually enabled.
-    from shared.event_backbone import kafka_enabled  # noqa: PLC0415
+    from shared.event_backbone import kafka_enabled  # noqa: PLC0415 -- lazy import, avoids a module-load cycle
 
     required: list[tuple[str, ...]] = list(REQUIRED_PRODUCTION_CREDENTIALS)
     if kafka_enabled():

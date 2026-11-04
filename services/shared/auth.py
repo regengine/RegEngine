@@ -32,7 +32,7 @@ def validate_auth_config() -> None:
     # Resolve cloud markers before evaluating the controls below. Deployed
     # staging keeps its environment name, but it must still use the same
     # durable authentication backends as production.
-    from shared.env import (  # noqa: PLC0415
+    from shared.env import (  # noqa: PLC0415 -- lazy import, avoids a module-load cycle
         CLOUD_ENV_VARS,
         is_production,
         requires_strict_auth_runtime,
@@ -304,8 +304,13 @@ class APIKeyStore:
         return hash_api_key(raw_key)
 
 
-from shared.api_key_store import APIKeyResponse, DatabaseAPIKeyStore, get_db_key_store
-from shared.tenant_context import set_rls_tenant_id
+# Deferred below the in-memory store on purpose: shared.api_key_store imports
+# shared.auth, so importing it at the top would be a cycle.
+from shared.api_key_store import (  # noqa: E402 -- import cycle with shared.api_key_store
+    APIKeyResponse,
+    DatabaseAPIKeyStore,
+)
+from shared.tenant_context import set_rls_tenant_id  # noqa: E402 -- kept with the deferred import above
 
 # Global key store instance
 _key_store = APIKeyStore()
@@ -670,9 +675,9 @@ def get_tenant_id(
 
     try:
         _uuid.UUID(x_tenant_id)
-    except (ValueError, AttributeError, TypeError):
+    except (ValueError, AttributeError, TypeError) as exc:
         raise HTTPException(
             status_code=400,
             detail="Invalid X-Tenant-ID: must be a valid UUID.",
-        )
+        ) from exc
     return x_tenant_id

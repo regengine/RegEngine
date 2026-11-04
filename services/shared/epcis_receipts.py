@@ -118,14 +118,14 @@ def record_epcis_receipt(
     session = None
     try:
         if session_factory is None:
-            from shared.database import get_db_safe  # noqa: PLC0415 (no engine setup at import)
+            from shared.database import get_db_safe  # noqa: PLC0415 -- no engine setup at import
 
             session_factory = get_db_safe
         session = session_factory()
         if session is None:
             logger.warning("epcis_receipt_write_failed tenant=%s error_class=NoSession", tenant)
             return False
-        from shared.tenant_context import set_tenant_guc  # noqa: PLC0415
+        from shared.tenant_context import set_tenant_guc  # noqa: PLC0415 -- lazy import, avoids a module-load cycle
 
         set_tenant_guc(session, tenant)
         session.execute(
@@ -144,14 +144,14 @@ def record_epcis_receipt(
         if session is not None:
             try:
                 session.rollback()
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001 -- fail-safe path: this operation must not propagate a failure
                 pass
         return False
     finally:
         if session is not None:
             try:
                 session.close()
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001 -- fail-safe path: this operation must not propagate a failure
                 pass
 
 

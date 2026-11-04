@@ -283,7 +283,7 @@ def record_outcomes(db_session: Any, tenant_id: str, outcomes: Sequence[Validati
         )
         try:
             db_session.rollback()
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001 -- fail-safe path: this operation must not propagate a failure
             logger.warning("data_gap_rollback_failed tenant=%s", tenant_id)
 
 

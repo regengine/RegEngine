@@ -333,8 +333,24 @@ dependency injection); `lint-shared` runs `ruff check services/shared` with it;
 (local run: 561 findings); `scripts/check_noqa_ratchet.py` with tests and
 `scripts/noqa_baseline.txt`, wired into `lint-repo-roots`; CONTRIBUTING.md
 Code Guidelines describe the rule set, the `-- reason` convention and the
-one-directory-per-PR adoption. Remaining in this PR: fixing the findings the
-new config reports under `services/shared` and lowering the baseline.
+one-directory-per-PR adoption. The findings are fixed: `ruff check
+services/shared` exits 0 (245 findings before: 119 auto-fixed unused imports
+and import order, the rest by hand: `raise … from exc` on nine except
+clauses, two unused assignments and one dead netloc computation removed, a
+loop variable renamed off the `field` import, `.is_(True)` for the SQLAlchemy
+column test, twelve long literals wrapped, `strict=` on two `zip` calls;
+twenty-two markers added with reasons: twelve `S105` on event, header,
+environment-variable and verdict names, five `E402` on deliberately deferred
+imports, one `B008` on a dependency factory, one `B019` on a bounded
+singleton cache, one `E501` on a digest literal, plus `F401` on the six names
+the persistence tests patch on `shared.cte_persistence.core`, which the
+first auto-fix had removed and 72 tests caught). `rules/seeds.py` keeps
+`E501` off as a data table; test files keep `F` and drop the style and
+credential rules in `per-file-ignores`. Every pre-existing `# noqa` under
+`services/shared` (79) now carries a `-- reason`; `scripts/noqa_baseline.txt`
+is 138. Verified: `services/shared/tests` + `tests/shared` match the HEAD
+baseline (3041 passed, the same two pre-existing failures), the other suites
+in the PR.
 
 
 **Problem.** CI runs `ruff --select E9,F63,F7,F82`; `pyproject.toml`
