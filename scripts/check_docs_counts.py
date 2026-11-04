@@ -12,7 +12,7 @@ Checks:
 1. ``docs/CODEBASE_MAP.md`` §2 and §7 — the number of workflow files under
    ``.github/workflows/``.
 2. ``docs/CODEBASE_MAP.md`` §4 — the number of ``include_owned_router`` calls
-   in ``server/main.py``.
+   in ``server/routers_mount.py`` (split out of ``server/main.py`` in WI-14).
 3. ``docs/CODEBASE_MAP.md`` §4 — the fenced list of experimental routers
    equals ``EXPERIMENTAL_ROUTERS`` in ``server/router_policy.py`` (parsed
    with ``ast``, not imported).
@@ -39,7 +39,7 @@ from pathlib import Path
 CODEBASE_MAP = "docs/CODEBASE_MAP.md"
 ARCHITECTURE = "ARCHITECTURE.md"
 ROUTER_POLICY = "server/router_policy.py"
-SERVER_MAIN = "server/main.py"
+ROUTERS_MOUNT = "server/routers_mount.py"
 SOURCE_ROOTS = ("server", "services", "regengine", "kernel", "plugins", "shared")
 LARGE_MODULE_LINES = 1000
 EXPERIMENTAL_MARKER = "`EXPERIMENTAL_ROUTERS` names"
@@ -65,7 +65,7 @@ def workflow_count(repo_root: Path) -> int:
 
 
 def owned_router_calls(repo_root: Path) -> int:
-    text = _read(repo_root / SERVER_MAIN)
+    text = _read(repo_root / ROUTERS_MOUNT)
     return len(re.findall(r"\binclude_owned_router\(", text))
 
 
@@ -153,7 +153,7 @@ COUNT_CHECKS: tuple[CountCheck, ...] = (
     CountCheck(CODEBASE_MAP, r"CI is (\d+) workflows under", workflow_count, "§7 workflow count"),
     CountCheck(
         CODEBASE_MAP,
-        r"`server/main.py` makes (\d+) `include_owned_router` calls",
+        r"`server/routers_mount.py` makes (\d+) `include_owned_router` calls",
         owned_router_calls,
         "§4 include_owned_router count",
     ),

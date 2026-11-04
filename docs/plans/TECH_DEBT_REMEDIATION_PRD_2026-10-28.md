@@ -1064,6 +1064,32 @@ Node 20".
 
 ### WI-14 — Split `server/main.py`
 
+**Status 2026-11-04:** delivered in PR #3699. `server/main.py` is 450 lines
+(app construction, middleware order, router policy, the lifespan and the
+root/scheduler-status mounts). Extracted: `server/startup_checks.py`
+(`run_import_time_checks` = auth config + the two secrets gates;
+`init_admin_database`, `register_integration_connectors`,
+`log_integration_config` for the `jev_configured` /
+`document_extract_configured` lines, `configure_audit_logger`),
+`server/workers_boot.py` (`start_background_workers` /
+`stop_background_workers` for the ingestion task worker and the embedded
+scheduler), `server/routers_mount.py` (the 81 `include_owned_router` calls in
+their original first-match order) and `server/readiness.py` (`/readiness`,
+one module more than the PRD named because the readiness probe was the next
+270 lines). The lifespan keeps every log event in its original order and
+the source anchors the existing wiring tests assert on (ORM alignment
+calls, the RLS posture gate before auth and workers, the auth-runtime
+shutdown step). `tests/test_server_route_snapshot_wi14.py` imports
+`server.main` in a child under production posture with the release-approved
+router set and compares every `METHOD path` with
+`tests/snapshots/server_main_production_routes.json` (259 entries generated
+from the pre-split file): no route changed. `scripts/check_docs_counts.py`
+now counts the router calls in `routers_mount.py`;
+`tests/test_server_readiness_probe.py` patches `server.readiness`. The
+`tests/security` suite shows the same failures on the pre-split tree
+(database-gated proofs and Redis-backed routes with no services in this
+session) and is green only in CI.
+
 **Problem.** `server/main.py` is 1,256 lines holding the lifespan, startup
 checks, worker boot and router policy wiring. 25 non-test modules exceed
 1,000 lines (20 under `services/` and `server/`); the others are split

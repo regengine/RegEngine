@@ -69,8 +69,10 @@ relative weight, not a contract.
 
 ## 4. Router gating — what is actually reachable in production
 
-`server/main.py` makes 82 `include_owned_router` calls (router registration
-moved from bare `include_router` to `server/router_policy.py`'s owned form), but
+`server/routers_mount.py` makes 81 `include_owned_router` calls (the router
+registration split out of `server/main.py` in WI-14, moved earlier from bare
+`include_router` to `server/router_policy.py`'s owned form; `server/main.py`
+itself mounts only the scheduler-status router), but
 **not all of them are live in production.** `EXPERIMENTAL_ROUTERS` names domains
 that are auto-disabled unless `ENABLE_EXPERIMENTAL_ROUTERS` is set (this block
 is rendered from the frozenset and checked by `scripts/check_docs_counts.py`):

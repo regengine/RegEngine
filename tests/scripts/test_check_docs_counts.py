@@ -24,7 +24,7 @@ _MAP = """# Map
 
 | `.github/workflows/` | {wf} workflows (see §7). |
 
-`server/main.py` makes {routers} `include_owned_router` calls.
+`server/routers_mount.py` makes {routers} `include_owned_router` calls.
 `EXPERIMENTAL_ROUTERS` names domains that are auto-disabled:
 
 ```
@@ -57,7 +57,7 @@ def _fake_repo(
 ):
     for i in range(wf):
         _write(tmp_path, f".github/workflows/w{i}.yml", "name: w\n")
-    _write(tmp_path, "server/main.py", "include_owned_router(app, r1)\ninclude_owned_router(app, r2)\n")
+    _write(tmp_path, "server/routers_mount.py", "include_owned_router(app, r1)\ninclude_owned_router(app, r2)\n")
     _write(
         tmp_path,
         "server/router_policy.py",

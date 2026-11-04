@@ -33,8 +33,12 @@ useful decomposition seams in the codebase:
 
 ## Current Runtime Shape
 
-- `server/main.py` mounts routers from the service directories into a single
-  FastAPI process.
+- `server/main.py` builds the single FastAPI process: app construction,
+  middleware order and the lifespan. Since WI-14 (2026-11-04) it calls
+  `server/startup_checks.py` (import-time gates and best-effort startup steps),
+  `server/workers_boot.py` (task worker and embedded scheduler),
+  `server/routers_mount.py` (router registration in first-match order) and
+  `server/readiness.py` (`/readiness`).
 - Legacy entrypoints like `services/ingestion/main.py` still exist for local
   debugging and compatibility, but they are not the checked-in production
   deploy target.
@@ -151,7 +155,6 @@ drifts from the tree):
 | `services/shared/canonical_persistence/writer.py` | 1378 | shared persistence | extract write-path helpers and transaction orchestration |
 | `services/ingestion/app/fda_export/router.py` | 1340 | export API | separate query, bundle assembly, and format writers |
 | `services/graph/app/routers/fsma/compliance.py` | 1284 | graph API | split query builders from response shaping |
-| `server/main.py` | 1271 | app composition | extract router registration and startup checks from lifespan |
 | `services/ingestion/app/inflow_workbench.py` | 1271 | ingestion preflight | split preflight, readiness scoring, fix queue, and commit gate |
 | `services/graph/app/fsma_audit.py` | 1249 | graph audit | separate traversal from audit-record assembly |
 | `services/ingestion/app/compliance_score.py` | 1209 | compliance scoring | split rule evaluation from report shaping |
@@ -180,4 +183,6 @@ runtime now in `service.py`). The earlier 2026-05-06 list also included
 `services/ingestion/app/routes.py` (since split — now ~100 lines).
 `services/nlp/app/consumer/__init__.py` (1,118 lines) left the table on
 2026-11-04 when the Kafka consumer loop was archived (WI-05); the package now
-holds only the extraction helpers the task processor imports.
+holds only the extraction helpers the task processor imports. `server/main.py`
+(1,271 lines) left the same day when WI-14 split it into `startup_checks.py`,
+`workers_boot.py`, `routers_mount.py` and `readiness.py` (main is 450 lines).

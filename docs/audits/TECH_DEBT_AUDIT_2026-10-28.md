@@ -37,7 +37,7 @@ below is tracked there yet.
 | 11 | Frontend API access split three ways; 8 hand-rolled proxy routes | Code | 3 | 2 | 3 | **15** | delivered in PR #3699 (rawFetch/requestPublicJson, ESLint rule, request-shape tests) |
 | 12 | Legacy `cte_events` dual-write still live, with 12 non-legacy readers | Architecture | 3 | 4 | 4 | **14** | PR B delivered in PR #3699 (`CANONICAL_LEGACY_DUAL_WRITE` flag + `legacy_dual_write_skipped_total`, DEVOPS_NOTES plan); PR A needs a session with a scratch Postgres; PR C needs Christopher |
 | 13 | Blocked major upgrades and Node version drift across CI | Dependency | 2 | 2 | 3 | **12** | delivered in PR #3699 (copy-gate reads `.nvmrc`; jsdom/jest-dom Dependabot ignores lifted) |
-| 14 | 25 source modules over 1,000 lines (20 under `services/` and `server/`) | Code | 3 | 2 | 4 | **10** | open |
+| 14 | 25 source modules over 1,000 lines (20 under `services/` and `server/`) | Code | 3 | 2 | 4 | **10** | delivered in PR #3699 (`server/main.py` 1,271 → 450 lines; `startup_checks.py`, `workers_boot.py`, `routers_mount.py`, `readiness.py`; production route snapshot test) |
 | 15 | `graph_update` task type declared, never enqueued, never handled | Code | 1 | 1 | 1 | **10** | delivered in PR #3699 |
 | 16 | Frontend type looseness: 192 `any`, 14 eslint suppressions | Code | 1 | 1 | 2 | **8** | open |
 
