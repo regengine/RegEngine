@@ -44,6 +44,30 @@ npm install
 npm run dev
 ```
 
+### Running database tests locally
+
+The RLS, migration and persistence suites need a migrated PostgreSQL and
+skip without one. `pytest --require-db` (same contract as
+`REGENGINE_REQUIRE_DB=1`, which the `live-db-suite` and
+`seeded-migration-rehearsal` CI jobs set) turns every database-availability
+skip into a failure, so a lost `DATABASE_URL` cannot turn a run green. The
+guards refuse the dev-stack database itself (`regengine` / `regengine_admin`
+on localhost) because the suites run `alembic upgrade head` and seed rows
+into their target; point them at a scratch database on the same server:
+
+```bash
+docker compose -f docker-compose.dev.yml up -d postgres      # needs POSTGRES_PASSWORD in the environment
+psql "postgresql://regengine_owner:${POSTGRES_PASSWORD}@localhost:5432/regengine" -c "CREATE DATABASE regengine_test"
+export REGENGINE_MIGRATION_TEST_DB="postgresql://regengine_owner:${POSTGRES_PASSWORD}@localhost:5432/regengine_test"
+DATABASE_URL="$REGENGINE_MIGRATION_TEST_DB" alembic upgrade head
+python3 -m pytest tests/shared tests/migrations -q --no-cov --require-db
+```
+
+The skip message of every database gate prints the same recipe
+(`tests/migrations/rls_db.py` → `skip_or_fail_without_db`). The
+supplier-remediation suites under `services/ingestion/tests/*_pg.py` read
+`REMEDIATION_TEST_SUPERUSER_DSN` instead (README → Testing notes).
+
 Dependency changes go in `requirements.in` (production), `requirements-dev.in`
 (test tooling) or `requirements-experimental.in` (experimental routers only),
 then regenerate the locks in this order, under Python 3.11 with

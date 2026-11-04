@@ -810,6 +810,31 @@ legacy entrypoints (WI-02).
 
 ### WI-10 — DB-dependent tests fail loudly when the DB is missing
 
+**Status 2026-11-04:** delivered in PR #3699, with one finding that changed
+the shape: the fail-not-skip contract already existed as the
+`REGENGINE_REQUIRE_DB=1` environment variable (`tests/migrations/rls_db.py`,
+`tests/integration_requirements.py`, the ingestion `_DB_READY` modules), and
+`live-db-suite` and `seeded-migration-rehearsal` already set it. What was
+missing was a CLI entry point, one helper, and a backstop for skips raised
+with other wording. Delivered: `pytest --require-db` in the root
+`conftest.py` (exports `REGENGINE_REQUIRE_DB=1` for the module-level gates
+and, through a `pytest_runtest_makereport` hook, turns any remaining skip
+whose reason names a database condition into a failure, leaving package,
+service and platform skips alone); `skip_or_fail_without_db()` in
+`tests/migrations/rls_db.py`, whose skip and fail messages carry the local
+recipe (`docker compose … up -d postgres`, `CREATE DATABASE regengine_test`,
+`REGENGINE_MIGRATION_TEST_DB`, `alembic upgrade head`); the existing
+`skip_or_fail_db`, `tests/integration_requirements._skip_or_fail` and the
+bootstrap-staging helper now delegate to it, and 24 inline
+`pytest.skip(...)` database sites in tests/ and services/ call it directly;
+`--require-db` added to the six pytest invocations of the two CI jobs;
+CONTRIBUTING.md → "Running database tests locally";
+`tests/scripts/test_require_db_option.py` proves both modes in a subprocess.
+Appendix A command A10: 95 files / 146 sites before, 81 files / 123 sites
+after (the remaining sites are `importorskip` for optional packages and
+service-not-running skips). Not done: requirement 4 (coverage floors) needs
+the post-merge CI measurement and is tracked under WI-04's follow-up.
+
 **Problem.** 170 skip sites; the most common reason is "migrated Postgres
 with fsma schema not available". A bare `pytest` locally passes while
 exercising none of the RLS, migration or persistence paths. CI does run

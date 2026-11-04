@@ -11,6 +11,7 @@ import uuid
 from datetime import datetime, timezone
 
 import pytest
+from tests.migrations.rls_db import skip_or_fail_without_db
 from shared.db_url import sync_postgres_url
 from shared.supplier_data_quality import METRIC_UNLINKED_LOT, fetch_lot_rows, fetch_supplier_quality, unlinked_lots
 from sqlalchemy import create_engine, text
@@ -38,9 +39,9 @@ def test_lot_attributed_to_its_facility_when_callers_record_is_elsewhere() -> No
                 )
             ).one()
         except OperationalError:
-            pytest.skip("Postgres DATABASE_URL is unavailable")
+            skip_or_fail_without_db("Postgres DATABASE_URL is unavailable")
         if any(table is None for table in tables):
-            pytest.skip("supplier lot, CTE, or transformation-link table is not migrated")
+            skip_or_fail_without_db("supplier lot, CTE, or transformation-link table is not migrated")
         link_tenant_type = session.execute(
             text(
                 """

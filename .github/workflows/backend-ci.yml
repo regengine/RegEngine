@@ -1284,7 +1284,7 @@ jobs:
         run: |
           repo_root="$(pwd)"
           export PYTHONPATH="${repo_root}:${repo_root}/services:${PYTHONPATH}"
-          pytest tests/migrations/test_seeded_mid_chain_upgrade.py \
+          pytest --require-db tests/migrations/test_seeded_mid_chain_upgrade.py \
             -v --no-cov -o "testpaths=tests"
 
   # ── Live-DB regression suite (tests/shared/*_live.py) ──
@@ -1429,7 +1429,7 @@ jobs:
           set -o pipefail
           # The cutover lock-timeout test runs last: it drifts a grant, holds
           # a lock on public.api_keys, and restores both before it returns.
-          pytest tests/migrations/test_v111_runtime_role_grants.py \
+          pytest --require-db tests/migrations/test_v111_runtime_role_grants.py \
             tests/security/test_account_erasure_identity_isolation_pg.py \
             tests/migrations/test_runtime_role_cutover_lock_timeout.py \
             -v -rs --no-cov -o "testpaths=tests" | tee /tmp/v111-role-cutover.log
@@ -1445,7 +1445,7 @@ jobs:
           export PYTHONPATH="${PWD}:${PWD}/services:${PYTHONPATH}"
           # v126 runs its real upgrade/downgrade as this job's NOBYPASSRLS
           # schema owner over populated, FORCE-RLS tables, then rolls back.
-          pytest tests/migrations/test_rule_backfill_owner_rls.py \
+          pytest --require-db tests/migrations/test_rule_backfill_owner_rls.py \
             tests/migrations/test_v120_rule_citations.py \
             tests/migrations/test_v126_tenant_composite_run_fks.py \
             -v -rs --no-cov -o "testpaths=tests"
@@ -1461,7 +1461,7 @@ jobs:
           # Glob, not an explicit list: a future tests/shared/*_live.py is
           # included automatically instead of silently joining the gap this
           # job exists to close.
-          pytest tests/shared/test_*_live.py \
+          pytest --require-db tests/shared/test_*_live.py \
             -v -rs --no-cov -o "testpaths=tests" | tee /tmp/live-db-suite.log
           if grep -qE '[0-9]+ skipped' /tmp/live-db-suite.log; then
             echo "::error::live-DB tests skipped — this job exists so they always RUN (check the #2646 guard env contract)"
@@ -1479,7 +1479,7 @@ jobs:
         run: |
           export PYTHONPATH="${PWD}:${PWD}/services:${PYTHONPATH}"
           set -o pipefail
-          pytest tests/migrations/test_v104_no_deny_all_rls_tables.py \
+          pytest --require-db tests/migrations/test_v104_no_deny_all_rls_tables.py \
             tests/migrations/test_task_queue_tenantless_idempotency_2852.py \
             -v -rs --no-cov -o "testpaths=tests" | tee /tmp/rls-guard.log
           if grep -qE '[0-9]+ skipped' /tmp/rls-guard.log; then
@@ -1510,7 +1510,7 @@ jobs:
         run: |
           export PYTHONPATH="${PWD}:${PWD}/services:${PWD}/services/ingestion:${PYTHONPATH}"
           set -o pipefail
-          pytest tests/shared/test_postgres_evidence_workflow_pg.py \
+          pytest --require-db tests/shared/test_postgres_evidence_workflow_pg.py \
             tests/shared/test_email_ingest_restricted_role_pg.py \
             -v -rs --no-cov -o "testpaths=tests" | tee /tmp/evidence-workflow.log
           if grep -qE '[0-9]+ skipped' /tmp/evidence-workflow.log; then

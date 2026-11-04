@@ -33,7 +33,7 @@ below is tracked there yet.
 | 7 | Orientation docs disagree with the tree; duplicate doc directories; one-off reports at repo root | Documentation | 3 | 2 | 2 | **20** | delivered in PR #3699 (`scripts/check_docs_counts.py`, directory merges, root reports moved) |
 | 8 | 31 of 87 top-level scripts are referenced by nothing | Code | 2 | 2 | 1 | **20** | delivered in PR #3699 (registry `scripts/README.md`, guard `scripts/check_scripts_registered.py` in backend-ci); 16 archive candidates await Christopher's approval by name |
 | 9 | Retired six-service topology still has entrypoints, k8s manifests, a PR-time CI job, and legacy runbooks | Infrastructure | 2 | 2 | 1 | **20** | delivered in PR #3699 (moved to `docs/archive/retired-topology/`) |
-| 10 | DB-dependent tests skip vacuously without a migrated Postgres | Test | 3 | 3 | 3 | **18** | open |
+| 10 | DB-dependent tests skip vacuously without a migrated Postgres | Test | 3 | 3 | 3 | **18** | delivered in PR #3699 (`pytest --require-db`, `skip_or_fail_without_db`, CI flags, CONTRIBUTING recipe); coverage floors await the post-merge measurement |
 | 11 | Frontend API access split three ways; 8 hand-rolled proxy routes | Code | 3 | 2 | 3 | **15** | delivered in PR #3699 (rawFetch/requestPublicJson, ESLint rule, request-shape tests) |
 | 12 | Legacy `cte_events` dual-write still live, with 12 non-legacy readers | Architecture | 3 | 4 | 4 | **14** | open |
 | 13 | Blocked major upgrades and Node version drift across CI | Dependency | 2 | 2 | 3 | **12** | delivered in PR #3699 (copy-gate reads `.nvmrc`; jsdom/jest-dom Dependabot ignores lifted) |
@@ -348,6 +348,8 @@ entrypoints to docs/archive/retired-topology/ or delete them. Git history
 keeps them. Remove `infra-k8s-ci.yml` and the gateway testpath.
 
 ### 10. DB-dependent tests skip vacuously — Priority 18
+
+**Status 2026-11-04:** delivered in PR #3699 (see the PRD's WI-10 status block). A10: 95 files / 146 sites → 81 / 123.
 
 **Evidence**
 

@@ -9,6 +9,7 @@ pooler breaks on prepared statements).
 from __future__ import annotations
 
 import pytest
+from tests.migrations.rls_db import skip_or_fail_without_db
 from shared.db_url import sync_postgres_connect_args, sync_postgres_url
 
 REST = "u:p@h:5432/db?sslmode=require"
@@ -55,5 +56,5 @@ def test_shared_engine_driver():
     from shared import database
 
     if database.engine.dialect.name != "postgresql":
-        pytest.skip("DATABASE_URL is not Postgres in this run")
+        skip_or_fail_without_db("DATABASE_URL is not Postgres in this run")
     assert database.engine.dialect.driver == "psycopg"
