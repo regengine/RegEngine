@@ -276,7 +276,9 @@ async def ingest_events(
 
     tenant_id = principal_tenant_id
 
-    from app.tenant_validation import validate_tenant_id
+    # Relative: in the consolidated server, top-level ``app`` resolves to
+    # another service's package (compliance/graph/...), not ingestion.
+    from .tenant_validation import validate_tenant_id
 
     validate_tenant_id(tenant_id)
 
