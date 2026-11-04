@@ -181,7 +181,9 @@ Backend setup:
 ```bash
 python3 -m venv venv
 source venv/bin/activate
-pip install --require-hashes -r requirements.lock
+# requirements.lock is the production set; requirements-dev.lock adds pytest,
+# hypothesis, testcontainers and aiosqlite for running the suites locally.
+pip install --require-hashes -r requirements.lock -r requirements-dev.lock
 
 export POSTGRES_PASSWORD=regengine
 docker compose -f docker-compose.dev.yml up -d

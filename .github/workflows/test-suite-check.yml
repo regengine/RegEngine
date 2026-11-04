@@ -14,6 +14,7 @@ on:
       - 'pyproject.toml'
       - 'requirements.in'
       - 'requirements.lock'
+      - 'requirements-dev.lock'
       - 'scripts/**'
       - '.semgrep/**'
       - '.github/workflows/test-suite-check.yml'
@@ -55,7 +56,7 @@ jobs:
           # breaks on the first third-party import.
           # --require-hashes enforces the pip-compile lockfile (#1139).
           if [ -f requirements.lock ]; then
-            pip install --require-hashes -r requirements.lock
+            pip install --require-hashes -r requirements.lock -r requirements-dev.lock
           fi
 
       - name: Collect whole suite and fail on any error
@@ -151,7 +152,7 @@ jobs:
       - name: Install test dependencies
         run: |
           if [ -f requirements.lock ]; then
-            pip install --require-hashes -r requirements.lock
+            pip install --require-hashes -r requirements.lock -r requirements-dev.lock
           fi
 
       - name: Run offline repo-root tests
@@ -208,7 +209,7 @@ jobs:
           # Per-service requirements.txt files are DEPRECATED stubs (#1429)
           # and will be removed when docker-compose is retired.
           if [ -f requirements.lock ]; then
-            pip install --require-hashes -r requirements.lock
+            pip install --require-hashes -r requirements.lock -r requirements-dev.lock
           fi
 
       - name: Setup Shared Module Bridge

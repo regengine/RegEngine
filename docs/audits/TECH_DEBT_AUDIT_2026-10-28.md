@@ -29,7 +29,7 @@ below is tracked there yet.
 | 3 | Lint and type gates are near-empty (ruff selects 4 rule groups, mypy not a gate) | Code | 3 | 3 | 2 | **24** | open |
 | 4 | 33 CI workflows, four of them over 850 lines, plus a workflow that exists to re-run flaky gates | Infrastructure | 4 | 3 | 3 | **21** | open |
 | 5 | Legacy Kafka backbone still in tree and in the production image | Architecture | 2 | 3 | 2 | **20** | open |
-| 6 | Production image carries test and optional AI dependencies | Infrastructure | 2 | 3 | 2 | **20** | open |
+| 6 | Production image carries test and optional AI dependencies | Infrastructure | 2 | 3 | 2 | **20** | delivered in PR #3699 (dev and experimental locks, image-import-check) |
 | 7 | Orientation docs disagree with the tree; duplicate doc directories; one-off reports at repo root | Documentation | 3 | 2 | 2 | **20** | delivered in PR #3699 (`scripts/check_docs_counts.py`, directory merges, root reports moved) |
 | 8 | 31 of 87 top-level scripts are referenced by nothing | Code | 2 | 2 | 1 | **20** | delivered in PR #3699 (registry `scripts/README.md`, guard `scripts/check_scripts_registered.py` in backend-ci); 16 archive candidates await Christopher's approval by name |
 | 9 | Retired six-service topology still has entrypoints, k8s manifests, a PR-time CI job, and legacy runbooks | Infrastructure | 2 | 2 | 1 | **20** | delivered in PR #3699 (moved to `docs/archive/retired-topology/`) |

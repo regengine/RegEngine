@@ -85,7 +85,7 @@ jobs:
 
       - name: Install Python dependencies
         continue-on-error: true
-        run: python3 -m pip install --require-hashes -r requirements.lock
+        run: python3 -m pip install --require-hashes -r requirements.lock -r requirements-dev.lock
 
       - name: Run backend pytest
         timeout-minutes: 15

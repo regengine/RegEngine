@@ -110,9 +110,17 @@ ingest -> canonicalize -> validate -> persist evidence -> export
 
 Backend dependencies are managed at the repository root:
 
-- `requirements.in` is the human-edited dependency spec.
-- `requirements.lock` is the fully pinned, hash-verified install set used by CI
-  and the production Docker build.
+- `requirements.in` is the human-edited production dependency spec.
+- `requirements.lock` is the fully pinned, hash-verified install set used by
+  the production Docker build and every CI job.
+- `requirements-dev.in` / `requirements-dev.lock` add the test tooling (pytest,
+  hypothesis, testcontainers, aiosqlite) for CI jobs that run pytest; they are
+  constrained by `requirements.lock` and never enter the image.
+- `requirements-experimental.in` / `requirements-experimental.lock` hold the
+  packages only `EXPERIMENTAL_ROUTERS` modules import (`pyzbar` today, from a
+  static import trace); no CI job installs them.
+- backend-ci's `image-import-check` job imports `server.main` from a clean
+  virtualenv built from `requirements.lock` alone.
 - `pyproject.toml` declares the supported Python version range.
 
 Backend CI and security checks run against the root lockfile. Do not treat old

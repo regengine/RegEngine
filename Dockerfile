@@ -15,6 +15,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install Python dependencies from the pip-compile lockfile.
 # requirements.in = human-edited loose spec; requirements.lock = fully pinned w/ hashes.
 # --require-hashes enforces that every dep resolves to the exact artifact in the lock.
+# Production dependencies only: requirements-dev.lock (pytest, testcontainers,
+# hypothesis, aiosqlite) and requirements-experimental.lock never enter the image
+# (WI-06). backend-ci's image-import-check job proves server.main imports from
+# this lock alone.
 COPY requirements.in /app/requirements.in
 COPY requirements.lock /app/requirements.lock
 RUN pip install --no-cache-dir --require-hashes -r /app/requirements.lock
@@ -118,7 +122,9 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD sh -c 'curl -fsS "http://localhost:${PORT:-8000}/readiness" || exit 1'
 
-# Issue #1155: Remove any test files that slipped through the build context
+# Issue #1155: Remove any test files that slipped through the build context.
+# Kept after WI-06 (2026-11-04): .dockerignore excludes every tests/ tree, but
+# scripts/utilities/test_redis_sessions.py sits outside one and is still copied.
 RUN find /app -name "test_*.py" -delete
 
 # Set ownership and switch to non-root user

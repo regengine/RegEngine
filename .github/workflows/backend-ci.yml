@@ -34,6 +34,10 @@ on:
       - 'railway.toml'
       - 'requirements.in'
       - 'requirements.lock'
+      - 'requirements-dev.in'
+      - 'requirements-dev.lock'
+      - 'requirements-experimental.in'
+      - 'requirements-experimental.lock'
       - 'scripts/**'
       - 'tests/**'
       - 'docs/security/route-security-manifest.json'
@@ -60,6 +64,10 @@ on:
       - 'railway.toml'
       - 'requirements.in'
       - 'requirements.lock'
+      - 'requirements-dev.in'
+      - 'requirements-dev.lock'
+      - 'requirements-experimental.in'
+      - 'requirements-experimental.lock'
       - 'scripts/**'
       - 'tests/**'
       - 'docs/security/route-security-manifest.json'
@@ -107,6 +115,51 @@ jobs:
           CUSTOM_COMPILE_COMMAND="pip-compile --allow-unsafe --generate-hashes --output-file=requirements.lock requirements.in" \
             pip-compile --allow-unsafe --generate-hashes --output-file=requirements.lock requirements.in
           git diff --exit-code -- requirements.lock
+
+      # The dev and experimental locks are constrained by requirements.lock
+      # (`-c requirements.lock` in their .in files), so they are checked after
+      # it (WI-06).
+      - name: Verify requirements-dev.lock and requirements-experimental.lock freshness
+        run: |
+          for name in dev experimental; do
+            CUSTOM_COMPILE_COMMAND="pip-compile --allow-unsafe --generate-hashes --output-file=requirements-${name}.lock requirements-${name}.in" \
+              pip-compile --allow-unsafe --generate-hashes --output-file="requirements-${name}.lock" "requirements-${name}.in"
+          done
+          git diff --exit-code -- requirements-dev.lock requirements-experimental.lock
+
+  # ── Production-lock import check ─────────────────────────
+  # The image installs requirements.lock alone (Dockerfile). This job builds
+  # a clean virtualenv from that lock and imports the monolith with the
+  # experimental routers off, so a package that only requirements-dev.lock
+  # or requirements-experimental.lock carries cannot be an import-time
+  # dependency of production (WI-06, 2026-11-04). The database URLs are
+  # placeholders: engines are created lazily and nothing connects at import.
+  image-import-check:
+    name: Production lock imports server.main
+    needs: dependency-lock
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install the production lock only
+        run: |
+          python -m venv /tmp/prod-venv
+          /tmp/prod-venv/bin/pip install --require-hashes -r requirements.lock
+      - name: Import server.main with experimental routers unset
+        env:
+          REGENGINE_ENV: test
+          ADMIN_DATABASE_URL: postgresql+psycopg://placeholder:placeholder@localhost:5432/placeholder  # pragma: allowlist secret
+          DATABASE_URL: postgresql+psycopg://placeholder:placeholder@localhost:5432/placeholder  # pragma: allowlist secret
+          MIGRATIONS_DATABASE_URL: postgresql+psycopg://placeholder:placeholder@localhost:5432/placeholder  # pragma: allowlist secret
+          PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/services
+        run: |
+          unset ENABLE_EXPERIMENTAL_ROUTERS
+          /tmp/prod-venv/bin/python -c "import server.main; print('server.main imported from requirements.lock alone')"
+          /tmp/prod-venv/bin/python -c "import importlib.util, sys; missing = [m for m in ('pytest', 'hypothesis', 'testcontainers', 'aiosqlite', 'pyzbar') if importlib.util.find_spec(m)]; sys.exit('dev/experimental package present in the production venv: %s' % missing if missing else 0)"
 
   # ── Test Matrix ──────────────────────────────────────────
   test:
@@ -205,7 +258,7 @@ jobs:
           # Key off the root requirements.lock — the single source of truth.
           # Per-service requirements.txt files are DEPRECATED (see #1429)
           # and match root, so caching on root invalidates correctly.
-          key: pip-${{ hashFiles('requirements.lock') }}
+          key: pip-${{ hashFiles('requirements.lock', 'requirements-dev.lock') }}
           restore-keys: |
             pip-
 
@@ -216,7 +269,7 @@ jobs:
           # guarantees reproducible builds and rejects CVE-shifted artifacts.
           # Per-service stubs are DEPRECATED and will be removed with
           # docker-compose (#1429).
-          pip install --require-hashes -r requirements.lock
+          pip install --require-hashes -r requirements.lock -r requirements-dev.lock
 
       - name: Run tests with coverage
         env:
@@ -334,10 +387,40 @@ jobs:
       - name: Run linting
         run: |
           pip install ruff==0.15.5
-          cd services/shared
-          ruff check . --select E9,F63,F7,F82 --line-length 120 \
-            --extend-exclude __pycache__,.venv,venv,build,dist \
-            --statistics
+          # services/shared carries the wider rule set in services/shared/ruff.toml
+          # (WI-03); the narrow E9,F63,F7,F82 gate stays for the other services.
+          ruff check services/shared --statistics
+
+  # ── mypy on services/shared (non-blocking report) ────────
+  # WI-03: a type report for the shared layer, uploaded as an artifact and
+  # never a merge gate (ci-status does not depend on it). Tighten per module
+  # through [tool.mypy] overrides before making it block.
+  mypy-shared:
+    name: mypy shared/ (report only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install the locks and mypy
+        run: |
+          pip install --require-hashes -r requirements.lock -r requirements-dev.lock
+          pip install mypy==1.19.1
+      - name: Run mypy over services/shared
+        run: |
+          mypy services/shared --config-file pyproject.toml --no-error-summary > mypy-shared-report.txt 2>&1 || true
+          echo "mypy findings: $(grep -c ': error:' mypy-shared-report.txt || true)"
+          tail -n 20 mypy-shared-report.txt
+      - name: Upload the report
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7
+        with:
+          name: mypy-shared-report
+          path: mypy-shared-report.txt
+          retention-days: 14
 
   # ── Lint repo roots (scripts/, cli/, server/, alembic/, …) ─
   # The per-service matrix + lint-shared only cover services/. Python
@@ -574,13 +657,13 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v5
         with:
           path: ~/.cache/pip
-          key: pip-${{ hashFiles('requirements.lock') }}
+          key: pip-${{ hashFiles('requirements.lock', 'requirements-dev.lock') }}
           restore-keys: |
             pip-
 
       - name: Install dependencies
         run: |
-          pip install --require-hashes -r requirements.lock
+          pip install --require-hashes -r requirements.lock -r requirements-dev.lock
 
       - name: Migrate remediation database to alembic head
         env:
@@ -826,12 +909,12 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v5
         with:
           path: ~/.cache/pip
-          key: pip-${{ hashFiles('requirements.lock') }}
+          key: pip-${{ hashFiles('requirements.lock', 'requirements-dev.lock') }}
           restore-keys: |
             pip-
 
       - name: Install dependencies
-        run: pip install --require-hashes -r requirements.lock
+        run: pip install --require-hashes -r requirements.lock -r requirements-dev.lock
 
       - name: Route-complete security manifest and disabled-router gate
         run: |
@@ -1214,12 +1297,12 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v5
         with:
           path: ~/.cache/pip
-          key: pip-${{ hashFiles('requirements.lock') }}
+          key: pip-${{ hashFiles('requirements.lock', 'requirements-dev.lock') }}
           restore-keys: |
             pip-
 
       - name: Install dependencies
-        run: pip install --require-hashes -r requirements.lock
+        run: pip install --require-hashes -r requirements.lock -r requirements-dev.lock
 
       - name: Create dedicated-owner rehearsal database
         env:
@@ -1300,12 +1383,12 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v5
         with:
           path: ~/.cache/pip
-          key: pip-${{ hashFiles('requirements.lock') }}
+          key: pip-${{ hashFiles('requirements.lock', 'requirements-dev.lock') }}
           restore-keys: |
             pip-
 
       - name: Install dependencies
-        run: pip install --require-hashes -r requirements.lock
+        run: pip install --require-hashes -r requirements.lock -r requirements-dev.lock
 
       - name: Create scratch database (dedicated migration + runtime roles)
         env:
@@ -1509,12 +1592,13 @@ jobs:
     # jobs that were aborted mid-flight. `!cancelled()` does not relax the
     # script below: every dependency still has to be success.
     if: always() && !cancelled()
-    needs: [dependency-lock, test, lint, lint-shared, lint-repo-roots, ingestion-full-suite, repo-root-suite, seeded-migration-rehearsal, live-db-suite, docker-build, security, rls-fallback-check, alembic-revision-check, dep-version-check, tenant-id-uuid-check]
+    needs: [dependency-lock, image-import-check, test, lint, lint-shared, lint-repo-roots, ingestion-full-suite, repo-root-suite, seeded-migration-rehearsal, live-db-suite, docker-build, security, rls-fallback-check, alembic-revision-check, dep-version-check, tenant-id-uuid-check]
     runs-on: ubuntu-latest
     steps:
       - name: Check results
         run: |
           echo "Dependency lock:   ${{ needs.dependency-lock.result }}"
+          echo "Image import:      ${{ needs.image-import-check.result }}"
           echo "Test:              ${{ needs.test.result }}"
           echo "Lint:              ${{ needs.lint.result }}"
           echo "Lint shared/:      ${{ needs.lint-shared.result }}"
