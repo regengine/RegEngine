@@ -76,20 +76,56 @@ def _allow_subscription_read_fallback() -> bool:
     description="Returns all available subscription plans with features and pricing.",
 )
 async def list_plans() -> dict[str, list[dict[str, Any]]]:
-    """List all subscription plans."""
-    return {
-        "plans": [
-            {
-                "id": plan["id"],
-                "name": plan["name"],
-                "price_monthly": plan["price_monthly"],
-                "price_annual": plan["price_annual"],
-                "features": plan["features"],
-                "limits": plan["limits"],
-            }
-            for plan in PLANS.values()
-        ]
+    """List all subscription plans.
+
+    Compatibility contract for the pricing page: the ``list`` plan carries
+    ``ga_monthly`` / ``partner_monthly`` so the page can render the approved
+    A-2155 amounts without a backend change. Annual fields are null until
+    C.Lee approves annual pricing (OPEN) — do not invent annual amounts.
+    Claude owns the pricing-page follow-up to consume the new ids/fields.
+    """
+    list_plan = PLANS["list"]
+    compat_amounts = {
+        "ga_monthly": list_plan["price_monthly"],
+        "partner_monthly": PLANS["founding"]["price_monthly"],
+        "ga_annual": None,
+        "partner_annual": None,
     }
+
+    plans: list[dict[str, Any]] = []
+    for plan in PLANS.values():
+        payload = {
+            "id": plan["id"],
+            "name": plan["name"],
+            "price_monthly": plan["price_monthly"],
+            "price_annual": plan["price_annual"],
+            "features": plan["features"],
+            "limits": plan["limits"],
+            "product_status": "Beta",
+        }
+        if plan["id"] == "list":
+            payload.update(compat_amounts)
+        plans.append(payload)
+
+    # Synthetic compatibility entry for the page's historical ``base`` tier
+    # id. It mirrors the list plan's monthly amounts until Claude updates the
+    # page. ``standard``/``premium`` are intentionally omitted: there is no
+    # approved self-serve Standard/Premium dollar SKU, and null-priced
+    # placeholders would be skipped by the page anyway.
+    plans.append(
+        {
+            "id": "base",
+            "name": list_plan["name"],
+            "price_monthly": list_plan["price_monthly"],
+            "price_annual": list_plan["price_annual"],
+            "features": list_plan["features"],
+            "limits": list_plan["limits"],
+            "product_status": "Beta",
+            **compat_amounts,
+        }
+    )
+
+    return {"plans": plans}
 
 
 @router.post(
@@ -421,7 +457,7 @@ async def create_portal_session_for_tenant(
     if request.return_url:
         return_url = _helpers_mod._validate_redirect_url(request.return_url, field="return_url")
     else:
-        server_default = os.getenv("STRIPE_PORTAL_RETURN_URL", DEFAULT_PORTAL_RETURN_URL)
+        server_default = (os.getenv("STRIPE_PORTAL_RETURN_URL") or DEFAULT_PORTAL_RETURN_URL)
         return_url = _helpers_mod._validate_redirect_url(server_default, field="return_url")
 
     try:
@@ -633,7 +669,7 @@ async def create_portal_session_legacy(
     # doesn't accept a client override, but the env-var value is still
     # run through the allowlist so a misconfigured STRIPE_PORTAL_RETURN_URL
     # fails at request time rather than silently redirecting.
-    server_default = os.getenv("STRIPE_PORTAL_RETURN_URL", DEFAULT_PORTAL_RETURN_URL)
+    server_default = (os.getenv("STRIPE_PORTAL_RETURN_URL") or DEFAULT_PORTAL_RETURN_URL)
     return_url = _helpers_mod._validate_redirect_url(server_default, field="return_url")
 
     try:
