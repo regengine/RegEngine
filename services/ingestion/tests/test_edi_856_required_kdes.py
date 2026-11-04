@@ -25,6 +25,8 @@ pytest.importorskip("fastapi")
 import app.edi_ingestion.routes as edi_ingestion_routes  # noqa: E402
 from app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
 from app.edi_ingestion import router as edi_router  # noqa: E402
+from app.edi_ingestion.extractors import _extract_861_fields  # noqa: E402
+from app.edi_ingestion.parser import _parse_x12_segments  # noqa: E402
 from app.webhook_models import IngestResponse, WebhookPayload  # noqa: E402
 from app.webhook_router_v2 import _validate_event_kdes  # noqa: E402
 
@@ -141,3 +143,37 @@ def test_861_without_ship_from_only_misses_immediate_previous_source(captured) -
     for event in events:
         assert "immediate_previous_source" not in event.kdes
         assert _validate_event_kdes(event) == ["Missing required KDE 'immediate_previous_source' for receiving CTE"]
+
+
+_SUPPLIER = "N1*SU*Fresh Supply Co*92*0614141000005"
+_SHIP_FROM = "N1*SF*Valley Fresh Farms*92*6141410000014"
+
+
+@pytest.mark.parametrize(
+    ("parties", "expected_source", "expected_gln"),
+    [
+        ((_SUPPLIER, _SHIP_FROM), "Valley Fresh Farms", "6141410000014"),
+        ((_SHIP_FROM, _SUPPLIER), "Valley Fresh Farms", "6141410000014"),
+        ((_SUPPLIER,), "Fresh Supply Co", "0614141000005"),
+        ((_SUPPLIER, "N1*SF"), "Fresh Supply Co", "0614141000005"),
+    ],
+)
+def test_861_prefers_the_ship_from_party_over_a_supplier(
+    parties: tuple[str, ...], expected_source: str, expected_gln: str, captured
+) -> None:
+    response = _post(
+        "/document",
+        {"traceability_lot_code": "LOT-861-KDE", "tlc_source_reference": "PACK-0311"},
+        _receiving_advice_861(*parties),
+    )
+
+    assert response.status_code == 201, response.text
+    events = [event for payload in captured for event in payload.events]
+    assert events
+    for event in events:
+        assert event.kdes["immediate_previous_source"] == expected_source
+        assert event.kdes["ship_from_location"] == expected_source
+        assert _validate_event_kdes(event) == []
+    assert _extract_861_fields(_parse_x12_segments(_receiving_advice_861(*parties).decode()))["ship_from_gln"] == (
+        expected_gln
+    )

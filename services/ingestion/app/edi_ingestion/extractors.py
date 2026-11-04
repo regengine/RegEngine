@@ -505,6 +505,7 @@ def _extract_861_fields(segments: list[list[str]]) -> dict[str, Any]:
     data["reference_document_number"] = data["receiving_advice_number"]
 
     items = _ItemLines()
+    has_explicit_ship_from = False
     for segment in segments:
         if not segment:
             continue
@@ -514,7 +515,13 @@ def _extract_861_fields(segments: list[list[str]]) -> dict[str, Any]:
             entity_code = segment[1].upper() if len(segment) > 1 else ""
             name = segment[2] if len(segment) > 2 and segment[2] else None
             location_id = segment[4] if len(segment) > 4 and segment[4] else None
-            if entity_code in _FROM_ENTITY_CODES:
+            if entity_code == "SF" and not has_explicit_ship_from and (name or location_id):
+                # N1*SF names the location itself, so it replaces a supplier
+                # (SU) or shipper (SH) party that appeared earlier.
+                has_explicit_ship_from = True
+                data["ship_from_name"] = name
+                data["ship_from_gln"] = location_id
+            elif entity_code in _FROM_ENTITY_CODES and not has_explicit_ship_from:
                 data["ship_from_name"] = data["ship_from_name"] or name
                 data["ship_from_gln"] = data["ship_from_gln"] or location_id
             elif entity_code in _TO_ENTITY_CODES:
