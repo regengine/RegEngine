@@ -29,6 +29,7 @@ from shared.secrets_manager import (
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SERVER_MAIN = REPO_ROOT / "server" / "main.py"
+STARTUP_CHECKS = REPO_ROOT / "server" / "startup_checks.py"
 
 _CRED_VARS = (
     "REGENGINE_ENV",
@@ -301,7 +302,11 @@ class TestValidateProductionSecrets:
 
 class TestStartupWiring:
     def test_server_main_fails_closed_on_secrets(self):
-        source = SERVER_MAIN.read_text(encoding="utf-8")
-        assert "from shared.secrets_manager import" in source
-        assert re.search(r"^require_secure_secrets_in_production\(\)", source, re.MULTILINE)
-        assert re.search(r"^validate_production_secrets\(\)", source, re.MULTILINE)
+        # WI-14: the import-time gates live in server/startup_checks.py;
+        # server/main.py runs them at import through run_import_time_checks().
+        checks = STARTUP_CHECKS.read_text(encoding="utf-8")
+        assert "from shared.secrets_manager import" in checks
+        assert re.search(r"^    require_secure_secrets_in_production\(\)", checks, re.MULTILINE)
+        assert re.search(r"^    validate_production_secrets\(\)", checks, re.MULTILINE)
+        main = SERVER_MAIN.read_text(encoding="utf-8")
+        assert re.search(r"^startup_checks\.run_import_time_checks\(\)", main, re.MULTILINE)
