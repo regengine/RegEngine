@@ -294,6 +294,7 @@ def _preflight_856_required_kdes(
     traceability_lot_code: str,
     partner_id: str | None,
     source: str,
+    placeholder_errors: list[dict[str, Any]] | None = None,
 ) -> None:
     """Reject an 856 the required-KDE gate would refuse, before ISA13 is reserved.
 
@@ -302,8 +303,11 @@ def _preflight_856_required_kdes(
     assigned the lot, so the TLC source reference must come from the caller.
     It is never derived from the ship-from party: a pass-through distributor
     ships lots it did not assign.
+
+    ``placeholder_errors`` carries KDEs the caller's route would otherwise
+    synthesize, which the gate cannot catch because the invented value passes.
     """
-    errors: list[dict[str, Any]] = []
+    errors: list[dict[str, Any]] = list(placeholder_errors or [])
     if not tlc_source_reference:
         errors.append(
             {
@@ -345,7 +349,6 @@ _RECEIPT_KDE_SOURCES: dict[str, tuple[str, ...]] = {
     "reference_document": _REFERENCE_DOCUMENT_SOURCE,
 }
 _KDE_SOURCES_BY_SET: dict[str, dict[str, tuple[str, ...]]] = {
-    "856": _SHIPMENT_KDE_SOURCES,
     "945": _SHIPMENT_KDE_SOURCES,
     "861": _RECEIPT_KDE_SOURCES,
     "944": _RECEIPT_KDE_SOURCES,
@@ -369,6 +372,8 @@ def _preflight_document_required_kdes(
     extracted: dict[str, Any],
     tlc_source_reference: str | None,
     product_description_override: str | None,
+    quantity_override: float | None,
+    unit_override: str | None,
     sender_tenant_id: str,
     traceability_lot_code: str,
     partner_id: str | None,
@@ -377,14 +382,18 @@ def _preflight_document_required_kdes(
     """Reject a document the required-KDE gate would refuse, before ISA13 is reserved.
 
     Without this the gate drops the events inside ``ingest_events`` and
-    ``/document`` answers 201 with ``accepted: 0``. Quantity, unit and event
-    dates have their own checks. X12 has no element naming who assigned a lot,
-    so the TLC source reference comes from the caller on every set. A line with
-    no product id fails here so the route cannot synthesize ``EDI <set> Item``.
+    ``/document`` answers 201 with ``accepted: 0``. Event dates have their own
+    check. X12 has no element naming who assigned a lot, so the TLC source
+    reference comes from the caller on every set. Each line needs a product, a
+    positive quantity and a valid unit here, because the route would otherwise
+    synthesize ``EDI <set> Item``, ``1.0`` or ``units`` and the gate cannot catch
+    an invented value. An 856 uses ``_legacy_856_placeholder_errors`` instead.
     """
     sources = _KDE_SOURCES_BY_SET[transaction_set]
     no_source = _KDES_WITH_NO_SOURCE_BY_SET.get(transaction_set, frozenset())
     errors: list[dict[str, Any]] = []
+    # Lines replace header values, as in the route's line expansion.
+    lines = [{**extracted, **line} for line in extracted.get("line_items") or [{}]]
 
     for kde in REQUIRED_KDES_BY_CTE[_CTE_TYPE_BY_SET[transaction_set]]:
         if kde in no_source:
@@ -394,12 +403,20 @@ def _preflight_document_required_kdes(
             present = bool(tlc_source_reference)
             message = f"Provide the tlc_source_reference form field; EDI {transaction_set} does not carry it."
         elif kde == "product_description":
-            # Lines replace header values, as in the route's line expansion.
-            lines = extracted.get("line_items") or [{}]
-            present = bool(product_description_override) or all(
-                {**extracted, **line}.get("product_description") for line in lines
-            )
+            present = bool(product_description_override) or all(line.get("product_description") for line in lines)
             message = f"EDI {transaction_set} line has no product identification or description."
+        elif kde == "quantity" and not no_source:
+            present = quantity_override is not None or all(
+                _positive_float_or_none(line.get("quantity")) is not None for line in lines
+            )
+            message = f"EDI {transaction_set} line has no positive quantity."
+        elif kde == "unit_of_measure" and not no_source:
+            present = all(
+                _valid_unit_or_none(unit_override if unit_override is not None else line.get("unit_of_measure"))
+                is not None
+                for line in lines
+            )
+            message = f"EDI {transaction_set} line has no recognized X12 unit of measure."
         elif kde in sources:
             present = any(extracted.get(field) for field in sources[kde])
             message = f"EDI {transaction_set} has no value for {kde}."
@@ -1347,16 +1364,38 @@ async def ingest_edi_document(
                 partner_id=x_partner_id,
                 source=source,
             )
-            _preflight_document_required_kdes(
-                transaction_set=slice_set,
-                extracted=slice_extracted,
-                tlc_source_reference=tlc_source,
-                product_description_override=product_description,
-                sender_tenant_id=sender_tenant_id,
-                traceability_lot_code=traceability_lot_code,
-                partner_id=x_partner_id,
-                source=source,
-            )
+            if slice_set == "856":
+                _preflight_856_required_kdes(
+                    extracted=slice_extracted,
+                    tlc_source_reference=tlc_source,
+                    sender_tenant_id=sender_tenant_id,
+                    traceability_lot_code=traceability_lot_code,
+                    partner_id=x_partner_id,
+                    source=source,
+                    # location_override sets the event location only, so it
+                    # cannot supply the ship-from or ship-to KDE here.
+                    placeholder_errors=_legacy_856_placeholder_errors(
+                        extracted=slice_extracted,
+                        product_description_override=product_description,
+                        quantity_override=quantity_override,
+                        unit_override=unit_of_measure_override,
+                        ship_from_override=None,
+                        ship_to_override=None,
+                    ),
+                )
+            else:
+                _preflight_document_required_kdes(
+                    transaction_set=slice_set,
+                    extracted=slice_extracted,
+                    tlc_source_reference=tlc_source,
+                    product_description_override=product_description,
+                    quantity_override=quantity_override,
+                    unit_override=unit_of_measure_override,
+                    sender_tenant_id=sender_tenant_id,
+                    traceability_lot_code=traceability_lot_code,
+                    partner_id=x_partner_id,
+                    source=source,
+                )
 
     # Content rejections run after the allowlist and before the ISA13 is
     # reserved, so a corrected resend is not refused as a 409 replay.

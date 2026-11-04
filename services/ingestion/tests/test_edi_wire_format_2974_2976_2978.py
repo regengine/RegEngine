@@ -371,7 +371,8 @@ def test_2978_unmapped_unit_warns_and_fails_closed_on_document_route(
     )
     response = _post(client, bad, name="bad-uom.edi")
     assert response.status_code == 422, response.text
-    assert response.json()["detail"]["error"] == "edi_unmapped_unit_of_measure"
+    assert response.json()["detail"]["error"] == "edi_856_missing_required_kdes"
+    assert "unit_of_measure" in response.json()["detail"]["missing_kdes"]
     assert "payload" not in captured_payload, "an unmapped unit must not reach the canonical stream"
 
 
@@ -483,7 +484,8 @@ def test_856_blank_sn1_quantity_is_rejected(client: TestClient, captured_payload
         files={"file": ("document.edi", raw, "application/edi-x12")},
     )
     assert response.status_code == 422, response.text
-    assert response.json()["detail"]["error"] == "edi_non_positive_quantity"
+    assert response.json()["detail"]["error"] == "edi_856_missing_required_kdes"
+    assert "quantity" in response.json()["detail"]["missing_kdes"]
     assert "payload" not in captured_payload
 
 

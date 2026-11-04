@@ -194,6 +194,42 @@ def test_missing_tlc_source_is_rejected_before_the_isa13_is_reserved(
     assert reserved == []
 
 
+@pytest.mark.parametrize(
+    ("old", "new", "missing"),
+    [
+        (b"LIN**SK*ROMAINE-12CT~", b"", "product_description"),
+        (b"SN1**200*CA~", b"SN1**200~", "unit_of_measure"),
+        (b"SN1**200*CA~", b"", "quantity"),
+        (b"N1*SF*Valley Fresh Farms*92", b"N1*SF**92", "ship_from_location"),
+        (b"N1*ST*Metro Distribution Center*92", b"N1*ST**92", "ship_to_location"),
+    ],
+    ids=["product", "unit", "quantity", "ship_from", "ship_to"],
+)
+def test_document_route_does_not_store_synthesized_856_kdes(
+    client: TestClient,
+    stored: list[dict[str, Any]],
+    monkeypatch: pytest.MonkeyPatch,
+    old: bytes,
+    new: bytes,
+    missing: str,
+) -> None:
+    """The gate cannot catch these: the route's placeholder would pass it."""
+    reserved: list[Any] = []
+    monkeypatch.setattr(
+        edi_routes,
+        "check_and_record_interchange",
+        lambda **kwargs: (reserved.append(kwargs), (False, None))[1],
+    )
+    raw = FIXTURE.read_bytes().replace(old, new)
+
+    response = _post(client, "/document", raw, tlc_source_reference=TLC_SOURCE)
+
+    assert response.status_code == 422, response.text
+    assert missing in response.json()["detail"]["missing_kdes"]
+    assert stored == []
+    assert reserved == []
+
+
 def test_strict_false_does_not_downgrade_a_missing_tlc_source(
     client: TestClient, stored: list[dict[str, Any]], monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -412,7 +448,9 @@ def test_856_with_no_item_line_is_rejected_before_reservation(
 
     response = _post(client, "/document", raw, tlc_source_reference=TLC_SOURCE)
 
-    _assert_rejected_before_reservation(response, "856", ["product_description"], stored, reserved)
+    _assert_rejected_before_reservation(
+        response, "856", ["quantity", "unit_of_measure", "product_description"], stored, reserved
+    )
 
 
 def test_one_856_line_with_no_product_id_rejects_the_document(
@@ -474,6 +512,61 @@ def test_missing_kde_is_rejected_before_reservation(
     response = _post(client, "/document", raw, tlc_source_reference=TLC_SOURCE)
 
     _assert_rejected_before_reservation(response, transaction_set, missing, stored, reserved)
+
+
+@pytest.mark.parametrize(
+    ("transaction_set", "good", "bad", "missing"),
+    [
+        ("861", "RCD**200*CA", "RCD**200", ["unit_of_measure"]),
+        ("861", "RCD**200*CA", "RCD**200*XX", ["unit_of_measure"]),
+        ("861", "RCD**200*CA", "RCD***CA", ["quantity"]),
+        ("861", "RCD**200*CA", "RCD**0*CA", ["quantity"]),
+        (
+            "944",
+            "W07*200*CA**UP*012345678905***LOT-ROMAINE-A",
+            "W07*200***UP*012345678905***LOT-ROMAINE-A",
+            ["unit_of_measure"],
+        ),
+        (
+            "944",
+            "W07*200*CA**UP*012345678905***LOT-ROMAINE-A",
+            "W07**CA**UP*012345678905***LOT-ROMAINE-A",
+            ["quantity"],
+        ),
+        ("945", "W12*CC*200*200*0*CA****LOT-ROMAINE-A", "W12*CC*200*200*0*****LOT-ROMAINE-A", ["unit_of_measure"]),
+        ("945", "W12*CC*200*200*0*CA****LOT-ROMAINE-A", "W12*CC*200**0*CA****LOT-ROMAINE-A", ["quantity"]),
+    ],
+)
+def test_quantity_and_unit_are_not_synthesized_on_other_sets(
+    client: TestClient,
+    stored: list[dict[str, Any]],
+    reserved: list[Any],
+    transaction_set: str,
+    good: str,
+    bad: str,
+    missing: list[str],
+) -> None:
+    body = [bad if item == good else item for item in VALID_DOCUMENTS[transaction_set]]
+    assert bad in body
+
+    response = _post(client, "/document", _document(transaction_set, *body), tlc_source_reference=TLC_SOURCE)
+
+    _assert_rejected_before_reservation(response, transaction_set, missing, stored, reserved)
+
+
+def test_unit_override_supplies_a_blank_unit(client: TestClient, stored: list[dict[str, Any]]) -> None:
+    body = ["RCD**200" if item == "RCD**200*CA" else item for item in VALID_DOCUMENTS["861"]]
+
+    response = _post(
+        client,
+        "/document",
+        _document("861", *body),
+        tlc_source_reference=TLC_SOURCE,
+        unit_of_measure_override="CA",
+    )
+
+    assert response.status_code == 201, response.text
+    assert len(stored) == 1
 
 
 @pytest.mark.parametrize(
