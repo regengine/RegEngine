@@ -499,6 +499,7 @@ APPLICATION_TABLES = {
         "compliance_notifications",
         "compliance_status_log",
         "controls",
+        "data_gap_events",
         "food_traceability_list",
         "funnel_events",
         "graph_outbox",
@@ -568,6 +569,9 @@ REGENGINE_TABLE_GRANTS = {
     "public.audit_logs": ("SELECT", "INSERT"),
     "public.compliance_alerts": ("SELECT", "INSERT"),
     "public.controls": ("SELECT",),
+    # v142 -- ingest opens and closes data gaps. No DELETE: gap history is
+    # evidence.
+    "public.data_gap_events": ("SELECT", "INSERT", "UPDATE"),
     "public.food_traceability_list": ("SELECT",),
     "public.funnel_events": ("SELECT", "INSERT"),
     "public.obligation_cte_rules": ("SELECT",),
@@ -659,6 +663,9 @@ REGENGINE_COLUMN_GRANTS = {
     # without exposing names/settings. v139 applies the same column grant to
     # databases already past v111; this inventory keeps it across cutover.
     "public.tenants": {"SELECT": ("id", "status")},
+    # v142 -- opening a gap attributes it to the lot's facility. Only the
+    # columns that lookup reads; the rest stays control-plane.
+    "public.supplier_traceability_lots": {"SELECT": ("tenant_id", "tlc_code", "facility_id")},
     # v126 -- POST /api/v1/ingest/csv (#3122) retains each upload verbatim
     # in the ingest transaction (webhook_compat._open_ingestion_run).
     # v138 extends INSERT with storage_url for partner-uploads pointer rows;
@@ -727,6 +734,7 @@ REGENGINE_SYSADMIN_TABLE_GRANTS = {
     "public.audit_logs": ("SELECT", "INSERT"),
     "public.auth_challenges": ("SELECT", "INSERT", "UPDATE", "DELETE"),
     "public.compliance_alerts": ("SELECT", "INSERT", "UPDATE"),
+    "public.data_gap_events": ("SELECT",),
     "public.funnel_events": ("SELECT",),
     "public.graph_outbox": ("SELECT", "INSERT", "UPDATE"),
     "public.invites": ("SELECT", "INSERT", "UPDATE"),
