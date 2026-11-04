@@ -51,9 +51,17 @@ _STUB_NAMES = [
 
 
 def _ensure_stubs():
+    # Prefer the real package when it is installed: a stub ``LoggerProvider``
+    # without ``get_logger`` would otherwise be installed as the process-wide
+    # logger provider by ``setup_standalone_observability`` and break every
+    # later FastAPI TestClient request in the same session (the SDK is in
+    # requirements.lock, so CI has it; the stubs cover a bare environment).
     for name in _STUB_NAMES:
         if name not in sys.modules:
-            sys.modules[name] = types.ModuleType(name)
+            try:
+                importlib.import_module(name)
+            except ImportError:
+                sys.modules[name] = types.ModuleType(name)
 
     root = sys.modules["opentelemetry"]
     root._logs = sys.modules["opentelemetry._logs"]

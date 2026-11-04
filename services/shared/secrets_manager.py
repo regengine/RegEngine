@@ -164,36 +164,6 @@ class SecretsManager:
             "password": password,
         }
 
-    def get_kafka_credentials(self, environment: Optional[str] = None) -> dict:
-        """Get Kafka credentials.
-
-        Args:
-            environment: Environment name (production, staging, dev)
-
-        Returns:
-            Dict with bootstrap_servers, username, password, security_protocol
-
-        Raises:
-            RuntimeError: If running in production with bootstrap servers missing
-        """
-        servers = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "")
-        if _is_production_environment(environment):
-            if not servers:
-                raise RuntimeError(
-                    "Missing required Kafka credentials in production: "
-                    "KAFKA_BOOTSTRAP_SERVERS. Set it via environment variables; "
-                    "the localhost fallback is for local development only."
-                )
-        elif not servers:
-            logger.warning("KAFKA_BOOTSTRAP_SERVERS not set, defaulting to localhost (dev only)")
-            servers = "localhost:9092"
-        return {
-            "bootstrap_servers": servers,
-            "username": os.getenv("KAFKA_USERNAME", ""),
-            "password": os.getenv("KAFKA_PASSWORD", ""),
-            "security_protocol": os.getenv("KAFKA_SECURITY_PROTOCOL", "PLAINTEXT"),
-        }
-
     def get_s3_credentials(self, environment: Optional[str] = None) -> dict:
         """Get object storage credentials and configuration.
 
@@ -275,18 +245,6 @@ def get_neo4j_credentials(environment: Optional[str] = None) -> dict:
     return get_secrets_manager().get_neo4j_credentials(environment)
 
 
-def get_kafka_credentials(environment: Optional[str] = None) -> dict:
-    """Get Kafka credentials.
-
-    Args:
-        environment: Environment name
-
-    Returns:
-        Kafka credentials dict
-    """
-    return get_secrets_manager().get_kafka_credentials(environment)
-
-
 def get_s3_credentials(environment: Optional[str] = None) -> dict:
     """Get S3 credentials.
 
@@ -312,9 +270,6 @@ INSECURE_DEFAULTS = {
 # The localhost fallbacks in the getters are for local development only
 # and never satisfy this requirement.
 REQUIRED_PRODUCTION_CREDENTIALS: tuple[tuple[str, ...], ...] = (("DATABASE_URL",),)
-
-# Kafka consumers run only when EVENT_BACKBONE=kafka (default pg).
-KAFKA_PRODUCTION_CREDENTIALS: tuple[tuple[str, ...], ...] = (("KAFKA_BOOTSTRAP_SERVERS",),)
 
 # Neo4j is absent from the release-approved production router set; its
 # credentials stay fail-closed on use. Object storage is optional: absent
@@ -350,13 +305,9 @@ def validate_production_secrets() -> None:
     env = _production_env_label()
     logger.info("validating_production_secrets", environment=env)
 
-    # DATABASE_URL is always required; subsystem credentials join the list
-    # only when their subsystem is actually enabled.
-    from shared.event_backbone import kafka_enabled  # noqa: PLC0415 -- lazy import, avoids a module-load cycle
-
+    # DATABASE_URL is the only always-required credential; the optional
+    # subsystems (Neo4j, object storage) fail closed on use instead.
     required: list[tuple[str, ...]] = list(REQUIRED_PRODUCTION_CREDENTIALS)
-    if kafka_enabled():
-        required.extend(KAFKA_PRODUCTION_CREDENTIALS)
 
     errors = []
 

@@ -1,8 +1,5 @@
-import os
-
 # --- Standardized Bootstrap ---
 import sys
-import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -52,9 +49,6 @@ logger = _structlog.get_logger("nlp")
 # Refers to services/nlp/app/...
 from services.nlp.app.config import settings
 
-# DEPRECATED: Kafka consumer import — will be removed once EVENT_BACKBONE=pg is
-# default (see #1159 #1240). Gated by EVENT_BACKBONE=kafka env flag below.
-from services.nlp.app.consumer import run_consumer, stop_consumer
 from services.nlp.app.routes import router as nlp_router
 from fastapi import FastAPI
 
@@ -62,25 +56,14 @@ from fastapi import FastAPI
 @asynccontextmanager
 async def lifespan(api_app: FastAPI):
     # Startup
+    # Extraction runs on the PostgreSQL task queue (server/workers/task_processor.py);
+    # the Kafka consumer thread was retired in WI-05.
     logger.info("nlp_service_startup")
-
-    # DEPRECATED (#1159 #1240): Kafka consumer only runs when EVENT_BACKBONE=kafka.
-    # Default is pg (task_processor). Remove this block once #1159 is merged.
-    consumer_thread: threading.Thread | None = None
-    if os.getenv("EVENT_BACKBONE", "pg").lower() == "kafka":
-        consumer_thread = threading.Thread(target=run_consumer, daemon=True)
-        consumer_thread.start()
-        logger.info("nlp_consumer_thread_started")
-    else:
-        logger.info("nlp_kafka_consumer_skipped", reason="EVENT_BACKBONE!=kafka")
 
     yield
 
     # Shutdown
     logger.info("nlp_service_shutdown")
-    if consumer_thread is not None:
-        stop_consumer()
-        consumer_thread.join(timeout=5.0)
 
 
 from shared.env import is_production

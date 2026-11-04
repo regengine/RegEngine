@@ -1,6 +1,6 @@
 # Retired six-service topology (archive)
 
-**Archived:** 2026-10-30, tech-debt work item WI-09 (PR #3699).
+**Archived:** 2026-10-30, tech-debt work item WI-09 (PR #3699); `kafka/` added 2026-11-04 under WI-05 (same PR).
 **Loaded by:** nothing. No build, test, deploy or CI workflow reads anything
 under this directory. The files are kept for history and were moved with
 `git mv`, so `git log --follow` reaches their earlier history.
@@ -25,6 +25,7 @@ on Vercel; `ARCHITECTURE.md` and `docs/CODEBASE_MAP.md` describe it. The
 | `swarm/tests/` | `tests/swarm/` | Its tests; they only exercised the runtime and the sweep script below. |
 | `swarm/compliance_sweep.py` | `scripts/compliance_sweep.py` | The only importer of the runtime. |
 | `workflows/infra-k8s-ci.yml` | `.github/workflows/infra-k8s-ci.yml` | Rendered the production overlay and ran the k8s and gateway tests. Removed from `scripts/workflow_inventory.txt`. |
+| `kafka/services/...`, `kafka/tests/...` | same path under the repo root | The Kafka event backbone (WI-05, 2026-11-04): shared client/auth/DLQ modules, the NLP and admin consumers, the ingestion and scheduler producers, the graph audit publisher, and 33 Kafka-only test files. `kafka/README.md` has the per-module call graph. |
 
 The five narrative runbooks with a `LEGACY:` banner moved to
 `docs/runbooks/legacy/` (WI-07, 2026-11-04); `scripts/check_docs_links.py`

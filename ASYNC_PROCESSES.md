@@ -48,17 +48,24 @@ task handlers. It polls the same `fsma.task_queue` table with a disjoint set of 
 types. Producer side: ingestion routes call `shared.task_queue.enqueue_task` (note:
 `task_processor.enqueue_task` is a different function with no production callers).
 
-## Event Backbone: Postgres by default, Kafka opt-in
+## Event Backbone: Postgres only
 
-`services/shared/event_backbone.py` defaults `EVENT_BACKBONE=pg`. `kafka_enabled()`
-returns `True` only when `EVENT_BACKBONE=kafka` is set explicitly (#1159 split-brain
-guard). In the default Railway deployment **no Kafka consumers run**:
+The `fsma.task_queue` table is the only event backbone. The Kafka path (the
+`EVENT_BACKBONE` switch, the NLP and admin consumer threads, the ingestion and
+scheduler producers, the HMAC event signing in `kafka_auth`, the DLQ producers
+and the correlation-header propagation helpers) was retired on 2026-11-04
+(tech-debt WI-05). The modules moved with `git mv` to
+`docs/archive/retired-topology/kafka/`, where a README lists each one with its
+former importers; `confluent-kafka` and `fastavro` left `requirements.lock`.
 
-- The NLP Kafka consumer pipeline (`services/nlp/app/consumer/`) is deprecated; its
-  consumer thread starts only from the legacy standalone `services/nlp/main.py` with
-  `EVENT_BACKBONE=kafka` — neither condition holds in production.
-- `services/shared/kafka_compat.py` keeps a confluent-kafka compatibility layer alive for the
-  opt-in path. Opt-in-alive, not deleted — but vestigial for the default deployment.
+- `services/nlp/app/consumer/` now holds only the extraction helpers
+  (`conversion`, `review_routing`, `thresholds`, `schema_validation`,
+  `tenancy`, `events`) that `server/workers/task_processor.py` imports.
+- `GET /health` (ingestion) still returns a `kafka` key for dashboards; its
+  value is the constant `"retired"`. `GET /health/consumer` (admin) returns a
+  static 200 for the same reason.
+- `scripts/check_legacy_dead_code.py` fails CI on any new `confluent_kafka` or
+  `shared.kafka_*` import.
 
 ## Scheduler (embedded in the monolith)
 
@@ -84,9 +91,9 @@ refuses to run in production via `assert_legacy_entrypoint_not_in_production('sc
 | Task Queue Purge | 24 hr | Deletes completed/dead `fsma.task_queue` rows older than 30 days | Yes | Logs error; continues |
 
 (The former "Regulatory Discovery" job was removed — it duplicated the FSMA Nightly Sync
-against the same endpoint with credentials the API never accepted. Kafka emission from
-scrape results is gated on `EVENT_BACKBONE=kafka`; in the default pg backbone, items are
-acked after webhook + compliance processing.)
+against the same endpoint with credentials the API never accepted. Scrape results
+are acked after webhook + compliance processing; there is no emission step since
+the Kafka producer was retired in WI-05.)
 
 **Enable gate:** `SCHEDULER_EMBEDDED` (default: on in production, off elsewhere).
 **Config:** `services/scheduler/app/config.py` — intervals, thresholds, timeouts. If

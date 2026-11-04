@@ -83,6 +83,8 @@ class LegacyPattern:
     code: str
     regex: re.Pattern[str]
     message: str
+    # Restrict the pattern to these file suffixes; None scans every text file.
+    suffixes: tuple[str, ...] | None = None
 
 
 @dataclass(frozen=True)
@@ -240,6 +242,24 @@ BANNED_PATTERNS = (
         re.compile(r"(^|[\s`'\"])(app/(?:epcis_ingestion|fda_export_router|sandbox_router)\.py)\b"),
         "Active docs/code should not point to deleted ingestion shim files.",
     ),
+    # WI-05 (2026-11-04): the Kafka backbone was retired; its modules live under
+    # docs/archive/retired-topology/kafka/ and the client library left the lock.
+    LegacyPattern(
+        "retired-kafka-client-import",
+        re.compile(r"\b(?:from|import)\s+confluent_kafka\b"),
+        "confluent-kafka was removed from requirements.lock with the Kafka backbone (WI-05); "
+        "use shared.task_queue / server/workers/task_processor.py.",
+        suffixes=(".py",),
+    ),
+    LegacyPattern(
+        "retired-kafka-module-import",
+        re.compile(
+            r"\b(?:from|import)\s+(?:services\.)?shared\.(?:kafka_auth|kafka_compat|kafka_consumer_base|"
+            r"event_backbone|dlq|observability\.(?:dlq_producer|kafka_propagation))\b"
+        ),
+        "The shared Kafka modules moved to docs/archive/retired-topology/kafka/ (WI-05).",
+        suffixes=(".py",),
+    ),
     LegacyPattern(
         "legacy-per-service-railway-host",
         re.compile(
@@ -391,6 +411,8 @@ def check_patterns(files: Iterable[Path], root: Path) -> list[Finding]:
 
         for line_number, line in enumerate(lines, start=1):
             for pattern in BANNED_PATTERNS:
+                if pattern.suffixes is not None and path.suffix not in pattern.suffixes:
+                    continue
                 if pattern.regex.search(line):
                     findings.append(
                         Finding(

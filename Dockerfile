@@ -71,10 +71,10 @@ COPY plugins /app/plugins
 # Copy the event JSON schemas (#2965). These are NOT optional documentation:
 # services/nlp/app/consumer/schema_validation.py loads
 # data-schemas/events/ingest.normalized.schema.json at import to validate every
-# inbound Kafka message (OWASP API10:2023). Without this COPY the loader gets a
-# FileNotFoundError and the consumer runs with a fail-closed stub validator
-# that rejects every message — the container is broken loudly instead of
-# silently passing hostile payloads through, but it is still broken.
+# inbound extraction payload (OWASP API10:2023). Without this COPY the loader
+# gets a FileNotFoundError and the task processor runs with a fail-closed stub
+# validator that rejects every payload — the container is broken loudly
+# instead of silently passing hostile payloads through, but it is still broken.
 COPY data-schemas /app/data-schemas
 
 # Copy normalized QA health baseline used by the sysadmin dashboard. Raw test

@@ -404,8 +404,7 @@ from shared.auth import validate_auth_config
 validate_auth_config()
 
 # Fail fast in production when required credentials are missing or still
-# set to insecure placeholders. Startup requires DATABASE_URL always, plus
-# KAFKA_BOOTSTRAP_SERVERS only when EVENT_BACKBONE=kafka; unset optional
+# set to insecure placeholders. Startup requires DATABASE_URL; unset optional
 # subsystem values (Neo4j, object storage) stay unset so those paths degrade
 # (no-op or 503) instead of aborting boot. This gate does not change the
 # credential getters, which keep their own fail-closed-on-use contract:

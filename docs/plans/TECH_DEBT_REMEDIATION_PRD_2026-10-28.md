@@ -467,6 +467,28 @@ Lowering thresholds.
 
 ### WI-05 — Retire the Kafka backbone
 
+**Status 2026-11-04:** delivered in PR #3699. Appendix A command A5 returns 0.
+Sixteen modules and 33 Kafka-only test files moved with `git mv` to
+`docs/archive/retired-topology/kafka/` (its README carries the call graph
+required by requirement 1 and the list of environment variables that are no
+longer read). Live-path changes: `_process_and_emit` returns the event
+instead of publishing it; the scheduler acks on webhook + alerting with no
+emission branch; the admin and NLP consumer threads and their
+`EVENT_BACKBONE` gates are gone; `validate_production_secrets` requires
+`DATABASE_URL` only; the Kafka fields left all five service configs,
+`.env.example` and `scripts/export_env_bundle.py`; `/health` reports
+`"kafka": "retired"` and `/health/consumer` a static 200. `confluent-kafka`,
+`avro` and `fastavro` left `requirements.lock` (compiled in place, no other
+pin moved; the dev and experimental locks were unchanged).
+`scripts/check_legacy_dead_code.py` now fails on `confluent_kafka` and
+`shared.kafka_*` imports. Deviations from the requirements: the pure
+`_is_fsma_event` / `_collect_ftl_flags` helpers moved to a new
+`services/nlp/app/consumer/events.py` instead of staying in the archived
+`dlq.py`; `kafka_propagation.py` had no reader on the pg path, so it was
+archived rather than kept; `tenancy._kafka_key_for` stays as a string helper.
+Not done: removing the variables from Railway (operator step, listed in the
+archive README).
+
 **Problem.** 13 non-test modules import `confluent_kafka` or read
 `KAFKA_BOOTSTRAP_SERVERS`; the main ones total 3,505 lines
 (`services/shared/kafka_auth.py` 786, `services/nlp/app/consumer/__init__.py`

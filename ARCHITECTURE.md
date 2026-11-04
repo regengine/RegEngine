@@ -75,11 +75,12 @@ useful decomposition seams in the codebase:
   (`docker-compose.dev.yml`) starts PostgreSQL **and** Redis — without Redis
   the subscription gate fails closed with 503, so authenticated ingest does
   not work locally.
-- **Async/event backbone:** the consolidated deploy path uses PostgreSQL-backed
-  task processing via `server/workers/task_processor.py` and
-  `services/shared/task_queue.py`. Legacy Kafka/Redpanda code paths still exist
-  in-tree and should be treated as remediation drift, not the primary deploy
-  contract.
+- **Async/event backbone:** PostgreSQL-backed task processing via
+  `server/workers/task_processor.py` and `services/shared/task_queue.py` is the
+  only backbone. The Kafka/Redpanda producers, consumers and the
+  `EVENT_BACKBONE` switch were retired on 2026-11-04 (WI-05); the modules are
+  under `docs/archive/retired-topology/kafka/` and `confluent-kafka` is no
+  longer in `requirements.lock`.
 - **Graph:** Neo4j integration code and health checks exist, but the default
   local development stack does not start Neo4j.
 - **Edge / gateway:** there is no app-managed nginx layer in production — the
@@ -143,7 +144,7 @@ drifts from the tree):
 | File | Lines | Area | Likely split direction |
 | --- | ---: | --- | --- |
 | `services/ingestion/app/csv_templates.py` | 2502 | ingestion CSV | split header mapping, template catalogue, and Jev-assisted suggestions |
-| `services/scheduler/service.py` | 1544 | scheduler runtime | split scrape orchestration, emission/ack, and job registration |
+| `services/scheduler/service.py` | 1459 | scheduler runtime | split scrape orchestration, webhook/alert ack, and job registration |
 | `services/shared/api_key_store.py` | 1488 | shared auth | split storage adapters from validation helpers |
 | `services/ingestion/app/edi_ingestion/routes.py` | 1470 | ingestion EDI | separate upload handling from parsing and rejection logging |
 | `services/shared/canonical_event.py` | 1466 | shared model | split schema, hashing, and conversion helpers |
@@ -158,7 +159,6 @@ drifts from the tree):
 | `services/shared/data_retention.py` | 1138 | shared retention | split policy table from purge execution |
 | `services/ingestion/app/routes_ingest.py` | 1137 | ingestion API | separate route wiring from validation and persistence |
 | `server/workers/task_processor.py` | 1126 | async worker | separate queue polling, dispatch, and retry policy |
-| `services/nlp/app/consumer/__init__.py` | 1118 | nlp consumer | move handlers out of the package __init__ |
 | `services/admin/app/metrics.py` | 1118 | admin observability | separate metric definitions from collectors/endpoints |
 | `services/admin/app/session_store.py` | 1047 | admin auth | split Redis and in-memory backends from session policy |
 | `services/ingestion/app/fda_export_service.py` | 1019 | export service | separate query assembly from writers |
@@ -178,3 +178,6 @@ same name. Four shrank below the threshold:
 runtime now in `service.py`). The earlier 2026-05-06 list also included
 `kernel/reporting/fsma_engine.py` (since removed) and
 `services/ingestion/app/routes.py` (since split — now ~100 lines).
+`services/nlp/app/consumer/__init__.py` (1,118 lines) left the table on
+2026-11-04 when the Kafka consumer loop was archived (WI-05); the package now
+holds only the extraction helpers the task processor imports.

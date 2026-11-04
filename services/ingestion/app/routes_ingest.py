@@ -65,7 +65,6 @@ from shared.tenant_rate_limiting import consume_tenant_rate_limit, rate_limit_re
 
 from .authz import IngestionPrincipal, get_ingestion_principal
 from .config import get_settings
-from .kafka_utils import send
 from .models import (
     DirectIngestRequest,
     IngestRegulationResponse,
@@ -145,7 +144,6 @@ REQUEST_COUNTER = _get_or_create_counter("ingestion_requests_total", "Total inge
 REQUEST_LATENCY = _get_or_create_histogram(
     "ingestion_request_latency_seconds", "Ingestion request latency", ["endpoint"]
 )
-KAFKA_COUNTER = _get_or_create_counter("ingestion_kafka_messages_total", "Kafka messages produced", ["topic"])
 
 
 def get_db_manager() -> Optional[DatabaseManager]:
@@ -457,16 +455,8 @@ def _process_and_emit(
                 is_duplicate=True,
             )
 
-            # Emit deduplication event to Kafka
-            try:
-                send(
-                    get_settings().kafka_topic_normalized,
-                    event.model_dump(mode="json"),
-                    key=f"{document_id}:{content_sha256}",
-                )
-            except (ConnectionError, OSError, RuntimeError) as e:
-                logger.warning("kafka_dedup_emit_failed", error=str(e))
-
+            # The duplicate is returned to the caller; nothing downstream is
+            # re-run for it (the Kafka dedup emit was retired in WI-05).
             return event
 
     # 2. Enhanced Parsing
@@ -565,7 +555,8 @@ def _process_and_emit(
         except (psycopg.Error, ConnectionError, OSError, RuntimeError) as db_exc:
             logger.warning("document_db_insert_failed", error=str(db_exc))
 
-    # 8. Kafka Emission & Claim Check Pattern
+    # 8. Normalized event (returned to the caller; downstream extraction runs
+    # on the PostgreSQL task queue — the Kafka emit was retired in WI-05)
     event = NormalizedEvent(
         event_id=event_id,
         document_id=document_id,
@@ -582,20 +573,15 @@ def _process_and_emit(
     try:
         payload_bytes = json.dumps(event.model_dump(mode="json")).encode("utf-8")
 
-        # If payload exceeds 1MB Kafka limit, execute Claim Check pattern
+        # Claim-check pattern: a payload over 1MB carries its text by
+        # reference so the event stays small on any transport.
         if len(payload_bytes) > 1024 * 1024:
-            logger.info("kafka_claim_check_triggered", document_id=document_id, size=len(payload_bytes))
+            logger.info("claim_check_triggered", document_id=document_id, size=len(payload_bytes))
             text_key = f"normalized-text/{document_id}/{event_id}.txt"
             text_uri = put_bytes(settings.processed_bucket, text_key, parsed_text.encode("utf-8"))
             event.text_s3_uri = text_uri
-
-        send(
-            settings.kafka_topic_normalized,
-            event.model_dump(mode="json"),
-            key=f"{document_id}:{content_sha256}",
-        )
-    except (ConnectionError, OSError, RuntimeError, ValueError) as kafka_exc:
-        logger.warning("kafka_publish_failed", document_id=document_id, error=str(kafka_exc))
+    except (ConnectionError, OSError, RuntimeError, ValueError) as claim_exc:
+        logger.warning("claim_check_failed", document_id=document_id, error=str(claim_exc))
 
     return event
 

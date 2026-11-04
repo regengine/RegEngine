@@ -28,7 +28,7 @@ below is tracked there yet.
 | 2 | Six `app` packages collide; bare `from app.` imports; 347-line `sys.path` conftest | Architecture | 4 | 4 | 3 | **24** | first half delivered in PR #3699 (production imports, Dockerfile PYTHONPATH, guard); tests and conftest shim are the second half |
 | 3 | Lint and type gates are near-empty (ruff selects 4 rule groups, mypy not a gate) | Code | 3 | 3 | 2 | **24** | delivered in PR #3699 (services/shared on the wider rule set, noqa ratchet, mypy report job) |
 | 4 | 33 CI workflows, four of them over 850 lines, plus a workflow that exists to re-run flaky gates | Infrastructure | 4 | 3 | 3 | **21** | delivered in PR #3699 (timing doc, shared setup action; rerun workflow kept, no flaky spec found) |
-| 5 | Legacy Kafka backbone still in tree and in the production image | Architecture | 2 | 3 | 2 | **20** | open |
+| 5 | Legacy Kafka backbone still in tree and in the production image | Architecture | 2 | 3 | 2 | **20** | delivered in PR #3699 (modules and 33 tests archived under `docs/archive/retired-topology/kafka/`, `confluent-kafka` out of the lock, dead-code guard) |
 | 6 | Production image carries test and optional AI dependencies | Infrastructure | 2 | 3 | 2 | **20** | delivered in PR #3699 (dev and experimental locks, image-import-check) |
 | 7 | Orientation docs disagree with the tree; duplicate doc directories; one-off reports at repo root | Documentation | 3 | 2 | 2 | **20** | delivered in PR #3699 (`scripts/check_docs_counts.py`, directory merges, root reports moved) |
 | 8 | 31 of 87 top-level scripts are referenced by nothing | Code | 2 | 2 | 1 | **20** | delivered in PR #3699 (registry `scripts/README.md`, guard `scripts/check_scripts_registered.py` in backend-ci); 16 archive candidates await Christopher's approval by name |
@@ -218,6 +218,9 @@ of removing it.
    same PR, if not already universal.
 
 ### 5. Legacy Kafka backbone — Priority 20
+
+**Status 2026-11-04:** delivered in PR #3699 (see the PRD's WI-05 status block).
+The A5 surface command below now returns 0.
 
 **Evidence**
 

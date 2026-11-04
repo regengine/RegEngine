@@ -116,9 +116,6 @@ dnspython>=2.9.0
 # testcontainers; floored here so the lockfile cannot regress below the fix.
 urllib3>=2.8.0
 
-# Messaging / Kafka
-confluent-kafka[schema-registry,avro]>=2.16.0
-fastavro>=1.13.1
 cachetools>=7.2.3
 attrs>=26.1.0
 
