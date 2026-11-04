@@ -130,8 +130,8 @@ export function eventHash(scenario: Pick<Scenario, 'id'>, record: ChainRecord): 
   return stableHash(scenario.id + record.cte + record.date);
 }
 
-/** The dataset marks a record with no traceability lot code with an em dash. */
-const NO_LOT = '—';
+/** The dataset marks a record with no traceability lot code with an em dash (U+2014). */
+const NO_LOT = String.fromCharCode(0x2014);
 
 /**
  * The lot code to show for a record. Only a record whose own lot is missing
