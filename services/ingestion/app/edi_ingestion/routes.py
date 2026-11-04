@@ -80,9 +80,11 @@ def _record_edi_rejection(**kwargs):
 
     Tests swap ``app.edi_ingestion`` modules in and out of ``sys.modules``.
     Looking up the recorder lazily keeps the route and the test helpers
-    pointed at the same in-memory rejection store.
+    pointed at the same in-memory rejection store. Resolve it against this
+    package, not ``app``: in the consolidated server the top-level ``app`` is
+    another service, so an absolute name turns every rejection into a 500.
     """
-    rejection_log = importlib.import_module("app.edi_ingestion.rejection_log")
+    rejection_log = importlib.import_module(".rejection_log", __package__)
     return rejection_log.record_edi_rejection(**kwargs)
 
 
