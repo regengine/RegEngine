@@ -13,6 +13,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from sqlalchemy.exc import ProgrammingError
 
 from services.ingestion.app import webhook_compat as wc
 from services.ingestion.app.edi_ingestion import routes as edi_routes
@@ -25,9 +26,29 @@ EVENT_HASH = "a" * 64
 TLC_SOURCE_GAP = Gap(GAP_KIND_MISSING_KDE, "tlc_source_reference")
 
 
+class _Savepoint:
+    def __init__(self, state: SimpleNamespace) -> None:
+        self.state = state
+        self.stored_before = len(state.stored)
+
+    def commit(self) -> None:
+        return None
+
+    def rollback(self) -> None:
+        del self.state.stored[self.stored_before :]
+
+
 class _Session:
-    def begin_nested(self) -> "_Session":
-        return self
+    def __init__(self, state: SimpleNamespace) -> None:
+        self.state = state
+
+    def begin_nested(self) -> "_Savepoint":
+        return _Savepoint(self.state)
+
+    def execute(self, _statement: Any, params: dict[str, Any]) -> None:
+        if self.state.gap_write_error is not None:
+            raise self.state.gap_write_error
+        self.state.inline_gaps.append(params["key"])
 
     def commit(self) -> None:
         return None
@@ -41,7 +62,7 @@ class _Session:
 
 @pytest.fixture()
 def harness(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
-    state = SimpleNamespace(stored=[], outcomes=[])
+    state = SimpleNamespace(stored=[], outcomes=[], inline_gaps=[], gap_write_error=None)
 
     class _Persistence:
         def __init__(self, db: Any) -> None:
@@ -55,7 +76,7 @@ def harness(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
         raise ValueError("canonical write not under test")
 
     def _sessions():
-        yield _Session()
+        yield _Session(state)
 
     import shared.canonical_event as canonical_event
     import shared.cte_persistence as cte_persistence
@@ -127,12 +148,23 @@ def test_deferred_kde_stores_event_and_keeps_gap_open(harness) -> None:
     assert (response.accepted, response.rejected) == (1, 0)
     assert response.events[0].open_gaps == ["tlc_source_reference"]
     assert len(harness.stored) == 1
+    assert harness.inline_gaps == ["tlc_source_reference"]
 
     outcome = harness.outcomes[0]
     assert outcome.gaps == (TLC_SOURCE_GAP,)
     # A receipt would close every open gap on this lot, including its own.
     assert outcome.closing_record_id is None
     assert outcome.closing_record_hash is None
+
+
+def test_event_is_not_accepted_when_its_gap_cannot_be_written(harness) -> None:
+    harness.gap_write_error = ProgrammingError("INSERT", {}, Exception("permission denied"))
+
+    response = _ingest(_shipment(), deferred_kdes=edi_routes._EDI_DEFERRED_KDES)
+
+    assert (response.accepted, response.rejected) == (0, 1)
+    assert response.events[0].open_gaps == []
+    assert harness.stored == [], "the stored event must roll back with its gap"
 
 
 def test_supplied_reference_stores_event_and_closes_gaps(harness) -> None:

@@ -29,11 +29,13 @@ from shared.data_gap_tracking import (
     ValidationOutcome,
     gap_from_rule_reason,
     gaps_from_kde_errors,
+    open_gaps_for_stored_record,
     record_outcomes,
 )
 from shared.database import get_db_session as _get_db_session
 from shared.permissions import has_permission
 from shared.tenant_context import TenantContext, resolve_tenant_context
+from sqlalchemy.exc import SQLAlchemyError
 
 from .authz import IngestionPrincipal, get_ingestion_principal
 from .webhook_models import EventResult, IngestEvent, IngestResponse, WebhookCTEType, WebhookPayload
@@ -494,6 +496,20 @@ async def ingest_events(
                         )
                         continue
 
+                # An incomplete record and its gap commit together: if the
+                # gap can't be written, the event is not accepted.
+                if open_gaps:
+                    try:
+                        open_gaps_for_stored_record(
+                            db_session,
+                            tenant_id,
+                            lot_code=event.traceability_lot_code,
+                            cte_type=event.cte_type.value,
+                            gaps=open_gaps,
+                        )
+                    except SQLAlchemyError as gap_err:
+                        raise RuntimeError("deferred gap write failed") from gap_err
+
                 # Accepted path. Savepoint commits the primary CTE write.
                 savepoint.commit()
                 results.append(
@@ -509,7 +525,9 @@ async def ingest_events(
                 )
                 accepted += 1
                 # A record with deferred KDEs is stored but incomplete: it
-                # opens its gaps and must not close the lot's existing ones.
+                # must not close the lot's existing gaps. Its gaps stay queued
+                # as well, so a complete record earlier in this batch can't
+                # close them when outcomes are applied in arrival order.
                 gap_outcomes.append(
                     ValidationOutcome(
                         order=event_index,

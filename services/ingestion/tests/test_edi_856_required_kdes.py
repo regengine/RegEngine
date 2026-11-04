@@ -102,3 +102,56 @@ def test_both_routes_defer_only_shipping_tlc_source_reference(route: str, monkey
     assert seen
     for kwargs in seen:
         assert kwargs["deferred_kdes"] == {WebhookCTEType.SHIPPING: frozenset({"tlc_source_reference"})}
+
+
+def _two_lot_asn() -> bytes:
+    raw = _ASN_856.read_text(encoding="utf-8")
+    line = "LIN**SK*ROMAINE-12CT~SN1**200*CA~"
+    assert line in raw
+    two_lots = raw.replace(
+        line,
+        "LIN**SK*ROMAINE-12CT~SN1**100*CA~REF*LT*LOT-A~LIN**SK*ROMAINE-12CT~SN1**100*CA~REF*LT*LOT-B~",
+    )
+    return two_lots.replace("SE*10*0001", "SE*14*0001").encode()
+
+
+def _post_two_lots(route: str, data: dict[str, str]):
+    app = FastAPI()
+    app.include_router(edi_router)
+    app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
+        key_id="test", scopes=["edi.ingest"], tenant_id=_TENANT
+    )
+    with TestClient(app) as client:
+        return client.post(
+            f"/api/v1/ingest/edi{route}",
+            data=data,
+            files={"file": ("asn_856.edi", _two_lot_asn(), "application/edi-x12")},
+        )
+
+
+@pytest.mark.parametrize("route", ["", "/document"])
+def test_one_reference_cannot_cover_distinct_lots(route: str, monkeypatch: pytest.MonkeyPatch, captured) -> None:
+    claims: list[tuple] = []
+
+    def _claim(*args, **kwargs):
+        claims.append(args)
+        return False, None
+
+    monkeypatch.setattr(edi_ingestion_routes, "check_and_record_interchange", _claim)
+
+    response = _post_two_lots(route, {"traceability_lot_code": "LOT-856-KDE", "tlc_source_reference": "PACK-0310"})
+
+    assert response.status_code == 422, response.text
+    assert response.json()["detail"]["error"] == "edi_tlc_source_reference_with_multiple_lots"
+    assert captured == []
+    assert claims == [], "a refused document must not reserve its ISA13"
+
+
+@pytest.mark.parametrize("route", ["", "/document"])
+def test_distinct_lots_without_a_reference_are_ingested(route: str, captured) -> None:
+    response = _post_two_lots(route, {"traceability_lot_code": "LOT-856-KDE"})
+
+    assert response.status_code == 201, response.text
+    events = [event for payload in captured for event in payload.events]
+    assert {event.traceability_lot_code for event in events} == {"LOT-A", "LOT-B"}
+    assert all(event.kdes.get("tlc_source_reference") is None for event in events)

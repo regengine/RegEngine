@@ -26,7 +26,7 @@ from __future__ import annotations
 import importlib
 import logging
 import os
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, UploadFile
@@ -90,6 +90,38 @@ def _record_edi_rejection(**kwargs):
     """
     rejection_log = importlib.import_module("app.edi_ingestion.rejection_log")
     return rejection_log.record_edi_rejection(**kwargs)
+
+
+def _reject_shared_tlc_source_for_distinct_lots(
+    tlc_source_reference: str | None,
+    extractions: Iterable[dict[str, Any]],
+    traceability_lot_code: str,
+) -> None:
+    """Refuse one TLC source reference across several lots.
+
+    The form field is a single value copied to every event. On a document with
+    several lots it could link a lot to a source that never assigned its code,
+    which is worse than the open gap the lot gets without the field.
+    """
+    if not (tlc_source_reference and tlc_source_reference.strip()):
+        return
+    lots: set[str] = set()
+    for extracted in extractions:
+        for line in extracted.get("line_items") or [{}]:
+            lot = line.get("lot_number")
+            lots.add(lot.strip() if isinstance(lot, str) and lot.strip() else traceability_lot_code)
+    if len(lots) > 1:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "edi_tlc_source_reference_with_multiple_lots",
+                "message": (
+                    "tlc_source_reference applies to one lot, but this document has several. "
+                    "Send each lot separately, or resubmit without the field."
+                ),
+                "lot_count": len(lots),
+            },
+        )
 
 
 def _decode_edi_bytes(raw_bytes: bytes) -> str:
@@ -625,19 +657,18 @@ async def ingest_edi_856(
 
     # Event-date rejections run after the allowlist and before the ISA13
     # is reserved, so a corrected resend is not refused as a 409 replay.
-    _enforce_envelope_integrity(
-        extracted,
-        sender_tenant_id,
-        "856",
-        before_reserve=lambda: _preflight_event_date(
+    def _preflight() -> None:
+        _preflight_event_date(
             transaction_set="856",
             extracted=extracted,
             sender_tenant_id=sender_tenant_id,
             traceability_lot_code=traceability_lot_code,
             partner_id=x_partner_id,
             source=source,
-        ),
-    )
+        )
+        _reject_shared_tlc_source_for_distinct_lots(tlc_source_reference, [extracted], traceability_lot_code)
+
+    _enforce_envelope_integrity(extracted, sender_tenant_id, "856", before_reserve=_preflight)
 
     lines = extracted.get("line_items") or []
     if len(lines) > 1:
@@ -1200,6 +1231,7 @@ async def ingest_edi_document(
                 partner_id=x_partner_id,
                 source=source,
             )
+        _reject_shared_tlc_source_for_distinct_lots(tlc_source_reference, extractions, traceability_lot_code)
 
     # Event-date rejections run after the allowlist and before the ISA13
     # is reserved, so a corrected resend is not refused as a 409 replay.
