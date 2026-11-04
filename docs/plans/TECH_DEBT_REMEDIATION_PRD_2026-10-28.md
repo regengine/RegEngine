@@ -1143,6 +1143,13 @@ nothing outside migrations; `tests/shared` passes.
 
 ### WI-16 — Frontend hook-rule suppressions (ongoing)
 
+**Status 2026-11-04:** `frontend/src/app/status/StatusBoard.tsx` (touched by
+WI-11 in PR #3699) lost its `react-hooks/set-state-in-effect` suppression: the
+fetch moved to a module-level `fetchHealthState()` and the effect writes state
+only from the promise callback, with a cancelled flag for unmount. 13
+suppressions remain across the other nine files, each to be removed when a PR
+touches its file.
+
 **Problem.** 14 `eslint-disable` comments in product code: 8
 `react-hooks/set-state-in-effect`, 4 `react-hooks/exhaustive-deps`, 2
 `no-console`. All 192 `any` usages are in test files and are not in
