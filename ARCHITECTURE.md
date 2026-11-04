@@ -84,9 +84,9 @@ useful decomposition seams in the codebase:
   defense against a client-supplied `X-RegEngine-Tenant-ID` header is the in-app
   `TenantContextMiddleware` (`services/shared/middleware/tenant_context.py`),
   which rejects the header unless it carries a valid `REGENGINE_INTERNAL_SECRET`
-  (covered by `tests/security/test_header_remediation.py`). `infra/gateway/nginx.conf`
-  is a reference-only config (with its own test suite) for if a gateway service is
-  ever provisioned; it is not in the production image.
+  (covered by `tests/security/test_header_remediation.py`). The reference-only
+  nginx config and its tests were archived to `docs/archive/retired-topology/gateway/`
+  on 2026-10-30; nothing in the production image or CI loads them.
 
 ## Current Architecture Direction
 

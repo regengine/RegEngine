@@ -116,8 +116,7 @@ jobs:
           for root in tests regengine/tests services/admin/tests \
                       services/compliance/tests services/graph/tests \
                       services/ingestion/tests services/nlp/tests \
-                      services/scheduler/tests services/shared/tests \
-                      infra/gateway/tests; do
+                      services/scheduler/tests services/shared/tests; do
             if ! echo "$OUTPUT" | grep -q "^${root}/"; then
               MISSING_ROOTS="$MISSING_ROOTS $root"
             fi
@@ -159,7 +158,6 @@ jobs:
         run: |
           python3 -m pytest \
             tests/sdk \
-            tests/swarm \
             tests/scripts \
             tests/test_monolith_route_parity.py \
             tests/test_server_import_smoke.py \

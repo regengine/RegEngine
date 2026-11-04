@@ -62,9 +62,8 @@ testpaths = [
     # files silently fail to import" — could not see these 53 files, and a
     # bare `pytest` from the repo root skipped them.
     "services/shared/tests",
-    # #3247: the nginx gateway tests never ran because this directory was not
-    # listed, so a bare `pytest` never collected infra/gateway/tests.
-    "infra/gateway/tests",
+    # The nginx gateway tests (#3247) moved with the reference-only config to
+    # docs/archive/retired-topology/gateway/ on 2026-10-30 (WI-09).
 ]
 asyncio_mode = "auto"
 python_files = "test_*.py"

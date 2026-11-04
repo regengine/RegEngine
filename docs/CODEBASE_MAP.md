@@ -27,8 +27,10 @@ Neo4j (optional graph mirror — see §6).
 The `services/*` directories are **router domains and code paths inside that
 one process**, not separate deployments. Any document, manifest or runbook that
 describes a six-service topology is describing the retired architecture; all
-five files in `runbooks/` carry an explicit `LEGACY:` banner saying so, and
-`infra/k8s/` describes that same retired topology.
+five files in `runbooks/` carry an explicit `LEGACY:` banner saying so. The
+manifests, gateway config, swarm runtime and workflow of that topology live
+under `docs/archive/retired-topology/` (moved 2026-10-30) and are loaded by
+no build, test or deploy.
 
 Railway's healthcheck path is `/readiness` (`railway.toml`). Its container
 filesystem is ephemeral and `railway.toml` declares **no volume** — anything
@@ -48,7 +50,7 @@ written to local disk is lost on every deploy.
 | `.github/workflows/` | 23 workflows (see §7). |
 | `docs/` | Reference documentation. **`docs/archive/` is historical** — those files describe the tree as it was on their date and are deliberately not kept current. |
 | `runbooks/` | Operational runbooks; all five currently carry a `LEGACY:` banner. |
-| `infra/k8s/` | Manifests for the retired k8s topology. |
+| `infra/` | `otel-collector-config.yaml` (pinned by `tests/infra/`), monitoring dashboards and module READMEs. The k8s manifests moved to `docs/archive/retired-topology/k8s/`. |
 
 ## 3. `services/` — domain code inside the monolith
 

@@ -53,55 +53,6 @@
     },
     {
       "rule": "image-digest",
-      "file": "infra/k8s/base/admin/deployment.yaml",
-      "match": "image: regengine/admin-service:$(IMAGE_TAG)",
-      "reason": "First-party image built from this repo's own pinned Dockerfile. Tag is supplied at deploy time, not pulled from upstream.",
-      "exact": true
-    },
-    {
-      "rule": "image-digest",
-      "file": "infra/k8s/base/compliance/deployment.yaml",
-      "match": "image: regengine/compliance-service:$(IMAGE_TAG)",
-      "reason": "First-party image built from this repo's own pinned Dockerfile. Tag is supplied at deploy time, not pulled from upstream.",
-      "exact": true
-    },
-    {
-      "rule": "image-digest",
-      "file": "infra/k8s/base/graph/deployment.yaml",
-      "match": "image: regengine/graph-service:$(IMAGE_TAG)",
-      "reason": "First-party image built from this repo's own pinned Dockerfile. Tag is supplied at deploy time, not pulled from upstream.",
-      "exact": true
-    },
-    {
-      "rule": "image-digest",
-      "file": "infra/k8s/base/ingestion/deployment.yaml",
-      "match": "image: regengine/ingestion-service:$(IMAGE_TAG)",
-      "reason": "First-party image built from this repo's own pinned Dockerfile. Tag is supplied at deploy time, not pulled from upstream.",
-      "exact": true
-    },
-    {
-      "rule": "image-digest",
-      "file": "infra/k8s/base/nlp/deployment.yaml",
-      "match": "image: regengine/nlp-service:$(IMAGE_TAG)",
-      "reason": "First-party image built from this repo's own pinned Dockerfile. Tag is supplied at deploy time, not pulled from upstream.",
-      "exact": true
-    },
-    {
-      "rule": "image-digest",
-      "file": "infra/k8s/base/scheduler/deployment.yaml",
-      "match": "image: regengine/scheduler:$(IMAGE_TAG)",
-      "reason": "First-party image built from this repo's own pinned Dockerfile. Tag is supplied at deploy time, not pulled from upstream.",
-      "exact": true
-    },
-    {
-      "rule": "image-digest",
-      "file": "infra/k8s/base/monitoring/alertmanager.yaml",
-      "match": "image: quay.io/prometheus/alertmanager:v0.32.1",
-      "reason": "Third-party monitoring image with a fixed version tag. Digest not recorded yet because digest resolution needs registry access. Record it on the next refresh.",
-      "exact": true
-    },
-    {
-      "rule": "image-digest",
       "file": ".github/workflows/backend-ci.yml",
       "match": "image: postgres:16",
       "reason": "Pre-existing CI service tag postgres:16, not digest-pinned. Explicit accepted debt awaiting a verified registry digest; exact match covers only this tag.",

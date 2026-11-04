@@ -44,7 +44,6 @@ remediation PRD). The 14 candidates stay in place until then; the move is
 | `check_trust_safety_copy.py` | used | Fail CI when trust-and-safety outcome claims drift back into UI copy. — invoked by `.github/workflows/frontend-ci.yml`, `.github/workflows/pr-gate.yml` |
 | `check_workflow_inventory.py` | used | CI guard: keep workflows and branch-protection required contexts in sync. — invoked by `.github/workflows/pr-gate.yml`, `docs/runbooks/BRANCH_PROTECTION.md` |
 | `clear_fsma_data.sql` | manual | dev/test helper: clear FSMA demo rows for the zero-UUID tenant in one transaction; header says never against production |
-| `compliance_sweep.py` | used | self-described legacy sweep; named by `tests/swarm/test_swarm_guards.py`, so it stays (PRD WI-08 requirement 4) |
 | `create_copilot_issues.sh` | archive candidate | one-off issue batch for retired vertical development |
 | `create_neo4j_indexes.sh` | manual | create Neo4j indexes for the optional graph tier; its secret handling is covered by `services/shared/tests/test_secret_redaction.py` |
 | `create_test_api_key.py` | used | Mint a tenant-scoped RegEngine API key for local/dev testing. — invoked by `README.md` |
@@ -133,4 +132,4 @@ remediation PRD). The 14 candidates stay in place until then; the move is
 | `scripts/test/` | test database bootstrap SQL used by `docker-compose.dev.yml` and CI |
 | `scripts/utilities/` | local diagnostics; none is referenced by CI or a runbook |
 
-Counts on 2026-10-30: 60 used, 4 data, 21 manual/one-time/retire, 14 archive candidates.
+Counts on 2026-10-30: 59 used, 4 data, 21 manual/one-time/retire, 14 archive candidates.
