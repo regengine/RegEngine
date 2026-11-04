@@ -84,11 +84,64 @@ async def test_create_checkout_uses_stripe_and_normalizes_plan(monkeypatch):
     assert response.session_id == "cs_test_123"
     assert response.plan == "list"
     assert captured["line_items"][0]["price"] == "price_growth_monthly"
+    # Omitted facility_count defaults to a single facility (quantity 1).
+    assert captured["line_items"][0]["quantity"] == 1
     assert captured["metadata"]["tenant_id"] == "tenant-1"
     assert captured["metadata"]["plan_id"] == "list"
+    assert captured["metadata"]["facility_quantity"] == "1"
+    assert captured["subscription_data"]["metadata"]["facility_quantity"] == "1"
+    assert response.facility_quantity == 1
     assert captured["customer_email"] == "ops@example.com"
     assert captured_funnel["tenant_id"] == "tenant-1"
     assert captured_funnel["event_name"] == "checkout_started"
+
+
+@pytest.mark.parametrize(
+    ("plan_id", "env_var", "price_id", "unit_amount"),
+    [
+        ("list", "STRIPE_PRICE_LIST_MONTHLY", "price_list_monthly", 999),
+        ("founding", "STRIPE_PRICE_FOUNDING_MONTHLY", "price_founding_monthly", 499),
+    ],
+)
+@pytest.mark.asyncio
+async def test_create_checkout_bills_facility_count_for_list_and_founding(
+    monkeypatch, plan_id: str, env_var: str, price_id: str, unit_amount: int
+):
+    """facility_count is the subscription quantity for per-facility plans."""
+    fake_redis = _FakeRedis()
+    monkeypatch.setattr(stripe_billing, "_redis_client", lambda: fake_redis)
+    monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_123")
+    monkeypatch.setenv(env_var, price_id)
+    captured: dict[str, object] = {}
+
+    class _Session:
+        id = "cs_facility_count"
+        url = "https://checkout.stripe.com/c/pay/cs_facility_count"
+
+    def _fake_create(**kwargs):
+        captured.update(kwargs)
+        return _Session()
+
+    monkeypatch.setattr(stripe_billing.stripe.checkout.Session, "create", _fake_create)
+
+    principal = IngestionPrincipal(tenant_id="tenant-1", scopes=["billing.read"], key_id="k1")
+    response = await stripe_billing.create_checkout(
+        stripe_billing.CheckoutRequest(
+            plan_id=plan_id,
+            billing_period="monthly",
+            facility_count=3,
+        ),
+        x_tenant_id=None,
+        principal=principal,
+    )
+
+    assert captured["line_items"] == [{"price": price_id, "quantity": 3}]
+    assert captured["metadata"]["facility_quantity"] == "3"
+    assert captured["subscription_data"]["metadata"]["facility_quantity"] == "3"
+    assert response.plan == plan_id
+    assert response.facility_quantity == 3
+    # amount remains the unit price, not unit * quantity.
+    assert response.amount == unit_amount
 
 
 @pytest.mark.asyncio
@@ -395,6 +448,11 @@ def test_invoice_list_returns_paginated_results(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_123")
     monkeypatch.setattr(authz, "consume_tenant_rate_limit", lambda **_kwargs: (True, 42))
 
+    # Derive fixture cents from the live catalog so a retired Scale
+    # $1,999 cents literal cannot reappear after A-2155 list/founding pricing.
+    list_cents = int(stripe_billing.PLANS["list"]["price_monthly"]) * 100
+    founding_cents = int(stripe_billing.PLANS["founding"]["price_monthly"]) * 100
+
     stripe_billing._store_subscription_mapping(
         tenant_id,
         {
@@ -402,7 +460,7 @@ def test_invoice_list_returns_paginated_results(monkeypatch: pytest.MonkeyPatch)
             "session_id": "",
             "customer_id": "cus_invoice_1",
             "subscription_id": "sub_invoice_1",
-            "plan_id": "growth",
+            "plan_id": "list",
             "billing_period": "monthly",
             "status": "active",
             "customer_email": "billing@acme.example",
@@ -414,8 +472,8 @@ def test_invoice_list_returns_paginated_results(monkeypatch: pytest.MonkeyPatch)
         data = [
             {
                 "id": "in_1",
-                "amount_due": 99900,
-                "amount_paid": 99900,
+                "amount_due": list_cents,
+                "amount_paid": list_cents,
                 "currency": "usd",
                 "status": "paid",
                 "created": 1700000000,
@@ -424,7 +482,7 @@ def test_invoice_list_returns_paginated_results(monkeypatch: pytest.MonkeyPatch)
             },
             {
                 "id": "in_2",
-                "amount_due": 199900,
+                "amount_due": founding_cents,
                 "amount_paid": 0,
                 "currency": "usd",
                 "status": "open",

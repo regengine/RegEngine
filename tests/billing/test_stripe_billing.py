@@ -570,7 +570,8 @@ class TestHandleCheckoutCompleted:
         mock_stripe.Subscription.retrieve.return_value = {
             "status": "active",
             "current_period_end": 1700000000,
-            "items": {"data": [{"price": {"id": "price_growth_m"}}]},
+            "items": {"data": [{"price": {"id": "price_growth_m"}, "quantity": 7}]},
+            "metadata": {"facility_quantity": "3"},  # item quantity wins
         }
 
         session = {
@@ -585,6 +586,7 @@ class TestHandleCheckoutCompleted:
                 "tenant_id": "tenant-abc",
                 "plan_id": "growth",
                 "billing_period": "monthly",
+                "facility_quantity": "3",
             },
         }
 
@@ -598,6 +600,7 @@ class TestHandleCheckoutCompleted:
         assert payload["status"] == "active"
         assert payload["subscription_id"] == "sub_test_456"
         assert payload["customer_id"] == "cus_test_789"
+        assert payload["facility_quantity"] == "7"
 
     @pytest.mark.asyncio
     @patch("services.ingestion.app.stripe_billing._create_tenant_via_admin")
@@ -712,6 +715,47 @@ class TestHandleCheckoutCompleted:
         payload = mock_store.call_args[0][1]
         assert payload["plan_id"] == ""
         assert payload["status"] == "incomplete"  # gate denies; alert fired
+
+    @pytest.mark.asyncio
+    @patch.dict("os.environ", {"STRIPE_PRICE_LIST_MONTHLY": "price_list_m"})
+    @patch("services.ingestion.app.stripe_billing._store_subscription_mapping")
+    @patch("services.ingestion.app.stripe_billing._redis_client")
+    @patch("services.ingestion.app.stripe_billing.stripe")
+    async def test_checkout_persists_facility_quantity_from_metadata_fallback(
+        self, mock_stripe, mock_redis_client, mock_store
+    ):
+        """When Stripe items omit quantity, checkout metadata still lands."""
+        mock_client = MagicMock()
+        mock_client.get.side_effect = ["tenant-abc", None]
+        mock_client.getdel.return_value = None
+        mock_redis_client.return_value = mock_client
+
+        mock_stripe.Subscription.retrieve.return_value = {
+            "status": "active",
+            "current_period_end": 1700000000,
+            "items": {"data": [{"price": {"id": "price_list_m"}}]},
+        }
+
+        session = {
+            "id": "cs_test_qty",
+            "subscription": "sub_qty",
+            "customer": "cus_qty",
+            "payment_status": "paid",
+            "customer_details": {"email": "user@example.com"},
+            "metadata": {
+                "tenant_id": "tenant-abc",
+                "plan_id": "list",
+                "billing_period": "monthly",
+                "facility_quantity": "5",
+            },
+        }
+
+        await _handle_checkout_completed(session)
+
+        payload = mock_store.call_args[0][1]
+        assert payload["facility_quantity"] == "5"
+        assert payload["plan_id"] == "list"
+        assert payload["status"] == "active"
 
 
 # ── Webhook Event: customer.subscription.deleted ─────────────────

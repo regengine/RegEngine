@@ -356,6 +356,49 @@ def _extract_subscription_price_ids(subscription: Any) -> list[str]:
     return price_ids
 
 
+def _extract_subscription_facility_quantity(subscription: Any) -> Optional[int]:
+    """Resolve the billed facility count for a Stripe subscription.
+
+    Prefer the quantity on the list/founding (or alias) price item — never the
+    first truthy item quantity, because metered add-ons share the subscription
+    and their quantity is not a facility count. Fall back to
+    ``metadata.facility_quantity`` stamped at checkout when no catalog item
+    quantity is present. Never invent a default; callers treat ``None`` as
+    unknown.
+    """
+    # Local import: plans does not import helpers, but keep this lazy so helper
+    # module import stays free of catalog coupling for unit tests that only
+    # stub stripe helpers.
+    from .plans import _plan_for_stripe_price
+
+    items = _stripe_get(subscription, "items", None)
+    data = _stripe_get(items, "data", None) if items is not None else None
+    if isinstance(data, (list, tuple)):
+        for item in data:
+            price_id: Any = None
+            price = _stripe_get(item, "price", None)
+            if price is not None:
+                price_id = _stripe_get(price, "id", None)
+            if not price_id:
+                plan = _stripe_get(item, "plan", None)
+                price_id = _stripe_get(plan, "id", plan) if plan is not None else None
+            if not (isinstance(price_id, str) and price_id):
+                continue
+            mapped = _plan_for_stripe_price(price_id)
+            if not mapped or mapped[0] not in {"list", "founding"}:
+                continue
+            qty = _coerce_optional_int(_stripe_get(item, "quantity", None))
+            if qty:
+                return qty
+
+    metadata = _stripe_get(subscription, "metadata", None) or {}
+    if isinstance(metadata, dict):
+        qty = _coerce_optional_int(metadata.get("facility_quantity"))
+        if qty:
+            return qty
+    return None
+
+
 def _extract_paid_at(invoice_payload: dict[str, Any]) -> Optional[str]:
     status_transitions = invoice_payload.get("status_transitions") or {}
     paid_at = _coerce_optional_int(status_transitions.get("paid_at"))
