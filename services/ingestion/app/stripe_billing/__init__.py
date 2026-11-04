@@ -36,14 +36,6 @@ from .customers import (
     _get_existing_customer_id,
     _record_checkout_session_hint,
 )
-from .label_billing import (
-    STATUS_CHARGED,
-    STATUS_FAILED,
-    STATUS_NO_CUSTOMER,
-    LabelChargeResult,
-    charge_for_label,
-    get_label_charge,
-)
 from .helpers import (
     _coerce_int,
     _coerce_optional_int,
@@ -56,6 +48,14 @@ from .helpers import (
     _principal_role,
     _resolve_tenant_context,
     _stripe_get,
+)
+from .label_billing import (
+    STATUS_CHARGED,
+    STATUS_FAILED,
+    STATUS_NO_CUSTOMER,
+    LabelChargeResult,
+    charge_for_label,
+    get_label_charge,
 )
 from .models import (
     BillingPortalRequest,
@@ -73,10 +73,18 @@ from .plans import (
     DEFAULT_PORTAL_RETURN_URL,
     DEFAULT_SUCCESS_URL,
     METERED_ADDONS,
+    PILOT_CONVERT_WINDOW_DAYS,
+    PILOT_DURATION_DAYS,
+    PILOT_FEE_CONVERT_30_CENTS,
+    PILOT_FEE_STANDARD_CENTS,
+    PILOT_PRICE_ENV_CONVERT_30,
+    PILOT_PRICE_ENV_STANDARD,
     PLAN_ALIASES,
     PLANS,
     _normalize_billing_period,
     _normalize_plan_id,
+    _plan_for_stripe_price,
+    _resolve_pilot_price_id,
     _resolve_price_id,
 )
 from .routes import (
@@ -113,6 +121,8 @@ from .state import (
 from .usage import _current_billing_period, increment_usage_for_event
 from .usage_reporting import METER_EVENT_NAME, report_tenant_usage_to_stripe
 from .webhooks import (
+    _apply_pilot_credit_if_eligible,
+    _extract_facility_quantity,
     _handle_checkout_completed,
     _handle_stripe_event,
     _process_stripe_webhook,
@@ -153,6 +163,12 @@ __all__ = [
     "PLANS",
     "PLAN_ALIASES",
     "METERED_ADDONS",
+    "PILOT_FEE_STANDARD_CENTS",
+    "PILOT_FEE_CONVERT_30_CENTS",
+    "PILOT_DURATION_DAYS",
+    "PILOT_CONVERT_WINDOW_DAYS",
+    "PILOT_PRICE_ENV_STANDARD",
+    "PILOT_PRICE_ENV_CONVERT_30",
     # State
     "_buffer_pending_subscription_update",
     "_customer_lookup_key",
@@ -182,6 +198,8 @@ __all__ = [
     # Plans (functions)
     "_normalize_billing_period",
     "_normalize_plan_id",
+    "_plan_for_stripe_price",
+    "_resolve_pilot_price_id",
     "_resolve_price_id",
     # Customers
     "_create_customer_for_tenant",
@@ -202,6 +220,8 @@ __all__ = [
     "_handle_stripe_event",
     "_process_stripe_webhook",
     "_update_subscription_status",
+    "_extract_facility_quantity",
+    "_apply_pilot_credit_if_eligible",
     # Usage (per-label metered billing)
     "_current_billing_period",
     "increment_usage_for_event",
@@ -257,6 +277,7 @@ _ATTR_TO_SUBMODULE = {
     "_normalize_plan_id": _plans_mod,
     "_normalize_billing_period": _plans_mod,
     "_resolve_price_id": _plans_mod,
+    "_resolve_pilot_price_id": _plans_mod,
     # customers.py
     "_create_tenant_via_admin": _customers_mod,
     "_create_portal_session": _customers_mod,
@@ -269,6 +290,8 @@ _ATTR_TO_SUBMODULE = {
     "_update_subscription_status": _webhooks_mod,
     "_handle_stripe_event": _webhooks_mod,
     "_process_stripe_webhook": _webhooks_mod,
+    "_extract_facility_quantity": _webhooks_mod,
+    "_apply_pilot_credit_if_eligible": _webhooks_mod,
     # usage.py
     "_current_billing_period": _usage_mod,
     "increment_usage_for_event": _usage_mod,

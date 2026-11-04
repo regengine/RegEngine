@@ -46,7 +46,7 @@ async def test_create_checkout_uses_stripe_and_normalizes_plan(monkeypatch):
     fake_redis = _FakeRedis()
     monkeypatch.setattr(stripe_billing, "_redis_client", lambda: fake_redis)
     monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_123")
-    monkeypatch.setenv("STRIPE_PRICE_GROWTH_MONTHLY", "price_growth_monthly")
+    monkeypatch.setenv("STRIPE_PRICE_LIST_MONTHLY", "price_list_monthly")
     captured_funnel: dict[str, object] = {}
 
     captured = {}
@@ -81,13 +81,66 @@ async def test_create_checkout_uses_stripe_and_normalizes_plan(monkeypatch):
     )
 
     assert response.session_id == "cs_test_123"
-    assert response.plan == "growth"
-    assert captured["line_items"][0]["price"] == "price_growth_monthly"
+    assert response.plan == "list"
+    assert captured["line_items"][0]["price"] == "price_list_monthly"
+    # Omitted facility_count defaults to a single facility (quantity 1).
+    assert captured["line_items"][0]["quantity"] == 1
     assert captured["metadata"]["tenant_id"] == "tenant-1"
-    assert captured["metadata"]["plan_id"] == "growth"
+    assert captured["metadata"]["plan_id"] == "list"
+    assert captured["metadata"]["facility_quantity"] == "1"
+    assert captured["subscription_data"]["metadata"]["facility_quantity"] == "1"
+    assert response.facility_quantity == 1
     assert captured["customer_email"] == "ops@example.com"
     assert captured_funnel["tenant_id"] == "tenant-1"
     assert captured_funnel["event_name"] == "checkout_started"
+
+
+@pytest.mark.parametrize(
+    ("plan_id", "env_var", "price_id", "unit_amount"),
+    [
+        ("list", "STRIPE_PRICE_LIST_MONTHLY", "price_list_monthly", 999),
+        ("founding", "STRIPE_PRICE_FOUNDING_MONTHLY", "price_founding_monthly", 499),
+    ],
+)
+@pytest.mark.asyncio
+async def test_create_checkout_bills_facility_count_for_list_and_founding(
+    monkeypatch, plan_id: str, env_var: str, price_id: str, unit_amount: int
+):
+    """facility_count is the subscription quantity for per-facility plans."""
+    fake_redis = _FakeRedis()
+    monkeypatch.setattr(stripe_billing, "_redis_client", lambda: fake_redis)
+    monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_123")
+    monkeypatch.setenv(env_var, price_id)
+    captured: dict[str, object] = {}
+
+    class _Session:
+        id = "cs_facility_count"
+        url = "https://checkout.stripe.com/c/pay/cs_facility_count"
+
+    def _fake_create(**kwargs):
+        captured.update(kwargs)
+        return _Session()
+
+    monkeypatch.setattr(stripe_billing.stripe.checkout.Session, "create", _fake_create)
+
+    principal = IngestionPrincipal(tenant_id="tenant-1", scopes=["billing.read"], key_id="k1")
+    response = await stripe_billing.create_checkout(
+        stripe_billing.CheckoutRequest(
+            plan_id=plan_id,
+            billing_period="monthly",
+            facility_count=3,
+        ),
+        x_tenant_id=None,
+        principal=principal,
+    )
+
+    assert captured["line_items"] == [{"price": price_id, "quantity": 3}]
+    assert captured["metadata"]["facility_quantity"] == "3"
+    assert captured["subscription_data"]["metadata"]["facility_quantity"] == "3"
+    assert response.plan == plan_id
+    assert response.facility_quantity == 3
+    # amount remains the unit price, not unit * quantity.
+    assert response.amount == unit_amount
 
 
 @pytest.mark.asyncio
@@ -96,7 +149,7 @@ async def test_create_checkout_reuses_existing_customer_id_and_records_session(m
     tenant_id = "tenant-checkout-1"
     monkeypatch.setattr(stripe_billing, "_redis_client", lambda: fake_redis)
     monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_123")
-    monkeypatch.setenv("STRIPE_PRICE_GROWTH_MONTHLY", "price_growth_monthly")
+    monkeypatch.setenv("STRIPE_PRICE_LIST_MONTHLY", "price_list_monthly")
 
     stripe_billing._store_subscription_mapping(
         tenant_id,
@@ -179,7 +232,7 @@ async def test_checkout_webhook_provisions_tenant_and_stores_mapping(monkeypatch
 
     mapping = fake_redis.hgetall(stripe_billing._tenant_subscription_key("tenant-123"))
     assert mapping["tenant_id"] == "tenant-123"
-    assert mapping["plan_id"] == "growth"
+    assert mapping["plan_id"] == "list"
     assert mapping["subscription_id"] == "sub_1"
     assert mapping["customer_id"] == "cus_1"
     assert fake_redis.get(stripe_billing._subscription_lookup_key("sub_1")) == "tenant-123"
@@ -393,6 +446,11 @@ def test_invoice_list_returns_paginated_results(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_123")
     monkeypatch.setattr(authz, "consume_tenant_rate_limit", lambda **_kwargs: (True, 42))
 
+    # Derive fixture cents from the live catalog so a retired Scale
+    # $1,999 cents literal cannot reappear after A-2155 list/founding pricing.
+    list_cents = int(stripe_billing.PLANS["list"]["price_monthly"]) * 100
+    founding_cents = int(stripe_billing.PLANS["founding"]["price_monthly"]) * 100
+
     stripe_billing._store_subscription_mapping(
         tenant_id,
         {
@@ -400,7 +458,7 @@ def test_invoice_list_returns_paginated_results(monkeypatch: pytest.MonkeyPatch)
             "session_id": "",
             "customer_id": "cus_invoice_1",
             "subscription_id": "sub_invoice_1",
-            "plan_id": "growth",
+            "plan_id": "list",
             "billing_period": "monthly",
             "status": "active",
             "customer_email": "billing@acme.example",
@@ -412,8 +470,8 @@ def test_invoice_list_returns_paginated_results(monkeypatch: pytest.MonkeyPatch)
         data = [
             {
                 "id": "in_1",
-                "amount_due": 99900,
-                "amount_paid": 99900,
+                "amount_due": list_cents,
+                "amount_paid": list_cents,
                 "currency": "usd",
                 "status": "paid",
                 "created": 1700000000,
@@ -422,7 +480,7 @@ def test_invoice_list_returns_paginated_results(monkeypatch: pytest.MonkeyPatch)
             },
             {
                 "id": "in_2",
-                "amount_due": 199900,
+                "amount_due": founding_cents,
                 "amount_paid": 0,
                 "currency": "usd",
                 "status": "open",
@@ -545,3 +603,43 @@ def test_patching_package_stripe_propagates_to_usage_reporting(monkeypatch: pyte
     sentinel = object()
     monkeypatch.setattr(stripe_billing, "stripe", sentinel)
     assert stripe_billing._usage_reporting_mod.stripe is sentinel
+
+
+@pytest.mark.asyncio
+async def test_list_plans_exposes_pricing_page_compat_amounts() -> None:
+    """The pricing page consumes ga/partner monthly fields on list and base.
+
+    Annual is OPEN (null) until approved; standard/premium have no approved
+    self-serve dollar SKU and must not be emitted as invented tiers.
+    """
+    result = await stripe_billing.list_plans()
+    by_id = {plan["id"]: plan for plan in result["plans"]}
+
+    list_plan = by_id["list"]
+    assert list_plan["price_monthly"] == 999
+    assert list_plan["price_annual"] is None
+    assert list_plan["ga_monthly"] == 999
+    assert list_plan["partner_monthly"] == 499
+    assert list_plan["ga_annual"] is None
+    assert list_plan["partner_annual"] is None
+
+    # Synthetic compatibility entry for the page's historical `base` id.
+    base = by_id["base"]
+    assert base["price_monthly"] == 999
+    assert base["price_annual"] is None
+    assert base["ga_monthly"] == 999
+    assert base["partner_monthly"] == 499
+
+    founding = by_id["founding"]
+    assert founding["price_monthly"] == 499
+    assert founding["price_annual"] is None
+
+    assert "growth" not in by_id
+    assert "scale" not in by_id
+    assert "standard" not in by_id
+    assert "premium" not in by_id
+
+    for plan in result["plans"]:
+        assert plan["product_status"] == "Beta"
+        features = [feature.lower() for feature in plan["features"]]
+        assert any("epcis" in feature and "preview" in feature for feature in features)

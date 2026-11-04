@@ -137,7 +137,12 @@ def _portal_subscription_active(tenant_id: str) -> Optional[bool]:
         if is_production():
             raise _portal_entitlement_unavailable("redis_unavailable")
         return None
-    return (status or "").lower() in {"active", "trialing"}
+    # A-2155: settled one-time pilots get ``pilot_active`` for 90 days.
+    # ``_check_subscription_and_redis_health`` has already downgraded an
+    # expired pilot to ``pilot_expired``, so only the live status reaches
+    # this allowlist. Suppliers of a paying pilot tenant must be able to
+    # submit shipping evidence.
+    return (status or "").lower() in {"active", "trialing", "pilot_active"}
 
 
 def _portal_entitlement_unavailable(reason: str) -> HTTPException:
