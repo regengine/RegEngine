@@ -164,6 +164,7 @@ class TestValidateKdeCompleteness:
             "harvesting",
             harvest_date="2026-02-26",
             reference_document="REF-001",
+            immediate_subsequent_recipient="Packhouse A",
         )
         kdes = {
             "traceability_lot_code": "LOT-001",
@@ -173,6 +174,7 @@ class TestValidateKdeCompleteness:
             "harvest_date": "2026-02-26",
             "location_name": "Test Facility",
             "reference_document": "REF-001",
+            "immediate_subsequent_recipient": "Packhouse A",
         }
         missing = _validate_kde_completeness("harvesting", event, kdes)
         assert missing == []

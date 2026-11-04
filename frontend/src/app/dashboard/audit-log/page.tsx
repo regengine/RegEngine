@@ -9,6 +9,8 @@ import { Badge, type BadgeTone } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
 import { ErrorState } from '@/components/ui/error-state';
+import { BetaUnavailableState } from '@/components/ui/beta-unavailable-state';
+import { isBetaUnavailableError } from '@/lib/dashboard-load-failure';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { StatTile } from '@/components/ui/stat-tile';
@@ -37,7 +39,7 @@ import {
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
-import { getErrorRequestId, withRequestId } from '@/lib/api-error';
+import { apiError, getErrorRequestId, withRequestId } from '@/lib/api-error';
 import { useTenant } from '@/lib/tenant-context';
 import { useDashboardRefresh } from '@/hooks/use-dashboard-refresh';
 
@@ -117,7 +119,7 @@ async function fetchAuditLog(tenantId: string, page = 1, pageSize = 50): Promise
     });
     if (!res.ok) {
         console.error(`Audit log fetch failed: ${res.status} ${res.statusText}`);
-        throw withRequestId(new Error("Couldn't load the audit log."), res);
+        throw withRequestId(apiError(res.status, res.statusText), res);
     }
     return res.json();
 }
@@ -245,7 +247,7 @@ export default function AuditLogPage() {
                 )}
 
                 {/* Error */}
-                {error && <ErrorState message="We could not load this page." onRetry={() => loadLog()} requestId={getErrorRequestId(error)} />}
+                {error && (isBetaUnavailableError(error) ? <BetaUnavailableState feature="Audit log" /> : <ErrorState message="We could not load this page." onRetry={() => loadLog()} requestId={getErrorRequestId(error)} />)}
 
                 {/* Event list shell — toolbar, rows, pagination */}
                 {isLoggedIn && !error && entries.length > 0 && (

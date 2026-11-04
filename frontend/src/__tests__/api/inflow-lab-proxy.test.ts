@@ -171,6 +171,59 @@ describe('Inflow Lab API proxy', () => {
         expect(mockFetch).toHaveBeenCalledTimes(1);
     });
 
+    it('allows GET scenarios and rejects POST scenarios', async () => {
+        mockSessionThenUpstream(
+            new Response(JSON.stringify({ scenarios: [{ id: 'leafy_greens_supplier', label: 'Leafy greens supplier' }] }), {
+                status: 200,
+                headers: { 'content-type': 'application/json' },
+            }),
+        );
+
+        const allowed = await GET(
+            makeRequest({ url: 'http://localhost/api/inflow-lab/scenarios' }),
+            { params: Promise.resolve({ path: ['scenarios'] }) },
+        );
+
+        expect(allowed.status).toBe(200);
+        expect(mockFetch).toHaveBeenNthCalledWith(
+            2,
+            new URL('http://inflow.test/api/scenarios'),
+            expect.objectContaining({
+                method: 'GET',
+                cache: 'no-store',
+                redirect: 'manual',
+            }),
+        );
+        await expect(allowed.json()).resolves.toEqual({
+            scenarios: [{ id: 'leafy_greens_supplier', label: 'Leafy greens supplier' }],
+        });
+
+        mockFetch.mockClear();
+        // Session must validate before the allowlist rejects the method/path.
+        mockFetch.mockResolvedValueOnce(
+            new Response(JSON.stringify({ tenant_id: '11111111-1111-4111-8111-111111111111' }), {
+                status: 200,
+                headers: { 'content-type': 'application/json' },
+            }),
+        );
+        const rejected = await POST(
+            makeRequest({
+                method: 'POST',
+                url: 'http://localhost/api/inflow-lab/api/scenarios',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ id: 'leafy_greens_supplier' }),
+            }),
+            { params: Promise.resolve({ path: ['api', 'scenarios'] }) },
+        );
+        expect(rejected.status).toBe(400);
+        await expect(rejected.json()).resolves.toMatchObject({
+            ok: false,
+            code: 'INVALID_PATH',
+        });
+        // Auth/me only — no upstream proxy call for disallowed POST scenarios.
+        expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
     it('returns exact 404 in production unless the server-only proxy flag is enabled', async () => {
         vi.stubEnv('NODE_ENV', 'production');
         vi.stubEnv('REGENGINE_ENABLE_INFLOW_LAB_PROXY', '');
