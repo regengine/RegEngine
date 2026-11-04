@@ -237,7 +237,10 @@ def test_canonical_content_tampering_is_rejected(workflow, tmp_path, column):
     _assert_package(w, tmp_path, verified=True)
     # Simulate corruption by a cluster administrator; runtime ACLs stay intact.
     expression = "quantity + 0.25" if column == "quantity" else "event_timestamp + interval '1 minute'"
-    with w.admin.cursor() as cur:
+    # v141 makes the canonical table append-only; the simulated administrator
+    # uses the break-glass GUC inside one transaction, as a real one would.
+    with w.admin.transaction(), w.admin.cursor() as cur:
+        cur.execute("SET LOCAL fsma.allow_mutation = 'true'")
         cur.execute(f"UPDATE fsma.traceability_events SET {column}={expression} WHERE tenant_id=%s", (w.tenant,))
     _assert_package(w, tmp_path, verified=False)
 
@@ -370,9 +373,9 @@ def _upload_csv(monkeypatch, tenant):
     day = (datetime.now(timezone.utc).date() - timedelta(days=2)).isoformat()
     body = (
         "Lot #,tlc,Shipped On,product_description,quantity,unit_of_measure,harvest_date,location_name,"
-        "reference_document\n"
-        f"LOT-1,PG-CSV-{tenant[:8]}-1,{day},Kale,10,lbs,{day},Farm A,REF-1\n"
-        f"LOT-2,PG-CSV-{tenant[:8]}-2,{day},Chard,5,lbs,{day},Farm A,REF-2\n"
+        "reference_document,immediate_subsequent_recipient\n"
+        f"LOT-1,PG-CSV-{tenant[:8]}-1,{day},Kale,10,lbs,{day},Farm A,REF-1,Cooler Co\n"
+        f"LOT-2,PG-CSV-{tenant[:8]}-2,{day},Chard,5,lbs,{day},Farm A,REF-2,Cooler Co\n"
     ).encode()
     with TestClient(app) as client:
         response = client.post(
@@ -556,15 +559,15 @@ def test_runtime_ingest_evidence_grants_stay_tenant_isolated(workflow, monkeypat
         blob_insert,
         {"run": other_blobless_run, "tenant": w.tenant, "sha": "0" * 64},
     )
-    # INSERT is column-scoped: retention metadata cannot be forged.
-    for forged_column, forged_value in (("storage_url", "https://attacker.example/x"), ("created_at", "1990-01-01")):
-        rejected(
-            "permission denied",
-            f"""INSERT INTO fsma.manifest_blobs
-                    (ingestion_run_id, tenant_id, raw_bytes, sha256, original_filename, {forged_column})
-                VALUES (CAST(:run AS uuid), CAST(:tenant AS uuid), '\\x00', :sha, 'forged.csv', :value)""",
-            {"run": own_run, "tenant": w.tenant, "sha": "0" * 64, "value": forged_value},
-        )
+    # INSERT is column-scoped: created_at still cannot be forged. v140 grants
+    # storage_url INSERT for partner-uploads pointer-only rows.
+    rejected(
+        "permission denied",
+        """INSERT INTO fsma.manifest_blobs
+                (ingestion_run_id, tenant_id, raw_bytes, sha256, original_filename, created_at)
+            VALUES (CAST(:run AS uuid), CAST(:tenant AS uuid), '\\x00', :sha, 'forged.csv', :value)""",
+        {"run": own_run, "tenant": w.tenant, "sha": "0" * 64, "value": "1990-01-01"},
+    )
     rejected("row-level security", None, call=lambda db: persist_agent_artifact(db, other_payload))
     # Reusing another tenant's artifact id under the own tenant is a loud
     # primary-key violation, never a silent ON CONFLICT no-op.

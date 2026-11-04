@@ -62,7 +62,11 @@ from ...models.fsma_nodes import (
 from ...neo4j_utils import Neo4jClient
 from ...traceability_linker import TraceabilityLinker
 
-router = APIRouter(tags=["Traceability"])
+# Validate the API key before any endpoint parameter. The handlers below declare
+# ``Depends(get_current_tenant_id)`` ahead of ``Depends(require_api_key)``, so a key-only
+# caller got 401 on tenant resolution before the key was checked. Router-level
+# dependencies resolve first; the per-request cache still validates the key exactly once.
+router = APIRouter(tags=["Traceability"], dependencies=[Depends(require_api_key)])
 logger = structlog.get_logger("fsma-traceability")
 
 

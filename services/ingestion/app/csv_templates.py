@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import csv
 import dataclasses
+import difflib
 import io
 import itertools
 import logging
@@ -58,6 +59,7 @@ from .webhook_compat import SourceFileReceipt, ingest_events
 from .webhook_models import (
     REQUIRED_KDES_BY_CTE,
     CsvIngestResponse,
+    CsvRowDispositionEntry,
     CteTypeSuggestionResult,
     HeaderMappingEngineResult,
     HeaderMappingSuggestionResult,
@@ -84,6 +86,11 @@ CTE_COLUMNS: dict[str, list[tuple[str, str, str]]] = {
         ("growing_coordinates", "36.9107,-121.7569", "GPS coordinates of growing area (optional)"),
         ("grower_name", "Sunrise Organic Farm LLC", "Business name of grower"),
         ("harvest_date", "2026-04-01", "Date of harvest (YYYY-MM-DD) — growing rows ingest as harvesting"),
+        (
+            "immediate_subsequent_recipient",
+            "Sunrise Packhouse",
+            "Immediate subsequent recipient (who receives the harvested food next)",
+        ),
         ("reference_document", "HARV-2026-0401-001", "Harvest record or reference document number"),
     ],
     "harvesting": [
@@ -97,6 +104,11 @@ CTE_COLUMNS: dict[str, list[tuple[str, str, str]]] = {
         ("location_gln", "0614141000005", "GS1 GLN (optional, 13 digits)"),
         ("field_id", "FIELD-A7", "Field or growing area identifier"),
         ("harvester_name", "Valley Fresh Farms LLC", "Business name of harvester"),
+        (
+            "immediate_subsequent_recipient",
+            "Valley Fresh Packhouse",
+            "Immediate subsequent recipient (who receives the harvested food next)",
+        ),
         ("reference_document", "HARV-2026-0226-001", "Harvest record or reference document number"),
     ],
     "cooling": [
@@ -109,6 +121,16 @@ CTE_COLUMNS: dict[str, list[tuple[str, str, str]]] = {
         ("location_name", "Valley Fresh Cooler #2", "Cooling facility name"),
         ("location_gln", "0614141000005", "GS1 GLN (optional)"),
         ("temperature_celsius", "2.1", "Temperature at cooling (optional but recommended)"),
+        (
+            "immediate_subsequent_recipient",
+            "Valley Fresh Packhouse",
+            "Immediate subsequent recipient (who receives the cooled food next)",
+        ),
+        (
+            "harvest_location_name",
+            "Valley Fresh Farms, Salinas CA",
+            "Farm location where the food was harvested",
+        ),
         ("reference_document", "COOL-2026-0226-014", "Cooling record or reference document number"),
     ],
     "initial_packing": [
@@ -130,6 +152,45 @@ CTE_COLUMNS: dict[str, list[tuple[str, str, str]]] = {
         ("reference_document", "PACK-2026-0226-007", "Packing record or reference document number"),
         ("harvester_business_name", "Valley Fresh Farms LLC", "Business name of the harvester"),
         ("harvester_business_phone", "+1-202-555-0100", "Phone number of the harvester; sample number only"),
+        ("harvest_date", "2026-02-26", "Date the food was harvested (YYYY-MM-DD)"),
+        (
+            "harvest_location_name",
+            "Valley Fresh Farms, Salinas CA",
+            "Farm name where the food was harvested (location description)",
+        ),
+        (
+            "harvest_location_phone",
+            "+1-831-555-0147",
+            "Farm business phone for the harvest location description",
+        ),
+        (
+            "harvest_location_address",
+            "100 Farm Rd, Salinas CA 93901",
+            "Farm physical address for the harvest location description",
+        ),
+        (
+            "growing_area_name",
+            "North Field Block A",
+            "Human-readable growing area or field name (required; field_id alone is not enough)",
+        ),
+        (
+            "field_id",
+            "FIELD-A7",
+            "Optional internal field id; only sufficient when paired with growing_area_name / field_name",
+        ),
+        ("received_date", "2026-02-26", "Date the packer received the food (YYYY-MM-DD)"),
+        ("received_quantity", "500", "Quantity received (distinct from packed quantity)"),
+        (
+            "cooled",
+            "yes",
+            "Explicit yes/no: was the food cooled before packing? Required for RAC initial packing",
+        ),
+        (
+            "cooling_location_name",
+            "Valley Fresh Cooler #2",
+            "Cooling location (required when cooled=yes)",
+        ),
+        ("cooling_date", "2026-02-26", "Date of cooling (required when cooled=yes)"),
     ],
     "shipping": [
         ("traceability_lot_code", "TOM-0226-F3-001", "Lot code being shipped"),
@@ -188,6 +249,11 @@ CTE_COLUMNS: dict[str, list[tuple[str, str, str]]] = {
             "input_units_of_measure",
             "cases,cases",
             "Unit for each input lot, comma-separated (one value applies to all)",
+        ),
+        (
+            "input_product_descriptions",
+            "Roma Tomatoes,Romaine Lettuce",
+            "Product description for EACH input lot, comma-separated in input_lot_codes order",
         ),
         ("reference_document", "PROD-2026-0228-003", "Production record or reference document number"),
     ],
@@ -325,11 +391,14 @@ _DATE_FIELDS = [
 _CTE_TYPE_COLUMNS = ["cte_type", "event_type", "type", "cte"]
 
 # Data rows parse_csv_rows reads: the first MAX_CSV_ROWS rows csv.DictReader
-# yields after the header. DictReader skips completely blank lines, so they
-# do not count; comment rows and all-empty rows do. The next row is an error
-# and parsing stops; rows past it are counted (not stored) and reported as
-# skipped so the caller knows exactly what was dropped.
-# _file_cte_type_for_jev scans exactly these rows.
+# yields after the header. ``csv.DictReader`` omits completely blank physical
+# lines; parse_csv_rows recovers them via ``_physical_data_line_layout`` and
+# logs each as skipped/``blank_physical_line`` so partners never see a silent
+# drop (SEL-549 / first-file dry run). Comment rows and all-empty comma rows
+# are still yielded by DictReader and logged as ``comment_row`` / ``blank_row``.
+# The next row past the cap is an error and parsing stops; rows past it are
+# counted (not stored) and reported as skipped so the caller knows exactly
+# what was dropped. ``_file_cte_type_for_jev`` scans exactly these rows.
 MAX_CSV_ROWS = 500
 
 # Fallback chains: when several columns can supply the same field, the first
@@ -464,6 +533,30 @@ def _inject_required_kdes(kdes: dict, row_cte: str, row: dict, loc_name: Optiona
                 kdes[kde_key] = value
 
 
+def _inputs_satisfy_quantity_kdes(kdes: dict) -> bool:
+    """True when ``kdes.inputs`` carries quantity + UOM for every input lot.
+
+    ``parse_csv_rows`` folds ``input_quantities`` / ``input_units_of_measure``
+    into structured ``inputs`` and leaves the raw columns out of ``kdes``
+    (see test_csv_input_quantities). Contract v3 still names those raw fields
+    in REQUIRED_KDES_BY_CTE; treat a complete ``inputs`` list as satisfying
+    them so template rows and aligned uploads are not false-missing.
+    """
+    inputs = kdes.get("inputs")
+    if not isinstance(inputs, list) or not inputs:
+        return False
+    for item in inputs:
+        if not isinstance(item, dict):
+            return False
+        qty = item.get("quantity")
+        uom = item.get("unit_of_measure")
+        if qty is None or str(qty).strip() == "":
+            return False
+        if uom is None or str(uom).strip() == "":
+            return False
+    return True
+
+
 def _validate_kde_completeness(cte_type: str, event: IngestEvent, kdes: dict) -> list[str]:
     """Check required KDEs for a CTE type. Returns list of missing field names."""
     try:
@@ -472,6 +565,7 @@ def _validate_kde_completeness(cte_type: str, event: IngestEvent, kdes: dict) ->
         return []
     required = REQUIRED_KDES_BY_CTE.get(cte_enum, [])
     missing = []
+    inputs_ok = _inputs_satisfy_quantity_kdes(kdes)
     for field in required:
         # Check in top-level event fields first, then KDEs
         if field in {"traceability_lot_code", "product_description", "quantity", "unit_of_measure"}:
@@ -481,6 +575,8 @@ def _validate_kde_completeness(cte_type: str, event: IngestEvent, kdes: dict) ->
         elif field == "location_name":
             if not (event.location_name or kdes.get("location_name")):
                 missing.append(field)
+        elif field in {"input_quantities", "input_units_of_measure"} and inputs_ok:
+            continue
         else:
             val = kdes.get(field)
             if val is None or str(val).strip() == "":
@@ -585,6 +681,58 @@ def _normalize_location(raw: str) -> str:
 # ── Flexible date parsing ────────────────────────────────────────────────────
 
 
+
+# ── SEL-549 clearer reject reasons (delimiter / TLC / ambiguous date) ────────
+
+_AMBIGUOUS_NUMERIC_DATE = re.compile(
+    r"^\s*(\d{1,2})([/-])(\d{1,2})\2(\d{2}|\d{4})\s*$"
+)
+
+
+def _is_ambiguous_numeric_date(raw: str) -> bool:
+    """True when a numeric date could be MDY or DMY (both parts ≤ 12).
+
+    ISO ``YYYY-MM-DD`` and dates with a day > 12 are unambiguous. Equal
+    month/day values (``05-05-2026``) resolve the same either way, so they
+    are not flagged.
+    """
+    match = _AMBIGUOUS_NUMERIC_DATE.match(raw or "")
+    if not match:
+        return False
+    first, _sep, second, _year = match.groups()
+    a, b = int(first), int(second)
+    if a < 1 or b < 1 or a > 31 or b > 31:
+        return False
+    return a <= 12 and b <= 12 and a != b
+
+
+def _sniff_non_comma_delimiter(text: str) -> Optional[str]:
+    """Return ``';``, ``\\t``, or ``|`` when that separator clearly dominates the header line.
+
+    Partner CSV ingest is comma-only (``csv.DictReader`` default). Spreadsheet
+    exports that use semicolon, tab, or pipe otherwise collapse into one
+    column and surface as opaque ``missing_required_columns``.
+    """
+    first: Optional[str] = None
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        first = line
+        break
+    if first is None:
+        return None
+    commas = first.count(",")
+    for sep, label in ((";", ";"), ("\t", "\\t"), ("|", "|")):
+        count = first.count(sep)
+        if count > commas and count >= 1:
+            return sep
+    return None
+
+
+def _delimiter_display(sep: str) -> str:
+    return {";": "semicolon (;)", "\t": "tab", "|": "pipe (|)"}.get(sep, repr(sep))
+
 def _parse_date_flexible(raw: str, event_time: str = "") -> tuple[str | None, str | None]:
     """Parse a date string in *any* common format into an ISO 8601 UTC timestamp.
 
@@ -601,6 +749,14 @@ def _parse_date_flexible(raw: str, event_time: str = "") -> tuple[str | None, st
         return None, "date field was empty"
 
     raw = raw.strip()
+
+    # SEL-549: numeric dates where both parts are ≤ 12 are MDY/DMY-ambiguous.
+    # Refuse them rather than guessing with dateutil (dayfirst=False).
+    if _is_ambiguous_numeric_date(raw):
+        return (
+            None,
+            f"AMBIGUOUS_DATE: '{raw}' could be month-day or day-month; use YYYY-MM-DD",
+        )
 
     # Fast-path: already an ISO timestamp
     try:
@@ -634,7 +790,9 @@ def _parse_date_flexible(raw: str, event_time: str = "") -> tuple[str | None, st
 _LOT_DIGIT_ADJACENT = re.compile(r"(?<=[0-9])[OI]|[OI](?=[0-9])", re.IGNORECASE)
 
 
-def _check_lot_code_integrity(lot_code: str) -> list[str]:
+def _check_lot_code_integrity(
+    lot_code: str, *, row_log: Optional[list[CsvRowDispositionEntry]] = None, row_number: int = 0
+) -> list[str]:
     """Flag likely O↔0 and I↔1 character swaps in a Traceability Lot Code.
 
     Returns a (possibly empty) list of human-readable integrity warnings.
@@ -645,18 +803,37 @@ def _check_lot_code_integrity(lot_code: str) -> list[str]:
     warnings: list[str] = []
     suspicious = _LOT_DIGIT_ADJACENT.findall(lot_code)
     if suspicious:
+        _append_row_log(
+            row_log,
+            row_number=row_number,
+            disposition="flagged",
+            reason="lot_code_possible_character_swap",
+            field="traceability_lot_code",
+        )
         chars = ", ".join(f"'{c}'" for c in set(s.upper() for s in suspicious))
         warnings.append(
             f"lot_code '{lot_code}': possible character swap ({chars} adjacent to digits — verify O vs 0 or I vs 1)"
         )
     # All-alpha codes longer than 3 chars have no digits — flag for review
     if lot_code.isalpha() and len(lot_code) > 3:
+        _append_row_log(
+            row_log,
+            row_number=row_number,
+            disposition="flagged",
+            reason="lot_code_no_digits",
+            field="traceability_lot_code",
+        )
         warnings.append(f"lot_code '{lot_code}': no digits found — confirm this is not a data entry error")
     return warnings
 
 
 def _parse_input_quantities(
-    row: dict, input_lot_codes: list[str], row_cte: str
+    row: dict,
+    input_lot_codes: list[str],
+    row_cte: str,
+    *,
+    row_log: Optional[list[CsvRowDispositionEntry]] = None,
+    row_number: int = 0,
 ) -> tuple[list[dict], Optional[str], Optional[str]]:
     """Build ``kdes.inputs`` from ``input_quantities`` / ``input_units_of_measure``.
 
@@ -670,6 +847,14 @@ def _parse_input_quantities(
     units_raw = (row.get("input_units_of_measure") or "").strip()
     if not quantities_raw and not units_raw:
         if input_lot_codes and row_cte == "transformation":
+            for field in ("input_quantities", "input_units_of_measure"):
+                _append_row_log(
+                    row_log,
+                    row_number=row_number,
+                    disposition="flagged",
+                    reason="missing_input_quantity_data",
+                    field=field,
+                )
             return (
                 [],
                 None,
@@ -715,10 +900,324 @@ def _parse_input_quantities(
     return inputs, None, None
 
 
+# ---------------------------------------------------------------------------
+# SEL-549: partner-file header checks + row disposition log
+# ---------------------------------------------------------------------------
+# Every physical CSV row the partner sent must be accounted for as accepted,
+# rejected (with reason), flagged, or skipped — never silently dropped.
+# Header guesses (Jev applied mappings) are logged as flagged field decisions
+# without echoing cell values.
+
+
+_REQUIRED_PARTNER_FIELD_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("traceability_lot_code", _LOT_CODE_COLUMNS),
+    ("quantity", _QUANTITY_COLUMNS),
+    ("unit_of_measure", _UNIT_COLUMNS),
+    ("event_date", tuple(_DATE_FIELDS)),
+)
+
+
+def _normalized_header_names(header: Optional[Sequence[Optional[str]]]) -> list[str]:
+    if not header:
+        return []
+    return [normalize_csv_header(name) for name in header if name is not None and str(name).strip()]
+
+
+def _header_covers_field(
+    normalized_headers: set[str],
+    header_mapping: Optional[Mapping[str, str]],
+    aliases: Sequence[str],
+) -> bool:
+    """True when the file (or an applied mapping) can supply one of ``aliases``."""
+    alias_set = set(aliases)
+    if normalized_headers & alias_set:
+        return True
+    if not header_mapping:
+        return False
+    for source_key, canonical in header_mapping.items():
+        if canonical in alias_set and (not source_key or source_key in normalized_headers):
+            return True
+    return False
+
+
+def _missing_required_partner_columns(
+    header: Optional[Sequence[Optional[str]]],
+    header_mapping: Optional[Mapping[str, str]] = None,
+    fallback_cte: Optional[str] = None,
+) -> list[str]:
+    """Canonical names of required partner columns the header cannot supply."""
+    normalized = set(_normalized_header_names(header))
+    missing: list[str] = []
+    for canonical, aliases in _REQUIRED_PARTNER_FIELD_GROUPS:
+        if not _header_covers_field(normalized, header_mapping, aliases):
+            missing.append(canonical)
+    # cte_type is not checked here: a file without one keeps its per-row
+    # "No CTE type" rejection, which carries the Jev CTE suggestion.
+    return missing
+
+
+def _unrecognized_partner_columns(
+    header: Optional[Sequence[Optional[str]]],
+    header_mapping: Optional[Mapping[str, str]] = None,
+) -> list[str]:
+    """Partner columns outside the parser's recognised set (after applied mappings)."""
+    normalized = _normalized_header_names(header)
+    mapped_sources = set((header_mapping or {}).keys())
+    unknown: list[str] = []
+    seen: set[str] = set()
+    for name in normalized:
+        if name in seen:
+            continue
+        seen.add(name)
+        if name in _RECOGNIZED_COLUMNS:
+            continue
+        if name in mapped_sources:
+            continue
+        unknown.append(name)
+    return unknown
+
+
+def _bounded_edit_distance(a: str, b: str, limit: int = 2) -> int:
+    """Levenshtein distance, capped — returns limit+1 once known to exceed ``limit``."""
+    if a == b:
+        return 0
+    if abs(len(a) - len(b)) > limit:
+        return limit + 1
+    # Classic DP; early exit when every cell in a row exceeds limit.
+    prev = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        cur = [i]
+        row_min = i
+        for j, cb in enumerate(b, 1):
+            ins = cur[-1] + 1
+            delete = prev[j] + 1
+            sub = prev[j - 1] + (0 if ca == cb else 1)
+            val = min(ins, delete, sub)
+            cur.append(val)
+            if val < row_min:
+                row_min = val
+        if row_min > limit:
+            return limit + 1
+        prev = cur
+    return prev[-1]
+
+
+def _format_missing_columns_error(
+    missing: Sequence[str],
+    header: Optional[Sequence[Optional[str]]],
+) -> str:
+    """Clear, actionable error naming each missing required column and aliases.
+
+    When a present header is a near miss for a required field, append a
+    closest-match suggestion so misspellings are actionable.
+
+    Near-miss gate (Hermes SEL-549): SequenceMatcher ratio >= 0.85 AND
+    edit distance <= 2. The prior 0.6 cutoff false-matched unrelated present
+    headers (quality→quantity, code→lot_code, uom_code→lot_code).
+    """
+    alias_by_canonical = {canonical: aliases for canonical, aliases in _REQUIRED_PARTNER_FIELD_GROUPS}
+    alias_by_canonical["cte_type"] = tuple(_CTE_TYPE_COLUMNS)
+    present_names = list(_normalized_header_names(header))
+    parts: list[str] = []
+    for name in missing:
+        aliases = alias_by_canonical.get(name, (name,))
+        alias_list = ", ".join(aliases)
+        suggestion = ""
+        if present_names:
+            # Score present headers against every accepted alias; keep best.
+            best: tuple[float, str, str] | None = None
+            for present in present_names:
+                for alias in aliases:
+                    ratio = difflib.SequenceMatcher(None, present, alias).ratio()
+                    if ratio < 0.85:
+                        continue
+                    if _bounded_edit_distance(present, alias, limit=2) > 2:
+                        continue
+                    if best is None or ratio > best[0]:
+                        best = (ratio, present, alias)
+            if best is not None:
+                _ratio, present_hit, alias_hit = best
+                suggestion = f"; did you mean {present_hit!r} → {alias_hit!r}?"
+        parts.append(f"{name} (accepted column names: {alias_list}){suggestion}")
+    present = ", ".join(present_names) or "(none)"
+    return "Missing required columns for partner CSV ingest: " + "; ".join(parts) + f". Present columns: {present}"
+
+
+def _unknown_row_cte_value(row: Mapping[str, Optional[str]]) -> tuple[Optional[str], Optional[str]]:
+    """``(value, column)`` when the row's first CTE value is not a known alias, else ``(None, None)``."""
+    for col in _CTE_TYPE_COLUMNS:
+        raw = (row.get(col) or "").strip()
+        if not raw:
+            continue
+        if raw.lower().replace(" ", "_") in _CTE_TYPE_ALIASES:
+            return None, None
+        return raw, col
+    return None, None
+
+
+class _PhysicalDataLineLayout(NamedTuple):
+    """Physical 1-based line numbers for DictReader records vs omitted blanks.
+
+    ``csv.DictReader`` silently drops completely blank lines. ``record_lines[i]``
+    is the physical file line of the i-th yielded data record; ``blank_lines``
+    are the omitted blanks (leading or between data rows) that must still be
+    accounted for as skipped dispositions (SEL-549).
+    """
+
+    header_line: int  # 0 when the file has no non-blank header line
+    record_lines: tuple[int, ...]
+    blank_lines: tuple[int, ...]
+
+
+def _physical_data_line_layout(text: str) -> _PhysicalDataLineLayout:
+    """Map DictReader data records to physical lines; list blank lines it omits."""
+    lines = text.splitlines()
+    if not lines:
+        return _PhysicalDataLineLayout(0, (), ())
+    header_line = 0
+    record_lines: list[int] = []
+    blank_lines: list[int] = []
+    for index, line in enumerate(lines):
+        physical = index + 1
+        if not line.strip():
+            # Leading blanks before the header are also omitted by DictReader,
+            # but partner files put the header on line 1; only blanks after the
+            # header are recovered here so disposition row numbers stay aligned
+            # with physical data lines (SEL-549 first-file dry run).
+            if header_line != 0:
+                blank_lines.append(physical)
+            continue
+        if header_line == 0:
+            header_line = physical
+            continue
+        record_lines.append(physical)
+    return _PhysicalDataLineLayout(header_line, tuple(record_lines), tuple(blank_lines))
+
+
+def _log_blank_physical_lines(
+    row_log: Optional[list[CsvRowDispositionEntry]],
+    blank_lines: Sequence[int],
+) -> None:
+    """Emit skipped/blank_physical_line for each DictReader-omitted blank line."""
+    for physical in blank_lines:
+        _append_row_log(
+            row_log,
+            row_number=physical,
+            disposition="skipped",
+            reason="blank_physical_line",
+            detail=(
+                f"Row {physical}: completely blank physical line was omitted by "
+                "the CSV reader and was not ingested"
+            ),
+        )
+
+
+def _is_data_record(record: Mapping[Optional[str], object]) -> bool:
+    """True for a record the row loop would read as data (not blank, not a comment)."""
+    values = [str(v or "").strip() for k, v in record.items() if k is not None]
+    if not any(values):
+        return False
+    return not values[0].startswith("#")
+
+
+def _append_row_log(
+    row_log: Optional[list[CsvRowDispositionEntry]],
+    *,
+    row_number: int,
+    disposition: str,
+    reason: str,
+    field: Optional[str] = None,
+    detail: Optional[str] = None,
+    guessed_as: Optional[str] = None,
+) -> None:
+    if row_log is None:
+        return
+    entry = CsvRowDispositionEntry(
+        row_number=row_number,
+        disposition=disposition,
+        reason=reason,
+        field=field,
+        detail=detail,
+        guessed_as=guessed_as,
+    )
+    row_log.append(entry)
+    logger.info(
+        "csv_row_disposition row=%s disposition=%s reason=%s",
+        row_number,
+        disposition,
+        reason,
+    )
+
+
+def _ingest_reject_reason(errors: Sequence[str]) -> str:
+    """Map ingest_events rejection text to a stable disposition reason code."""
+    joined = " ".join(errors).lower()
+    if "duplicate event" in joined:
+        return "duplicate"
+    if joined.startswith("rule_violation") or "rule_violation" in joined:
+        return "rule_violation"
+    if errors:
+        return "ingest_rejected"
+    return "ingest_rejected"
+
+
+def finalize_row_dispositions_from_ingest(
+    row_log: Optional[list[CsvRowDispositionEntry]],
+    event_source_rows: Sequence[int],
+    event_results: Sequence[object],
+    row_notes: Optional[Mapping[int, Sequence[str]]] = None,
+) -> None:
+    """Append the final per-row disposition after ``ingest_events`` returns.
+
+    Parse-time logging never claims a successfully built event was ingested.
+    Each source row listed in ``event_source_rows`` (parallel to the parsed
+    events / the first ``len(event_source_rows)`` ingest results) gets exactly
+    one exclusive outcome here: accepted, or rejected (including duplicates).
+
+    ``row_notes`` carries parse-time observations (e.g. missing KDEs) that must
+    ride on that final exclusive entry — never as a second disposition that
+    could claim the row was already accepted.
+    """
+    if row_log is None:
+        return
+    notes = row_notes or {}
+    # ingest_csv may append synthetic EventResults for parse_errors after
+    # ingest_events; only the results that correspond to parsed events finalize.
+    for row_number, result in zip(event_source_rows, event_results):
+        status = getattr(result, "status", None)
+        errors = list(getattr(result, "errors", None) or [])
+        extra = list(notes.get(row_number) or [])
+        note_suffix = f"; {'; '.join(extra)}" if extra else ""
+        if status == "accepted":
+            detail = "Row ingested" + note_suffix
+            _append_row_log(
+                row_log,
+                row_number=row_number,
+                disposition="accepted",
+                reason="ingested",
+                detail=detail,
+            )
+            continue
+        reason = _ingest_reject_reason(errors)
+        detail = (errors[0] if errors else "Row rejected during ingest") + note_suffix
+        # Never echo partner cell values; EventResult errors are codes/messages.
+        _append_row_log(
+            row_log,
+            row_number=row_number,
+            disposition="rejected",
+            reason=reason,
+            detail=detail,
+        )
+
+
 def parse_csv_rows(
     text: str,
     fallback_cte: Optional[str] = None,
     header_mapping: Optional[Mapping[str, str]] = None,
+    row_log: Optional[list[CsvRowDispositionEntry]] = None,
+    event_source_rows: Optional[list[int]] = None,
+    row_notes: Optional[dict[int, list[str]]] = None,
+    overflow_aggregates: Optional[list[str]] = None,
 ) -> tuple[list[IngestEvent], list[str], list[str]]:
     """Parse CSV text into ``IngestEvent`` objects.
 
@@ -736,13 +1235,55 @@ def parse_csv_rows(
     carries. The source column is left in place so the raw column still
     reaches ``kdes`` and nothing is lost.
 
+    ``row_log``, when provided, receives a ``CsvRowDispositionEntry`` for every
+    input row and for file-level header decisions (SEL-549). Cell values are
+    never written into the log. Successfully parsed rows are not logged as
+    accepted here: callers that ingest must call
+    ``finalize_row_dispositions_from_ingest`` after ``ingest_events`` so the
+    log records only the final outcome (accepted, rejected, duplicate).
+
+    ``event_source_rows``, when provided, is filled with the CSV line number
+    of each returned event (same order as ``events``), so the ingest path can
+    finalize dispositions without inventing row associations.
+
+    ``row_notes``, when provided, collects non-exclusive parse observations
+    (currently missing KDEs) keyed by row number. Callers fold these into the
+    final exclusive disposition via ``finalize_row_dispositions_from_ingest``
+    so a row never carries both a pre-ingest "Accepted with missing KDEs"
+    flag and a later reject.
+
+    ``overflow_aggregates``, when provided, receives the aggregate overflow
+    summary string(s) (e.g. "N more row(s) … skipped"). Those messages are
+    still appended to ``parse_errors`` for visibility, but callers that
+    synthesize rejected EventResults must skip only membership in this list —
+    never substring-match error text, which can embed partner cell values.
+
     Returns ``(events, parse_errors, kde_warnings)``.
     """
-    reader = csv.DictReader(io.StringIO(text))
-
     events: list[IngestEvent] = []
     parse_errors: list[str] = []
     kde_warnings: list[str] = []
+
+    # SEL-549: reject non-comma delimiters with a specific reason before
+    # DictReader collapses the header into a single opaque column.
+    non_comma = _sniff_non_comma_delimiter(text)
+    if non_comma is not None:
+        detail = (
+            f"CSV uses {_delimiter_display(non_comma)} as the field delimiter; "
+            "partner ingest requires comma-separated values. Re-export as CSV (comma) "
+            "or replace the delimiter with commas."
+        )
+        _append_row_log(
+            row_log,
+            row_number=1,
+            disposition="rejected",
+            reason="wrong_delimiter",
+            detail=detail,
+        )
+        return ([], [detail], [])
+
+    reader = csv.DictReader(io.StringIO(text))
+    line_layout = _physical_data_line_layout(text)
 
     # Read the header and every record the loop below can reach before
     # touching any row: a file the csv module cannot read (CR-only line
@@ -750,6 +1291,8 @@ def parse_csv_rows(
     # quote) is rejected whole with its line named, never partially ingested.
     records: list[dict] = []
     skipped_overflow = 0
+    overflow_tail_unreadable = False
+    header = None
     try:
         header = reader.fieldnames
         if header and any(name.strip() for name in header):
@@ -757,14 +1300,19 @@ def parse_csv_rows(
             for position, name in enumerate(header, start=1):
                 normalized = normalize_csv_header(name)
                 if normalized in seen_columns:
-                    return (
-                        [],
-                        [
-                            f"CSV has duplicate column {normalized!r} at positions "
-                            f"{seen_columns[normalized]} and {position}; column names must be unique"
-                        ],
-                        [],
+                    detail = (
+                        f"CSV has duplicate column {normalized!r} at positions "
+                        f"{seen_columns[normalized]} and {position}; column names must be unique"
                     )
+                    _append_row_log(
+                        row_log,
+                        row_number=1,
+                        disposition="rejected",
+                        reason="duplicate_column",
+                        field=normalized,
+                        detail=detail,
+                    )
+                    return ([], [detail], [])
                 seen_columns[normalized] = position
         for record in reader:
             records.append(record)
@@ -775,60 +1323,347 @@ def parse_csv_rows(
             # file may hold many more rows the reader never reached. Count
             # them (without storing them) so the caller learns exactly what
             # was dropped instead of silently losing data.
+            # Keep any partial count if the unread tail raises csv.Error —
+            # zeroing would drop rows we already saw (SEL-549 / Codex).
+            overflow_tail_unreadable = False
             try:
-                skipped_overflow = sum(1 for _ in reader)
-            except csv.Error:
-                # A malformed tail must not break the rows already read.
-                skipped_overflow = 0
+                for _ in reader:
+                    skipped_overflow += 1
+            except csv.Error as overflow_exc:
+                overflow_tail_unreadable = True
+                logger.warning(
+                    "csv_overflow_tail_unreadable after=%s error=%s",
+                    skipped_overflow,
+                    overflow_exc,
+                )
     except csv.Error as exc:
         line = reader.reader.line_num
         logger.warning("csv_unreadable line=%s error=%s", line, exc)
-        return (
-            [],
-            [
-                f"Line {line}: CSV could not be read. Check for carriage-return-only line endings, "
-                f"an unclosed quote, or a field longer than {csv.field_size_limit()} characters"
-            ],
-            [],
+        detail = (
+            f"Line {line}: CSV could not be read. Check for carriage-return-only line endings, "
+            f"an unclosed quote, or a field longer than {csv.field_size_limit()} characters"
         )
+        _append_row_log(
+            row_log,
+            row_number=line or 0,
+            disposition="rejected",
+            reason="unreadable_csv",
+            detail=detail,
+        )
+        return ([], [detail], [])
     if header is not None and not any(name.strip() for name in header):
-        return [], ["CSV has no header row: the first line must list the column names"], []
+        detail = "CSV has no header row: the first line must list the column names"
+        _append_row_log(
+            row_log,
+            row_number=1,
+            disposition="rejected",
+            reason="missing_header",
+            detail=detail,
+        )
+        return ([], [detail], [])
 
-    for row_num, row in enumerate(records, start=2):
+    # SEL-549 / first-file dry run: DictReader-omitted blank physical lines
+    # must still appear in the disposition log (skipped), or partners who pad
+    # CSVs with empty lines see under-counted row totals relative to what they sent.
+    _log_blank_physical_lines(row_log, line_layout.blank_lines)
+
+    # SEL-549: fail fast with a clear error naming each missing required column
+    # (and the aliases we accept) rather than emitting one opaque per-row error.
+    # Only a file with data rows is checked; empty and header-only files keep
+    # their existing "no data rows" handling.
+    has_data = any(_is_data_record(r) for r in records)
+    missing_columns = (
+        _missing_required_partner_columns(header, header_mapping, fallback_cte) if header and has_data else []
+    )
+    if missing_columns:
+        detail = _format_missing_columns_error(missing_columns, header)
+        _append_row_log(
+            row_log,
+            row_number=0,
+            disposition="rejected",
+            reason="missing_required_columns",
+            detail=detail,
+        )
+        for name in missing_columns:
+            _append_row_log(
+                row_log,
+                row_number=0,
+                disposition="rejected",
+                reason="missing_column",
+                field=name,
+                detail=f"Required column {name!r} is absent from the partner file header",
+            )
+        # Every physical data row still needs an exclusive outcome so
+        # accepted + rejected + skipped equals rows sent (SEL-549).
+        for idx, record in enumerate(records):
+            row_num = (
+                line_layout.record_lines[idx]
+                if idx < len(line_layout.record_lines)
+                else idx + 2
+            )
+            if not _is_data_record(record):
+                values = [str(v or "").strip() for k, v in record.items() if k is not None]
+                if values and values[0].startswith("#"):
+                    _append_row_log(
+                        row_log,
+                        row_number=row_num,
+                        disposition="skipped",
+                        reason="comment_row",
+                        detail="Comment row (first value starts with #) was not ingested",
+                    )
+                else:
+                    _append_row_log(
+                        row_log,
+                        row_number=row_num,
+                        disposition="skipped",
+                        reason="blank_row",
+                        detail="Blank data row was not ingested",
+                    )
+                continue
+            _append_row_log(
+                row_log,
+                row_number=row_num,
+                disposition="rejected",
+                reason="missing_required_columns",
+                detail=detail,
+            )
+        # Unread content lines past the buffer still exist physically; every one
+        # must land in an exclusive bucket so accepted+rejected+skipped equals
+        # the file's data-row count (SEL-549 / Codex review). Overflow rows here
+        # are rejected with missing_required_columns (not skipped): the whole
+        # file failed the header check. Use physical line numbers from the layout.
+        if skipped_overflow:
+            overflow_lines = line_layout.record_lines[len(records) : len(records) + skipped_overflow]
+            for overflow_row in overflow_lines:
+                _append_row_log(
+                    row_log,
+                    row_number=overflow_row,
+                    disposition="rejected",
+                    reason="missing_required_columns",
+                    detail=detail,
+                )
+            # If layout was short (malformed / CR-only edge), fall back to synthetic numbers.
+            for offset in range(len(overflow_lines) + 1, skipped_overflow + 1):
+                overflow_row = (line_layout.record_lines[-1] if line_layout.record_lines else 1) + offset
+                _append_row_log(
+                    row_log,
+                    row_number=overflow_row,
+                    disposition="rejected",
+                    reason="missing_required_columns",
+                    detail=detail,
+                )
+        if overflow_tail_unreadable:
+            tail_pos = len(records) + skipped_overflow
+            tail_row = (
+                line_layout.record_lines[tail_pos]
+                if tail_pos < len(line_layout.record_lines)
+                else 1 + len(records) + skipped_overflow + 1
+            )
+            tail_detail = (
+                f"Row {tail_row}: unread CSV overflow tail could not be fully "
+                f"counted (malformed after {skipped_overflow} row(s) past the limit)"
+            )
+            _append_row_log(
+                row_log,
+                row_number=tail_row,
+                disposition="rejected",
+                reason="unreadable_overflow_tail",
+                detail=tail_detail,
+            )
+            return ([], [detail, tail_detail], [])
+        return ([], [detail], [])
+
+    unrecognized = _unrecognized_partner_columns(header, header_mapping)
+    if unrecognized:
+        # Surface in the warning output too, not only the disposition log.
+        kde_warnings.append("Unrecognised column(s) kept as KDEs, not mapped to a field: " + ", ".join(unrecognized))
+    for bad in unrecognized:
+        _append_row_log(
+            row_log,
+            row_number=0,
+            disposition="flagged",
+            reason="unrecognized_column",
+            field=bad,
+            detail=(
+                f"Column {bad!r} is not a recognised ingest field; values still pass through into KDEs when present"
+            ),
+        )
+
+    for idx, row in enumerate(records):
+        row_num = (
+            line_layout.record_lines[idx]
+            if idx < len(line_layout.record_lines)
+            else idx + 2
+        )
         # _file_cte_type_for_jev reads exactly the rows before this cut-off.
-        if row_num - 1 > MAX_CSV_ROWS:
+        if idx >= MAX_CSV_ROWS:
+            # First over-limit row is rejected once. Further unread rows are
+            # each skipped under their own physical row numbers so counts
+            # balance and this row is never both skipped and rejected (SEL-549).
             if skipped_overflow:
-                parse_errors.append(
+                overflow_detail = (
                     f"Row {row_num}: {skipped_overflow} more row(s) after this one were skipped and not ingested"
                 )
-            parse_errors.append(f"Row {row_num}: CSV exceeds maximum row limit of {MAX_CSV_ROWS}")
+                parse_errors.append(overflow_detail)
+                if overflow_aggregates is not None:
+                    # Structural marker: ingest_csv skips EventResult synthesis
+                    # by membership here, not by scanning error substrings.
+                    overflow_aggregates.append(overflow_detail)
+                for offset in range(1, skipped_overflow + 1):
+                    pos = idx + offset
+                    overflow_row = (
+                        line_layout.record_lines[pos]
+                        if pos < len(line_layout.record_lines)
+                        else row_num + offset
+                    )
+                    _append_row_log(
+                        row_log,
+                        row_number=overflow_row,
+                        disposition="skipped",
+                        reason="row_limit_overflow",
+                        detail=(f"Row {overflow_row}: skipped after CSV row limit of {MAX_CSV_ROWS}"),
+                    )
+            if overflow_tail_unreadable:
+                # Partial count kept above; name the remainder explicitly so it
+                # is not silently dropped when csv.Error fires mid-tail.
+                tail_pos = idx + skipped_overflow + 1
+                tail_row = (
+                    line_layout.record_lines[tail_pos]
+                    if tail_pos < len(line_layout.record_lines)
+                    else row_num + skipped_overflow + 1
+                )
+                tail_detail = (
+                    f"Row {tail_row}: unread CSV overflow tail "
+                    f"could not be fully counted (malformed after {skipped_overflow} "
+                    f"row(s) past the limit)"
+                )
+                parse_errors.append(tail_detail)
+                _append_row_log(
+                    row_log,
+                    row_number=tail_row,
+                    disposition="rejected",
+                    reason="unreadable_overflow_tail",
+                    detail=tail_detail,
+                )
+            limit_detail = f"Row {row_num}: CSV exceeds maximum row limit of {MAX_CSV_ROWS}"
+            parse_errors.append(limit_detail)
+            _append_row_log(
+                row_log,
+                row_number=row_num,
+                disposition="rejected",
+                reason="row_limit_exceeded",
+                detail=limit_detail,
+            )
             break
         # DictReader files values past the last header column under the None
         # restkey. A non-blank one rejects the row below rather than being
         # dropped; blank ones (a trailing comma) carry nothing and are ignored.
         extra_values = row.pop(None, None) or []
         row = {normalize_csv_header(k): (v or "").strip() for k, v in row.items()}
+        mapped_fields: set[str] = set()
         if header_mapping:
             for source_key, canonical_field in header_mapping.items():
                 value = row.get(source_key)
                 if value and not _row_provides(row, canonical_field):
                     row[canonical_field] = value
+                    mapped_fields.add(canonical_field)
+                    _append_row_log(
+                        row_log,
+                        row_number=row_num,
+                        disposition="flagged",
+                        reason="header_guess_applied",
+                        field=source_key,
+                        guessed_as=canonical_field,
+                        detail=(
+                            f"Applied header mapping {source_key!r} -> {canonical_field!r} "
+                            "(cell value omitted from log)"
+                        ),
+                    )
         first_val = next(iter(row.values()), "")
         if first_val and str(first_val).startswith("#"):
+            _append_row_log(
+                row_log,
+                row_number=row_num,
+                disposition="skipped",
+                reason="comment_row",
+                detail="Comment row (first value starts with #) was not ingested",
+            )
             continue
         if any(value.strip() for value in extra_values):
-            parse_errors.append(
+            detail = (
                 f"Row {row_num}: has more fields than the header "
                 f"({len(header) + len(extra_values)} fields, header has {len(header)})"
             )
+            parse_errors.append(detail)
+            _append_row_log(
+                row_log,
+                row_number=row_num,
+                disposition="rejected",
+                reason="extra_fields",
+                detail=detail,
+            )
             continue
         if not any(row.values()):
+            _append_row_log(
+                row_log,
+                row_number=row_num,
+                disposition="skipped",
+                reason="blank_row",
+                detail="Blank data row was not ingested",
+            )
             continue
 
+        def _reject(reason: str, message: str) -> None:
+            parse_errors.append(message)
+            _append_row_log(
+                row_log,
+                row_number=row_num,
+                disposition="rejected",
+                reason=reason,
+                detail=message,
+            )
+
         try:
+            unknown_cte, unknown_cte_col = _unknown_row_cte_value(row)
+            if unknown_cte is not None and unknown_cte_col in mapped_fields:
+                # A guessed (mapped) column whose value is not a CTE: keep the
+                # declared fallback, but flag it rather than accept quietly.
+                _append_row_log(
+                    row_log,
+                    row_number=row_num,
+                    disposition="flagged",
+                    reason="mapped_cte_not_recognized",
+                    field=unknown_cte_col,
+                    detail="Mapped column value is not a known CTE type; used the upload's cte_type",
+                )
+                kde_warnings.append(
+                    f"Row {row_num}: mapped {unknown_cte_col} value is not a known CTE type; used the upload's cte_type"
+                )
+            elif unknown_cte is not None:
+                # SEL-549: an event type we don't recognise is never replaced
+                # by the upload's cte_type; the row is rejected and named.
+                _reject(
+                    "unknown_cte_type",
+                    f"Row {row_num}: unrecognised CTE type {unknown_cte!r}; "
+                    f"use one of: {', '.join(sorted(set(_CTE_TYPE_ALIASES.values())))}",
+                )
+                continue
             row_cte = _detect_row_cte_type(row, fallback_cte)
+            if row_cte and _detect_row_cte_type(row, None) is None:
+                _append_row_log(
+                    row_log,
+                    row_number=row_num,
+                    disposition="flagged",
+                    reason="cte_type_from_upload",
+                    field="cte_type",
+                    guessed_as=row_cte,
+                    detail="Row has no CTE type; used the upload's cte_type",
+                )
             if not row_cte:
-                parse_errors.append(f"Row {row_num}: No CTE type — add cte_type column or pass cte_type param")
+                _reject(
+                    "missing_cte_type",
+                    f"Row {row_num}: No CTE type — add cte_type column or pass cte_type param",
+                )
                 continue
 
             # ── Phase 1: Ingestion — flexible on format, strict on presence ──
@@ -839,46 +1674,93 @@ def parse_csv_rows(
             event_time_raw = (row.get("event_time") or "").strip()
             ts, date_warning = _parse_date_flexible(raw_date, event_time_raw)
             if ts is None:
-                parse_errors.append(f"Row {row_num}: {date_warning}")
+                date_reason = (
+                    "ambiguous_date"
+                    if date_warning and date_warning.startswith("AMBIGUOUS_DATE:")
+                    else "bad_date"
+                )
+                _reject(date_reason, f"Row {row_num}: {date_warning}")
                 continue
+            if date_warning:
+                _append_row_log(
+                    row_log,
+                    row_number=row_num,
+                    disposition="flagged",
+                    reason="date_guessed",
+                    field="date",
+                    detail=date_warning,
+                )
 
             # Location: strip whitespace and expand abbreviations
             loc_gln = _first_present(row, _LOCATION_GLN_COLUMNS) or None
             _loc_raw = _first_present(row, _LOCATION_NAME_COLUMNS)
             loc_name = _normalize_location(_loc_raw) if _loc_raw else None
+            if _loc_raw and loc_name != _loc_raw:
+                _append_row_log(
+                    row_log,
+                    row_number=row_num,
+                    disposition="flagged",
+                    reason="location_normalized",
+                    field="location_name",
+                    detail="Location name was normalised (abbreviations expanded)",
+                )
 
             # Unit of measure: map abbreviations before Pydantic sees them.
             # No default: a unit the uploader did not record is not "units".
             uom_raw = _first_present(row, _UNIT_COLUMNS)
             if not uom_raw:
-                parse_errors.append(f"Row {row_num}: unit_of_measure is required")
+                _reject("missing_unit_of_measure", f"Row {row_num}: unit_of_measure is required")
                 continue
             uom = _normalize_uom(uom_raw)
+            if uom != uom_raw:
+                _append_row_log(
+                    row_log,
+                    row_number=row_num,
+                    disposition="flagged",
+                    reason="unit_normalized",
+                    field="unit_of_measure",
+                    guessed_as=uom,
+                    detail=f"Unit of measure mapped to {uom!r}",
+                )
 
             # Quantity: required and numeric. The generic exception handler
             # below would reject the row too, but with an opaque message.
             quantity_raw = _first_present(row, _QUANTITY_COLUMNS)
             if not quantity_raw:
-                parse_errors.append(f"Row {row_num}: quantity is required")
+                _reject("missing_quantity", f"Row {row_num}: quantity is required")
                 continue
             try:
                 quantity = float(quantity_raw)
             except ValueError:
-                parse_errors.append(f"Row {row_num}: quantity '{quantity_raw}' is not a number")
+                _reject("bad_quantity", f"Row {row_num}: quantity '{quantity_raw}' is not a number")
                 continue
             # IngestEvent requires a finite quantity greater than 0. Reject
             # here with a row-specific message instead of falling through to
             # the generic "could not be parsed" handler below.
             if not math.isfinite(quantity):
-                parse_errors.append(f"Row {row_num}: quantity '{quantity_raw}' must be a finite number")
+                _reject(
+                    "bad_quantity",
+                    f"Row {row_num}: quantity '{quantity_raw}' must be a finite number",
+                )
                 continue
             if quantity <= 0:
-                parse_errors.append(f"Row {row_num}: quantity '{quantity_raw}' must be greater than 0")
+                _reject(
+                    "bad_quantity",
+                    f"Row {row_num}: quantity '{quantity_raw}' must be greater than 0",
+                )
                 continue
 
-            # Lot code: extract and run integrity checks
+            # Lot code: extract, reject short/empty TLC with bad_tlc (not parse_exception),
+            # then run advisory integrity checks.
             lot_code = _first_present(row, _LOT_CODE_COLUMNS)
-            for integrity_warn in _check_lot_code_integrity(lot_code):
+            if len((lot_code or "").strip()) < 3:
+                _reject(
+                    "bad_tlc",
+                    f"Row {row_num}: traceability_lot_code must be at least 3 characters "
+                    f"(got {lot_code!r})",
+                )
+                continue
+            for integrity_warn in _check_lot_code_integrity(lot_code, row_log=row_log, row_number=row_num):
                 kde_warnings.append(f"Row {row_num}: {integrity_warn}")
 
             kdes: dict = {}
@@ -915,9 +1797,11 @@ def parse_csv_rows(
             # the row: guessing which quantity belongs to which lot would fabricate
             # a KDE. Rows without the columns still ingest (older templates) with a
             # warning for transformations.
-            inputs, input_error, input_warning = _parse_input_quantities(row, input_lot_codes, row_cte)
+            inputs, input_error, input_warning = _parse_input_quantities(
+                row, input_lot_codes, row_cte, row_log=row_log, row_number=row_num
+            )
             if input_error:
-                parse_errors.append(f"Row {row_num}: {input_error}")
+                _reject("bad_input_quantities", f"Row {row_num}: {input_error}")
                 continue
             if inputs:
                 kdes["inputs"] = inputs
@@ -944,11 +1828,22 @@ def parse_csv_rows(
             missing_kdes = _validate_kde_completeness(row_cte, event, kdes)
             if missing_kdes:
                 kde_warnings.append(f"Row {row_num}: Missing KDEs for {row_cte}: {', '.join(missing_kdes)}")
+                # Do not log a flagged "Accepted with missing KDEs" here: ingest
+                # may still reject the row, and a row must have exactly one
+                # final exclusive disposition. Carry the observation as a note
+                # for finalize_row_dispositions_from_ingest to attach.
+                if row_notes is not None:
+                    row_notes.setdefault(row_num, []).append(f"missing KDEs: {', '.join(missing_kdes)}")
+            # Do not log accepted/ingested here. Dedup, KDE checks and
+            # persistence decide the final disposition in ingest_events;
+            # finalize_row_dispositions_from_ingest records it once.
+            if event_source_rows is not None:
+                event_source_rows.append(row_num)
         except Exception as e:
-            # Log the detail server-side; return a generic per-row message so
-            # raw exception text (library internals) isn't echoed to callers.
-            logger.warning("csv_row_parse_failed row=%s error=%s", row_num, str(e))
-            parse_errors.append(f"Row {row_num}: could not be parsed (see server logs)")
+            # Validation exceptions can include uploaded cell values. Keep
+            # only the exception type in logs and a generic per-row response.
+            logger.warning("csv_row_parse_failed row=%s error_type=%s", row_num, type(e).__name__)
+            _reject("parse_exception", f"Row {row_num}: could not be parsed (see server logs)")
 
     return events, parse_errors, kde_warnings
 
@@ -1459,13 +2354,32 @@ async def ingest_csv(
             len(header_mapping.applied_mapping),
             sorted(header_mapping.applied_mapping.items()),
         )
+    row_log: list[CsvRowDispositionEntry] = []
+    event_source_rows: list[int] = []
+    row_notes: dict[int, list[str]] = {}
+    overflow_aggregates: list[str] = []
     events, parse_errors, kde_warnings = parse_csv_rows(
-        text, fallback_cte, header_mapping=header_mapping.applied_mapping
+        text,
+        fallback_cte,
+        header_mapping=header_mapping.applied_mapping,
+        row_log=row_log,
+        event_source_rows=event_source_rows,
+        row_notes=row_notes,
+        overflow_aggregates=overflow_aggregates,
     )
     kde_warnings.extend(xlsx_warnings)
+    missing_columns = [e.field for e in row_log if e.reason == "missing_column" and e.field]
+    unrecognized_columns = [e.field for e in row_log if e.reason == "unrecognized_column" and e.field]
 
     if not events and parse_errors:
         detail: dict = {"message": "No valid rows found", "errors": parse_errors}
+        if missing_columns:
+            # SEL-549: name the absent columns so the uploader can fix the header.
+            detail["missing_columns"] = missing_columns
+        # Every physical row's exclusive outcome, including unread overflow on
+        # the missing-column path — clients need this to reconcile counts.
+        if row_log:
+            detail["row_disposition_log"] = [entry.model_dump() for entry in row_log]
         if xlsx_warnings:
             detail["kde_warnings"] = kde_warnings
             detail["kde_warning_count"] = len(kde_warnings)
@@ -1511,6 +2425,8 @@ async def ingest_csv(
         principal=principal,
         source_file=receipt,
     )
+    # Final dispositions only: parse never claimed these rows were ingested.
+    finalize_row_dispositions_from_ingest(row_log, event_source_rows, response.events, row_notes=row_notes)
 
     artifacts_recorded = 0
     if header_mapping.ok and header_mapping.suggestions:
@@ -1534,7 +2450,15 @@ async def ingest_csv(
     if parse_errors:
         from .webhook_models import EventResult
 
+        # Structural skip set: only messages parse_csv_rows recorded as
+        # overflow aggregates. Never substring-match error text — quantity
+        # (and similar) embed raw cell values that an adversary can craft.
+        # Match by object identity, not string equality, so even a rejection
+        # message that happens to equal the summary text is still counted.
+        overflow_aggregate_ids = {id(a) for a in overflow_aggregates}
         for err in parse_errors:
+            if id(err) in overflow_aggregate_ids:
+                continue
             response.events.append(
                 EventResult(
                     traceability_lot_code="", cte_type=fallback_cte or "unknown", status="rejected", errors=[err]
@@ -1544,9 +2468,7 @@ async def ingest_csv(
             response.total += 1
 
     if kde_warnings:
-        logger.warning(
-            "csv_ingest_kde_warnings: %d warnings: %s", len(kde_warnings), "; ".join(kde_warnings[:5])
-        )
+        logger.warning("csv_ingest_kde_warnings: %d warnings: %s", len(kde_warnings), "; ".join(kde_warnings[:5]))
 
     logger.info(
         "csv_ingest_complete: total=%d accepted=%d rejected=%d kde_warnings=%d",
@@ -1568,4 +2490,13 @@ async def ingest_csv(
         header_mapping_suggestions=_header_mapping_suggestion_results(header_mapping),
         header_mapping_engine=_header_mapping_engine_result(header_mapping, artifacts_recorded),
         cte_type_suggestion=_cte_type_suggestion_result(file_cte, file_cte_artifacts),
+        row_disposition_log=row_log,
+        missing_columns=missing_columns,
+        unrecognized_columns=unrecognized_columns,
     )
+
+
+# Read-only preview shares this router's production ownership and parser.
+from .pilot_diagnostic import router as pilot_diagnostic_router  # noqa: E402
+
+router.include_router(pilot_diagnostic_router)

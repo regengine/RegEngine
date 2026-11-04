@@ -2824,7 +2824,7 @@
         "type": "text"
       },
       "raw_bytes": {
-        "nullable": false,
+        "nullable": true,
         "type": "bytea"
       },
       "sha256": {
@@ -6062,6 +6062,220 @@
       }
     },
     "foreign_keys": []
+  },
+  "public.partner_file_deletion_log": {
+    "columns": {
+      "actor": {
+        "nullable": false,
+        "type": "text"
+      },
+      "byte_size": {
+        "nullable": true,
+        "type": "bigint"
+      },
+      "ciphertext_sha256": {
+        "nullable": true,
+        "type": "text"
+      },
+      "content_sha256": {
+        "nullable": false,
+        "type": "text"
+      },
+      "deleted_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "engagement_id": {
+        "nullable": true,
+        "type": "uuid"
+      },
+      "entry_hash": {
+        "nullable": false,
+        "type": "text"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "partner_file_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "prev_entry_hash": {
+        "nullable": true,
+        "type": "text"
+      },
+      "reason": {
+        "nullable": false,
+        "type": "text"
+      },
+      "report_delivered_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "storage_bucket": {
+        "nullable": false,
+        "type": "text"
+      },
+      "storage_path": {
+        "nullable": false,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    },
+    "foreign_keys": []
+  },
+  "public.partner_file_derived": {
+    "columns": {
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "deleted_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "kind": {
+        "nullable": false,
+        "type": "text"
+      },
+      "partner_file_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "row_ref": {
+        "nullable": true,
+        "type": "text"
+      },
+      "storage_bucket": {
+        "nullable": true,
+        "type": "text"
+      },
+      "storage_path": {
+        "nullable": true,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "partner_file_id"
+        ],
+        "name": "partner_file_derived_partner_file_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "public",
+        "referred_table": "partner_files"
+      },
+      {
+        "constrained_columns": [
+          "tenant_id"
+        ],
+        "name": "partner_file_derived_tenant_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "public",
+        "referred_table": "tenants"
+      }
+    ]
+  },
+  "public.partner_files": {
+    "columns": {
+      "byte_size": {
+        "nullable": false,
+        "type": "bigint"
+      },
+      "ciphertext_sha256": {
+        "nullable": true,
+        "type": "text"
+      },
+      "content_sha256": {
+        "nullable": false,
+        "type": "text"
+      },
+      "content_type": {
+        "nullable": false,
+        "type": "text"
+      },
+      "delete_after": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "deleted_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "engagement_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "kek_key_id": {
+        "nullable": true,
+        "type": "text"
+      },
+      "original_filename": {
+        "nullable": false,
+        "type": "text"
+      },
+      "report_delivered_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "status": {
+        "nullable": false,
+        "type": "text"
+      },
+      "storage_bucket": {
+        "nullable": false,
+        "type": "text"
+      },
+      "storage_path": {
+        "nullable": false,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "uploaded_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "wrapped_dek": {
+        "nullable": true,
+        "type": "bytea"
+      }
+    },
+    "foreign_keys": [
+      {
+        "constrained_columns": [
+          "tenant_id"
+        ],
+        "name": "partner_files_tenant_id_fkey",
+        "referred_columns": [
+          "id"
+        ],
+        "referred_schema": "public",
+        "referred_table": "tenants"
+      }
+    ]
   },
   "public.pcos_authority_documents": {
     "columns": {

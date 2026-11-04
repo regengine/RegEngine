@@ -35,6 +35,14 @@ from shared.rules.seeds import seed_rule_definitions
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
+_meta_engine = create_engine(c["owner_url"])
+with _meta_engine.connect() as _meta_conn:
+    hmac_secret = _meta_conn.execute(
+        text("SELECT value FROM probe_harness_meta WHERE key = 'webhook_hmac_secret'")
+    ).scalar_one()
+_meta_engine.dispose()
+assert isinstance(hmac_secret, str) and hmac_secret
+
 result = {"catalog": "repository FSMA_RULE_SEEDS explicitly seeded only into disposable database"}
 engine = create_engine(c["owner_url"])
 with Session(engine) as session:
@@ -75,7 +83,7 @@ hdr = {
     "X-Tenant-ID": tenant["tenant"],
     "Idempotency-Key": str(uuid4()),
     "Content-Type": "application/json",
-    "X-Webhook-Signature": "sha256=" + hmac.new(c["hmac_secret"].encode(), raw, hashlib.sha256).hexdigest(),
+    "X-Webhook-Signature": "sha256=" + hmac.new(hmac_secret.encode(), raw, hashlib.sha256).hexdigest(),
 }
 with httpx.Client(base_url=c["base_url"], timeout=120) as client:
     started = time.monotonic()

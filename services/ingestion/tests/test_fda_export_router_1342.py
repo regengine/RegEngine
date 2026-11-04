@@ -29,13 +29,27 @@ def test_include_pii_without_permission_returns_403() -> None:
 
 
 def test_coverage_above_threshold_passes_silently() -> None:
-    _enforce_kde_coverage_gate(
+    bypassed = _enforce_kde_coverage_gate(
         completeness_summary=_build_completeness_summary([]),
         allow_incomplete=False,
         identity={},
         tenant_id="",
         export_scope="",
     )
+    assert bypassed is False
+
+
+def test_acknowledged_low_coverage_reports_bypass() -> None:
+    """S7: the bypass is returned so the package can record it, not just logged."""
+    summary = _build_completeness_summary([{}])
+    bypassed = _enforce_kde_coverage_gate(
+        completeness_summary=summary,
+        allow_incomplete=True,
+        identity={"user_id": "u", "request_id": "r"},
+        tenant_id="",
+        export_scope="",
+    )
+    assert bypassed is True
 
 
 def test_unchecked_empty_event_requires_acknowledgement() -> None:

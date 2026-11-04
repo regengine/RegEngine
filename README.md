@@ -200,7 +200,10 @@ Mint a local test API key against this stack (seeds the test tenant and its
 ./venv/bin/python scripts/create_test_api_key.py
 ```
 
-The raw key is printed once — pass it in the `X-RegEngine-API-Key` header.
+The raw key is never printed in full. It is written once to
+`~/.regengine/test-api-key` (mode 0600, override with `--key-file`); load it
+with `export REGENGINE_TEST_API_KEY="$(cat ~/.regengine/test-api-key)"` and
+pass it in the `X-RegEngine-API-Key` header.
 In development the backend validates DB-backed keys only when the server
 process runs with `ENABLE_DB_API_KEYS=true`.
 

@@ -3,6 +3,7 @@
 Date: 2026-10-27. Status: draft v1 for founder review. Product status: Beta, pre-revenue. Owner: founder / product.
 Supersedes for product scope: `PRODUCT_OVERVIEW.md` and `PRODUCT_ROADMAP.md` (2026-04-30). Does not replace `PRODUCTION_REMEDIATION_PRD_2026-05-01.md`, which is a fix program; its six open questions are carried into section 9.
 Verification basis. Code and surface claims were checked against `server/main.py`, `server/router_policy.py`, `PRODUCTION_SURFACE.md`, `frontend/src/lib/capabilities.ts` and Linear project P-SEL-2 as of 2026-10-27. Market, customer, pilot and compliance-scope claims come from the repository documents cited inline (`POSITIONING.md`, the May 2026 go-to-market research, the proof checklist, `docs/specs/FSMA_204_MVP_SPEC.md`, the 2026-10-27 plan note) and are those documents' claims, not verified facts about customers. Jev answers and the Q1 dates are planning inputs. Any other claim is marked "not verified".
+See also: `docs/product/FSMA_204_READINESS_GAP_ANALYSIS_2026-10-28.md`, a subordinate reconciliation of an external PRD summary dated 2026-10-28; it changes none of the decisions in section 9.
 
 ## 1. Problem statement
 

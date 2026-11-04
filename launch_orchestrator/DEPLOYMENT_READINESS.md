@@ -44,15 +44,15 @@ This document identifies what's complete and what's needed for production deploy
 2. **Domain Name & DNS**
    - Status: Using example.com placeholders
    - Action needed:
-     - Register domain (e.g., regengine.ai, regengine.io)
+     - Use regengine.co (already registered); add DNS records for the subdomains below
      - Configure DNS (Route53 or alternative)
      - SSL certificates (ACM or Let's Encrypt)
    - Required subdomains:
-     - api.regengine.ai (production API)
-     - sandbox.regengine.ai (design partner sandbox)
-     - docs.regengine.ai (API documentation)
-     - status.regengine.ai (status page)
-     - regengine.ai (marketing site)
+     - api.regengine.co (production API)
+     - sandbox.regengine.co (design partner sandbox)
+     - docs.regengine.co (API documentation)
+     - status.regengine.co (status page)
+     - regengine.co (marketing site)
 
 3. **Production Database Credentials**
    - Status: Using "change-me-in-production" placeholders
@@ -158,7 +158,7 @@ This document identifies what's complete and what's needed for production deploy
 **Goal**: Get production infrastructure running
 
 1. **Obtain platform credentials** (real account with billing)
-2. **Register domain** (regengine.ai or similar)
+2. **Confirm domain and DNS** (regengine.co is already registered; add the sandbox, docs and status records)
 3. **Run Terraform** to provision:
    - VPC with public/private subnets
    - S3 buckets for data storage
@@ -200,7 +200,7 @@ This document identifies what's complete and what's needed for production deploy
 **Checklist**:
 - [ ] All 5 services deployed and healthy
 - [ ] Load balancer configured with HTTPS
-- [ ] API accessible at api.regengine.ai
+- [ ] API accessible at api.regengine.co
 - [ ] Test API key created and working
 - [ ] Demo data loaded successfully
 - [ ] End-to-end test: Ingest → Extract → Query works
@@ -217,19 +217,19 @@ This document identifies what's complete and what's needed for production deploy
 2. **Deploy API documentation**:
    - Use OpenAPI spec
    - Deploy Redoc or Swagger UI
-   - Host at docs.regengine.ai
+   - Host at docs.regengine.co
 3. **Set up status page**:
    - Monitor API uptime
    - Statuspage.io or self-hosted
-   - Host at status.regengine.ai
+   - Host at status.regengine.co
 4. **Configure analytics**:
    - Google Analytics or Plausible
    - Track: Page views, demo requests, API key signups
 
 **Checklist**:
-- [ ] Marketing site live at regengine.ai
-- [ ] API docs live at docs.regengine.ai
-- [ ] Status page live at status.regengine.ai
+- [ ] Marketing site live at regengine.co
+- [ ] API docs live at docs.regengine.co
+- [ ] Status page live at status.regengine.co
 - [ ] Analytics tracking working
 - [ ] All links working (no 404s)
 - [ ] Mobile responsive

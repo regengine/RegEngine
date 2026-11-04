@@ -18,22 +18,22 @@ You've been selected to participate in our 8-week design partner evaluation prog
 ## What You'll Get
 
 ### 1. Sandbox Environment Access
-- **Sandbox URL**: `https://sandbox.regengine.ai`
+- **Sandbox URL**: `https://sandbox.regengine.co`
 - **API Key**: Will be provided via secure channel (1Password/email)
 - **Rate Limits**: 60 requests/minute (adjustable on request)
 - **Document Limits**: 1,000 regulatory documents
 - **Jurisdictions**: United States (SEC, FINRA), European Union (MiFID II, GDPR), United Kingdom (FCA)
 
 ### 2. API Documentation
-- **OpenAPI Spec**: https://docs.regengine.ai/openapi.yaml
-- **Interactive Docs**: https://docs.regengine.ai (Swagger UI)
-- **Code Examples**: Python, Node.js, cURL available at https://docs.regengine.ai/examples
+- **OpenAPI Spec**: https://docs.regengine.co/openapi.yaml
+- **Interactive Docs**: https://docs.regengine.co (Swagger UI)
+- **Code Examples**: Python, Node.js, cURL available at https://docs.regengine.co/examples
 
 ### 3. Technical Support
 - **Slack Channel**: #regengine-design-partners (invite sent separately)
 - **Response SLA**: < 4 business hours for technical questions
 - **Bi-weekly Check-ins**: 30-minute video calls on Wednesdays
-- **Emergency Contact**: support@regengine.ai (for critical issues)
+- **Emergency Contact**: support@regengine.co (for critical issues)
 
 ---
 
@@ -43,7 +43,7 @@ You've been selected to participate in our 8-week design partner evaluation prog
 
 1. **Verify API Key**
    ```bash
-   curl -X GET "https://sandbox.regengine.ai/health" \
+   curl -X GET "https://sandbox.regengine.co/health" \
      -H "X-RegEngine-API-Key: YOUR_API_KEY"
    ```
    Expected response:
@@ -72,7 +72,7 @@ You've been selected to participate in our 8-week design partner evaluation prog
 
 1. **Ingest Your First Document**
    ```bash
-   curl -X POST "https://sandbox.regengine.ai/ingest/url" \
+   curl -X POST "https://sandbox.regengine.co/ingest/url" \
      -H "X-RegEngine-API-Key: YOUR_API_KEY" \
      -H "Content-Type: application/json" \
      -d '{
@@ -85,13 +85,13 @@ You've been selected to participate in our 8-week design partner evaluation prog
 
 2. **Query Extracted Obligations**
    ```bash
-   curl -X GET "https://sandbox.regengine.ai/obligations?jurisdiction=United%20States" \
+   curl -X GET "https://sandbox.regengine.co/obligations?jurisdiction=United%20States" \
      -H "X-RegEngine-API-Key: YOUR_API_KEY"
    ```
 
 3. **Explore Graph Relationships**
    ```bash
-   curl -X GET "https://sandbox.regengine.ai/graph/relationships?concept=capital_requirements" \
+   curl -X GET "https://sandbox.regengine.co/graph/relationships?concept=capital_requirements" \
      -H "X-RegEngine-API-Key: YOUR_API_KEY"
    ```
 
@@ -156,7 +156,7 @@ You've been selected to participate in our 8-week design partner evaluation prog
          ▼
 ┌─────────────────────────┐
 │  RegEngine Sandbox API  │
-│  sandbox.regengine.ai   │
+│  sandbox.regengine.co   │
 └─────────────────────────┘
          │
          │ Pre-loaded data:
@@ -202,20 +202,20 @@ You've been selected to participate in our 8-week design partner evaluation prog
 
 ```bash
 # 1. Ingest new US regulation
-curl -X POST "https://sandbox.regengine.ai/ingest/url" \
+curl -X POST "https://sandbox.regengine.co/ingest/url" \
   -H "X-RegEngine-API-Key: YOUR_API_KEY" \
   -d '{"url": "https://sec.gov/new-capital-rule.pdf", "jurisdiction": "United States"}'
 
 # 2. Extract obligations
-curl -X GET "https://sandbox.regengine.ai/obligations?jurisdiction=United%20States&concept=capital_requirements&since=2024-11-01" \
+curl -X GET "https://sandbox.regengine.co/obligations?jurisdiction=United%20States&concept=capital_requirements&since=2024-11-01" \
   -H "X-RegEngine-API-Key: YOUR_API_KEY"
 
 # 3. Compare to UK version
-curl -X GET "https://sandbox.regengine.ai/opportunities/arbitrage?j1=United%20States&j2=United%20Kingdom&concept=capital_requirements" \
+curl -X GET "https://sandbox.regengine.co/opportunities/arbitrage?j1=United%20States&j2=United%20Kingdom&concept=capital_requirements" \
   -H "X-RegEngine-API-Key: YOUR_API_KEY"
 
 # 4. Identify gaps in your controls
-curl -X POST "https://sandbox.regengine.ai/opportunities/gaps" \
+curl -X POST "https://sandbox.regengine.co/opportunities/gaps" \
   -H "X-RegEngine-API-Key: YOUR_API_KEY" \
   -d '{
     "jurisdiction": "United States",
@@ -228,7 +228,7 @@ curl -X POST "https://sandbox.regengine.ai/opportunities/gaps" \
 **Scenario**: Understand all regulations related to "minimum net capital"
 
 ```bash
-curl -X GET "https://sandbox.regengine.ai/graph/traverse?start_concept=minimum_net_capital&max_depth=2" \
+curl -X GET "https://sandbox.regengine.co/graph/traverse?start_concept=minimum_net_capital&max_depth=2" \
   -H "X-RegEngine-API-Key: YOUR_API_KEY"
 ```
 
@@ -325,12 +325,12 @@ X-RegEngine-API-Key: rge_abc123....xyz789...
 ### During Onboarding
 
 - **Slack**: #regengine-design-partners (fastest response)
-- **Email**: support@regengine.ai
+- **Email**: support@regengine.co
 - **Video calls**: Calendly link sent via email
 
 ### After Hours / Emergencies
 
-- **Email**: oncall@regengine.ai (critical issues only)
+- **Email**: support@regengine.co (critical issues only)
 - **Response SLA**: Best-effort (no guarantee during design partner phase)
 
 ---
@@ -391,7 +391,7 @@ Contact your design partner manager. Extensions are typically granted on a case-
 
 - **Version**: 1.0
 - **Last Updated**: 2025-11-19
-- **Contact for Updates**: partnerships@regengine.ai
+- **Contact for Updates**: sales@regengine.co
 
 ---
 

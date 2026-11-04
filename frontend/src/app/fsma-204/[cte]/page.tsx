@@ -224,7 +224,7 @@ const CTE_DATA: Record<string, CTEData> = {
       { field: "Unit of Measure", description: "UOM for the output quantity", example: "bags" },
       { field: "Location", description: "Address or GLN of the processing facility", example: "GreenLeaf Processing, Salinas, CA" },
       { field: "Transformation Date", description: "Date the transformation occurred", example: "2026-04-18" },
-      { field: "Input TLCs", description: "All lot codes of ingredients that went into this product", example: "LOT-ROM-042, LOT-SPN-038, LOT-KAL-019" },
+      { field: "Input TLCs", description: "All lot codes of ingredients that went into this product", example: "Every input TLC, one per ingredient lot" },
     ],
     commonMistakes: [
       "Missing input TLCs: this is the most critical transformation error. Without input lot codes, trace-back stops at the processor.",

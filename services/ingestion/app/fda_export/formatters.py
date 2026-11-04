@@ -151,6 +151,8 @@ def build_package_response(
     chain_payload_extras: dict | None = None,
     *,
     include_pii: bool = False,
+    rule_versions: dict | None = None,
+    coverage_gate_bypassed: bool = False,
 ) -> StreamingResponse:
     """Build a StreamingResponse for a ZIP package export.
 
@@ -158,6 +160,9 @@ def build_package_response(
     (issue #1219). The caller must have generated ``csv_content`` with
     the same flag; otherwise manifest metadata and CSV contents will
     disagree on redaction status.
+
+    ``rule_versions`` and ``coverage_gate_bypassed`` are forwarded to the
+    package builder for its ``evidence_context_*.json`` member.
     """
     chain_payload = _build_chain_verification_payload(
         tenant_id=tenant_id,
@@ -182,6 +187,8 @@ def build_package_response(
         query_start_date=start_date,
         query_end_date=end_date,
         include_pii=include_pii,
+        rule_versions=rule_versions,
+        coverage_gate_bypassed=coverage_gate_bypassed,
     )
     headers = {
         "Content-Disposition": f"attachment; filename={filename}",

@@ -237,16 +237,28 @@ def main():
                 time.sleep(0.2)
             else:
                 raise RuntimeError("local service startup timed out")
+            # CodeQL py/clear-text-storage: do not write hmac/redis secrets into access.json.
+            # HMAC is stored in the disposable DB; redis is reconstructed from redis_port.
+            admin_meta = create_engine(url("probe_owner"), isolation_level="AUTOCOMMIT")
+            with admin_meta.connect() as meta_conn:
+                meta_conn.execute(
+                    text("CREATE TABLE IF NOT EXISTS probe_harness_meta (key text PRIMARY KEY, value text NOT NULL)")
+                )
+                meta_conn.execute(text("DELETE FROM probe_harness_meta WHERE key = 'webhook_hmac_secret'"))
+                meta_conn.execute(
+                    text("INSERT INTO probe_harness_meta (key, value) VALUES ('webhook_hmac_secret', :v)"),
+                    {"v": env["WEBHOOK_HMAC_SECRET"]},
+                )
+            admin_meta.dispose()
             access = work / "access.json"
             access.write_text(
                 json.dumps(
                     {
                         "base_url": base,
                         "fixtures": fixtures,
-                        "hmac_secret": env["WEBHOOK_HMAC_SECRET"],
                         "runtime_url": url("regengine"),
                         "owner_url": url("probe_owner"),
-                        "redis_url": env["REDIS_URL"],
+                        "redis_port": redisport,
                     }
                 )
             )

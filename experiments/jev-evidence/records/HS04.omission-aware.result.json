@@ -1,0 +1,12 @@
+{
+  "expected": "insufficient",
+  "actual": {
+    "claim_id": "HS04",
+    "verdict": "insufficient",
+    "reason": "polarity_uncertain",
+    "policy_status": "uncalibrated",
+    "review_required": true,
+    "model": "jev-1.13.0"
+  },
+  "matches": true
+}

@@ -16,6 +16,12 @@ from ..neo4j_utils import Neo4jClient
 
 logger = structlog.get_logger("fsma-utils")
 
+# Search pages stay small. The shared range query also feeds the FDA and
+# EPCIS exports, which pass ``export_cap=True`` and may read up to one past
+# ``EXPORT_EVENT_CAP`` so the caller can refuse a truncated file.
+SEARCH_LIMIT_CEILING = 1_000
+EXPORT_EVENT_CAP = 50_000
+
 
 async def get_lot_timeline(
     client: Neo4jClient,
@@ -129,6 +135,12 @@ async def get_lot_timeline(
     return timeline
 
 
+def _bounded_range_limit(limit: int, *, export_cap: bool) -> int:
+    """Clamp a range-query limit. Search cannot raise the export ceiling."""
+    ceiling = (EXPORT_EVENT_CAP + 1) if export_cap else SEARCH_LIMIT_CEILING
+    return max(1, min(ceiling, int(limit)))
+
+
 async def query_events_by_range(
     client: Neo4jClient,
     start_date: str,
@@ -141,6 +153,7 @@ async def query_events_by_range(
     tlc: Optional[str] = None,
     limit: int = 500,
     starting_after: Optional[str] = None,
+    export_cap: bool = False,
 ) -> List[Dict[str, Any]]:
     """
     Query all TraceEvents within a date range for FDA reporting.
@@ -156,6 +169,10 @@ async def query_events_by_range(
         tlc: Optional Traceability Lot Code. When set, only events whose
             joined Lot has exactly this ``tlc`` are returned (no trimming
             or case folding).
+        export_cap: When true, ``limit`` may be as high as
+            ``EXPORT_EVENT_CAP + 1`` (the FDA/EPCIS export probe). Search
+            calls leave this false and stay clamped at
+            ``SEARCH_LIMIT_CEILING``.
 
     Returns:
         List of event objects with lot and facility details
@@ -193,11 +210,21 @@ async def query_events_by_range(
     OPTIONAL MATCH (e)<-[:UNDERWENT]-(l:Lot)
       WHERE l.tenant_id = $tenant_id
 
+    // Transformation inputs hang off CONSUMED (tenant-scoped)
+    OPTIONAL MATCH (e)-[:CONSUMED]->(input_lot:Lot)
+      WHERE input_lot.tenant_id = $tenant_id
+
     // Join with Facility (Location) — tenant-scoped (#1261)
     OPTIONAL MATCH (e)-[:OCCURRED_AT]->(f:Facility)
       WHERE f.tenant_id = $tenant_id
 
-    WITH e, l, f
+    // Shipping source / destination facilities when present
+    OPTIONAL MATCH (ship_from_f:Facility)-[:SHIPPED]->(e)
+      WHERE ship_from_f.tenant_id = $tenant_id
+    OPTIONAL MATCH (e)-[:SHIPPED_TO]->(ship_to_f:Facility)
+      WHERE ship_to_f.tenant_id = $tenant_id
+
+    WITH e, l, f, input_lot, ship_from_f, ship_to_f
     WHERE ($tlc IS NULL OR l.tlc = $tlc)
     AND (
         $product_contains IS NULL
@@ -217,10 +244,15 @@ async def query_events_by_range(
         e.event_time as event_time,
         e.risk_flag as risk_flag,
         l.tlc as tlc,
+        l.gtin as gtin,
         l.product_description as product_description,
         l.quantity as quantity,
         l.unit_of_measure as uom,
         l.tenant_id as lot_tenant,
+        input_lot.tlc as input_tlc,
+        input_lot.gtin as input_gtin,
+        ship_from_f.gln as ship_from_gln,
+        ship_to_f.gln as ship_to_gln,
         f.name as facility_name,
         f.gln as facility_gln,
         f.address as facility_address,
@@ -240,7 +272,7 @@ async def query_events_by_range(
             facility_contains=facility_contains,
             cte_type=cte_type,
             tlc=tlc,
-            limit=max(1, min(1000, int(limit))),
+            limit=_bounded_range_limit(limit, export_cap=export_cap),
             starting_after=starting_after,
         )
         async for record in result:
@@ -283,11 +315,17 @@ async def query_events_by_range(
                     "event_time": record["event_time"],
                     "risk_flag": record["risk_flag"],
                     "tlc": record["tlc"] or "N/A",
+                    "gtin": record["gtin"] or "",
                     "product_description": record["product_description"] or "",
                     "quantity": record["quantity"],
                     "unit_of_measure": record["uom"],
+                    "input_tlc": record["input_tlc"] or "",
+                    "input_gtin": record["input_gtin"] or "",
+                    "ship_from_gln": record["ship_from_gln"] or "",
+                    "ship_to_gln": record["ship_to_gln"] or "",
                     "location_description": record["facility_name"] or record["facility_address"] or "Unknown",
                     "location_gln": record["facility_gln"] or "",
+                    "facility_gln": record["facility_gln"] or "",
                     "reference_doc_type": "Invoice",  # Placeholder for now
                     "reference_doc_num": record["event_id"],  # Using Event ID as proxy for Ref Doc
                 }

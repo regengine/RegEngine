@@ -42,7 +42,7 @@ test.describe('mobile nav open', () => {
                 return;
             }
             await page.waitForTimeout(500);
-            await expect(page).toHaveScreenshot(`nav-open__${screenshotName(route)}`, {
+            await expect(page).toHaveScreenshot(`nav-open__${screenshotName(route)}.png`, {
                 mask: screenshotMasks(page),
             });
         });
@@ -82,7 +82,7 @@ test.describe('main CTA focus ring', () => {
                 });
                 return;
             }
-            await expect(page).toHaveScreenshot(`cta-focus__${screenshotName(route)}`, {
+            await expect(page).toHaveScreenshot(`cta-focus__${screenshotName(route)}.png`, {
                 mask: screenshotMasks(page),
             });
         });
@@ -95,7 +95,7 @@ test.describe('tablet', () => {
     for (const route of ['/', '/pricing']) {
         test(`tablet ${route}`, async ({ page }) => {
             await stabilize(page, route);
-            await expect(page).toHaveScreenshot(`tablet__${screenshotName(route)}`, {
+            await expect(page).toHaveScreenshot(`tablet__${screenshotName(route)}.png`, {
                 fullPage: true,
                 mask: screenshotMasks(page),
             });

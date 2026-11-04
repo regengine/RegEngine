@@ -1,0 +1,2 @@
+cte_type,traceability_lot_code,product_description,quantity,unit_of_measure,ship_date,ship_from_location,ship_to_location,reference_document,tlc_source_reference,gtin,po_number,sscc,product_date
+shipping,LOT-ROM-2026-0312A,Organic Romaine Hearts,200,cases,2026-03-10,Valley Fresh Farms,Metro Distribution Center,BOL-9001,PACK-2026-0310-001,00614141123456,PO-2026-7788,00161414100000000018,2026-03-17

@@ -10,6 +10,7 @@ import json
 import logging
 import os
 from collections import OrderedDict
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Optional
 from uuid import uuid4
@@ -356,16 +357,56 @@ def _fetch_event_from_db(tenant_id: str, event_id: str) -> Optional[dict]:
         db_session.close()
 
 
+# Hard cap on events a single EPCIS export returns. The query reads one
+# more row than this so the response can state whether it was cut off
+# (``metadata.truncated``) instead of leaving the caller to guess from a
+# round count. Raising it means a bigger response body and one KDE
+# round-trip per event; paginate instead when a tenant outgrows it.
+EXPORT_EVENT_LIMIT = 2000
+
+
+@dataclass(frozen=True)
+class EpcisExportPage:
+    """One page of EPCIS export events plus the facts the caller must state.
+
+    ``truncated`` is decided before the Python-side ``product_id`` filter
+    runs, so it means "the tenant has more matching rows in this date
+    range than ``limit``", not "fewer events came back than the limit".
+    A short list can still be a truncated export when the product filter
+    dropped most of the first ``limit`` rows.
+    """
+
+    events: list[dict]
+    truncated: bool
+    limit: int
+
+
 def _list_events_from_db(
     tenant_id: str,
     start_date: Optional[str],
     end_date: Optional[str],
     product_id: Optional[str],
 ) -> list[dict]:
+    """List-returning wrapper kept for callers that only want the events."""
+    return _list_events_from_db_detailed(tenant_id, start_date, end_date, product_id).events
+
+
+def _list_events_from_db_detailed(
+    tenant_id: str,
+    start_date: Optional[str],
+    end_date: Optional[str],
+    product_id: Optional[str],
+    *,
+    limit: int = EXPORT_EVENT_LIMIT,
+) -> EpcisExportPage:
+    if limit < 1:
+        raise ValueError("limit must be >= 1")
     db_session = get_db_safe()
     try:
         where = ["tenant_id = :tenant_id"]
-        params: dict[str, Any] = {"tenant_id": tenant_id}
+        # Fetch limit + 1 rows: the extra row only tells us the export was
+        # cut off and is never returned.
+        params: dict[str, Any] = {"tenant_id": tenant_id, "row_limit": limit + 1}
 
         if start_date:
             where.append("event_timestamp >= :start_date")
@@ -392,11 +433,14 @@ def _list_events_from_db(
                 FROM fsma.cte_events
                 WHERE {" AND ".join(where)}
                 ORDER BY event_timestamp DESC
-                LIMIT 2000
+                LIMIT :row_limit
                 """
             ),
             params,
         ).fetchall()
+
+        truncated = len(rows) > limit
+        rows = rows[:limit]
 
         events: list[dict] = []
         for row in rows:
@@ -436,7 +480,7 @@ def _list_events_from_db(
 
             events.append(_parse_epcis_document(kde_map, normalized))
 
-        return events
+        return EpcisExportPage(events=events, truncated=truncated, limit=limit)
     finally:
         db_session.close()
 

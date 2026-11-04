@@ -146,7 +146,7 @@ export default function FSMA204ComplianceGuide() {
               </li>
             </ul>
             <p className="text-body text-re-text-secondary">
-              EPCIS 2.0 (Electronic Product Code Information Services) can support trading-partner interoperability across the supply chain. FDA requests may require records, including an electronic sortable spreadsheet under 21 CFR 1.1455(c)(3), unless an exemption or agreed alternative applies.
+              EPCIS 2.0 (Electronic Product Code Information Services) can support trading-partner interoperability across the supply chain. RegEngine EPCIS support is in Preview. FDA requests may require records, including an electronic sortable spreadsheet under 21 CFR 1.1455(c)(3), unless an exemption or agreed alternative applies.
             </p>
           </div>
 
@@ -259,7 +259,7 @@ export default function FSMA204ComplianceGuide() {
                   3. Choose a Traceability System
                 </h4>
                 <p className="text-re-text-secondary">
-                  Options range from improved spreadsheets to specialized FSMA 204 software. Consider integration with your ERP, supplier connectivity, electronic sortable spreadsheet support, EPCIS 2.0 interoperability for trading partners, and your budget. A dedicated platform is typically faster and more reliable than manual processes.
+                  Options range from improved spreadsheets to specialized FSMA 204 software. Consider integration with your ERP, supplier connectivity, electronic sortable spreadsheet support, EPCIS 2.0 (Preview) interoperability for trading partners, and your budget. A dedicated platform is typically faster and more reliable than manual processes.
                 </p>
               </Card>
 

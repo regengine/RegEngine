@@ -39,7 +39,7 @@ class TestDevInboxProvider:
             agent_id="agent-1",
         )
         assert isinstance(result, ProvisionedInbox)
-        assert result.email_address == "outreach-pod-1-agent-1@agents.acme.regengine.dev"
+        assert result.email_address == "outreach-pod-1-agent-1@agents.acme.regengine.co"
         assert result.provider == "dev"
         assert result.provider_ref is None
 
@@ -60,7 +60,7 @@ class TestDevInboxProvider:
         result = provider.provision(
             tenant_slug="acme", agent_slug="bot", tenant_id="totally-different", agent_id="also-different"
         )
-        assert result.email_address == "bot@agents.acme.regengine.dev"
+        assert result.email_address == "bot@agents.acme.regengine.co"
 
 
 class TestGetInboxProvider:

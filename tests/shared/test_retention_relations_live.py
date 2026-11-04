@@ -138,3 +138,143 @@ def test_soft_delete_column_state_matches_what_the_module_declares() -> None:
             )
     finally:
         engine.dispose()
+
+
+def test_runtime_role_can_hard_delete_expired_partner_files() -> None:
+    """regengine must be able to hard-delete an expired partner_files row.
+
+    The retention sweep runs as the ordinary runtime role (get_db →
+    DATABASE_URL). v138 puts partner_files in the hard-delete path; without
+    DELETE the job fails on privileges and retries forever. This proves the
+    grant + sweep path on a migrated scratch DB using only structural rows
+    (no realistic partner payloads).
+    """
+    import asyncio
+    from datetime import datetime, timedelta, timezone
+    from unittest.mock import AsyncMock, MagicMock
+    from uuid import uuid4
+
+    from shared.data_retention import (
+        AuditActor,
+        DataRetentionManager,
+        RetentionPolicy,
+    )
+    from sqlalchemy import create_engine, text
+    from sqlalchemy.orm import sessionmaker
+
+    engine = create_engine(sync_postgres_url(DATABASE_URL))
+    tenant_id = str(uuid4())
+    file_id = str(uuid4())
+    engagement_id = str(uuid4())
+    expired_at = datetime.now(timezone.utc) - timedelta(days=31)
+
+    try:
+        # Privilege gate (independent of session role): cutover + v138.
+        with engine.connect() as conn:
+            has_delete_files = conn.execute(
+                text("SELECT has_table_privilege('regengine', to_regclass('public.partner_files'), 'DELETE')")
+            ).scalar()
+            has_delete_derived = conn.execute(
+                text("SELECT has_table_privilege('regengine', to_regclass('public.partner_file_derived'), 'DELETE')")
+            ).scalar()
+            has_delete_log = conn.execute(
+                text(
+                    "SELECT has_table_privilege('regengine', to_regclass('public.partner_file_deletion_log'), 'DELETE')"
+                )
+            ).scalar()
+            conn.commit()
+        assert has_delete_files is True, (
+            "regengine lacks DELETE on public.partner_files — retention "
+            "hard-delete will fail once rows age past 30 days"
+        )
+        assert has_delete_derived is True, "regengine lacks DELETE on public.partner_file_derived"
+        assert has_delete_log is False, "partner_file_deletion_log must stay append-only (no DELETE)"
+
+        # Seed as the live-suite provider (postgres / superuser). Minimal
+        # structural columns only — synthetic path/hash, not a real file.
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "INSERT INTO public.tenants (id, name, slug) VALUES (CAST(:id AS uuid), 'retention sweep', :slug)"
+                ),
+                {"id": tenant_id, "slug": f"ret-{tenant_id[:8]}"},
+            )
+            conn.execute(text("ALTER TABLE public.partner_files DISABLE ROW LEVEL SECURITY"))
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO public.partner_files (
+                        id, tenant_id, engagement_id, storage_path,
+                        content_sha256, original_filename, byte_size,
+                        content_type, status, deleted_at
+                    ) VALUES (
+                        CAST(:id AS uuid),
+                        CAST(:tenant_id AS uuid),
+                        CAST(:engagement_id AS uuid),
+                        'tenants/' || :tenant_id || '/structural.csv',
+                        repeat('a', 64),
+                        'structural.csv',
+                        12,
+                        'text/csv',
+                        'deleted',
+                        :deleted_at
+                    )
+                    """
+                ),
+                {
+                    "id": file_id,
+                    "tenant_id": tenant_id,
+                    "engagement_id": engagement_id,
+                    "deleted_at": expired_at,
+                },
+            )
+            conn.execute(text("ALTER TABLE public.partner_files ENABLE ROW LEVEL SECURITY"))
+
+        # Prove the DELETE as the runtime role under tenant RLS.
+        Session = sessionmaker(bind=engine)
+        session = Session()
+        try:
+            session.execute(text("SET LOCAL ROLE regengine"))
+            session.execute(
+                text("SELECT set_config('app.tenant_id', :tid, true)"),
+                {"tid": tenant_id},
+            )
+            audit = MagicMock()
+            audit.log_data_modification = AsyncMock(return_value=None)
+            mgr = DataRetentionManager(audit_logger=audit)
+            actor = AuditActor(
+                actor_id="system:retention_cleanup",
+                actor_type="system",
+                username="system",
+            )
+            deleted_ok = asyncio.run(
+                mgr.hard_delete_record(
+                    db=session,
+                    resource_type=RetentionPolicy.PARTNER_FILES.value,
+                    record_id=file_id,
+                    actor=actor,
+                )
+            )
+            assert deleted_ok is True
+        finally:
+            session.close()
+
+        # Row must be gone even when inspected as the provider role.
+        with engine.connect() as conn:
+            still_there = conn.execute(
+                text("SELECT 1 FROM public.partner_files WHERE id = CAST(:id AS uuid)"),
+                {"id": file_id},
+            ).scalar()
+            conn.commit()
+        assert still_there is None, "expired partner_files row survived hard-delete as regengine"
+    finally:
+        with engine.begin() as conn:
+            conn.execute(
+                text("DELETE FROM public.partner_files WHERE id = CAST(:id AS uuid)"),
+                {"id": file_id},
+            )
+            conn.execute(
+                text("DELETE FROM public.tenants WHERE id = CAST(:id AS uuid)"),
+                {"id": tenant_id},
+            )
+        engine.dispose()

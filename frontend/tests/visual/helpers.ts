@@ -1,7 +1,7 @@
 /**
  * Shared helpers for the report-only visual suite.
  *
- * stabilize() navigates and settles a page before screenshotting; 
+ * stabilize() navigates and settles a page before screenshotting;
  * screenshotMasks() returns tolerant mask locators for dynamic regions.
  */
 import { test, type Locator, type Page } from '@playwright/test';
@@ -33,6 +33,21 @@ export function screenshotName(route: string): string {
         .replace(/^\//, '')
         .replace(/\//g, '__')
         .replace(/[^a-zA-Z0-9_-]+/g, '-');
+}
+
+/**
+ * Returns true when the page has been redirected to Vercel Deployment Protection
+ * (Vercel Authentication / SSO wall).
+ */
+export function isVercelProtectionWall(page: Page): boolean {
+    try {
+        const url = new URL(page.url());
+        const isVercelHost =
+            url.hostname === 'vercel.com' || url.hostname.endsWith('.vercel.com');
+        return isVercelHost || url.pathname.startsWith('/sso-api');
+    } catch {
+        return false;
+    }
 }
 
 /**
@@ -70,6 +85,15 @@ export async function stabilize(page: Page, route: string): Promise<void> {
     });
     await scrollToLoadLazyImages(page);
     await autoTagDynamicText(page);
+    if (isVercelProtectionWall(page)) {
+        test.info().annotations.push({
+            type: 'vercel-protection',
+            description:
+                route +
+                ' redirected to Vercel Deployment Protection; set VERCEL_AUTOMATION_BYPASS_SECRET',
+        });
+        test.skip(true, 'Vercel Deployment Protection wall: ' + route);
+    }
 }
 
 /**

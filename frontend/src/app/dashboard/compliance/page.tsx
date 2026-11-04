@@ -142,7 +142,7 @@ const COMPLIANCE_SETUP_STEPS = [
     },
     {
         title: 'Preview export readiness',
-        detail: 'Once records exist, configure FDA and EPCIS (Preview) export jobs for audit-response workflows.',
+        detail: 'Once records exist, configure FDA sortable spreadsheet export jobs (with EPCIS Preview for partner exchange) for audit-response workflows.',
         href: '/dashboard/export-jobs',
         action: 'Set up exports',
         icon: Download,
@@ -603,8 +603,8 @@ export default function ComplianceDashboardPage() {
                                     <Link href="/dashboard/export-jobs">
                                         <Button variant="outline" className="w-full h-auto min-h-[56px] py-3 flex flex-col gap-1.5 rounded-xl hover:border-[var(--re-brand)] transition-colors">
                                             <FileText className="h-5 w-5 text-[var(--re-brand)]" />
-                                            <span className="text-xs font-medium">EPCIS Export (Preview)</span>
-                                            <span className="text-label text-muted-foreground">GS1 2.0 format</span>
+                                            <span className="text-xs font-medium">FDA Sortable Spreadsheet</span>
+                                            <span className="text-label text-muted-foreground">EPCIS Preview for partners</span>
                                         </Button>
                                     </Link>
                                 </CardContent>

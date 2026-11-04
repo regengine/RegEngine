@@ -1,0 +1,6 @@
+{
+  "cases_sha256": "ccc4cfec0e480f9fa30d94010ad514d97aed5125ce3c9e4c2ede66aa1835204f",
+  "case_count": 34,
+  "status": "previously_exposed_regression_cases",
+  "source": "First68requestpolaritycomparison; preserve combinedreference responses"
+}

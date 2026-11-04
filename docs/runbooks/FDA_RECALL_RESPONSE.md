@@ -153,7 +153,7 @@ curl -G "https://<railway-url>/api/v1/fda/export" \
 **Format options:**
 | Format | Output | Use When |
 |--------|--------|----------|
-| `package` | ZIP bundle (CSV + PDF + chain verification JSON + completeness report) | **Default for FDA submission** |
+| `package` | ZIP bundle (CSV + chain verification JSON + evidence context JSON + manifest + README; a validation log when KDEs are missing) | **Default for FDA submission** |
 | `csv` | Raw FDA-format CSV only | Quick inspection |
 | `pdf` | Human-readable PDF summary (landscape A4, subset of columns) | Reviewer walkthrough |
 
@@ -163,11 +163,16 @@ The ZIP bundle (`_build_fda_package()` in `services/ingestion/app/fda_export_ser
 
 | File | Contents |
 |------|----------|
-| `fda_traceability_<tlc>_<timestamp>.csv` | All 34 FDA columns per FSMA 204 spec |
-| `fda_export_<tlc>_<timestamp>.pdf` | Human-readable summary (8 key columns) |
-| `chain_verification.json` | Hash chain integrity proof |
-| `completeness_summary.json` | KDE coverage analysis per CTE type |
-| `manifest.json` | Package metadata, hashes, generation timestamp |
+| `fda_spreadsheet_<scope>_<timestamp>.csv` | FDA-oriented spreadsheet, one row per event (`FDA_COLUMNS`) |
+| `chain_verification_<scope>_<timestamp>.json` | Hash chain verification result, row hash coverage, completeness summary, redaction flag |
+| `evidence_context_<scope>_<timestamp>.json` | Rule catalog and the rule versions that evaluated these events, enforcement mode at export time, and a known-gaps section (KDE coverage, unchecked event types, missing hashes, whether the coverage gate was bypassed with `allow_incomplete`) |
+| `VALIDATION_ERRORS_<scope>_<timestamp>.log` | Only when events are missing required KDEs: one line per affected event |
+| `manifest.json` | Package metadata, per-file sizes and SHA-256 digests, Merkle root over the hashed members, pointer to the evidence context file. The manifest is not one of its own Merkle leaves. |
+| `README.txt` | Human-readable description of the package and how to verify it |
+
+The PDF format is a separate response (`format=pdf`), not a member of the ZIP. Every member except
+`manifest.json` is hashed and listed in `manifest.files`, so a change to any of them, the known-gaps
+section included, fails both the browser verifier and `services/admin/scripts/verify_audit_pack.py`.
 
 ### 3.3 FDA CSV Column Specification
 

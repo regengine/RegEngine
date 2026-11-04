@@ -82,7 +82,7 @@ test.describe('public pages', () => {
                 }
             }
 
-            await expect(page).toHaveScreenshot(screenshotName(route), {
+            await expect(page).toHaveScreenshot(`${screenshotName(route)}.png`, {
                 fullPage: true,
                 mask: screenshotMasks(page),
             });

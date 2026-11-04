@@ -17,6 +17,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 # Add parent paths for imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
@@ -30,6 +31,72 @@ from services.graph.app.routers.labels import (
     generate_qr_payload,
     initialize_label_batch,
 )
+
+
+@pytest.mark.security
+class TestLotNumberIssuanceGuard:
+    """A lot that cannot scan back to itself must be rejected before a label is printed.
+
+    "%XX" in a lot is decoded twice on Vercel (router, then Next's
+    decode-query-path-parameter), so "100%2F" would scan as "100/".
+    """
+
+    def _info(self, lot: str) -> TraceabilityInfo:
+        return TraceabilityInfo(lot_number=lot, pack_date="2026-01-15")
+
+    @pytest.mark.parametrize("lot", ["100%2F", "A%25B", "%", "LOT%"])
+    def test_rejects_literal_percent(self, lot):
+        with pytest.raises(ValidationError, match="must not contain '%'"):
+            self._info(lot)
+
+    @pytest.mark.parametrize("lot", ["", "   ", "\t"])
+    def test_rejects_empty_or_whitespace_only_lot(self, lot):
+        with pytest.raises(ValidationError, match="must not be empty"):
+            self._info(lot)
+
+    @pytest.mark.parametrize("lot", ["A~JAB", "A^XA", "LOT\x01"])
+    def test_rejects_zpl_control_prefix_and_control_bytes(self, lot):
+        # RE-SEC-004: the quoted lot sits inside ^FDMM,...^FS and quote()
+        # leaves "~" unescaped, so "~JA" would reach the printer as a command.
+        with pytest.raises(ValidationError, match="not permitted in label input"):
+            self._info(lot)
+
+    @pytest.mark.parametrize("lot", [".", ".."])
+    def test_rejects_dot_segments_the_browser_would_normalize_away(self, lot):
+        with pytest.raises(ValidationError, match="must not be '.' or '..'"):
+            self._info(lot)
+
+    @pytest.mark.parametrize("lot", ["LOT-2026-SAL-0001", "LOT-2024/001", "LOT 2024", "lot_01.A", "...", ".A"])
+    def test_accepts_lots_that_scan_back_unchanged(self, lot):
+        assert self._info(lot).lot_number == lot
+
+    @pytest.mark.parametrize("lot", ["100%2F", "", "..", "A~JAB"])
+    def test_batch_init_returns_422_naming_lot_number(self, lot):
+        """At the API boundary the guard is a 422 that names lot_number, never a 500."""
+        from fastapi import FastAPI
+
+        from services.graph.app.routers import labels as labels_module
+
+        app = FastAPI()
+        app.include_router(labels_module.router)
+        app.dependency_overrides[labels_module.get_current_tenant_id] = lambda: uuid.uuid4()
+        app.dependency_overrides[labels_module.require_api_key] = lambda: "test-key"
+        client = TestClient(app, raise_server_exceptions=False)
+
+        body = {
+            "packer_gln": "0614141000012",
+            "product": {"gtin": "00000012345678", "description": "Test Product", "expected_units": 1},
+            "traceability": {"lot_number": lot, "pack_date": "2026-01-15"},
+            "quantity": 10,
+            "unit_of_measure": "EA",
+            "packaging_level": "item",
+        }
+        with patch("services.graph.app.routers.labels.Neo4jClient") as neo4j:
+            response = client.post("/batch/init", json=body)
+
+        assert response.status_code == 422
+        assert any("lot_number" in err["loc"] for err in response.json()["detail"])
+        neo4j.assert_not_called()
 
 
 @pytest.mark.security

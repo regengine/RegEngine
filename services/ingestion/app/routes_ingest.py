@@ -197,9 +197,7 @@ def _endpoint_rate_limit(bucket: str, rpm: int, *, allow_session: bool = False):
     async def _check(
         request: Request,
         response: Response,
-        api_key: APIKey | IngestionPrincipal = Depends(
-            get_ingestion_principal if allow_session else require_api_key
-        ),
+        api_key: APIKey | IngestionPrincipal = Depends(get_ingestion_principal if allow_session else require_api_key),
     ) -> APIKey | IngestionPrincipal:
         if isinstance(api_key, IngestionPrincipal) and api_key.auth_mode == "session":
             if not has_permission(api_key.scopes, "webhooks.ingest"):
@@ -978,7 +976,7 @@ async def _fetch(url: str) -> tuple[bytes, str]:
         raise HTTPException(status_code=400, detail="No valid addresses for host")
 
     headers = {
-        "User-Agent": "RegEngine/1.0 (Integration_Testing; admin@regengine.io)",
+        "User-Agent": "RegEngine/1.0 (Integration_Testing; +https://regengine.co)",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,application/pdf,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.9",
         "Accept-Encoding": "gzip, deflate",

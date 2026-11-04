@@ -184,7 +184,7 @@ def test_api_key_guard_refuses_remote_redis_without_flag(monkeypatch):
 def test_api_key_billing_seed_skips_remote_redis(monkeypatch):
     module = _load("create_test_api_key_billing", SCRIPTS / "create_test_api_key.py")
     monkeypatch.setenv("REDIS_URL", "redis://shared-redis.example:6379/0")
-    note = module._seed_billing_status("11111111-1111-1111-1111-111111111111")
+    note = module._seed_subscription_status("11111111-1111-1111-1111-111111111111")
     assert "without --allow-production" in note
 
 

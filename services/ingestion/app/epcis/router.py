@@ -35,7 +35,7 @@ from .persistence import (
     _fetch_event_from_db,
     _ingest_batch_events_db_atomic,
     _ingest_single_event,
-    _list_events_from_db,
+    _list_events_from_db_detailed,
 )
 from .validation import (
     _validate_epcis,
@@ -335,8 +335,16 @@ async def export_epcis_events(
     end_dt = _parse_export_bound(end_date, "end_date")
 
     events: list[dict] = []
+    # ``limit`` and ``truncated`` describe the DB path. The in-memory
+    # fallback has no cap, so they stay None/False there and the
+    # response says so instead of implying a limit that was not applied.
+    limit: int | None = None
+    truncated = False
     try:
-        events = _list_events_from_db(resolved_tenant, start_date, end_date, product_id)
+        page = _list_events_from_db_detailed(resolved_tenant, start_date, end_date, product_id)
+        events = page.events
+        limit = page.limit
+        truncated = page.truncated
     except Exception as exc:
         if not _allow_in_memory_fallback():
             raise HTTPException(status_code=503, detail="Database unavailable") from exc
@@ -360,21 +368,35 @@ async def export_epcis_events(
                 continue
             filtered_records.append(entry)
         events = [entry["epcis_document"] for entry in filtered_records]
+        limit = None
+        truncated = False
 
+    filters = {
+        f"regengine:{key}": value
+        for key, value in (("start_date", start_date), ("end_date", end_date), ("product_id", product_id))
+        if value is not None
+    }
     return {
-        "@context": ["https://ref.gs1.org/standards/epcis/2.0.0/epcis-context.jsonld"],
+        "@context": [
+            "https://ref.gs1.org/standards/epcis/2.0.0/epcis-context.jsonld",
+            {"regengine": "https://regengine.co/ns/"},
+        ],
         "type": "EPCISDocument",
         "schemaVersion": "2.0",
         "creationDate": datetime.now(timezone.utc).isoformat(),
         "epcisBody": {"eventList": events},
-        "metadata": {
-            "source": "regengine-epcis-ingestion",
-            "event_count": len(events),
-            "filters": {
-                "start_date": start_date,
-                "end_date": end_date,
-                "product_id": product_id,
-            },
+        "regengine:metadata": {
+            "regengine:source": "regengine-epcis-ingestion",
+            "regengine:event_count": len(events),
+            "regengine:skipped_event_count": 0,
+            # A single export is capped; state the cap, whether it bit, and
+            # the order so a caller knows which events were dropped. The
+            # in-memory fallback is uncapped: limit is null there.
+            "regengine:limit": limit,
+            "regengine:truncated": truncated,
+            "regengine:ordering": "event_timestamp desc",
+            **({"regengine:message": "No data yet"} if not events else {}),
+            **({"regengine:filters": filters} if filters else {}),
         },
     }
 

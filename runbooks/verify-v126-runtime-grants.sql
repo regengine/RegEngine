@@ -5,8 +5,9 @@
 --
 -- WHAT IT CHECKS (for the runtime role `regengine`, from the catalog only):
 --   * POST /api/v1/ingest/csv can retain the upload: INSERT on exactly the
---     seven columns the route writes (not storage_url/created_at), nothing
---     else on fsma.manifest_blobs, and a validated (ingestion_run_id,
+--     seven columns the route writes, plus storage_url (v138 partner-uploads
+--     pointer rows). created_at stays non-insertable. Nothing else on
+--     fsma.manifest_blobs, and a validated (ingestion_run_id,
 --     tenant_id) foreign key so a blob can only attach to its own tenant's run.
 --   * The agent-artifact worker can write fsma.agent_artifacts and its
 --     ingestion-run receipt: the narrow column SELECTs (including the
@@ -68,8 +69,8 @@ checks(sort_key, check_name, expected, actual) AS (
     SELECT 1, 'regengine is NOSUPERUSER', false, rolsuper FROM pg_roles WHERE rolname = 'regengine'
     UNION ALL SELECT 2, 'regengine is NOBYPASSRLS', false, rolbypassrls FROM pg_roles WHERE rolname = 'regengine'
 
-    -- CSV upload retention (#3122)
-    UNION ALL SELECT 10, 'manifest_blobs INSERT on the 7 columns the route writes', true,
+    -- CSV upload retention (#3122); v138 also grants INSERT (storage_url).
+    UNION ALL SELECT 10, 'manifest_blobs INSERT on the 7 route columns and storage_url', true,
         has_column_privilege('regengine', to_regclass('fsma.manifest_blobs'), 'ingestion_run_id', 'INSERT')
         AND has_column_privilege('regengine', to_regclass('fsma.manifest_blobs'), 'tenant_id', 'INSERT')
         AND has_column_privilege('regengine', to_regclass('fsma.manifest_blobs'), 'raw_bytes', 'INSERT')
@@ -77,6 +78,7 @@ checks(sort_key, check_name, expected, actual) AS (
         AND has_column_privilege('regengine', to_regclass('fsma.manifest_blobs'), 'original_filename', 'INSERT')
         AND has_column_privilege('regengine', to_regclass('fsma.manifest_blobs'), 'content_type', 'INSERT')
         AND has_column_privilege('regengine', to_regclass('fsma.manifest_blobs'), 'uploaded_by', 'INSERT')
+        AND has_column_privilege('regengine', to_regclass('fsma.manifest_blobs'), 'storage_url', 'INSERT')
     UNION ALL SELECT 11, 'manifest_blobs SELECT (any column) stays denied', false,
         has_any_column_privilege('regengine', to_regclass('fsma.manifest_blobs'), 'SELECT')
     UNION ALL SELECT 12, 'manifest_blobs UPDATE (any column) stays denied', false,
@@ -88,9 +90,8 @@ checks(sort_key, check_name, expected, actual) AS (
         AND has_table_privilege('regengine', to_regclass('fsma.ingestion_runs'), 'UPDATE')
     UNION ALL SELECT 15, 'manifest_blobs table-wide INSERT stays denied', false,
         has_table_privilege('regengine', to_regclass('fsma.manifest_blobs'), 'INSERT')
-    UNION ALL SELECT 16, 'manifest_blobs storage_url/created_at not insertable', false,
-        has_column_privilege('regengine', to_regclass('fsma.manifest_blobs'), 'storage_url', 'INSERT')
-        OR has_column_privilege('regengine', to_regclass('fsma.manifest_blobs'), 'created_at', 'INSERT')
+    UNION ALL SELECT 16, 'manifest_blobs created_at not insertable', false,
+        has_column_privilege('regengine', to_regclass('fsma.manifest_blobs'), 'created_at', 'INSERT')
     -- Compared through the catalog, not pg_get_constraintdef() text, whose
     -- schema prefix depends on the session search_path.
     UNION ALL SELECT 17, 'manifest_blobs FK is (ingestion_run_id, tenant_id) -> ingestion_runs', true,

@@ -65,6 +65,7 @@ from typesafe_sdk import (
     __version__ as _sdk_version,
 )
 
+from .review_validation import ReviewContractError, validate_review_answers
 from .settings import JevSettings
 
 logger = structlog.get_logger("jev")
@@ -328,6 +329,7 @@ class JevDecider:
         questions_version: str,
         questions: Mapping[str, Any],
         started: float,
+        strict_answers: bool = False,
     ) -> JevAnswers:
         request_id = response.raw_http_response.headers.get("x-typesafe-request-id")
         if self._settings.model not in {"jev-latest", "jev-preview"} and response.model != self._settings.model:
@@ -341,6 +343,15 @@ class JevDecider:
                 response_model=response.model,
             )
             raise JevUnavailable("invalid_response", purpose=purpose, request_id=request_id)
+        if strict_answers:
+            try:
+                # Validate original JSON: SDK parsing may already coerce strings or bools.
+                raw = response.raw_http_response.json()
+                if not isinstance(raw, dict) or "error" in raw:
+                    raise ReviewContractError("Invalid response envelope")
+                validate_review_answers(raw.get("answers"), questions)
+            except (ValueError, TypeError, KeyError) as exc:
+                raise JevUnavailable("invalid_response", purpose=purpose, request_id=request_id) from exc
         choices, nouls, scores = _convert(response)
         evidence = JevEvidence(
             purpose=purpose,
@@ -382,6 +393,7 @@ class JevDecider:
         *,
         purpose: str,
         questions_version: str = "1",
+        strict_answers: bool = False,
     ) -> JevAnswers:
         """Synchronously answer ``questions`` about ``state``.
 
@@ -398,7 +410,12 @@ class JevDecider:
         except TypeSafeError as exc:
             raise self._unavailable(exc, purpose=purpose, started=started) from exc
         return self._answers(
-            response, purpose=purpose, questions_version=questions_version, questions=questions, started=started
+            response,
+            purpose=purpose,
+            questions_version=questions_version,
+            questions=questions,
+            started=started,
+            strict_answers=strict_answers,
         )
 
     async def ask_async(
@@ -408,6 +425,7 @@ class JevDecider:
         *,
         purpose: str,
         questions_version: str = "1",
+        strict_answers: bool = False,
     ) -> JevAnswers:
         """Asynchronous twin of :meth:`ask` for request handlers on the event loop."""
         self._require_enabled(purpose)
@@ -417,7 +435,12 @@ class JevDecider:
         except TypeSafeError as exc:
             raise self._unavailable(exc, purpose=purpose, started=started) from exc
         return self._answers(
-            response, purpose=purpose, questions_version=questions_version, questions=questions, started=started
+            response,
+            purpose=purpose,
+            questions_version=questions_version,
+            questions=questions,
+            started=started,
+            strict_answers=strict_answers,
         )
 
     # -- lifecycle ------------------------------------------------------------

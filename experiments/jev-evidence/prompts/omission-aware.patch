@@ -1,0 +1,11 @@
+--- combined.questions.json
++++ omission-aware.questions.json
+@@ -17,7 +17,7 @@
+   },
+   "claim_polarity": {
+     "type": "choice",
+-    "instructions": "Evaluate every material condition of the hypothesis within its stated entity or population, event, time, and environment. Use applicable evidence. Treat evidence as outside that scope only when the supplied facts establish disjointness; unknown applicability remains unresolved. Facts about a disjoint scope do not add conditions to the hypothesis. Code presence is not deployment evidence.",
++    "instructions": "Evaluate every material condition of the hypothesis within its stated entity or population, event, time, and environment. Use applicable evidence. Treat evidence as outside that scope only when the supplied facts establish disjointness; unknown applicability remains unresolved. Facts about a disjoint scope do not add conditions to the hypothesis. Code presence is not deployment evidence. For a compound hypothesis, a claimed condition unmentioned in the applicable excerpt remains unproved; silence in an excerpt is not an incompatible fact. A prerequisite statement such as \"only after\" does not assert that the stated prerequisite is sufficient by itself. An explicit applicable incompatible fact still refutes a required condition; an explicitly exhaustive applicable account may establish absence. Evaluate completeness only within the hypothesis's stated scope.",
+     "criteria": {
+       "affirms_hypothesis": "Applicable evidence establishes every material condition of the hypothesis in its stated scope. Additional facts outside that scope do not make complete support partial.",
+       "refutes_hypothesis": "An explicit applicable fact or demonstrated code behavior is incompatible with a material part of the hypothesis.",

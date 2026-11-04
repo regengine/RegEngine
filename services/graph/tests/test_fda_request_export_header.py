@@ -111,7 +111,7 @@ def _export_rows(events):
     with (
         patch("services.graph.app.routers.fsma.compliance.Neo4jClient", _neo4j_stub()),
         patch(
-            "services.graph.app.fsma_utils.query_events_by_range",
+            "services.graph.app.routers.fsma.compliance.query_events_by_range",
             new=AsyncMock(return_value=events),
         ),
     ):

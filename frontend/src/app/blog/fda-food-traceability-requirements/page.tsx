@@ -248,7 +248,7 @@ export default function FDAFoodTraceabilityRequirements() {
               </li>
             </ul>
             <p className="text-body text-re-text-secondary">
-              EPCIS 2.0 (Electronic Product Code Information Services) can support trading-partner interoperability. FDA requests may require records, including an electronic sortable spreadsheet under 21 CFR 1.1455(c)(3), unless an exemption or agreed alternative applies.
+              EPCIS 2.0 (Electronic Product Code Information Services) can support trading-partner interoperability. RegEngine EPCIS support is in Preview. FDA requests may require records, including an electronic sortable spreadsheet under 21 CFR 1.1455(c)(3), unless an exemption or agreed alternative applies.
             </p>
           </div>
 

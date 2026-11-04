@@ -6,6 +6,7 @@ import { apiClient } from './api-client';
 import { fetchWithCsrf } from './fetch-with-csrf';
 import { sanitizePermissions } from './permissions';
 import { serializeClientSessionUser } from './client-session-profile';
+import { identifyUser, resetAnalyticsIdentity } from './posthog-provider';
 
 interface AuthContextType {
   user: User | null;
@@ -535,6 +536,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // profile the user stays authenticated so dashboard layouts never bounce
   // to login over a transient /auth/me failure.
   const isAuthenticated = !!user && (!!accessToken || sessionUnknown);
+
+  // Analytics identity follows the verified session: identify on sign-in, reset on
+  // sign-out. identifyUser is a no-op without cookie consent and fires when consent
+  // arrives later in the session (C.Lee #3645 on A-2138).
+  const userEmail = user?.email ?? null;
+  useEffect(() => {
+    if (!isHydrated) return;
+    if (userEmail) identifyUser(userEmail);
+    else resetAnalyticsIdentity();
+  }, [isHydrated, userEmail]);
   const normalizedRoleName = user?.role_name?.toLowerCase() ?? null;
   const hasTenantSession = isAuthenticated && !!tenantId;
   const hasAdminSession = Boolean(

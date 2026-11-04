@@ -75,7 +75,7 @@ agents per call. Requires a tenant-scoped API key carrying the
 [services/shared/agent_org/providers.py](../../services/shared/agent_org/providers.py)
 defines an `InboxProvider` protocol with exactly one implementation,
 `DevInboxProvider`. It deterministically derives an address string
-(`{agent-slug}@agents.{tenant-slug}.regengine.dev`) and records it.
+(`{agent-slug}@agents.{tenant-slug}.regengine.co`) and records it.
 
 **It does not create an internet-routable mailbox and does not talk to any
 external email provider.** There is no MX record, no mailbox, no inbound

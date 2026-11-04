@@ -161,7 +161,7 @@ const DIFFERENTIATORS = [
         title: 'EPCIS 2.0 export (Preview)',
         description:
             "EPCIS 2.0 (Preview) export for trading-partner interoperability. Verify each enabled workflow against your retailer and buyer requirements.",
-        detail: 'We started on EPCIS 2.0; verify EPCIS coverage with each vendor for your stack.',
+        detail: 'We started on EPCIS 2.0 (Preview); verify EPCIS coverage with each vendor for your stack.',
     },
     {
         icon: CheckCircle,

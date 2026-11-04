@@ -99,7 +99,6 @@ if __name__ == "__main__":  # before the imports below can log anything
 
 try:
     from shared.jev import JevDecider, JevSettings, JevUnavailable
-    from shared.jev.settings import API_KEY_ENV, ENABLED_ENV
 except ImportError as exc:
     _missing_dependency(exc)
 
@@ -133,7 +132,7 @@ def _parser() -> _Parser:
     parser.add_argument(
         "--prompt-key",
         action="store_true",
-        help=f"read the API key from a hidden prompt for this run instead of {API_KEY_ENV}",
+        help="read the API key from a hidden prompt for this run instead of TYPESAFE_API_KEY",
     )
     return parser
 
@@ -286,8 +285,14 @@ def main(
             entered = ""
         settings = dataclasses.replace(settings, api_key=entered.strip() or None)
     if not settings.enabled:
-        reason = f"{API_KEY_ENV} is not set" if not settings.api_key else f"{ENABLED_ENV} switches Jev off"
-        print(f"{PROG}: not configured: {reason}. Nothing was sent.", file=sys.stderr)
+        # Constant-only messages: never interpolate API_KEY_ENV/api_key (CodeQL clear-text-logging).
+        if not settings.api_key:
+            print(f"{PROG}: not configured: TYPESAFE_API_KEY is not set. Nothing was sent.", file=sys.stderr)
+        else:
+            print(
+                f"{PROG}: not configured: REGENGINE_JEV_ENABLED switches Jev off. Nothing was sent.",
+                file=sys.stderr,
+            )
         return EXIT_NOT_CONFIGURED
 
     decider = JevDecider(settings, transport=transport)

@@ -55,7 +55,13 @@ def _clear_fallback_stores():
 
 
 def _force_fallback(monkeypatch: pytest.MonkeyPatch, store: dict) -> None:
-    monkeypatch.setattr(router_mod, "_list_events_from_db", lambda *a, **kw: [])
+    monkeypatch.setattr(
+        router_mod,
+        "_list_events_from_db_detailed",
+        lambda *a, **kw: persistence_mod.EpcisExportPage(
+            events=[], truncated=False, limit=persistence_mod.EXPORT_EVENT_LIMIT
+        ),
+    )
     monkeypatch.setattr(router_mod, "_allow_in_memory_fallback", lambda: True)
     monkeypatch.setattr(router_mod, "_fallback_store_for", lambda t: store)
 

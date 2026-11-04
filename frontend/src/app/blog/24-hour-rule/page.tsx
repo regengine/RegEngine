@@ -170,7 +170,7 @@ export default function TwentyFourHourRulePage() {
                   href="/tools/drill-simulator"
                   className="text-re-brand underline decoration-re-border-strong underline-offset-[3px] hover:decoration-re-brand"
                 >
-                  Recall Drill Simulator
+                  Recall drill (Preview)
                 </Link>{" "}
                 to practice.
               </p>

@@ -92,7 +92,7 @@ export default function CTEMapperPage() {
             <RelatedTools tools={[
                 { href: "/tools/kde-checker", title: "KDE Field Checklist", description: "Generate a customized Key Data Element (KDE) checklist for each CTE and FTL product type." },
                 { href: "/tools/ftl-checker", title: "FTL Checker", description: "Verify which of your food products are covered by FDA FSMA 204 requirements." },
-                { href: "/tools/drill-simulator", title: "24 Hour Drill Simulator", description: "Self-paced rehearsal for your §1.1455(c) records-on-request workflow." },
+                { href: "/tools/drill-simulator", title: "Recall drill (Preview)", description: "Self-paced rehearsal for your §1.1455(c) records-on-request workflow." },
             ]} />
         </>
     );

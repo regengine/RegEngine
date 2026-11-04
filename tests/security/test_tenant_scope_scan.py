@@ -15,6 +15,7 @@ import importlib.util
 import sys
 from pathlib import Path
 
+import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -342,6 +343,32 @@ def test_sql_with_tenant_or_org_predicate_passes(tmp_path: Path):
     for where in ("tenant_id = :tid", "org_id = CAST(:tid AS uuid)", "te.tenant_id = :tenant_id"):
         violations = scan_text(tmp_path, f'QUERY = "SELECT * FROM fsma.cte_events WHERE {where}"\n')
         assert violations == [], where
+
+
+def test_epcis_export_query_has_scanner_visible_tenant_predicates():
+    relpath = "services/ingestion/app/epcis_export.py"
+    errors = []
+    violations = scanner.scan_file(
+        ROOT / relpath,
+        relpath,
+        GLOBAL_TABLES,
+        CATALOG_LABELS,
+        {"cte_events", "cte_kdes"},
+        errors,
+    )
+    assert errors == []
+    assert violations == []
+
+
+@pytest.mark.parametrize("alias,table", [("e", "cte_events"), ("k", "cte_kdes")])
+def test_epcis_export_missing_tenant_predicate_is_flagged(tmp_path: Path, alias: str, table: str):
+    source = (ROOT / "services/ingestion/app/epcis_export.py").read_text(encoding="utf-8")
+    predicate = f"WHERE {alias}.tenant_id = :tenant_id"
+    assert predicate in source
+    violations = scan_text(tmp_path, source.replace(predicate, "WHERE TRUE"))
+    assert [(v.scope, v.rule, v.target) for v in violations] == [
+        ("_query_tenant_events", "sql-without-tenant-predicate", f"fsma.{table}")
+    ]
 
 
 def test_sql_on_global_or_other_schema_is_ignored(tmp_path: Path):

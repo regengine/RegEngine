@@ -6,7 +6,7 @@ The older multi-jurisdiction roadmap content that previously lived here is not p
 
 Use these files instead:
 
-- `docs/PRODUCT_ROADMAP.md`
+- `docs/product/PRODUCT_ROADMAP.md`
 - `docs/specs/FSMA_204_MVP_SPEC.md`
 - `docs/product/POSITIONING.md`
 - `docs/engineering/AI_ENGINEERING_STANDARDS.md`

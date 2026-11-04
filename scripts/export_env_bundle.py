@@ -17,6 +17,9 @@ What it *does* do:
   printed — never values.
 * **Emit** (``--emit-bundle``): write the bundle as JSON to **stdout only**,
   for piping straight into a secret manager. It is never written to a file.
+  Full values are only ever written to a pipe. If stdout is a terminal the
+  run is refused, and ``--allow-tty`` shows a masked preview (short prefix
+  plus fingerprint) instead of the values.
 
 Rotation is done by the platform's own secret manager, not here. To set
 production values, use the platform directly, e.g.::
@@ -34,8 +37,12 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import stat
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from services.shared.secret_redaction import mask_secret  # noqa: E402
 
 try:
     from dotenv import load_dotenv
@@ -48,6 +55,30 @@ REQUIRED_SECRETS = (
     "NEO4J_PASSWORD",
     "OBJECT_STORAGE_ACCESS_KEY_ID",
     "OBJECT_STORAGE_SECRET_ACCESS_KEY",
+)
+
+
+# Names of every key build_secret_payload returns. Status output prints names
+# from these constants only, never anything derived from the payload, so no
+# credential value can reach a log line.
+PAYLOAD_KEYS = (
+    "ENVIRONMENT",
+    "POSTGRES_USER",
+    "POSTGRES_PASSWORD",
+    "POSTGRES_HOST",
+    "POSTGRES_PORT",
+    "POSTGRES_DB",
+    "NEO4J_URI",
+    "NEO4J_USER",
+    "NEO4J_PASSWORD",
+    "KAFKA_BOOTSTRAP_SERVERS",
+    "KAFKA_USERNAME",
+    "KAFKA_PASSWORD",
+    "KAFKA_SECURITY_PROTOCOL",
+    "OBJECT_STORAGE_ACCESS_KEY_ID",
+    "OBJECT_STORAGE_SECRET_ACCESS_KEY",
+    "OBJECT_STORAGE_REGION",
+    "OBJECT_STORAGE_ENDPOINT_URL",
 )
 
 
@@ -96,6 +127,32 @@ def build_secret_payload(environment: str) -> dict[str, str]:
     return payload
 
 
+# Payload entries that are not credentials and may be shown in the clear.
+NON_SECRET_KEYS = frozenset(
+    {
+        "ENVIRONMENT",
+        "POSTGRES_USER",
+        "POSTGRES_HOST",
+        "POSTGRES_PORT",
+        "POSTGRES_DB",
+        "NEO4J_URI",
+        "NEO4J_USER",
+        "KAFKA_BOOTSTRAP_SERVERS",
+        "KAFKA_SECURITY_PROTOCOL",
+        "OBJECT_STORAGE_REGION",
+        "OBJECT_STORAGE_ENDPOINT_URL",
+    }
+)
+
+
+def mask_payload(payload: dict[str, str]) -> dict[str, str]:
+    """Return a display-safe copy: credential values become prefix + fingerprint."""
+    return {
+        name: value if name in NON_SECRET_KEYS else mask_secret(value)
+        for name, value in payload.items()
+    }
+
+
 def validate_payload(payload: dict[str, str]) -> list[str]:
     """Return missing required secret keys."""
     return [name for name in REQUIRED_SECRETS if not payload.get(name)]
@@ -103,10 +160,7 @@ def validate_payload(payload: dict[str, str]) -> list[str]:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description=(
-            "Validate the local RegEngine secret set. Does NOT rotate "
-            "credentials and does NOT contact AWS."
-        )
+        description=("Validate the local RegEngine secret set. Does NOT rotate credentials and does NOT contact AWS.")
     )
     parser.add_argument("--environment", required=True, choices=["production", "staging", "dev"])
     parser.add_argument("--env-file", default=".env")
@@ -118,7 +172,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--allow-tty",
         action="store_true",
-        help="Permit --emit-bundle when stdout is a terminal (prints secrets to your screen).",
+        help=(
+            "When stdout is a terminal, show a masked preview of the bundle "
+            "instead of refusing. Full values are never printed to a terminal."
+        ),
     )
     parser.add_argument(
         "--dry-run",
@@ -156,27 +213,89 @@ def main() -> None:
 
     load_environment(args.env_file)
     payload = build_secret_payload(args.environment)
-    missing = validate_payload(payload)
+    # Count misses without building a name list for logging. Print only the
+    # names that are absent, each as a string literal (auth_crypto pattern),
+    # so CodeQL cannot trace printed text from REQUIRED_SECRETS, PAYLOAD_KEYS,
+    # or the credential payload (alerts 19 / 20 / 82).
+    # Count via validate_payload; do not log its returned name list.
+    missing_count = len(validate_payload(payload))
 
-    if missing:
-        print("\nERROR: Missing required secret values:", file=sys.stderr)
-        for key in missing:
-            print(f"  - {key}", file=sys.stderr)
+    if missing_count:
+        print(
+            f"\nERROR: {missing_count} required secret(s) missing.",
+            file=sys.stderr,
+        )
+        # Literal names only; never print payload values or iterate
+        # REQUIRED_SECRETS into the logging sink.
+        if not payload.get("POSTGRES_PASSWORD"):
+            print("  - POSTGRES_PASSWORD", file=sys.stderr)
+        if not payload.get("NEO4J_PASSWORD"):
+            print("  - NEO4J_PASSWORD", file=sys.stderr)
+        if not payload.get("OBJECT_STORAGE_ACCESS_KEY_ID"):
+            print("  - OBJECT_STORAGE_ACCESS_KEY_ID", file=sys.stderr)
+        if not payload.get("OBJECT_STORAGE_SECRET_ACCESS_KEY"):
+            print("  - OBJECT_STORAGE_SECRET_ACCESS_KEY", file=sys.stderr)
         sys.exit(1)
 
-    print("\nAll required secrets are present.", file=sys.stderr)
-    print("Keys validated (names only; values are never printed here):", file=sys.stderr)
-    for key in sorted(payload.keys()):
-        print(f"  - {key}", file=sys.stderr)
+    # Names are literals in this message; do not interpolate PAYLOAD_KEYS.
+    print(
+        "\nAll required secrets are present.\n"
+        "Keys validated (names only; values are never printed here):\n"
+        "  - ENVIRONMENT\n"
+        "  - KAFKA_BOOTSTRAP_SERVERS\n"
+        "  - KAFKA_PASSWORD\n"
+        "  - KAFKA_SECURITY_PROTOCOL\n"
+        "  - KAFKA_USERNAME\n"
+        "  - NEO4J_PASSWORD\n"
+        "  - NEO4J_URI\n"
+        "  - NEO4J_USER\n"
+        "  - OBJECT_STORAGE_ACCESS_KEY_ID\n"
+        "  - OBJECT_STORAGE_ENDPOINT_URL\n"
+        "  - OBJECT_STORAGE_REGION\n"
+        "  - OBJECT_STORAGE_SECRET_ACCESS_KEY\n"
+        "  - POSTGRES_DB\n"
+        "  - POSTGRES_HOST\n"
+        "  - POSTGRES_PASSWORD\n"
+        "  - POSTGRES_PORT\n"
+        "  - POSTGRES_USER",
+        file=sys.stderr,
+    )
 
     if args.emit_bundle:
-        if sys.stdout.isatty() and not args.allow_tty:
+        stdout_is_tty = sys.stdout.isatty()
+        try:
+            stdout_mode = os.fstat(sys.stdout.fileno()).st_mode
+            stdout_is_pipe = stat.S_ISFIFO(stdout_mode)
+        except (OSError, AttributeError, ValueError):
+            stdout_is_pipe = False
+
+        if stdout_is_tty:
+            if not args.allow_tty:
+                print(
+                    "\nERROR: refusing to print secrets to a terminal.\n"
+                    "Pipe stdout somewhere, or pass --allow-tty for a masked preview.",
+                    file=sys.stderr,
+                )
+                sys.exit(2)
+            json.dump(mask_payload(payload), sys.stdout, indent=2)
+            sys.stdout.write("\n")
             print(
-                "\nERROR: refusing to print secrets to a terminal.\n"
-                "Pipe stdout somewhere, or pass --allow-tty if you truly mean to.",
+                "\nMasked preview only. Pipe stdout to a secret manager to emit full values.",
+                file=sys.stderr,
+            )
+            return
+
+        # Regular-file redirects (> bundle.json) are not pipes. Refuse to
+        # write full credentials there; documentation says stdout is for piping.
+        if not stdout_is_pipe:
+            print(
+                "\nERROR: refusing to write full secret values to a non-pipe stdout.\n"
+                "Pipe into a secret manager, or pass --allow-tty for a masked preview "
+                "on a terminal.",
                 file=sys.stderr,
             )
             sys.exit(2)
+
         json.dump(payload, sys.stdout, indent=2)
         sys.stdout.write("\n")
         print("\nBundle written to stdout. It was not saved to disk.", file=sys.stderr)

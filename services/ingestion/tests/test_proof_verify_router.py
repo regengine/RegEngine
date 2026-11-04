@@ -904,3 +904,87 @@ class TestZipRoundTrip:
         assert "verify: FAILED" in output
         assert "result: bundle UNVERIFIED" in output
         assert "result: bundle INVALID" in output
+
+
+class TestEvidenceContextMember:
+    """S7: the evidence_context member is covered by both public verifiers."""
+
+    def _package(self) -> bytes:
+        csv_content = "Event ID,Traceability Lot Code\nsynthetic-event-1,SYNTHETIC-LOT-1\n"
+        package_bytes, _ = _build_fda_package(
+            events=[{"id": "synthetic-event-1", "event_type": "RECEIVING", "traceability_lot_code": "SYNTHETIC-LOT-1"}],
+            csv_content=csv_content,
+            csv_hash=hashlib.sha256(csv_content.encode("utf-8")).hexdigest(),
+            chain_payload={
+                "version": "1.0",
+                "verification_status": "VERIFIED",
+                "chain_verification": {"valid": True, "chain_length": 1, "errors": [], "checked_at": "2026-08-31T00:00:00+00:00"},
+                "row_hash_coverage": {
+                    "records_with_hash": 1,
+                    "records_with_chain_hash": 1,
+                    "missing_record_hashes": 0,
+                    "missing_chain_hashes": 0,
+                },
+            },
+            completeness_summary={
+                "required_kde_coverage_ratio": 1.0,
+                "events_with_missing_required_fields": 0,
+                "missing_required_by_field": {},
+                "missing_required_events": [],
+            },
+            tenant_id="synthetic-tenant",
+            tlc="SYNTHETIC-LOT-1",
+            query_start_date=None,
+            query_end_date=None,
+            rule_versions={"catalog_status": "ok", "catalog": {}, "evaluated": [], "evaluated_status": "ok", "enforcement_mode": "off"},
+            coverage_gate_bypassed=False,
+        )
+        return package_bytes
+
+    @staticmethod
+    def _rewrite(package_bytes: bytes, member_prefix: str, mutate) -> bytes:
+        out = io.BytesIO()
+        with zipfile.ZipFile(io.BytesIO(package_bytes), "r") as source:
+            with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as target:
+                for member in source.infolist():
+                    data = source.read(member.filename)
+                    if member.filename.startswith(member_prefix):
+                        data = mutate(data)
+                    target.writestr(member, data)
+        return out.getvalue()
+
+    def test_member_present_and_package_verifies(self, client: TestClient, tmp_path: Path):
+        package_bytes = self._package()
+        with zipfile.ZipFile(io.BytesIO(package_bytes)) as zf:
+            names = zf.namelist()
+            evidence = [n for n in names if n.startswith("evidence_context_")]
+            assert len(evidence) == 1
+            manifest = json.loads(zf.read("manifest.json"))
+        assert evidence[0] in {entry["path"] for entry in manifest["files"]}
+
+        response = client.post("/api/v1/proof/verify", files={"bundle": ("p.zip", package_bytes, "application/zip")})
+        assert response.status_code == 200, response.text
+        assert response.json()["verified"] is True, response.json()
+
+        sdk_verify_bundle = runpy.run_path(str(REPO_ROOT / "frontend/public/sdk/verify_chain.py"))["verify_bundle"]
+        path = tmp_path / "p.zip"
+        path.write_bytes(package_bytes)
+        assert sdk_verify_bundle(str(path)) == 0
+
+    def test_tampered_known_gaps_fail_both_verifiers(self, client: TestClient, tmp_path: Path):
+        def _flip(data: bytes) -> bytes:
+            context = json.loads(data)
+            context["known_gaps"]["coverage_gate_bypassed"] = True
+            return json.dumps(context, indent=2, sort_keys=True).encode("utf-8")
+
+        tampered = self._rewrite(self._package(), "evidence_context_", _flip)
+        response = client.post("/api/v1/proof/verify", files={"bundle": ("t.zip", tampered, "application/zip")})
+        assert response.status_code == 200, response.text
+        assert response.json()["verified"] is False
+        checks = {check["name"]: check for check in response.json()["checks"]}
+        assert checks["file_hashes_match_manifest"]["passed"] is False
+
+        sdk_verify_bundle = runpy.run_path(str(REPO_ROOT / "frontend/public/sdk/verify_chain.py"))["verify_bundle"]
+        path = tmp_path / "t.zip"
+        path.write_bytes(tampered)
+        assert sdk_verify_bundle(str(path)) == 1
