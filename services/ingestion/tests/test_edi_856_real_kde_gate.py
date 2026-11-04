@@ -194,6 +194,7 @@ def test_missing_tlc_source_is_rejected_before_the_isa13_is_reserved(
     assert reserved == []
 
 
+@pytest.mark.parametrize("route", ROUTES)
 @pytest.mark.parametrize(
     ("old", "new", "missing"),
     [
@@ -205,10 +206,11 @@ def test_missing_tlc_source_is_rejected_before_the_isa13_is_reserved(
     ],
     ids=["product", "unit", "quantity", "ship_from", "ship_to"],
 )
-def test_document_route_does_not_store_synthesized_856_kdes(
+def test_synthesized_856_kdes_are_rejected_before_the_isa13_is_reserved(
     client: TestClient,
     stored: list[dict[str, Any]],
     monkeypatch: pytest.MonkeyPatch,
+    route: str,
     old: bytes,
     new: bytes,
     missing: str,
@@ -222,7 +224,7 @@ def test_document_route_does_not_store_synthesized_856_kdes(
     )
     raw = FIXTURE.read_bytes().replace(old, new)
 
-    response = _post(client, "/document", raw, tlc_source_reference=TLC_SOURCE)
+    response = _post(client, route, raw, tlc_source_reference=TLC_SOURCE)
 
     assert response.status_code == 422, response.text
     assert missing in response.json()["detail"]["missing_kdes"]

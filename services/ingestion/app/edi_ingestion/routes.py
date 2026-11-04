@@ -791,6 +791,14 @@ async def ingest_edi_856(
             traceability_lot_code=traceability_lot_code,
             partner_id=x_partner_id,
             source=source,
+            placeholder_errors=_legacy_856_placeholder_errors(
+                extracted=extracted,
+                product_description_override=product_description,
+                quantity_override=quantity_override,
+                unit_override=unit_of_measure_override,
+                ship_from_override=ship_from_location_override,
+                ship_to_override=ship_to_location_override,
+            ),
         )
 
     # Content rejections run after the allowlist and before the ISA13 is
@@ -820,24 +828,6 @@ async def ingest_edi_856(
                     "event_count": len(lines),
                 },
             )
-
-    placeholder_errors = _legacy_856_placeholder_errors(
-        extracted=extracted,
-        product_description_override=product_description,
-        quantity_override=quantity_override,
-        unit_override=unit_of_measure_override,
-        ship_from_override=ship_from_location_override,
-        ship_to_override=ship_to_location_override,
-    )
-    if placeholder_errors:
-        _reject_missing_required_kdes(
-            errors=placeholder_errors,
-            sender_tenant_id=sender_tenant_id,
-            traceability_lot_code=traceability_lot_code,
-            extracted=extracted,
-            partner_id=x_partner_id,
-            source=source,
-        )
 
     timestamp, ship_date = _ship_timestamp_and_date(
         extracted.get("ship_date_raw"),
