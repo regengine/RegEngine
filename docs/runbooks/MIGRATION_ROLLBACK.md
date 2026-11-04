@@ -4,6 +4,13 @@
 **Owner:** On-call engineer
 **Last Updated:** 2026-04-08
 
+> Historical runbook: its dual-migration description, raw SQL commands, and
+> revision inventory are obsolete. Do not execute the procedures below without
+> a current, reviewed recovery plan and backup. The checked-in deployment uses
+> Alembic; consult [deployment guidance](../operations/PRODUCTION_DEPLOYMENT.md),
+> [database role cutover](../operations/DATABASE_ROLE_CUTOVER.md), and the
+> actual migration revision and database state before recovery.
+
 > **Before you do anything:** Determine which migration system was involved.
 > RegEngine has **two** systems running against the **same** database.
 > Getting this wrong means rolling back the wrong thing (or nothing).

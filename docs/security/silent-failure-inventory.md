@@ -1,5 +1,8 @@
 # Silent-failure inventory — failure paths that degrade to permissive
 
+> Historical inventory: line numbers and dispositions reflect the dated sweep, not
+> proof of current code or deployment. Recheck each item before acting.
+>
 > Produced by the 2026-07-31 remediation sweep (Phase 2). Method: six
 > parallel subsystem audits (compliance scoring, rules engine, billing
 > gates & rate limits, tenant context/RLS plumbing, scheduler & probes,
@@ -85,20 +88,20 @@ dispositions below name the PR that has since shipped each fix.
 | `engine.py:704` `_persist_evaluations` | M | Savepoint rollback swallows persist failure after accept | **FIXED (#2712)**: the single-event path now runs the same `_salvage_rows` salvage + dead-letter as the batch path (accept decision still stands; the verdict survives for replay) |
 | `rejection_audit.py:128` `record_rejection` | M | Durable rejection-audit row dropped on DB error (error log + Sentry; reject decision itself stands) | documented-intentional |
 | `enforcement.py:135` `handle_preeval_exception` (OFF mode) | M | Pre-eval crash → warn + accept in OFF mode | documented-intentional (docstring: OFF is log-and-accept by contract; enforcement modes fail closed with 500) |
-| `evaluators/relational.py:458,486` mass-balance | M | UOM mix without container weights, or zero input events → `warn`, not `fail` | documented-intentional (warn-tier design; revisit when mass-balance goes critical-blocking) |
-| `evaluators/relational.py:156` temporal order | L | Unknown event_type → `skip` | documented-intentional |
+| `services/shared/rules/evaluators/relational.py:458,486` mass-balance | M | UOM mix without container weights, or zero input events → `warn`, not `fail` | documented-intentional (warn-tier design; revisit when mass-balance goes critical-blocking) |
+| `services/shared/rules/evaluators/relational.py:156` temporal order | L | Unknown event_type → `skip` | documented-intentional |
 
 ### Tenant context / RLS plumbing (`services/shared/`, `services/admin/app/`)
 
 | Path | Sev | Behavior | Disposition |
 | --- | --- | --- | --- |
-| `shared/database.py:176` `check_rls_posture` | M (downgraded from H) | Probe error → `"unknown"` → boot proceeds under `REGENGINE_REQUIRE_RLS_ENFORCEMENT=1` | **FIXED (#2705)**: retry-then-abort under REQUIRE=1 |
-| `admin/app/dependencies.py:326` stale-context clear | M | #1383 hygiene clear failure silently `pass`es — not even a log | **FIXED (#2705)**: `stale_tenant_context_clear_failed` warning; request still proceeds (RLS fail-closed default is the primary guard) |
-| `shared/middleware/tenant_context.py:170` | M | Malformed tenant claim in a *validated* JWT → warning + treated as absent claim | **FIXED (#2705)**: rejected — 401 on protected paths, exempt paths proceed tenant-less |
-| `admin/app/database.py:303` `get_tenant_session` | L | Falsy tenant_id → yields session with no GUC instead of raising | **FIXED (#2705)**: raises ValueError |
-| `shared/tenant_context.py:452,650` slug-tenant GUC skips | M | Non-UUID tenant id → RLS GUC backstop silently absent | documented-intentional (slug tolerance, #2458 / begin-hook `skipped_non_uuid` metric; fail-hard predicate remains the enforcement layer) |
-| `shared/tenant_context.py:247,274` claim collection | L | Exceptions reading query params / body → claim treated as absent (409 defense-in-depth check skipped) | **FIXED (#2705)**: logged (warning for query-param, debug for body parse); claim-absent behavior kept |
-| `shared/middleware/tenant_context.py:139`, `shared/tenant_context.py:558` | L | Exempt-path extraction errors → `tenant_id=None`; RLS-GUC metric counter failures swallowed | documented-intentional |
+| `services/shared/database.py:176` `check_rls_posture` | M (downgraded from H) | Probe error → `"unknown"` → boot proceeds under `REGENGINE_REQUIRE_RLS_ENFORCEMENT=1` | **FIXED (#2705)**: retry-then-abort under REQUIRE=1 |
+| `services/admin/app/dependencies.py:326` stale-context clear | M | #1383 hygiene clear failure silently `pass`es — not even a log | **FIXED (#2705)**: `stale_tenant_context_clear_failed` warning; request still proceeds (RLS fail-closed default is the primary guard) |
+| `services/shared/middleware/tenant_context.py:170` | M | Malformed tenant claim in a *validated* JWT → warning + treated as absent claim | **FIXED (#2705)**: rejected — 401 on protected paths, exempt paths proceed tenant-less |
+| `services/admin/app/database.py:303` `get_tenant_session` | L | Falsy tenant_id → yields session with no GUC instead of raising | **FIXED (#2705)**: raises ValueError |
+| `services/shared/tenant_context.py:452,650` slug-tenant GUC skips | M | Non-UUID tenant id → RLS GUC backstop silently absent | documented-intentional (slug tolerance, #2458 / begin-hook `skipped_non_uuid` metric; fail-hard predicate remains the enforcement layer) |
+| `services/shared/tenant_context.py:247,274` claim collection | L | Exceptions reading query params / body → claim treated as absent (409 defense-in-depth check skipped) | **FIXED (#2705)**: logged (warning for query-param, debug for body parse); claim-absent behavior kept |
+| `services/shared/middleware/tenant_context.py:139`, `services/shared/tenant_context.py:558` | L | Exempt-path extraction errors → `tenant_id=None`; RLS-GUC metric counter failures swallowed | documented-intentional |
 
 ### Scheduler & probes (`services/scheduler/`, `server/main.py`)
 
@@ -109,8 +112,8 @@ dispositions below name the PR that has since shipped each fix.
 | `notifications.py:424` outbox rewrite | M | Corrupt JSONL line skipped, then the file is rewritten from parsed entries only — the corrupt entry is permanently destroyed | **FIXED (#2705)**: corrupt lines quarantined to `<outbox>.quarantine`; on quarantine failure the raw line is re-appended verbatim by the rewrite |
 | `kafka_producer.py:273` `_send` | M | Returns True on local enqueue; async delivery failure + swallowed flush error → items acked (kafka backbone only, non-default) | **FIXED (#2715)**: send futures carry errbacks (`_note_delivery_failure`); `emit_fsma_batch` flushes, then reconciles — undelivered messages counted as failures and subtracted from success. Local enqueue no longer implies delivery. |
 | `service.py:388` FSMA graph emission | M | fsma emission failures / transform exceptions never gate the ack | **PARTIAL FIX (#2705)**: failures escalate to error log + `record_kafka_emit_failure` metric. Ack-gating deliberately not added (reprocessing-loop risk for a best-effort mirror) |
-| `scrapers/fda_warning_letters.py:96` | M | RSS 404 + zero scrape results → `success=True, items_found=0`; coverage can be dead indefinitely with no alarm (feeds known bot-blocked) | **FIXED (#2705)**: `scrape_coverage_stale` error after 7 consecutive zero-item successful runs (in-memory streak; resets on leader failover) |
-| `scrapers/fda_recalls.py:137` | L | Row missing `recall_number` dropped with no log | **FIXED (#2705)**: dropped rows log identifying hints |
+| `services/scheduler/app/scrapers/fda_warning_letters.py:96` | M | RSS 404 + zero scrape results → `success=True, items_found=0`; coverage can be dead indefinitely with no alarm (feeds known bot-blocked) | **FIXED (#2705)**: `scrape_coverage_stale` error after 7 consecutive zero-item successful runs (in-memory streak; resets on leader failover) |
+| `services/scheduler/app/scrapers/fda_recalls.py:137` | L | Row missing `recall_number` dropped with no log | **FIXED (#2705)**: dropped rows log identifying hints |
 | `graph/audit_buffer_reconciler.py:406`, `notifications.py:402`, `service.py:672`, `service.py:340`, `server/main.py:980,1058`, `app/metrics.py:120` | M/L | Reconciler-tick swallow, outbox-append OSError, unset outbox path, pg-mode kafka skip, readiness degraded-200 for Redis/Neo4j/worker-start, metrics no-op without prometheus_client | documented-intentional (in-code comments; README documents the readiness degrade contract; outbox-path warning at boot) |
 
 ### FDA export & chain verification (`services/ingestion/app/fda_export*`, `services/shared/`)
@@ -118,8 +121,8 @@ dispositions below name the PR that has since shipped each fix.
 | Path | Sev | Behavior | Disposition |
 | --- | --- | --- | --- |
 | `fda_export_service.py:518` `_build_completeness_summary` | M | Events whose type isn't a `WebhookCTEType` member are assumed fully covered (`ratio 1.0`) — an export where nothing was checked reports 100% KDE coverage | **FIXED (#2705)**: unknown types counted as unchecked (`events_unchecked_type`), ratio 0.0 when nothing was checked; surfaced in the verification payload |
-| `cte_persistence/verification.py:250` `verify_chain_merkle` | M | Empty chain read → `MerkleVerification(valid=True, chain_length=0)` surfaced verbatim by the export routes | **FIXED (#2705)**: `valid=False` + `no_chain_evidence=True` when non-rejected events exist (canonical twin fixed in #2700) |
-| `cte_persistence/queries.py:100` broad `ProgrammingError` catch | M | — | **FIXED (this PR)** as part of the `:118` fix (narrowed to missing-table) |
+| `services/shared/cte_persistence/verification.py:250` `verify_chain_merkle` | M | Empty chain read → `MerkleVerification(valid=True, chain_length=0)` surfaced verbatim by the export routes | **FIXED (#2705)**: `valid=False` + `no_chain_evidence=True` when non-rejected events exist (canonical twin fixed in #2700) |
+| `services/shared/cte_persistence/queries.py:100` broad `ProgrammingError` catch | M | — | **FIXED (this PR)** as part of the `:118` fix (narrowed to missing-table) |
 
 ### Billing gates & rate limits
 
@@ -128,11 +131,11 @@ matches its documented contract exactly: `CircuitOpenError` → 503,
 `redis_available=False` (including unset `REDIS_URL`) → 503, missing key
 → 402, non-active status → 402, no tenant context → 401. The only bypass
 is `SUBSCRIPTION_GATE_FAIL_OPEN`, default off and logged at CRITICAL on
-every request. Also verified closed: `admin/app/rate_limit_service.py`
+every request. Also verified closed: `services/admin/app/rate_limit_service.py`
 (Redis errors propagate → 500, never an OTP-flood allow),
 `tool_verification_routes.py:114-182` (every Redis failure → 503 in
 production/cloud), `e2e_safety.py` (E2E mode raises in production),
-`stripe_billing/state.py:117-139` (mapping errors propagate → Stripe
+`services/ingestion/app/stripe_billing/state.py:117-139` (mapping errors propagate → Stripe
 retries), and every 429-raising call site.
 
 | Path | Sev | Behavior | Disposition |
@@ -142,7 +145,7 @@ retries), and every 429-raising call site.
 | `services/shared/rate_limit.py:129,150` `BruteForceLimiter` | M | Same shape for the admin master-key lockout. The first-pass claim that guessing "continues unbounded" is **wrong** — the in-memory fallback still blocks after `max_failures` per process, so the budget is multiplied by worker count, not removed. | **FIXED (#2706)**: activation logs `brute_force_limiter_backend_unavailable` once per healthy→degraded transition, and under `RATE_LIMIT_FAIL_MODE=closed` Redis uncertainty counts as *limited* — a blip cannot reset a lockout. The fallback threshold is deliberately **not** divided by worker count (dividing a 5-failure lockout would lock a legitimate user out after one mistake); that residual multiplier stays documented-intentional — see the runbook's budget-math section. |
 | `services/shared/tenant_rate_limiting.py:119`, `rate_limit.py:35,104` | M | Missing `RATE_LIMIT_STORAGE_URI`/`REDIS_URL` at import → in-memory limiter for the process lifetime (slowapi decorators included, e.g. the "1/day" GDPR export limit). Startup warning only; README asserts Redis-backed rate limiting. | **FIXED (#2715)**: slowapi storage now resolves `RATE_LIMIT_STORAGE_URI` → `REGENGINE_REDIS_URL` → `REDIS_URL` → `memory://` at import, and `/readiness` reports the live backend via `slowapi_storage_backend()` — production still on `memory://` flags `rate_limiter: error` (degraded-200, never a 503). The config gap is now visible rather than silent; the boot-time `rate_limit_redis_not_configured` warning is unchanged. |
 | `services/ingestion/app/stripe_billing/webhooks.py:259` | M | Corrupt stored `last_event_created` → `last_seen = 0`, so the #1196 reorder guard passes and a **stale** event can overwrite current subscription status (a stale `active` over `canceled` is then read by the entitlement gate). | **FIXED (#2706)**: a corrupt stored value logs `stripe_subscription_state_corrupt` and **refuses** the update instead of assuming `0`, so a stale `active` can no longer overwrite `canceled`. |
-| `stripe_billing/rate_limiting.py:81`, `sandbox/rate_limiting.py:73` | M | Sticky `_redis_failed = True` on first failure → never retries Redis for the process lifetime; logged at DEBUG only (invisible in prod). | **FIXED (#2706)**: `_redis_failed` clears after a 30s retry cooldown (`_REDIS_RETRY_COOLDOWN_SECONDS`) instead of never, and the fallback logs at WARNING. |
+| `services/ingestion/app/stripe_billing/rate_limiting.py:81`, `services/ingestion/app/sandbox/rate_limiting.py:73` | M | Sticky `_redis_failed = True` on first failure → never retries Redis for the process lifetime; logged at DEBUG only (invisible in prod). | **FIXED (#2706)**: `_redis_failed` clears after a 30s retry cooldown (`_REDIS_RETRY_COOLDOWN_SECONDS`) instead of never, and the fallback logs at WARNING. |
 | `services/ingestion/app/authz.py:30-52` | M | Ingestion auth-failure block (15/5min) is a module-level dict with no Redis path and no fallback warning — the call site was never migrated to `BruteForceLimiter` (the #1392 fix for the admin key). | **FIXED (#2715)**: migrated to `shared.rate_limit.BruteForceLimiter` (namespace `ingestion_auth_fail`, 15 failures / 5 min) — Redis-backed when available so the budget is shared across workers and replicas, honors `RATE_LIMIT_FAIL_MODE` on Redis uncertainty, and falls back to a per-process counter with the standard activation warning. |
 | `services/shared/idempotency.py:190,215,91` | M | Cache read error → treated as cache miss (re-execute); unresolvable tenant → dedup silently skipped; API-key→tenant DB error → DEBUG log and `None`. Mitigated by the DB-level `UNIQUE (tenant_id, idempotency_key)` index (v072) that catches duplicate evidence writes. | **PARTIAL FIX (#2706)**: the cache-read path honors `IDEMPOTENCY_FAIL_MODE` — `closed` returns 503 + `Retry-After`; the default `degrade` re-executes and stays backstopped by the v072 UNIQUE index. Unresolvable tenant (`idempotency_skipped_no_tenant`) and the API-key→tenant lookup DEBUG path are unchanged: documented-intentional (module docstring documents graceful degradation). |
 | `services/shared/circuit_breaker_store.py:148` | M | `CIRCUIT_BREAKER_BACKEND=redis` explicitly configured but Redis init fails → silently substitutes the memory store; circuit state stops being shared across replicas. Not permissive itself (the gate still 503s), only slower to trip. | **FIXED (#2706)**: an explicitly configured `CIRCUIT_BREAKER_BACKEND=redis` whose init fails now raises at startup instead of silently substituting the memory store; `CIRCUIT_BREAKER_ALLOW_MEMORY_FALLBACK=1` is the logged escape hatch. |
@@ -151,7 +154,7 @@ retries), and every 429-raising call site.
 
 Adjacent (not a silent-failure path, so not fixed or filed under this
 sweep): `tenant_rate_limiting.py:156` buckets on the raw unauthenticated
-`X-Tenant-ID` header and `remediation/supplier_router.py:47` on the
+`X-Tenant-ID` header and `services/ingestion/app/remediation/supplier_router.py:47` on the
 unvalidated first `X-Forwarded-For` hop (acknowledged in its own
 docstring), so a caller can mint a fresh bucket per request by rotating
 the header. That is *evasion of a working limiter*, a different class

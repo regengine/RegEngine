@@ -1,15 +1,20 @@
 # Cloudflare R2 provisioning runbook
 
-Unblocks the `/v1/ingest/{url,file,direct,regulation}` endpoints (currently
-returning 503 per #2348 because `OBJECT_STORAGE_*` env vars are unset).
-The `/api/v1/webhooks/ingest` quickstart path does NOT depend on R2 — it
-ingests events directly without document storage.
+> Historical provisioning instructions: current configuration, route availability,
+> disclosure, and deployment status have not been reverified. Check the target
+> environment and current release procedures before acting.
+
+This historical procedure addressed `/v1/ingest/{url,file,direct,regulation}`
+endpoints reported as returning 503 in #2348 when `OBJECT_STORAGE_*` variables
+were unset. It recorded that the `/api/v1/webhooks/ingest` quickstart path
+ingests events directly without document storage; verify current route and
+deployment behavior separately.
 
 ## Prereqs
 
 - Cloudflare account with R2 enabled (one-time, requires billing on file)
 - Railway CLI authenticated to `RegEngine-Prod`
-- DPA / Trust subprocessor disclosure: **already current** ([trust/page.tsx:415](frontend/src/app/trust/page.tsx#L415), [dpa/page.tsx:115](frontend/src/app/dpa/page.tsx#L115)). No customer-notice clock to manage — disclosure landed ahead of provisioning per PR sequence in `project_session_2026_05_13.md`.
+- DPA / Trust subprocessor disclosure: the earlier record stated disclosure landed ahead of provisioning (see [trust page](../../frontend/src/app/trust/page.tsx), [DPA page](../../frontend/src/app/dpa/page.tsx)). Reconfirm current disclosures and notice obligations before provisioning.
 
 ## Step 1 — Cloudflare console
 
@@ -61,7 +66,7 @@ and --allow-production the script probes the operator laptop, not Railway.
 
 ## Step 4 — Lifespan probe
 
-On startup, [s3_utils.is_object_storage_configured](services/ingestion/app/s3_utils.py#L40) is logged by
+On startup, [s3_utils.is_object_storage_configured](../../services/ingestion/app/s3_utils.py) is logged by
 the FastAPI lifespan. Look for the `object_storage_not_configured` warning
 to disappear from logs after redeploy.
 

@@ -3,10 +3,13 @@
 **Severity:** SEV1 by default -- any recall-related failure is critical
 **Owner:** On-call engineer
 **Last Updated:** 2026-04-08
-**FSMA 204 deadline to respond:** 24 hours from FDA records request
 
-> **The clock starts when the FDA calls or sends a records request.
-> Everything in this runbook is optimized for speed under that constraint.**
+> **Historical procedure:** This 2026-04-08 runbook describes separate service
+> deployments and has not been revalidated against the current deployment,
+> routes, export outputs, or operating process. Verify applicability, current
+> legal requirements, and the actual request deadline with the responsible
+> team before relying on it. See [PRODUCTION_DEPLOYMENT.md](../operations/PRODUCTION_DEPLOYMENT.md)
+> for the checked-in backend configuration.
 
 ---
 
@@ -28,7 +31,10 @@
 
 ## 1. Overview
 
-RegEngine's core promise: **"When the FDA calls, produce compliant traceability records within 24 hours."**
+This historical workflow describes assembling traceability records in response
+to a request. The ability to meet a particular request or deadline depends on
+the available records, the deployed version, and operational review; it is
+not established by this document.
 
 The recall response flows through these stages:
 
@@ -45,7 +51,7 @@ FDA Records Request
   |
   v
 [3] Verify Integrity: Hash chain verification, KDE completeness check, blocking defect scan
-  |                    Code: CTEPersistence.verify_chain() in services/shared/cte_persistence.py
+  |                    Code: CTEPersistence.verify_chain() in services/shared/cte_persistence/verification.py
   |
   v
 [4] Tenant Isolation: Confirm RLS is enforcing -- no cross-tenant data in the export
@@ -243,7 +249,7 @@ The hash chain lives in `fsma.hash_chain`. Each entry links to the previous via 
 chain_hash = SHA-256( previous_chain_hash | event_hash )
 ```
 
-The genesis entry uses `'GENESIS'` as the seed (see `compute_chain_hash()` in `cte_persistence.py:142-149`).
+The genesis entry uses `'GENESIS'` as the seed (see `compute_chain_hash()` in `services/shared/cte_persistence/hashing.py`).
 
 **Full chain verification query:**
 
@@ -307,7 +313,7 @@ if result.errors:
 session.close()
 ```
 
-The `verify_chain()` method (`cte_persistence.py:966-1030`) walks the entire chain from genesis to head, recomputing each `chain_hash` as `SHA-256(previous_chain_hash|event_hash)` and comparing to the stored value. Any mismatch means tampering or corruption.
+The `verify_chain()` method (`services/shared/cte_persistence/verification.py`) walks the entire chain from genesis to head, recomputing each `chain_hash` as `SHA-256(previous_chain_hash|event_hash)` and comparing to the stored value. Any mismatch means tampering or corruption.
 
 ### 4.3 Merkle Tree Verification (Supplemental)
 
@@ -755,11 +761,11 @@ INSERT INTO fsma.fda_export_log (
 | `services/ingestion/app/request_workflow_router.py` | Request lifecycle endpoints (blockers, submit, signoffs) |
 | `services/shared/request_workflow/assembly.py` | `check_blocking_defects()` (7 checks), `add_signoff()`, `check_deadline_status()` |
 | `services/shared/request_workflow/submission.py` | `submit_package()` with force override |
-| `services/shared/cte_persistence.py` | `verify_chain()`, `verify_chain_merkle()`, `query_events_by_tlc()`, `log_export()` |
-| `services/shared/audit_logging.py` | `AuditIntegrity.verify_chain()` (HMAC-SHA256), `AuditLogger` |
+| `services/shared/cte_persistence/` | Chain verification, queries, and export logging |
+| `services/shared/audit_logging/` | `AuditIntegrity.verify_chain()` (HMAC-SHA256), `AuditLogger` |
 | `services/shared/canonical_event.py` | `TraceabilityEvent` model, normalization functions |
 | `services/shared/exception_queue.py` | `ExceptionQueueService` for blocking exception management |
-| `services/shared/identity_resolution.py` | `IdentityResolutionService` for entity disambiguation |
+| `services/shared/identity_resolution/service.py` | `IdentityResolutionService` for entity disambiguation |
 | `services/scheduler/main.py` | 5-minute `check_request_deadlines()` cron |
 | `services/scheduler/app/compliance_integration.py` | FDA recall alert matching (3-tier: lot code, supplier, FTL keyword) |
 
@@ -785,4 +791,4 @@ event_hash   = SHA-256(event_id | event_type | tlc | product | qty | uom | gln |
 chain_hash   = SHA-256(previous_chain_hash | event_hash)     -- or SHA-256('GENESIS' | event_hash) for first entry
 ```
 
-Implementation: `compute_event_hash()` and `compute_chain_hash()` in `services/shared/cte_persistence.py:115-149`.
+Implementation: `compute_event_hash()` and `compute_chain_hash()` in `services/shared/cte_persistence/hashing.py`.

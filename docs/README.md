@@ -1,5 +1,16 @@
 # RegEngine Documentation
 
+Start with the [repository README](../README.md), [architecture](../ARCHITECTURE.md),
+[local setup](guides/LOCAL_SETUP_GUIDE.md), and [deployment guide](operations/DEPLOYMENT.md).
+Code, configuration, and tests describe the checked-out revision; they do not
+establish the deployed revision, live settings, customer adoption, regulatory
+approval, or certification. Verify operational state separately.
+
+This index also links historical reviews, proposals, roadmaps, and dated plans for
+context. Their presence here does not establish that their recommendations were
+implemented or that their observations remain current. Check each document's
+date and status against the code and current operational evidence before acting.
+
 ## Architecture
 - [System Architecture](architecture/ARCHITECTURE.md)
 - [Database Topology](architecture/DATABASE_TOPOLOGY.md)
@@ -32,7 +43,7 @@
 - [Product Roadmap](product/PRODUCT_ROADMAP.md)
 - [Roadmap](product/ROADMAP.md)
 - [Product PRD, October 2026](product/PRODUCT_PRD_2026-10.md)
-- [FSMA 204 Readiness PRD gap analysis, 2026-10-28](product/FSMA_204_READINESS_GAP_ANALYSIS_2026-10-28.md)
+- [Historical FSMA 204 Readiness PRD gap analysis, 2026-10-28](product/FSMA_204_READINESS_GAP_ANALYSIS_2026-10-28.md)
 - [Positioning](product/POSITIONING.md)
 - [Pitch Deck](product/PITCH_DECK.md)
 - [Website Copy](product/WEBSITE_COPY.md)
@@ -53,7 +64,7 @@
 ## Guides
 - [Local Setup Guide](guides/LOCAL_SETUP_GUIDE.md)
 - [Beta Tester Guide](guides/BETA_TESTER_GUIDE.md)
-- [FSMA 204 Phase 1 Implementation](guides/FSMA_204_PHASE_1_IMPLEMENTATION.md)
+- [FSMA 204 Phase 1 Implementation plan (historical)](guides/FSMA_204_PHASE_1_IMPLEMENTATION.md)
 
 ## API Reference
 - [OpenAPI Specs](openapi/)

@@ -4,6 +4,12 @@
 **Owner:** On-call engineer + compliance officer sign-off
 **Last Updated:** 2026-04-08
 
+> Historical runbook: the examples, schema, hashes, and repair steps below have
+> not been revalidated against the current code or a target database. Do not
+> execute them without a current, reviewed repair plan, backup, and verification
+> of the deployed revision and persistence cutover state. See the
+> [dual-write cutover runbook](../persistence/dual-write-cutover.md).
+
 > **The cardinal rule: you NEVER delete canonical events or hash chain entries.**
 > The hash chain is append-only. Deleting a row breaks every subsequent chain hash.
 > All repairs go through the **amendment chain** via `supersedes_event_id`.
@@ -41,7 +47,7 @@ RegEngine has two event storage systems that coexist during the migration period
 
 - **No `supersedes_event_id` column.** Legacy events can't form amendment chains directly.
 - **No `status` column** (only `validation_status`: valid/rejected/warning).
-- This is what `CTEPersistence` in `services/shared/cte_persistence.py` writes to.
+- This is what `CTEPersistence` in `services/shared/cte_persistence/` writes to.
 - The FDA export endpoints read from this table.
 
 ### Canonical System (V043)
@@ -1107,25 +1113,25 @@ def add_growing_area(original: dict) -> dict:
 
 | File | Role in Repair |
 |------|---------------|
-| `services/shared/cte_persistence.py` | `store_event()` for hash-safe event insertion, `verify_chain()` for post-repair validation |
+| `services/shared/cte_persistence/` | `store_event()` for hash-safe event insertion, `verify_chain()` for post-repair validation |
 | `services/shared/canonical_event.py` | `TraceabilityEvent` model with `supersedes_event_id`, `EventStatus.SUPERSEDED` |
 | `services/shared/request_workflow/assembly.py` | `check_blocking_defects()` — stale evaluation detection at line 634 |
-| `migrations/V002__fsma_cte_persistence.sql` | Legacy table schema (`cte_events`, `cte_kdes`, `hash_chain`) |
-| `migrations/V043__canonical_traceability_events.sql` | Canonical table schema (`traceability_events` with amendment chain) |
-| `migrations/V052__cte_events_composite_idempotency_key.sql` | Composite idempotency constraint `(tenant_id, idempotency_key)` |
+| `alembic/sql/V002__fsma_cte_persistence.sql` | Legacy table schema (`cte_events`, `cte_kdes`, `hash_chain`) |
+| `alembic/sql/V043__canonical_traceability_events.sql` | Canonical table schema (`traceability_events` with amendment chain) |
+| `alembic/versions/20260428_71e79e111c5d_v072_cte_events_tenant_idempotency.py` | Composite idempotency constraint `(tenant_id, idempotency_key)` |
 
 ### Hash Formulas
 
 ```
 event_hash = SHA-256(event_id | event_type | tlc | product | qty | uom | gln | location | timestamp | json(kdes))
-             Implemented: compute_event_hash() in cte_persistence.py
+             Implemented: compute_event_hash() in `services/shared/cte_persistence/hashing.py`
 
 chain_hash = SHA-256(previous_chain_hash | event_hash)
              Genesis: SHA-256('GENESIS' | event_hash)
-             Implemented: compute_chain_hash() in cte_persistence.py:142-149
+             Implemented: compute_chain_hash() in `services/shared/cte_persistence/hashing.py`
 
 idempotency_key = SHA-256(json({event_type, tlc, timestamp, source, from_facility, to_facility, kdes}))
-                  Implemented: compute_idempotency_key() in cte_persistence.py
+                  Implemented: compute_idempotency_key() in `services/shared/cte_persistence/hashing.py`
 ```
 
 ### Tables Involved in Repairs

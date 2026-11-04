@@ -1,5 +1,7 @@
 # RegEngine Content Ingestion Guide
 
+> **Historical guide:** The regulatory-content extraction workflow and commands below reference paths absent from the current checkout, including the listed NYDFS tests. Do not use them as current setup instructions. For the supported FSMA intake path, see the [repository README](../../README.md) and [local setup guide](../guides/LOCAL_SETUP_GUIDE.md).
+
 This guide explains how to ingest regulatory documents and extract provisions using RegEngine's domain-specific extractors.
 
 ## Overview

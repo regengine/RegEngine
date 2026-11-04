@@ -6,7 +6,7 @@ RegEngine is currently positioned and documented as an FSMA 204 traceability pla
 
 - `README.md`
 - `docs/specs/FSMA_204_MVP_SPEC.md`
-- `docs/AI_ENGINEERING_STANDARDS.md`
+- `docs/engineering/AI_ENGINEERING_STANDARDS.md`
 - `frontend/src/app/docs/fsma-204/page.tsx`
 
 ## Product focus

@@ -1,5 +1,7 @@
 # RegEngine Audit Events Integration
 
+> **Historical integration guide:** The Kafka and phase-specific paths described below have not been revalidated against the current consolidated application. Refer to the [current architecture](../../ARCHITECTURE.md) and [admin audit code](../../services/admin/app/audit.py) before using this as an implementation guide.
+
 **Version**: 1.0
 **Last Updated**: 2025-11-22
 **Status**: Integrated

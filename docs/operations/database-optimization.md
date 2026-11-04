@@ -1,7 +1,11 @@
 # Database Optimization Guide
 
 **Date:** January 27, 2026  
-**Services:** All backend services using PostgreSQL
+**Services:** Backend code using PostgreSQL
+
+> Historical guide: examples below were written for an older service topology
+> and have not been validated as current operational procedures. Check current
+> code, schema and hosting configuration before applying them.
 
 ---
 
@@ -50,7 +54,7 @@ postgres:
 
 ### Python Query Logging
 
-**File:** `shared/database.py`
+**File:** `services/shared/database.py`
 
 ```python
 import logging
@@ -88,7 +92,7 @@ def after_cursor_execute(conn, cursor, statement, parameters, context, executema
 
 ### Admin Service Indexes
 
-**File:** `services/admin/migrations/V023__performance_indexes.sql`
+The former service migration is no longer present. Current schema changes are managed by Alembic; verify indexes against the target database before applying this historical example.
 
 ```sql
 -- User lookups by email
@@ -120,7 +124,7 @@ ANALYZE audit_logs;
 
 ### SQLAlchemy Pool Configuration
 
-**File:** `shared/database.py`
+**File:** `services/shared/database.py`
 
 ```python
 from sqlalchemy import create_engine, event
@@ -253,7 +257,7 @@ rate(db_slow_queries_total[5m])
 
 ### Grafana Dashboard
 
-Import template: `infra/grafana/dashboards/database-performance.json`
+The previously referenced Grafana dashboard template is no longer present in this repository. The panels below are historical suggestions, not a ready-to-import dashboard.
 
 **Panels:**
 - Query duration (p50, p95, p99)
