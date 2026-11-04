@@ -24,6 +24,17 @@ class BaseServiceSettings(BaseSettings):
 
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
     regengine_env: str = Field(default="development", alias="REGENGINE_ENV")
+    # WI-12 PR B: ``on`` keeps the legacy fsma.cte_events dual-write; ``off``
+    # makes the canonical writer skip it and count the skip. Read at write
+    # time from the environment by
+    # ``shared.canonical_persistence.legacy_dual_write.legacy_dual_write_enabled``
+    # (the writer is shared code with no settings instance); declared here so
+    # every service's Settings documents and validates the variable.
+    canonical_legacy_dual_write: str = Field(
+        default="on",
+        alias="CANONICAL_LEGACY_DUAL_WRITE",
+        pattern=r"(?i)^(on|off|1|0|true|false|yes|no)$",
+    )
 
 
 class ObjectStorageMixin(BaseSettings):

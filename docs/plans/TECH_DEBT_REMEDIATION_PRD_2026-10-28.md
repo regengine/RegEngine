@@ -942,6 +942,20 @@ shapes.
 
 ### WI-12 — Retire the `cte_events` dual-write
 
+**Status 2026-11-04:** PR B delivered in PR #3699: `CANONICAL_LEGACY_DUAL_WRITE`
+(default `on`) on `BaseServiceSettings`, read at write time by
+`legacy_dual_write.legacy_dual_write_enabled()`; with `off` the single and
+batch writers skip `dual_write_legacy` and increment
+`legacy_dual_write_skipped_total{path}`; `tests/shared/test_canonical_legacy_dual_write_flag.py`
+proves the row-count and counter contract against the mocked session, and
+`DEVOPS_NOTES.md` carries the staging-then-production plan. PR A (re-point
+the 12 readers with byte-identical parity tests) is **not** delivered: the
+parity tests must run against a migrated Postgres in `live-db-suite`, and
+this session had no database to run them, so re-pointing export surfaces
+blind would risk the production spine; it is the next item for a session
+with a scratch database (`CONTRIBUTING.md` → Running database tests
+locally). PR C waits on Christopher's two-week window.
+
 **Problem.** `services/shared/canonical_persistence/writer.py` calls
 `legacy_dual_write.dual_write_legacy` on single and batch writes; since
 #1277 a failure raises and rolls back the canonical write.

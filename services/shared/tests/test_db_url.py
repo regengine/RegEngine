@@ -9,8 +9,8 @@ pooler breaks on prepared statements).
 from __future__ import annotations
 
 import pytest
-from tests.migrations.rls_db import skip_or_fail_without_db
 from shared.db_url import sync_postgres_connect_args, sync_postgres_url
+from tests.migrations.rls_db import skip_or_fail_without_db
 
 REST = "u:p@h:5432/db?sslmode=require"
 

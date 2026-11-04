@@ -35,7 +35,7 @@ below is tracked there yet.
 | 9 | Retired six-service topology still has entrypoints, k8s manifests, a PR-time CI job, and legacy runbooks | Infrastructure | 2 | 2 | 1 | **20** | delivered in PR #3699 (moved to `docs/archive/retired-topology/`) |
 | 10 | DB-dependent tests skip vacuously without a migrated Postgres | Test | 3 | 3 | 3 | **18** | delivered in PR #3699 (`pytest --require-db`, `skip_or_fail_without_db`, CI flags, CONTRIBUTING recipe); coverage floors await the post-merge measurement |
 | 11 | Frontend API access split three ways; 8 hand-rolled proxy routes | Code | 3 | 2 | 3 | **15** | delivered in PR #3699 (rawFetch/requestPublicJson, ESLint rule, request-shape tests) |
-| 12 | Legacy `cte_events` dual-write still live, with 12 non-legacy readers | Architecture | 3 | 4 | 4 | **14** | open |
+| 12 | Legacy `cte_events` dual-write still live, with 12 non-legacy readers | Architecture | 3 | 4 | 4 | **14** | PR B delivered in PR #3699 (`CANONICAL_LEGACY_DUAL_WRITE` flag + `legacy_dual_write_skipped_total`, DEVOPS_NOTES plan); PR A needs a session with a scratch Postgres; PR C needs Christopher |
 | 13 | Blocked major upgrades and Node version drift across CI | Dependency | 2 | 2 | 3 | **12** | delivered in PR #3699 (copy-gate reads `.nvmrc`; jsdom/jest-dom Dependabot ignores lifted) |
 | 14 | 25 source modules over 1,000 lines (20 under `services/` and `server/`) | Code | 3 | 2 | 4 | **10** | open |
 | 15 | `graph_update` task type declared, never enqueued, never handled | Code | 1 | 1 | 1 | **10** | delivered in PR #3699 |

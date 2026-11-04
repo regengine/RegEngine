@@ -431,9 +431,14 @@ class CanonicalEventStore(CanonicalChainVerificationMixin):
         # surrounding transaction back, so either BOTH tables have
         # the event or NEITHER does. Callers that don't want legacy
         # writes at all must opt out via ``dual_write=False``.
+        # WI-12 PR B: CANONICAL_LEGACY_DUAL_WRITE=off skips the legacy write
+        # and counts it; ``on`` (default) keeps the behaviour above.
         legacy_id = None
         if self.dual_write:
-            legacy_id = migration.dual_write_legacy(self.session, event)
+            if migration.legacy_dual_write_enabled():
+                legacy_id = migration.dual_write_legacy(self.session, event)
+            else:
+                migration.record_legacy_dual_write_skipped("single")
 
         # --- Create transformation links ---
         self._create_transformation_links(event)
@@ -705,8 +710,12 @@ class CanonicalEventStore(CanonicalChainVerificationMixin):
         # canonical INSERTs are reverted, and the caller gets a loud
         # failure instead of a silent data-integrity violation.
         if self.dual_write and inserted_events:
-            for evt in inserted_events:
-                migration.dual_write_legacy(self.session, evt)
+            if migration.legacy_dual_write_enabled():
+                for evt in inserted_events:
+                    migration.dual_write_legacy(self.session, evt)
+            else:
+                # WI-12 PR B: flag off — count the skipped legacy writes.
+                migration.record_legacy_dual_write_skipped("batch", len(inserted_events))
 
         logger.info(
             "canonical_batch_persisted",

@@ -11,12 +11,12 @@ import uuid
 from datetime import datetime, timezone
 
 import pytest
-from tests.migrations.rls_db import skip_or_fail_without_db
 from shared.db_url import sync_postgres_url
 from shared.supplier_data_quality import METRIC_UNLINKED_LOT, fetch_lot_rows, fetch_supplier_quality, unlinked_lots
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker
+from tests.migrations.rls_db import skip_or_fail_without_db
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 
