@@ -125,7 +125,12 @@ def test_replay_that_backfills_the_canonical_row_is_evaluated():
     evaluate.assert_called_once()
 
 
-def test_evaluation_anchors_to_the_persisted_canonical_row():
+def test_evaluating_a_new_cte_row_leaves_the_stored_canonical_row_alone():
+    """Same canonical key under another source can carry a different quantity.
+
+    Evaluation writes its verdict onto the event id, so it must not be handed
+    the id of a stored row whose content differs from what is being evaluated.
+    """
     _, evaluate, _ = _ingest(cte_idempotent=False, canonical_idempotent=True)
     evaluate.assert_called_once()
-    assert evaluate.call_args.args[0]["event_id"] == STORED_CANONICAL_ID
+    assert evaluate.call_args.args[0]["event_id"] != STORED_CANONICAL_ID

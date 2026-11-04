@@ -394,9 +394,10 @@ async def ingest_events(
 
                         engine = RulesEngine(db_session)
                         event_data = {
-                            # Evaluations anchor to the persisted row, not a
-                            # freshly normalized candidate id.
-                            "event_id": str(persist_result.event_id if canonical_exists else canonical.event_id),
+                            # Never the existing canonical row's id: these
+                            # values can differ from what that row stores, and
+                            # evaluation writes its verdict onto the event id.
+                            "event_id": str(canonical.event_id),
                             "event_type": canonical.event_type.value,
                             "traceability_lot_code": canonical.traceability_lot_code,
                             "product_reference": canonical.product_reference,
