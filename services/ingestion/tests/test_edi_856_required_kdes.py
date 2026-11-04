@@ -25,7 +25,7 @@ pytest.importorskip("fastapi")
 import app.edi_ingestion.routes as edi_ingestion_routes  # noqa: E402
 from app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
 from app.edi_ingestion import router as edi_router  # noqa: E402
-from app.webhook_models import IngestResponse, WebhookPayload  # noqa: E402
+from app.webhook_models import IngestResponse, WebhookCTEType, WebhookPayload  # noqa: E402
 from app.webhook_router_v2 import _validate_event_kdes  # noqa: E402
 
 _ASN_856 = Path(__file__).parent / "fixtures" / "edi_corpus" / "asn_856.edi"
@@ -86,3 +86,19 @@ def test_856_without_tlc_source_reference_only_misses_that_kde(route: str, captu
         assert _validate_event_kdes(event) == [
             "Missing required KDE 'tlc_source_reference' for shipping CTE"
         ]
+
+
+@pytest.mark.parametrize("route", ["", "/document"])
+def test_both_routes_defer_only_shipping_tlc_source_reference(route: str, monkeypatch: pytest.MonkeyPatch, captured) -> None:
+    seen: list[dict] = []
+
+    async def _capture_kwargs(payload: WebhookPayload, **kwargs) -> IngestResponse:
+        seen.append(kwargs)
+        return IngestResponse(accepted=0, rejected=0, total=len(payload.events), events=[])
+
+    monkeypatch.setattr(edi_ingestion_routes, "ingest_events", _capture_kwargs)
+
+    assert _post(route, {"traceability_lot_code": "LOT-856-KDE"}).status_code == 201
+    assert seen
+    for kwargs in seen:
+        assert kwargs["deferred_kdes"] == {WebhookCTEType.SHIPPING: frozenset({"tlc_source_reference"})}

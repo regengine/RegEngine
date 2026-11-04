@@ -66,7 +66,7 @@ def ingested(monkeypatch: pytest.MonkeyPatch) -> list:
     """Stub the canonical write; capture each accepted payload."""
     calls: list = []
 
-    async def _fake_ingest_events(payload, *, principal_tenant_id=None, x_regengine_api_key=None):
+    async def _fake_ingest_events(payload, *, principal_tenant_id=None, x_regengine_api_key=None, **_kwargs):
         calls.append(payload)
         return IngestResponse(
             accepted=len(payload.events),

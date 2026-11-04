@@ -20,7 +20,7 @@ import hashlib
 import logging
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Mapping, Optional, Union
 
 from fastapi import Depends, Header, HTTPException, Request
 from shared.api_key_store import APIKeyResponse
@@ -36,7 +36,7 @@ from shared.permissions import has_permission
 from shared.tenant_context import TenantContext, resolve_tenant_context
 
 from .authz import IngestionPrincipal, get_ingestion_principal
-from .webhook_models import EventResult, IngestEvent, IngestResponse, WebhookPayload
+from .webhook_models import EventResult, IngestEvent, IngestResponse, WebhookCTEType, WebhookPayload
 from .webhook_router_v2 import (
     _check_rate_limit,
     _generate_alerts,
@@ -237,6 +237,7 @@ async def ingest_events(
     x_regengine_api_key: Optional[str] = None,
     principal: Optional[IngestionPrincipal] = None,
     source_file: Optional[SourceFileReceipt] = None,
+    deferred_kdes: Optional[Mapping[WebhookCTEType, frozenset[str]]] = None,
 ) -> IngestResponse:
     """Internal ingestion helper — not an HTTP route.
 
@@ -256,6 +257,12 @@ async def ingest_events(
     row is processed, retains the file verbatim, stamps ``ingestion_run_id``
     on every canonical event, and closes the run with counts covering every
     row of the file. The run id is returned on the response.
+
+    ``deferred_kdes`` names, per CTE, required KDEs the source format cannot
+    carry. An event missing only those is stored, with an open data gap and
+    ``open_gaps`` on its result, instead of being rejected. Only server-side
+    callers set this. Never derive it from the payload, which the sender
+    controls: that would let a caller switch off the KDE gate.
     """
     if not principal_tenant_id:
         raise PermissionError("ingest_events requires principal_tenant_id from authenticated context")
@@ -329,7 +336,9 @@ async def ingest_events(
             seen_in_batch.add(dedup_key)
 
             errors = _validate_event_kdes(event)
-            if errors:
+            open_gaps = gaps_from_kde_errors(errors)
+            deferrable = deferred_kdes.get(event.cte_type, frozenset()) if errors and deferred_kdes else frozenset()
+            if errors and not (open_gaps and all(gap.gap_key in deferrable for gap in open_gaps)):
                 results.append(
                     EventResult(
                         traceability_lot_code=event.traceability_lot_code,
@@ -344,7 +353,7 @@ async def ingest_events(
                         order=event_index,
                         lot_code=event.traceability_lot_code,
                         cte_type=event.cte_type.value,
-                        gaps=gaps_from_kde_errors(errors),
+                        gaps=open_gaps,
                     )
                 )
                 continue
@@ -495,16 +504,20 @@ async def ingest_events(
                         event_id=store_result.event_id,
                         sha256_hash=store_result.sha256_hash,
                         chain_hash=store_result.chain_hash,
+                        open_gaps=[gap.gap_key for gap in open_gaps],
                     )
                 )
                 accepted += 1
+                # A record with deferred KDEs is stored but incomplete: it
+                # opens its gaps and must not close the lot's existing ones.
                 gap_outcomes.append(
                     ValidationOutcome(
                         order=event_index,
                         lot_code=event.traceability_lot_code,
                         cte_type=event.cte_type.value,
-                        closing_record_id=store_result.event_id,
-                        closing_record_hash=store_result.sha256_hash,
+                        gaps=open_gaps,
+                        closing_record_id=None if open_gaps else store_result.event_id,
+                        closing_record_hash=None if open_gaps else store_result.sha256_hash,
                     )
                 )
                 _publish_graph_sync(store_result.event_id, event, tenant_id)

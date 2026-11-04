@@ -74,6 +74,12 @@ from .validation import _validate_edi_as_fsma_event
 
 logger = logging.getLogger("edi-ingestion")
 
+# X12 has no element for the TLC source reference (21 CFR 1.1340(a)(7)), so a
+# shipment arrives without it unless the uploader sends the form field. Store
+# the shipment with an open data gap rather than lose the rest of the record.
+# Receiving keeps the strict gate, as its rule for this KDE is critical.
+_EDI_DEFERRED_KDES = {WebhookCTEType.SHIPPING: frozenset({"tlc_source_reference"})}
+
 
 def _record_edi_rejection(**kwargs):
     """Resolve the live rejection-log module before writing.
@@ -519,7 +525,11 @@ async def ingest_edi_856(
     file: UploadFile = File(..., description="X12 EDI file (856 ASN)"),
     traceability_lot_code: str = Form(..., description="FSMA Traceability Lot Code"),
     tlc_source_reference: Optional[str] = Form(
-        None, description="Optional TLC source reference (where the TLC was assigned) copied to each event's KDEs"
+        None,
+        description=(
+            "TLC source reference (where the TLC was assigned), copied to each event's KDEs. "
+            "X12 cannot carry it: a shipment without it is stored with an open data gap."
+        ),
     ),
     tenant_id: Optional[str] = Form(None, description="Optional tenant override"),
     source: str = Form("edi_856_inbound", description="Source system identifier"),
@@ -744,6 +754,7 @@ async def ingest_edi_856(
         payload,
         principal_tenant_id=sender_tenant_id,
         x_regengine_api_key=x_regengine_api_key,
+        deferred_kdes=_EDI_DEFERRED_KDES,
     )
 
     return EDIIngestResponse(
@@ -1051,7 +1062,11 @@ async def ingest_edi_document(
         description="FSMA Traceability Lot Code for 856/850/810/861; required but ignored for 944/945 event TLCs, which use each line's lot code",
     ),
     tlc_source_reference: Optional[str] = Form(
-        None, description="Optional TLC source reference copied to every event's KDEs"
+        None,
+        description=(
+            "TLC source reference, copied to every event's KDEs. X12 cannot carry it: "
+            "a shipment without it is stored with an open data gap."
+        ),
     ),
     tenant_id: Optional[str] = Form(None, description="Optional tenant override"),
     source: str = Form("edi_inbound", description="Source system identifier"),
@@ -1464,6 +1479,7 @@ async def ingest_edi_document(
         payload,
         principal_tenant_id=sender_tenant_id,
         x_regengine_api_key=x_regengine_api_key,
+        deferred_kdes=_EDI_DEFERRED_KDES,
     )
 
     return EDIIngestResponse(
