@@ -31,10 +31,14 @@ runs:
           pip-
     - name: Install the requirement locks
       shell: bash
+      env:
+        # Passed through env rather than interpolated into the script so the
+        # input can never be expanded as shell (semgrep run-shell-injection).
+        INSTALL_DEV_LOCK: ${{ inputs.dev }}
       run: |
         # --require-hashes keeps the install reproducible and rejects a
         # CVE-shifted artifact; the locks are pip-compile output (CONTRIBUTING.md).
-        if [ "${{ inputs.dev }}" = "true" ]; then
+        if [ "$INSTALL_DEV_LOCK" = "true" ]; then
           pip install --require-hashes -r requirements.lock -r requirements-dev.lock
         else
           pip install --require-hashes -r requirements.lock

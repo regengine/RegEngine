@@ -67,7 +67,12 @@ describe('requestPublicJson (supplier portal helper)', () => {
 describe('StatusBoard', () => {
     it('reads /api/health with cache: no-store and nothing else', async () => {
         fetchMock.mockResolvedValue(
-            jsonResponse({ status: 'ok', checks: [], generated_at: new Date().toISOString() }),
+            jsonResponse({
+                status: 'healthy',
+                timestamp: new Date().toISOString(),
+                services: [],
+                summary: { healthy: 0, total: 0 },
+            }),
         );
         render(<StatusBoard />);
         await waitFor(() => expect(fetchMock).toHaveBeenCalled());
