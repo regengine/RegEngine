@@ -18,6 +18,7 @@ import {
   scenarios,
   stableHash,
   windowRows,
+  type FixedMap,
 } from '@/lib/demo-workspace/model';
 
 const all = scenarios();
@@ -135,7 +136,8 @@ describe('lot codes on gap records', () => {
     const idx = gapIndex(cantaloupe);
     const ownLot = cantaloupe.chain[idx].kdes.lot;
     expect(ownLot).not.toBe(cantaloupe.lot);
-    for (const fixed of [{}, { cantaloupe: true }]) {
+    const states: FixedMap[] = [{}, { cantaloupe: true }];
+    for (const fixed of states) {
       expect(deriveRows(cantaloupe, fixed)[idx].lot).toBe(ownLot);
       expect(buildCsv(cantaloupe, fixed).split('\n')[idx + 1]).toContain(`"${ownLot}"`);
     }
