@@ -157,6 +157,11 @@ def _edi_strict_mode() -> bool:
     return explicit.strip().lower() in {"1", "true", "yes", "on", "strict"}
 
 
+def _has_text(value: Any) -> bool:
+    """True when a value would pass the gate's presence check, which strips strings."""
+    return bool(value.strip()) if isinstance(value, str) else bool(value)
+
+
 def _positive_float_or_none(value: Any) -> float | None:
     try:
         parsed = float(str(value).strip())
@@ -221,21 +226,21 @@ def _legacy_856_placeholder_errors(
                 unit_message,
             )
 
-        if not (product_description_override or line.get("product_description")):
+        if not (_has_text(product_description_override) or _has_text(line.get("product_description"))):
             _add(
                 "product_description",
                 "EDI 856 Shipment",
                 "EDI 856 is missing product identification/description; refusing to synthesize a generic product.",
             )
 
-    if not (ship_from_override or extracted.get("ship_from_name")):
+    if not (_has_text(ship_from_override) or _has_text(extracted.get("ship_from_name"))):
         _add(
             "ship_from_location",
             "Unknown ship-from",
             "EDI 856 is missing ship-from location; refusing to synthesize an unknown location.",
         )
 
-    if not (ship_to_override or extracted.get("ship_to_name")):
+    if not (_has_text(ship_to_override) or _has_text(extracted.get("ship_to_name"))):
         _add(
             "ship_to_location",
             "Unknown ship-to",
@@ -316,7 +321,7 @@ def _preflight_856_required_kdes(
                 "type": "missing_required_kde",
             }
         )
-    if not extracted.get("reference_document_number"):
+    if not _has_text(extracted.get("reference_document_number")):
         errors.append(
             {
                 "loc": ["reference_document"],
@@ -403,7 +408,9 @@ def _preflight_document_required_kdes(
             present = bool(tlc_source_reference)
             message = f"Provide the tlc_source_reference form field; EDI {transaction_set} does not carry it."
         elif kde == "product_description":
-            present = bool(product_description_override) or all(line.get("product_description") for line in lines)
+            present = _has_text(product_description_override) or all(
+                _has_text(line.get("product_description")) for line in lines
+            )
             message = f"EDI {transaction_set} line has no product identification or description."
         elif kde == "quantity" and not no_source:
             present = quantity_override is not None or all(
@@ -418,7 +425,7 @@ def _preflight_document_required_kdes(
             )
             message = f"EDI {transaction_set} line has no recognized X12 unit of measure."
         elif kde in sources:
-            present = any(extracted.get(field) for field in sources[kde])
+            present = any(_has_text(extracted.get(field)) for field in sources[kde])
             message = f"EDI {transaction_set} has no value for {kde}."
         else:
             continue
@@ -774,6 +781,10 @@ async def ingest_edi_856(
 
     extracted = _extract_856_fields(segments)
     tlc_source = tlc_source_reference.strip() if tlc_source_reference else None
+    # A blank override must not replace a real document value downstream.
+    product_description = (product_description or "").strip() or None
+    ship_from_location_override = (ship_from_location_override or "").strip() or None
+    ship_to_location_override = (ship_to_location_override or "").strip() or None
 
     def _preflight_856() -> None:
         _preflight_event_date(
@@ -1341,6 +1352,8 @@ async def ingest_edi_document(
 
     extracted = extractions[0]
     tlc_source = tlc_source_reference.strip() if tlc_source_reference else None
+    # A blank override must not replace a real document value downstream.
+    product_description = (product_description or "").strip() or None
 
     # #1160 + #1165: validate and reserve the shared envelope once per
     # document, before validating any transaction set or warehouse line.

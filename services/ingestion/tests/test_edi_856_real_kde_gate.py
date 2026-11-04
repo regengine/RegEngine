@@ -630,3 +630,62 @@ def test_one_bad_set_in_a_batch_rejects_the_interchange(
     response = _post(client, "/document", raw, tlc_source_reference=TLC_SOURCE)
 
     _assert_rejected_before_reservation(response, "856", ["ship_to_location"], stored, reserved)
+
+
+@pytest.mark.parametrize("route", ROUTES)
+@pytest.mark.parametrize(
+    ("old", "new", "missing"),
+    [
+        (b"N1*SF*Valley Fresh Farms*92", b"N1*SF*   *92", "ship_from_location"),
+        (b"N1*ST*Metro Distribution Center*92", b"N1*ST*   *92", "ship_to_location"),
+    ],
+    ids=["ship_from", "ship_to"],
+)
+def test_whitespace_856_party_name_is_rejected_before_reservation(
+    client: TestClient,
+    stored: list[dict[str, Any]],
+    reserved: list[Any],
+    route: str,
+    old: bytes,
+    new: bytes,
+    missing: str,
+) -> None:
+    raw = FIXTURE.read_bytes().replace(old, new)
+
+    response = _post(client, route, raw, tlc_source_reference=TLC_SOURCE)
+
+    _assert_rejected_before_reservation(response, "856", [missing], stored, reserved)
+
+
+@pytest.mark.parametrize(
+    ("old", "new", "missing"),
+    [
+        (SHIP_TO, "N1*ST*   ", ["receiving_location"]),
+        (SHIP_FROM, "N1*SF*   ", ["immediate_previous_source"]),
+    ],
+    ids=["receiving_location", "previous_source"],
+)
+def test_whitespace_861_party_name_is_rejected_before_reservation(
+    client: TestClient,
+    stored: list[dict[str, Any]],
+    reserved: list[Any],
+    old: str,
+    new: str,
+    missing: list[str],
+) -> None:
+    body = [new if item == old else item for item in VALID_DOCUMENTS["861"]]
+
+    response = _post(client, "/document", _document("861", *body), tlc_source_reference=TLC_SOURCE)
+
+    _assert_rejected_before_reservation(response, "861", missing, stored, reserved)
+
+
+@pytest.mark.parametrize("route", ROUTES)
+def test_blank_product_override_keeps_the_document_product(
+    client: TestClient, stored: list[dict[str, Any]], route: str
+) -> None:
+    response = _post(client, route, tlc_source_reference=TLC_SOURCE, product_description="   ")
+
+    assert response.status_code == 201, response.text
+    assert response.json()["ingestion_result"]["accepted"] == 1
+    assert stored[0]["product_description"] == "ROMAINE-12CT"
