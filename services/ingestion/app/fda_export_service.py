@@ -69,7 +69,16 @@ FDA_COLUMNS = [
     "Additional KDEs (JSON)",
     # FSMA 204 §1.1455(c): date/time event entered into system
     "System Entry Timestamp",
+    # Names the gaps open on this row's lot and CTE when the export was
+    # generated, so a blank required KDE reads as a known outstanding item.
+    # Always the last column, in v1 and v2, so no earlier column moves.
+    "Open Data Gaps",
 ]
+
+OPEN_GAPS_COLUMN = FDA_COLUMNS[-1]
+
+# Exports logged before the column existed are verified against this layout.
+FDA_COLUMNS_WITHOUT_OPEN_GAPS = FDA_COLUMNS[:-1]
 
 
 # KDE keys that get their own named columns in the FDA export
@@ -162,13 +171,15 @@ def _redact_location_value(value: str, column_name: str, include_pii: bool) -> s
 
 
 # Extended column spec: original FDA columns + compliance + traceability graph columns
-FDA_COLUMNS_V2 = FDA_COLUMNS + [
+FDA_COLUMNS_V2_WITHOUT_OPEN_GAPS = FDA_COLUMNS_WITHOUT_OPEN_GAPS + [
     "Compliance Status",
     "Rule Failures",
     # Transformation traceability (added Phase 2)
     "Trace Relationship",  # "queried" | "linked_via_transformation"
     "Trace Seed TLC",  # The TLC originally queried (useful when this row is a linked lot)
 ]
+
+FDA_COLUMNS_V2 = FDA_COLUMNS_V2_WITHOUT_OPEN_GAPS + [OPEN_GAPS_COLUMN]
 
 
 def _event_to_fda_row(event: dict, *, include_pii: bool = False) -> dict:
@@ -283,6 +294,10 @@ def _event_to_fda_row(event: dict, *, include_pii: bool = False) -> dict:
     # into the traceability system (distinct from when the physical event occurred).
     # This maps to the ingested_at column which defaults to NOW() on INSERT.
     row["System Entry Timestamp"] = sanitize_cell(event.get("ingested_at", "") or "")
+
+    # Set by ``attach_open_gaps``. Blank means no gap was open at export time,
+    # so an export whose gap lookup failed must not reach this point.
+    row[OPEN_GAPS_COLUMN] = sanitize_cell("; ".join(event.get("open_data_gaps") or ()))
 
     return row
 
@@ -697,6 +712,7 @@ def _build_known_gaps(
     chain_payload: dict,
     coverage_gate_bypassed: bool,
     rule_versions: Optional[dict],
+    events_with_open_data_gaps: int = 0,
 ) -> dict:
     """Collect everything this package knows it does NOT prove.
 
@@ -711,6 +727,7 @@ def _build_known_gaps(
     rules = rule_versions or {}
     gaps: dict[str, Any] = {
         "required_kde_coverage_ratio": completeness_summary.get("required_kde_coverage_ratio"),
+        "events_with_open_data_gaps": events_with_open_data_gaps,
         "events_with_missing_required_fields": missing_total,
         "missing_required_by_field": completeness_summary.get("missing_required_by_field") or {},
         # The per-event list in ``completeness`` is capped (250); say so
@@ -785,6 +802,7 @@ def _build_fda_package(
         chain_payload=chain_payload,
         coverage_gate_bypassed=coverage_gate_bypassed,
         rule_versions=rule_versions,
+        events_with_open_data_gaps=sum(1 for event in events if event.get("open_data_gaps")),
     )
     evidence_context = {
         "version": "1.0",
@@ -818,6 +836,10 @@ def _build_fda_package(
         + "\n"
         + pii_note
         + "\n"
+        "Open Data Gaps: the last spreadsheet column names the data gaps open on that row's "
+        "traceability lot and CTE when this export was generated, for example a required KDE "
+        "still outstanding. Blank means none was open.\n"
+        "\n"
         "Verification:\n"
         "- Recompute each manifest file hash and the Merkle root to confirm "
         "the package bytes are internally consistent.\n"
@@ -1015,5 +1037,24 @@ def _generate_csv_v2(events: list[dict], *, include_pii: bool = False) -> str:
 
     for event in events:
         writer.writerow(_event_to_fda_row_v2(event, include_pii=include_pii))
+
+    return output.getvalue()
+
+
+def _generate_csv_before_open_gaps(events: list[dict], *, include_pii: bool, v2: bool) -> str:
+    """Write the layout from before the Open Data Gaps column existed.
+
+    Only ``/export/verify`` uses this, to reproduce exports logged back then.
+    """
+    columns = FDA_COLUMNS_V2_WITHOUT_OPEN_GAPS if v2 else FDA_COLUMNS_WITHOUT_OPEN_GAPS
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=columns, quoting=csv.QUOTE_ALL, extrasaction="ignore")
+    writer.writeheader()
+
+    for event in events:
+        if v2:
+            writer.writerow(_event_to_fda_row_v2(event, include_pii=include_pii))
+        else:
+            writer.writerow(_event_to_fda_row(event, include_pii=include_pii))
 
     return output.getvalue()
