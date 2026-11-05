@@ -1174,6 +1174,7 @@ jobs:
       group: ${{ github.workflow }}-engine-review-pass-${{ github.event.pull_request.number || github.event.issue.number }}
       cancel-in-progress: false
     permissions:
+      checks: write
       statuses: write
       pull-requests: read
       issues: read
@@ -1250,6 +1251,48 @@ jobs:
 
             const ALLOWED_ASSOCIATIONS = new Set(['OWNER', 'MEMBER', 'COLLABORATOR']);
 
+            // If a failure verdict cannot be posted, an earlier success status would
+            // still satisfy the required context. This check run takes the required
+            // name in that case only, and the next posted success clears it.
+            const REQUIRED_CONTEXT = 'Engine Review Pass';
+            const UNDELIVERED_ID = 'engine-review-status-undelivered';
+
+            async function raiseUndeliveredFailure(description) {
+              try {
+                await github.rest.checks.create({
+                  owner,
+                  repo,
+                  head_sha: headSha,
+                  name: REQUIRED_CONTEXT,
+                  external_id: UNDELIVERED_ID,
+                  status: 'completed',
+                  conclusion: 'failure',
+                  output: { title: 'Failure verdict was not posted', summary: description },
+                });
+              } catch (err) {
+                failRun(`Failed to create fallback check run on ${headSha}: ${err.message}`);
+              }
+            }
+
+            async function clearUndeliveredFailures() {
+              try {
+                const runs = await github.paginate(github.rest.checks.listForRef, {
+                  owner,
+                  repo,
+                  ref: headSha,
+                  check_name: REQUIRED_CONTEXT,
+                  per_page: 100,
+                });
+                for (const run of runs) {
+                  if (run.external_id === UNDELIVERED_ID && run.conclusion === 'failure') {
+                    await github.rest.checks.update({ owner, repo, check_run_id: run.id, conclusion: 'success' });
+                  }
+                }
+              } catch (err) {
+                failRun(`Failed to clear fallback check run on ${headSha}: ${err.message}`);
+              }
+            }
+
             let statusPosted = false;
             async function setCommitStatus(state, description) {
               if (statusPosted) {
@@ -1263,13 +1306,20 @@ jobs:
                   repo,
                   sha: headSha,
                   state,
-                  context: 'Engine Review Pass',
+                  context: REQUIRED_CONTEXT,
                   description: description.slice(0, 140),
                   target_url: `https://github.com/${owner}/${repo}/actions/runs/${context.runId}`,
                 });
                 core.info(`Created commit status '${state}' on ${headSha}: ${description}`);
               } catch (err) {
                 failRun(`Failed to create commit status on ${headSha}: ${err.message}`);
+                if (state === 'failure') {
+                  await raiseUndeliveredFailure(description);
+                }
+                return;
+              }
+              if (state === 'success') {
+                await clearUndeliveredFailures();
               }
             }
 
