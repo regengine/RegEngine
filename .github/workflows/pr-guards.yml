@@ -1283,6 +1283,14 @@ jobs:
             async function rerunStaleEvaluation() {
               const stale = (conclusion) => ['failure', 'cancelled', 'timed_out'].includes(conclusion);
               try {
+                // A rerun joins this job's concurrency group, where it would replace a
+                // queued evaluation of a newer head.
+                const { data: current } = await github.rest.pulls.get({ owner, repo, pull_number: pr.number });
+                if (current.head?.sha !== headSha) {
+                  core.info(`Not rerunning stale evaluations: PR head moved from ${headSha}`);
+                  return;
+                }
+
                 const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {
                   owner,
                   repo,
