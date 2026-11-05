@@ -1247,9 +1247,6 @@ jobs:
 
             const ALLOWED_ASSOCIATIONS = new Set(['OWNER', 'MEMBER', 'COLLABORATOR']);
 
-            // The marker must be alone on its own line.
-            const markerRegex = /^REVIEW: (PASS|BLOCKED|FAIL) ([A-Za-z0-9._-]+) ([0-9A-Fa-f]{40})\s*$/;
-
             let statusPosted = false;
             async function setCommitStatus(state, description) {
               if (statusPosted) {
@@ -1323,16 +1320,10 @@ jobs:
             try {
               // A comment run has no job under the required name on the PR head, so an
               // earlier success would outlive a run that dies or cannot post its verdict.
-              // Replacing it first leaves the PR blocked instead.
-              // Includes the previous text, because editing a marker away withdraws it.
-              const comment = context.payload.comment;
-              const commentTexts = [comment?.body, context.payload.changes?.body?.from];
-              if (
-                context.eventName === 'issue_comment' &&
-                ALLOWED_ASSOCIATIONS.has((comment?.author_association || '').toUpperCase()) &&
-                commentTexts.some((text) => (text || '').split(/\r?\n/).some((line) => markerRegex.test(line)))
-              ) {
-                await setCommitStatus('pending', 'Evaluating review marker');
+              // Replacing it first leaves the PR blocked instead. This runs for every
+              // comment, because a queued run with a marker can be replaced by one without.
+              if (context.eventName === 'issue_comment') {
+                await setCommitStatus('pending', 'Evaluating reviews');
               }
 
               const headRef = pr.head?.ref || '';
@@ -1408,6 +1399,8 @@ jobs:
                 return a.id - b.id;
               });
 
+              // The marker must be alone on its own line.
+              const markerRegex = /^REVIEW: (PASS|BLOCKED|FAIL) ([A-Za-z0-9._-]+) ([0-9A-Fa-f]{40})\s*$/;
               const headShaLower = headSha.toLowerCase();
               const authorEngineLower = authorEngine.toLowerCase();
 
