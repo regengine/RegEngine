@@ -576,6 +576,14 @@ if _router_enabled("sandbox"):
 
     include_owned_router(app, sandbox_router, owner="sandbox")
 
+# #3825: the persisted share endpoints mount under their own owner so the
+# stateless evaluator above can be production-enabled without them. This
+# owner stays out of PRODUCTION_ENABLED_ROUTERS; see sandbox/share_router.py.
+if _router_enabled("sandbox_share"):
+    from services.ingestion.app.sandbox.share_router import router as sandbox_share_router
+
+    include_owned_router(app, sandbox_share_router, owner="sandbox_share")
+
 if _router_enabled("inflow_workbench"):
     from services.ingestion.app.inflow_workbench import router as inflow_workbench_router
 
