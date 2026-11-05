@@ -92,12 +92,14 @@ def parse_class_uri(value: object) -> Optional[LotIdentity]:
     if not isinstance(value, str):
         return None
     text = value.strip()
-    if not text or "0000000.000000" in text:
+    if not text:
         return None
 
     m = _LGTIN_RE.match(text)
     if m:
         company, item, lot_raw = m.group(1), m.group(2), m.group(3)
+        if company == "0000000" and item == "000000":
+            return None
         lot = unquote(lot_raw)
         if not lot:
             return None

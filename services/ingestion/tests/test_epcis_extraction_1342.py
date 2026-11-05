@@ -115,3 +115,9 @@ class TestLosslessLotIdentitySel598:
         lot_code, tlc = _lot_from_identifier(dl)
         assert lot_code == "LotRebuild"
         assert tlc == dl
+
+
+def test_placeholder_digits_inside_lot_are_not_a_placeholder_product():
+    uri = "urn:epc:class:lgtin:0614141.107346.0000000.000000"
+    assert _lot_from_identifier(uri) == ("0000000.000000", uri)
+    assert _lot_from_identifier("urn:epc:class:lgtin:0000000.000000.LOT") is None
