@@ -79,3 +79,20 @@ def test_v111_column_grants_are_guarded_for_fresh_upgrade() -> None:
     guarded = f"IF to_regclass('public.data_gap_events') IS NOT NULL THEN\n        EXECUTE '{grant}';"
     assert guarded in sql
     assert f"\n{grant}" not in sql
+
+
+def test_downgrade_restores_v135_gap_privileges(monkeypatch) -> None:
+    spec = importlib.util.spec_from_file_location("v142_downgrade", V142)
+    assert spec is not None and spec.loader is not None
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    statements = []
+    monkeypatch.setattr(migration.op, "execute", statements.append)
+
+    migration.downgrade()
+
+    sql = "\n".join(statements)
+    assert "GRANT SELECT, INSERT, UPDATE ON TABLE public.data_gap_events TO regengine;" in sql
+    assert "GRANT SELECT ON TABLE public.data_gap_events TO regengine_sysadmin;" in sql
+    assert "REVOKE SELECT ON TABLE public.data_gap_events" not in sql
+    assert "REVOKE SELECT (tenant_id, tlc_code, facility_id) ON TABLE public.supplier_traceability_lots FROM regengine;" in sql
