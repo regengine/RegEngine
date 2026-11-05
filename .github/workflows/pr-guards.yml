@@ -4,7 +4,7 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
   pull_request_review:
-    types: [submitted, dismissed]
+    types: [submitted, edited, dismissed]
   pull_request_review_comment:
     types: [created, edited, deleted]
   issue_comment:
@@ -1212,7 +1212,9 @@ jobs:
                 });
                 pr = prResponse.data;
               } catch (err) {
-                failRun(`Could not load pull request #${context.payload.issue.number}: ${err.message}`);
+                // Without the head SHA there is nowhere to post a status, so an earlier
+                // success stands. Fail even though this run belongs to main.
+                core.setFailed(`Could not load pull request #${context.payload.issue.number}: ${err.message}`);
                 return;
               }
             }
