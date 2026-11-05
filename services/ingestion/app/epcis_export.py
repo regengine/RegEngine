@@ -52,8 +52,8 @@ def _lot_code_filter(lot_code: str | None) -> tuple[str | None, dict]:
 
     Rows may store the bare lot token (pre-H2, or ``LOT_IDENTITY_LOSSLESS``
     off) or the full LGTIN / GS1 Digital Link class URI (flag on). A bare
-    filter also matches URIs whose lot segment ends with that token; a URI
-    filter also matches the bare token. ``_row_matches_lot`` then keeps
+    filter also fetches class URI candidates; a URI filter also matches
+    the bare token. ``_row_matches_lot`` then keeps
     only rows whose lot token is exactly the requested one.
     """
     if not lot_code:
@@ -61,21 +61,17 @@ def _lot_code_filter(lot_code: str | None) -> tuple[str | None, dict]:
     params: dict = {"lot_code": lot_code}
     clauses = ["e.traceability_lot_code = :lot_code"]
     token = lot_token_only(lot_code)
-    if token and token != lot_code:
-        # Full URI requested: also match rows stored with the bare token.
+    if token:
         params["lot_token"] = token
         clauses.append("e.traceability_lot_code = :lot_token")
-    elif token:
-        # Bare lot requested: also match full class URIs carrying it.
-        suffixes = sorted({f"/10/{token}", f"/10/{quote(token, safe='-._~')}", f".{token}", f".{quote(token, safe='-._~')}"})
-        for index, suffix in enumerate(suffixes):
-            name = f"lot_suffix_{index}"
-            params[name] = suffix
-            clauses.append(
-                "((lower(e.traceability_lot_code) LIKE 'https://id.gs1.org/01/%'"
-                " OR lower(e.traceability_lot_code) LIKE 'urn:epc:class:lgtin:%')"
-                f" AND right(e.traceability_lot_code, char_length(:{name})) = :{name})"
-            )
+    if token and not is_full_class_uri(lot_code):
+        # URI lot segments may encode any character, including mixed-case
+        # percent escapes. Fetch class candidates and decode exactly in Python.
+        # Suffix comparisons cannot cover every equivalent encoded form.
+        clauses.append(
+            "(lower(e.traceability_lot_code) LIKE 'https://id.gs1.org/01/%'"
+            " OR lower(e.traceability_lot_code) LIKE 'urn:epc:class:lgtin:%')"
+        )
     return "(" + " OR ".join(clauses) + ")", params
 
 
@@ -118,8 +114,7 @@ def _query_tenant_events(
             where.append("e.event_timestamp < :date_to")
             params["date_to"] = date_to
 
-        rows = db.execute(
-            text(f"""
+        statement = text(f"""
                 WITH tenant_kdes AS (
                     SELECT k.* FROM fsma.cte_kdes k
                     WHERE k.tenant_id = :tenant_id
@@ -162,18 +157,31 @@ def _query_tenant_events(
                 WHERE e.tenant_id = :tenant_id
                 {"AND " + " AND ".join(where) if where else ""}
                 ORDER BY e.event_timestamp DESC
-                LIMIT :row_limit
-            """),
-            {**params, "row_limit": _MAX_EXPORT_EVENTS + 1},
-        ).fetchall()
-        result = [dict(row._mapping) for row in rows]
+                {"" if lot_code else "LIMIT :row_limit"}
+            """)
+        result = []
+        if lot_code:
+            # Stream candidates until cap+1 *exact* matches are collected.
+            # Applying LIMIT before decoding can let other lots crowd out the
+            # requested lot, producing an apparently valid partial export.
+            rows = db.execute(statement.execution_options(yield_per=1000), params)
+            try:
+                for row in rows:
+                    item = dict(row._mapping)
+                    if _row_matches_lot(item.get("traceability_lot_code"), lot_code):
+                        result.append(item)
+                        if len(result) > _MAX_EXPORT_EVENTS:
+                            break
+            finally:
+                rows.close()
+        else:
+            rows = db.execute(statement, {**params, "row_limit": _MAX_EXPORT_EVENTS + 1})
+            result = [dict(row._mapping) for row in rows.fetchall()]
     except Exception as exc:
         logger.error("db_query_failed_for_export", extra={"error": str(exc)})
         raise ExportStorageUnavailable(str(exc)) from exc
     finally:
         db.close()
-    if lot_code:
-        result = [row for row in result if _row_matches_lot(row.get("traceability_lot_code"), lot_code)]
     return result
 
 

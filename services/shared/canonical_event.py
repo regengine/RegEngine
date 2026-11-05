@@ -1331,10 +1331,13 @@ def _epcis_transformation_inputs(epcis_data: Dict[str, Any]) -> List[Dict[str, A
     for epc in _epcis_list(epcis_data, "inputEPCList"):
         identity = normalize_epcis_lot(epc)
         segment = identity.lot_token if identity else _epc_last_segment(epc)
-        dedup_key = ("epc", segment)
+        # A serial is unique only within a GTIN; retain the full instance
+        # identity so equal serials on different products remain separate.
+        epc_id = str(epc).strip()
+        dedup_key = ("epc", epc_id)
         if not segment or dedup_key in seen:
             continue
-        lot_key = identity.canonical_id if (identity and lossless_enabled()) else segment
+        lot_key = epc_id
         inputs.append(
             {
                 "traceability_lot_code": lot_key,
