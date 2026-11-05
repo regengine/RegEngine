@@ -425,7 +425,7 @@ def test_csv_and_edi_routes_call_ingest_events_under_prod_path(
     assert "edi_856_inbound" in seen, (edi_resp.status_code, edi_resp.text[:500], seen)
 
 
-def test_edi_rejection_is_recorded_under_prod_path(prod_path_webhook_compat):
+def test_edi_rejection_is_recorded_under_prod_path(prod_path_webhook_compat, monkeypatch: pytest.MonkeyPatch):
     """A rejected EDI document returns its 4xx and leaves an audit record.
 
     ``_record_edi_rejection`` resolves the rejection log lazily. With an
@@ -441,6 +441,8 @@ def test_edi_rejection_is_recorded_under_prod_path(prod_path_webhook_compat):
     from services.ingestion.app.edi_ingestion import router as edi_router  # noqa: PLC0415
     import services.ingestion.app.edi_ingestion.rejection_log as rejection_log  # noqa: PLC0415
 
+    monkeypatch.delenv("EDI_REQUIRE_PARTNER_ID", raising=False)
+    monkeypatch.delenv("EDI_PARTNER_ALLOWLIST", raising=False)
     rejection_log.reset_edi_rejections()
     app = FastAPI()
     app.include_router(edi_router)
