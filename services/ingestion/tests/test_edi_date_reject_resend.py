@@ -32,6 +32,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 FIXTURE = service_dir / "tests" / "fixtures" / "edi_corpus" / "asn_856.edi"
 FIXTURE_BSN = "BSN*00*ASN-12345*20260310*1200~"
 TENANT = "00000000-0000-0000-0000-000000000123"
+OTHER_TENANT = "00000000-0000-0000-0000-000000000456"
 # GTIN-14 + lot suffix, the FSMA 204 TLC format strict validation accepts
 # (same value test_edi_wire_format_2974_2976_2978 uses).
 VALID_TLC = "00012345678901-LOT001"
@@ -118,10 +119,10 @@ def _future_variant() -> bytes:
     return raw.replace(FIXTURE_BSN, f"BSN*00*ASN-12345*{future}*1200~").encode()
 
 
-def _post(client: TestClient, raw: bytes, route: str):
+def _post(client: TestClient, raw: bytes, route: str, tenant: str = TENANT):
     return client.post(
         f"/api/v1/ingest/edi{route}",
-        data={"traceability_lot_code": VALID_TLC, "tenant_id": TENANT},
+        data={"traceability_lot_code": VALID_TLC, "tenant_id": tenant},
         files={"file": ("asn_856.edi", raw, "application/edi-x12")},
     )
 
@@ -281,8 +282,46 @@ def test_rejection_frees_claim_when_set_landed_but_reply_was_lost(client, store,
 
 
 def test_release_is_a_noop_without_a_matching_token(store):
-    dedup_mod.check_and_record_interchange("sender", "receiver", "isa-13-1", "claim-a")
-    dedup_mod.release_interchange("sender", "receiver", "isa-13-1", "claim-b")
+    dedup_mod.check_and_record_interchange("tenant", "sender", "receiver", "isa-13-1", "claim-a")
+    dedup_mod.release_interchange("tenant", "sender", "receiver", "isa-13-1", "claim-b")
     assert list(store.keys.values()) == ["claim-a"]
-    dedup_mod.release_interchange("sender", "receiver", "isa-13-1", "claim-a")
+    dedup_mod.release_interchange("tenant", "sender", "receiver", "isa-13-1", "claim-a")
     assert store.keys == {}
+
+
+@pytest.mark.parametrize("route", ["", "/document"])
+def test_two_tenants_with_identical_envelope_ids_do_not_collide(client, store, ingested, route):
+    """Same sender, receiver and ISA13 under another tenant is a new interchange."""
+    first = _post(client, FIXTURE.read_bytes(), route, tenant=TENANT)
+    assert first.status_code == 201, first.json()
+
+    second = _post(client, FIXTURE.read_bytes(), route, tenant=OTHER_TENANT)
+    assert second.status_code == 201, second.json()
+
+    assert len(ingested) == 2
+    assert len(store.keys) == 2
+
+
+@pytest.mark.parametrize("route", ["", "/document"])
+def test_true_replay_within_a_tenant_still_gets_409(client, store, ingested, route):
+    first = _post(client, FIXTURE.read_bytes(), route)
+    assert first.status_code == 201, first.json()
+
+    replay = _post(client, FIXTURE.read_bytes(), route)
+    assert replay.status_code == 409, replay.json()
+    assert replay.json()["detail"]["error"] == "duplicate_interchange"
+    assert len(ingested) == 1
+    assert len(store.keys) == 1
+
+
+@pytest.mark.parametrize("route", ["", "/document"])
+def test_one_tenants_rejection_leaves_the_other_tenants_claim(client, store, ingested, route):
+    """Releasing a claim is scoped to the tenant that took it."""
+    stored = _post(client, FIXTURE.read_bytes(), route, tenant=TENANT)
+    assert stored.status_code == 201, stored.json()
+
+    rejected = _post(client, _zero_quantity_variant(), route, tenant=OTHER_TENANT)
+    assert 400 <= rejected.status_code < 500 and rejected.status_code != 409, rejected.json()
+
+    replay = _post(client, FIXTURE.read_bytes(), route, tenant=TENANT)
+    assert replay.status_code == 409, replay.json()

@@ -96,7 +96,7 @@ def _record_edi_rejection(**kwargs):
 # ISA13 claims taken by ``_enforce_envelope_integrity`` during the current
 # request, as ``release_interchange`` arguments. ``_release_isa13_unless_stored``
 # installs the list.
-_reserved_interchanges: contextvars.ContextVar[list[tuple[Any, Any, Any, str]] | None] = contextvars.ContextVar(
+_reserved_interchanges: contextvars.ContextVar[list[tuple[str, Any, Any, Any, str]] | None] = contextvars.ContextVar(
     "edi_reserved_interchanges", default=None
 )
 
@@ -118,7 +118,7 @@ def _release_isa13_unless_stored(endpoint):
 
     @functools.wraps(endpoint)
     async def wrapper(*args, **kwargs):
-        reserved: list[tuple[Any, Any, Any, str]] = []
+        reserved: list[tuple[str, Any, Any, Any, str]] = []
         token = _reserved_interchanges.set(reserved)
         try:
             response = await endpoint(*args, **kwargs)
@@ -469,6 +469,7 @@ def _enforce_envelope_integrity(
     # #1165: retransmission dedup on ISA13.
     claim_token = uuid.uuid4().hex
     is_duplicate, _prev = check_and_record_interchange(
+        tenant_id=sender_tenant_id,
         sender_id=extracted.get("sender_id"),
         receiver_id=extracted.get("receiver_id"),
         isa13=extracted.get("isa13"),
@@ -497,7 +498,15 @@ def _enforce_envelope_integrity(
 
     reserved = _reserved_interchanges.get()
     if reserved is not None:
-        reserved.append((extracted.get("sender_id"), extracted.get("receiver_id"), extracted.get("isa13"), claim_token))
+        reserved.append(
+            (
+                sender_tenant_id,
+                extracted.get("sender_id"),
+                extracted.get("receiver_id"),
+                extracted.get("isa13"),
+                claim_token,
+            )
+        )
 
 
 def _enforce_interchange_structure(
