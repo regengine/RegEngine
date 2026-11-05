@@ -8,8 +8,10 @@ never had. Every gap write failed with ``permission denied``, and because gap
 logging is fail-open the only trace was a ``data_gap_write_failed`` log line.
 
 This revision applies the grants, and the matching v111 inventory entries keep
-them across deploys. ``supplier_traceability_lots`` gets only the three columns
-the lookup reads. Both tables are tenant-scoped by forced RLS.
+them across deploys. ``data_gap_events`` UPDATE is column-scoped to the close
+fields (``closed_at``, ``closing_record_id``, ``closing_record_hash``), so the
+runtime cannot rewrite an opened gap. ``supplier_traceability_lots`` gets only
+the three columns the lookup reads. Both tables are tenant-scoped by forced RLS.
 
 Mirrors ``supabase/migrations/20261104120000_v142_data_gap_runtime_grants.sql``.
 
@@ -37,7 +39,10 @@ def upgrade() -> None:
                AND to_regclass('public.supplier_traceability_lots') IS NOT NULL
                AND EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'regengine')
                AND EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'regengine_sysadmin') THEN
-                GRANT SELECT, INSERT, UPDATE ON TABLE public.data_gap_events TO regengine;
+                REVOKE UPDATE ON TABLE public.data_gap_events FROM regengine;
+                GRANT SELECT, INSERT ON TABLE public.data_gap_events TO regengine;
+                GRANT UPDATE (closed_at, closing_record_id, closing_record_hash)
+                    ON TABLE public.data_gap_events TO regengine;
                 GRANT SELECT ON TABLE public.data_gap_events TO regengine_sysadmin;
                 GRANT SELECT (tenant_id, tlc_code, facility_id) ON TABLE public.supplier_traceability_lots TO regengine;
             END IF;
@@ -56,7 +61,9 @@ def downgrade() -> None:
                AND to_regclass('public.supplier_traceability_lots') IS NOT NULL
                AND EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'regengine')
                AND EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'regengine_sysadmin') THEN
-                REVOKE SELECT, INSERT, UPDATE ON TABLE public.data_gap_events FROM regengine;
+                REVOKE UPDATE (closed_at, closing_record_id, closing_record_hash)
+                    ON TABLE public.data_gap_events FROM regengine;
+                GRANT SELECT, INSERT, UPDATE ON TABLE public.data_gap_events TO regengine;
                 REVOKE SELECT ON TABLE public.data_gap_events FROM regengine_sysadmin;
                 REVOKE SELECT (tenant_id, tlc_code, facility_id) ON TABLE public.supplier_traceability_lots FROM regengine;
             END IF;

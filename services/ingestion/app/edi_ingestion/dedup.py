@@ -28,6 +28,8 @@ logger = logging.getLogger("edi-dedup")
 
 _DEDUP_KEY_PREFIX = "edi:interchange:"
 _DEDUP_TTL_SECONDS = 7 * 24 * 3600  # 7 days
+# Delete the key only while it still holds the caller's claim token.
+_RELEASE_IF_OWNER_LUA = "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) end return 0"
 
 
 def _dedup_key(sender_id: Optional[str], receiver_id: Optional[str], isa13: Optional[str]) -> str:
@@ -61,18 +63,23 @@ def check_and_record_interchange(
     sender_id: Optional[str],
     receiver_id: Optional[str],
     isa13: Optional[str],
+    claim_token: str,
 ) -> tuple[bool, Optional[str]]:
     """Return ``(is_duplicate, previous_ack_id)``.
 
     - Returns ``(True, previous)`` if we have seen this interchange
       before: the caller should reply with HTTP 409 / idempotent-replay.
     - Returns ``(False, None)`` otherwise and records the interchange
-      atomically via ``SET ... NX``.
+      atomically via ``SET ... NX``, storing ``claim_token``.
 
     If any envelope ID is missing (malformed interchange) or Redis is
     down, returns ``(False, None)`` and the caller proceeds with
     normal ingestion. Downstream CTE-hash idempotency catches the
     degenerate cases.
+
+    ``(False, None)`` therefore does not prove a claim was taken. The
+    caller passes a ``claim_token`` unique to the request, and
+    ``release_interchange`` frees the key only if it holds that token.
     """
     if not isa13 or not sender_id:
         return False, None
@@ -86,8 +93,7 @@ def check_and_record_interchange(
         # SET NX EX — atomic "create if absent". Returns True iff we
         # set the key (first time we saw this interchange), False if
         # it already existed (retransmission).
-        placeholder = "seen"
-        was_set = client.set(key, placeholder, nx=True, ex=_DEDUP_TTL_SECONDS)
+        was_set = client.set(key, claim_token, nx=True, ex=_DEDUP_TTL_SECONDS)
         if was_set:
             return False, None
         previous = client.get(key)
@@ -100,6 +106,43 @@ def check_and_record_interchange(
             str(exc),
         )
         return False, None
+
+
+def release_interchange(
+    sender_id: Optional[str],
+    receiver_id: Optional[str],
+    isa13: Optional[str],
+    claim_token: str,
+) -> None:
+    """Free an ISA13 reserved by ``check_and_record_interchange``.
+
+    Called when the request fails after the reservation (content
+    rejection, ingest error). Without it the 409 replay answer, "already
+    processed — no events were ingested", would refuse the partner's
+    resend for the full TTL even though nothing was stored. Best-effort:
+    a Redis error is logged and the key simply expires.
+
+    The delete applies only while the key holds ``claim_token``. A request
+    that failed open on a Redis error may hold no claim, and a concurrent
+    retry may own the key by then. Its claim must survive. If that failed
+    ``SET`` did land, the key holds this token and is freed.
+    """
+    if not isa13 or not sender_id:
+        return
+
+    client = _redis_client()
+    if client is None:
+        return
+
+    try:
+        client.eval(_RELEASE_IF_OWNER_LUA, 1, _dedup_key(sender_id, receiver_id, isa13), claim_token)
+    except Exception as exc:
+        logger.warning(
+            "edi_dedup_release_error sender=%s isa13=%s error=%s",
+            sender_id,
+            isa13,
+            str(exc),
+        )
 
 
 # ---------------------------------------------------------------------------
