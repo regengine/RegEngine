@@ -1302,8 +1302,9 @@ jobs:
                       per_page: 100,
                     });
                     // Runs that are red for another job's sake would rerun forever.
-                    if (jobs.some((j) => j.name === 'Engine Review Pass' && stale(j.conclusion))) {
-                      await github.rest.actions.reRunWorkflowFailedJobs({ owner, repo, run_id: run.id });
+                    const staleJob = jobs.find((j) => j.name === 'Engine Review Pass' && stale(j.conclusion));
+                    if (staleJob) {
+                      await github.rest.actions.reRunJobForWorkflowRun({ owner, repo, job_id: staleJob.id });
                       core.info(`Reran stale evaluation in run ${run.id}`);
                       return;
                     }
