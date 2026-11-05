@@ -1,6 +1,10 @@
-import { notFound } from 'next/navigation';
+import { permanentRedirect } from "next/navigation";
 
-// Hidden until a real, named-customer case study exists.
-export default function CaseStudy() {
-    notFound();
+/**
+ * Older index snippets still describe a case-studies URL. There is no named-
+ * customer case study to restore, so send crawlers and humans to /proof, which
+ * publishes inspectable sample exports instead of invented customer claims.
+ */
+export default function CaseStudiesRedirect() {
+  permanentRedirect("/proof");
 }

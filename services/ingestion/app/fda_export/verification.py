@@ -14,11 +14,12 @@ from fastapi import Depends, HTTPException, Query
 
 from ..authz import require_permission
 from ..export_models import ExportVerifyResponse
-from ..fda_export_service import _generate_csv, _generate_csv_v2
+from ..fda_export_service import _generate_csv, _generate_csv_before_open_gaps, _generate_csv_v2
 from ..subscription_gate import require_active_subscription
 from .queries import (
     FULL_EXPORT_TYPES,
     ExportOverflowError,
+    attach_open_gaps,
     build_v2_where_clause,
     fetch_v2_events,
     reconstruct_full_export_events,
@@ -140,8 +141,6 @@ async def verify_export_handler(
                     ),
                 )
             events = v2_rows_to_event_dicts(v2_rows)
-            csv_content = _generate_csv_v2(events, include_pii=include_pii)
-            regenerated_hash = hashlib.sha256(csv_content.encode("utf-8")).hexdigest()
         elif reconstruction == "single_tlc":
             events = persistence.query_events_by_tlc(
                 tenant_id=tenant_id,
@@ -172,9 +171,20 @@ async def verify_export_handler(
                     ),
                 ) from exc
 
-        if reconstruction != "v2":
-            csv_content = _generate_csv(events, include_pii=include_pii)
-            regenerated_hash = hashlib.sha256(csv_content.encode("utf-8")).hexdigest()
+        # Gaps as of the export, not now: one that has closed since must not
+        # read as tampering.
+        attach_open_gaps(db_session, tenant_id, events, as_of=generated_at)
+        generate_csv = _generate_csv_v2 if reconstruction == "v2" else _generate_csv
+        csv_content = generate_csv(events, include_pii=include_pii)
+        regenerated_hash = hashlib.sha256(csv_content.encode("utf-8")).hexdigest()
+
+        # An export logged before the Open Data Gaps column existed has the
+        # older layout. Without this, every such export would read as tampered.
+        if regenerated_hash != original_hash:
+            older_layout = _generate_csv_before_open_gaps(events, include_pii=include_pii, v2=reconstruction == "v2")
+            older_hash = hashlib.sha256(older_layout.encode("utf-8")).hexdigest()
+            if older_hash == original_hash:
+                regenerated_hash = older_hash
 
         match = regenerated_hash == original_hash
 

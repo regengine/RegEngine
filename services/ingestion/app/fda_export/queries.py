@@ -11,7 +11,11 @@ import os
 from datetime import date as _date, datetime, time as _time, timedelta, timezone
 from typing import Any, Optional
 
+from fastapi import HTTPException
+from shared.data_gap_tracking import fetch_gaps_open_at
+from shared.tenant_context import set_tenant_guc_if_uuid
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger("fda-export")
 
@@ -325,6 +329,50 @@ def fetch_recall_events_canonical(db_session, where_clause: str, params: dict, l
     return rows
 
 
+def attach_open_gaps(
+    db_session,
+    tenant_id: str,
+    events: list[dict],
+    *,
+    as_of: Optional[datetime] = None,
+) -> datetime:
+    """Set ``open_data_gaps`` on each event and return the moment it describes.
+
+    A gap belongs to a lot and CTE, so every row for that pair carries it.
+    ``as_of`` defaults to now. Exporters record the returned moment as the
+    audit row's ``generated_at`` and ``/export/verify`` passes that value back,
+    so a gap that closes after the export does not change the regenerated
+    bytes.
+
+    A blank cell states that no gap was open, so a failed lookup stops the
+    export with a 503 rather than emit rows it cannot vouch for. Scoped twice:
+    the ``tenant_id`` predicate here and forced RLS on the table.
+    """
+    as_of = as_of or datetime.now(timezone.utc)
+    lot_codes = {str(event.get("traceability_lot_code") or "") for event in events}
+    try:
+        set_tenant_guc_if_uuid(db_session, tenant_id)
+        gaps = fetch_gaps_open_at(db_session, tenant_id, lot_codes, as_of)
+    except SQLAlchemyError as exc:
+        logger.error(
+            "fda_export_open_gap_lookup_failed",
+            extra={"tenant_id": tenant_id, "error_type": type(exc).__name__},
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "FDA export halted: open data gaps could not be read, so the "
+                "export cannot state which rows have an outstanding item."
+            ),
+        ) from exc
+    for event in events:
+        lot_code = str(event.get("traceability_lot_code") or "").strip()
+        cte_type = str(event.get("event_type") or "").strip().lower()
+        event["open_data_gaps"] = list(gaps.get((lot_code, cte_type), ()))
+    return as_of
+
+
 def _verify_chain_for_export(persistence, db_session, tenant_id: str):
     """Chain verification for export handlers, honoring the WS-1b flag.
 
@@ -491,6 +539,7 @@ def log_recall_export(
     location: Optional[str] = None,
     event_type: Optional[str] = None,
     include_pii: bool = False,
+    generated_at: Optional[datetime] = None,
 ) -> None:
     """Write the recall-export audit log entry.
 
@@ -525,9 +574,10 @@ def log_recall_export(
                 INSERT INTO fsma.fda_export_log
                 (tenant_id, export_type, record_count, export_hash,
                  generated_by, query_tlc, query_start_date, query_end_date,
-                 include_pii)
+                 include_pii, generated_at)
                 VALUES (:tid, :etype, :cnt, :hash, :generated_by,
-                        :tlc, :sd, :ed, :pii)
+                        :tlc, :sd, :ed, :pii,
+                        COALESCE(CAST(:generated_at AS timestamptz), now()))
             """),
             {
                 "tid": tenant_id,
@@ -539,6 +589,7 @@ def log_recall_export(
                 "sd": start_date,
                 "ed": end_date,
                 "pii": bool(include_pii),
+                "generated_at": generated_at,
             },
         )
         db_session.commit()
@@ -769,6 +820,7 @@ def log_v2_export(
     source_ip: Optional[str] = None,
     include_pii: bool = False,
     event_type: Optional[str] = None,
+    generated_at: Optional[datetime] = None,
 ) -> None:
     """Write the v2 export audit log entry.
 
@@ -781,9 +833,9 @@ def log_v2_export(
                 INSERT INTO fsma.fda_export_log
                 (tenant_id, export_type, record_count, export_hash, generated_by,
                  query_tlc, query_start_date, query_end_date,
-                 include_pii, query_event_type)
+                 include_pii, query_event_type, generated_at)
                 VALUES (:tid, :etype, :cnt, :hash, :generated_by, :tlc, :sd, :ed,
-                        :pii, :qetype)
+                        :pii, :qetype, COALESCE(CAST(:generated_at AS timestamptz), now()))
             """),
             {
                 "tid": tenant_id,
@@ -796,6 +848,7 @@ def log_v2_export(
                 "ed": end_date,
                 "pii": bool(include_pii),
                 "qetype": event_type,
+                "generated_at": generated_at,
             },
         )
         db_session.commit()
