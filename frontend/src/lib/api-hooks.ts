@@ -154,6 +154,13 @@ export interface WorkbenchReadinessSnapshot {
     source: string;
 }
 
+/**
+ * Passwordless readiness snapshot for the signed-in workspace.
+ *
+ * Callers must treat HTTP failures (especially 503) as an unavailable state,
+ * not a blank page: prod 503s have been observed when auth cannot SELECT
+ * tenants.status for the bridge key before workbench persistence runs (SEL-616).
+ */
 export async function fetchWorkbenchReadinessSummary(tenantId: string, apiKey?: string | null) {
     const query = new URLSearchParams({ tenant_id: tenantId });
     return apiFetch<WorkbenchReadinessSnapshot>(
