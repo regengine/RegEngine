@@ -1244,13 +1244,16 @@ jobs:
 
             const ALLOWED_ASSOCIATIONS = new Set(['OWNER', 'MEMBER', 'COLLABORATOR']);
 
+            // The marker must be alone on its own line.
+            const markerRegex = /^REVIEW: (PASS|BLOCKED|FAIL) ([A-Za-z0-9._-]+) ([0-9A-Fa-f]{40})\s*$/;
+
             let statusPosted = false;
             async function setCommitStatus(state, description) {
               if (statusPosted) {
                 core.info(`Commit status already posted. Skipping duplicate (${state}: ${description})`);
                 return;
               }
-              statusPosted = true;
+              statusPosted = state !== 'pending';
               try {
                 await github.rest.repos.createCommitStatus({
                   owner,
@@ -1264,6 +1267,11 @@ jobs:
                 core.info(`Created commit status '${state}' on ${headSha}: ${description}`);
               } catch (err) {
                 core.warning(`Failed to create commit status on ${headSha}: ${err.message}`);
+                // A comment run has no check run on the PR head to carry the verdict, so
+                // make the lost write visible even though the run belongs to main.
+                if (context.eventName === 'issue_comment') {
+                  core.setFailed(`Could not post Engine Review Pass on ${headSha}: ${err.message}`);
+                }
               }
             }
 
@@ -1309,6 +1317,18 @@ jobs:
             }
 
             try {
+              // A comment run has no job under the required name on the PR head, so an
+              // earlier success would outlive a run that dies or cannot post its verdict.
+              // Replacing it first leaves the PR blocked instead.
+              const comment = context.payload.comment;
+              if (
+                context.eventName === 'issue_comment' &&
+                ALLOWED_ASSOCIATIONS.has((comment?.author_association || '').toUpperCase()) &&
+                (comment?.body || '').split(/\r?\n/).some((line) => markerRegex.test(line))
+              ) {
+                await setCommitStatus('pending', 'Evaluating review marker');
+              }
+
               const headRef = pr.head?.ref || '';
               const slashIndex = headRef.indexOf('/');
               const rawPrefix = slashIndex > 0 ? headRef.slice(0, slashIndex).trim() : '';
@@ -1382,8 +1402,6 @@ jobs:
                 return a.id - b.id;
               });
 
-              // The marker must be alone on its own line.
-              const markerRegex = /^REVIEW: (PASS|BLOCKED|FAIL) ([A-Za-z0-9._-]+) ([0-9A-Fa-f]{40})\s*$/;
               const headShaLower = headSha.toLowerCase();
               const authorEngineLower = authorEngine.toLowerCase();
 
@@ -1434,9 +1452,29 @@ jobs:
                 return m.action === 'PASS' && m.engine.toLowerCase() !== authorEngineLower;
               });
 
-              if (blockedMarkers.length > 0) {
-                const blockedEngines = blockedMarkers.map((m) => m.engine).join(', ');
-                const msg = `Blocked by ${blockedEngines}`;
+              // Native reviews follow GitHub's rule: a member's latest decision stands, and
+              // a later comment does not clear it. These are read from the raw list because
+              // eligibleReviews drops reviews with an empty body.
+              const latestDecisions = new Map();
+              const decisions = reviews
+                .filter((r) => ['APPROVED', 'CHANGES_REQUESTED', 'DISMISSED'].includes(r.state) && r.user?.login)
+                .sort((a, b) => new Date(a.submitted_at).getTime() - new Date(b.submitted_at).getTime() || a.id - b.id);
+              for (const r of decisions) {
+                latestDecisions.set(r.user.login, r);
+              }
+              const changesRequestedBy = Array.from(latestDecisions.values())
+                .filter((r) => r.state === 'CHANGES_REQUESTED' && ALLOWED_ASSOCIATIONS.has((r.author_association || '').toUpperCase()))
+                .map((r) => r.user.login);
+
+              if (blockedMarkers.length > 0 || changesRequestedBy.length > 0) {
+                const reasons = [];
+                if (blockedMarkers.length > 0) {
+                  reasons.push(`Blocked by ${blockedMarkers.map((m) => m.engine).join(', ')}`);
+                }
+                if (changesRequestedBy.length > 0) {
+                  reasons.push(`Changes requested by ${changesRequestedBy.join(', ')}`);
+                }
+                const msg = reasons.join('; ');
                 await setCommitStatus('failure', msg);
                 failRun(`Engine Review Pass blocked: ${msg}`);
                 return;
