@@ -1,0 +1,25 @@
+{
+  "fixture_id": "sel598-both-pass",
+  "traceability_lot_code": "00012345678004-LotA",
+  "gtin": "00012345678004",
+  "expected_lenient": true,
+  "expected_strict": true,
+  "epcis_event": {
+    "type": "ObjectEvent",
+    "action": "ADD",
+    "bizStep": "urn:epcglobal:cbv:bizstep:commissioning",
+    "eventTime": "2026-03-12T15:00:00.000Z",
+    "eventTimeZoneOffset": "+00:00",
+    "ilmd": {
+      "fsma:traceabilityLotCode": "00012345678004-LotA",
+      "cbvmda:lotNumber": "00012345678004-LotA"
+    },
+    "quantityList": [
+      {
+        "epcClass": "https://id.gs1.org/01/00012345678004/10/00012345678004-LotA",
+        "quantity": 10,
+        "uom": "KGM"
+      }
+    ]
+  }
+}
