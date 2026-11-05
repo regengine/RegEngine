@@ -1299,6 +1299,8 @@ jobs:
                 });
                 const candidates = runs
                   .filter((r) => r.name === context.workflow && r.id !== context.runId && r.status === 'completed' && stale(r.conclusion))
+                  // Another PR at this SHA may not have passed, and its run shares this status.
+                  .filter((r) => r.pull_requests?.some((p) => p.number === pr.number))
                   .sort((a, b) => a.id - b.id);
                 for (const run of candidates) {
                   try {
