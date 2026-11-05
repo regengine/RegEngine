@@ -570,8 +570,9 @@ REGENGINE_TABLE_GRANTS = {
     "public.compliance_alerts": ("SELECT", "INSERT"),
     "public.controls": ("SELECT",),
     # v142 -- ingest opens and closes data gaps. No DELETE: gap history is
-    # evidence.
-    "public.data_gap_events": ("SELECT", "INSERT", "UPDATE"),
+    # evidence. UPDATE is column-scoped to the close fields (see
+    # REGENGINE_COLUMN_GRANTS).
+    "public.data_gap_events": ("SELECT", "INSERT"),
     "public.food_traceability_list": ("SELECT",),
     "public.funnel_events": ("SELECT", "INSERT"),
     "public.obligation_cte_rules": ("SELECT",),
@@ -666,6 +667,11 @@ REGENGINE_COLUMN_GRANTS = {
     # v142 -- opening a gap attributes it to the lot's facility. Only the
     # columns that lookup reads; the rest stays control-plane.
     "public.supplier_traceability_lots": {"SELECT": ("tenant_id", "tlc_code", "facility_id")},
+    # v142 -- closing a gap sets only the close receipt. Opened rows, gap
+    # identity and tenant cannot be rewritten.
+    "public.data_gap_events": {
+        "UPDATE": ("closed_at", "closing_record_id", "closing_record_hash"),
+    },
     # v126 -- POST /api/v1/ingest/csv (#3122) retains each upload verbatim
     # in the ingest transaction (webhook_compat._open_ingestion_run).
     # v138 extends INSERT with storage_url for partner-uploads pointer rows;
