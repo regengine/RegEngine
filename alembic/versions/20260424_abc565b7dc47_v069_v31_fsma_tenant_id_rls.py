@@ -77,7 +77,7 @@ from typing import Sequence, Union
 
 from sqlalchemy import text
 
-from alembic import op
+from alembic import context, op
 
 revision: str = "abc565b7dc47"  # pragma: allowlist secret
 down_revision: Union[str, Sequence[str], None] = "f0a1b2c3d4e5"
@@ -114,7 +114,12 @@ def _v31_present() -> bool:
     Uses ``to_regclass`` rather than ``information_schema.tables`` so
     the probe respects search_path and returns NULL (treated as False)
     for missing schemas as well as missing tables.
+
+    Offline (``alembic upgrade --sql``) there is no connection to probe,
+    so assume the Alembic-only (Railway) shape and emit the no-op branch.
     """
+    if context.is_offline_mode():
+        return False
     bind = op.get_bind()
     return bind.execute(text("SELECT to_regclass(:t)"), {"t": _V31_CANARY}).scalar() is not None
 
@@ -130,7 +135,11 @@ def _v31_helper_fn_present() -> bool:
     only ever exists on Flyway-managed databases — its absence
     identifies an environment where this migration's upgrade no-op'd
     and the V31 policies must not (and cannot) be restored.
+
+    Offline there is no connection to probe; assume Alembic-only.
     """
+    if context.is_offline_mode():
+        return False
     bind = op.get_bind()
     return bind.execute(text("SELECT to_regprocedure('fsma.current_org_id()')")).scalar() is not None
 
