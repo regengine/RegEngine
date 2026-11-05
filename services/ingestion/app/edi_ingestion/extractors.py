@@ -515,7 +515,11 @@ def _extract_861_fields(segments: list[list[str]]) -> dict[str, Any]:
             location_id = segment[4] if len(segment) > 4 and segment[4] else None
             # Partners also send GLNs under qualifier 92. Accept a value only
             # when it is itself a valid GLN, without sanitizing an internal ID.
-            gln = _valid_gln_or_none(location_id) if location_id and location_id.isascii() and location_id.isdigit() else None
+            gln = (
+                _valid_gln_or_none(location_id)
+                if location_id and location_id.isascii() and location_id.isdigit()
+                else None
+            )
             if entity_code == "SF" and (name or gln):
                 if not has_explicit_ship_from or (name and not data["ship_from_name"]):
                     # An actual ship-from overrides SU/SH; a later named SF
