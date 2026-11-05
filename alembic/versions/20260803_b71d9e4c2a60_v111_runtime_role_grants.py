@@ -854,13 +854,29 @@ $$;
 """
 
 
+def _column_grant_sql(role: str, object_name: str, privilege: str, columns: tuple[str, ...]) -> str:
+    # Same to_regclass guard as _grant_sql: a column grant can name a table a
+    # later revision creates (public.data_gap_events comes from v135), and a
+    # bare GRANT would abort a fresh `alembic upgrade head` at this revision.
+    grant = f"GRANT {privilege} ({', '.join(columns)}) ON TABLE {object_name} TO {role};"
+    return f"""
+DO $$
+BEGIN
+    IF to_regclass('{object_name}') IS NOT NULL THEN
+        EXECUTE '{grant}';
+    END IF;
+END
+$$;
+"""
+
+
 def _build_object_grants() -> str:
     statements = [_OBJECT_GRANT_BASE]
     for object_name, privileges in sorted(REGENGINE_TABLE_GRANTS.items()):
         statements.append(_grant_sql("regengine", object_name, privileges, "TABLE"))
     for object_name, privilege_map in sorted(REGENGINE_COLUMN_GRANTS.items()):
         for privilege, columns in sorted(privilege_map.items()):
-            statements.append(f"GRANT {privilege} ({', '.join(columns)}) ON TABLE {object_name} TO regengine;")
+            statements.append(_column_grant_sql("regengine", object_name, privilege, columns))
     for object_name, privileges in sorted(REGENGINE_SEQUENCE_GRANTS.items()):
         statements.append(_grant_sql("regengine", object_name, privileges, "SEQUENCE"))
 
@@ -868,7 +884,7 @@ def _build_object_grants() -> str:
         statements.append(_grant_sql("regengine_sysadmin", object_name, privileges, "TABLE"))
     for object_name, privilege_map in sorted(REGENGINE_SYSADMIN_COLUMN_GRANTS.items()):
         for privilege, columns in sorted(privilege_map.items()):
-            statements.append(f"GRANT {privilege} ({', '.join(columns)}) ON TABLE {object_name} TO regengine_sysadmin;")
+            statements.append(_column_grant_sql("regengine_sysadmin", object_name, privilege, columns))
     for object_name, privileges in sorted(REGENGINE_SYSADMIN_SEQUENCE_GRANTS.items()):
         statements.append(_grant_sql("regengine_sysadmin", object_name, privileges, "SEQUENCE"))
     return "\n".join(statements)

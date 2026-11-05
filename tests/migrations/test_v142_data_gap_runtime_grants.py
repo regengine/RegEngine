@@ -69,3 +69,13 @@ def test_alembic_and_supabase_apply_the_same_grants() -> None:
         sql = path.read_text(encoding="utf-8")
         for statement in expected:
             assert statement in sql, f"{path.name} is missing {statement}"
+
+
+def test_v111_column_grants_are_guarded_for_fresh_upgrade() -> None:
+    # data_gap_events is created by v135, after v111 runs in a fresh
+    # `alembic upgrade head`, so its column grant must skip a missing table.
+    sql = _v111()._build_object_grants()
+    grant = "GRANT UPDATE (closed_at, closing_record_id, closing_record_hash) ON TABLE public.data_gap_events TO regengine;"
+    guarded = f"IF to_regclass('public.data_gap_events') IS NOT NULL THEN\n        EXECUTE '{grant}';"
+    assert guarded in sql
+    assert f"\n{grant}" not in sql
