@@ -1210,7 +1210,7 @@ def _epcis_traceability_lot_code(epcis_data: Dict[str, Any]) -> Tuple[str, Optio
     ILMD ``fsma:traceabilityLotCode`` / ``cbvmda:lotNumber`` as the bare partner
     TLC when no class URI is present (preserve bare TLC — do not rebuild a
     Digital Link from an SGTIN-derived GTIN at this boundary), then SGTIN
-    serial, then flat top-level keys. Legacy ``epcis/extraction`` prefers ILMD
+    instance identity, then flat top-level keys. Legacy ``epcis/extraction`` prefers ILMD
     first; canonical + export agree on class-URI-first after H2. Raises
     ``ValueError`` when nothing identifies the lot.
 

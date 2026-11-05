@@ -187,7 +187,7 @@ def normalize_epcis_lot(
             serial = unquote(sm.group(3))
             g = _company_item_to_gtin14(sm.group(1), sm.group(2))
             return LotIdentity(
-                canonical_id=serial if use_full else serial,
+                canonical_id=value.strip() if use_full else serial,
                 lot_token=serial,
                 gtin=g or (normalize_gtin14(gtin) if gtin else None),
                 is_full_class_uri=False,

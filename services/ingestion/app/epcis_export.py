@@ -65,13 +65,26 @@ def _lot_code_filter(lot_code: str | None) -> tuple[str | None, dict]:
         params["lot_token"] = token
         clauses.append("e.traceability_lot_code = :lot_token")
     if token and not is_full_class_uri(lot_code):
-        # URI lot segments may encode any character, including mixed-case
-        # percent escapes. Fetch class candidates and decode exactly in Python.
-        # Suffix comparisons cannot cover every equivalent encoded form.
+        # Match each literal character or its UTF-8 percent encoding. Only
+        # escape hex digits are case-insensitive; lot characters remain exact.
+        encoded_chars = []
+        for char in token:
+            encoded = "".join(
+                "%" + "".join(f"[{digit.lower()}{digit.upper()}]" if digit.isalpha() else digit
+                             for digit in f"{byte:02X}")
+                for byte in char.encode("utf-8")
+            )
+            encoded_chars.append(f"(?:{re.escape(char)}|{encoded})")
+        # Digital Link parsing strips surrounding decoded whitespace. Keep
+        # these variants as candidates too; the decoded comparison is final.
+        trailing_space = r"(?:[[:space:]]|%20|%09|%0[Aa]|%0[Bb]|%0[Cc]|%0[Dd])*"
+        params["lot_suffix_pattern"] = r"(?:\.|/10/)" + "".join(encoded_chars) + trailing_space + "$"
         clauses.append(
-            "(lower(e.traceability_lot_code) LIKE 'https://id.gs1.org/01/%'"
+            "((lower(e.traceability_lot_code) LIKE 'https://id.gs1.org/01/%'"
             " OR lower(e.traceability_lot_code) LIKE 'urn:epc:class:lgtin:%')"
+            " AND e.traceability_lot_code ~ :lot_suffix_pattern)"
         )
+
     return "(" + " OR ".join(clauses) + ")", params
 
 
@@ -115,7 +128,7 @@ def _query_tenant_events(
             params["date_to"] = date_to
 
         statement = text(f"""
-                WITH tenant_kdes AS (
+                WITH tenant_kdes AS NOT MATERIALIZED (
                     SELECT k.* FROM fsma.cte_kdes k
                     WHERE k.tenant_id = :tenant_id
                 )
