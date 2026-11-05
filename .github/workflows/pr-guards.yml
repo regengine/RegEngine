@@ -1163,18 +1163,14 @@ jobs:
 
   # All engines post through one shared GitHub account, so this is an audit trail and not a cryptographic gate.
   engine-review-pass:
-    # The required "Engine Review Pass" context is the commit status this job
-    # posts, which holds one latest value per SHA. The job must not share that
-    # name: its check runs pile up per event, and an old failure keeps a PR
-    # blocked after a later review passes.
-    name: "Engine Review Evaluator"
+    name: "Engine Review Pass"
     if: (github.event_name == 'pull_request' && github.event.action != 'ready_for_review') || github.event_name == 'pull_request_review' || github.event_name == 'issue_comment'
     # Review bursts must not cancel in-progress runs.
     concurrency:
       group: ${{ github.workflow }}-engine-review-pass-${{ github.event.pull_request.number || github.event.issue.number }}
       cancel-in-progress: false
     permissions:
-      checks: write
+      actions: write
       statuses: write
       pull-requests: read
       issues: read
@@ -1185,17 +1181,14 @@ jobs:
       - name: Verify engine review pass
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
-          retries: 3
           script: |
             const owner = context.repo.owner;
             const repo = context.repo.repo;
 
-            // The review verdict is the commit status posted on the PR head SHA, so a
-            // missing or blocking review does not fail this job. failRun is for when
-            // the verdict could not be evaluated or posted.
             // issue_comment events run in the default-branch context, so a failed job
-            // there is attributed to main even though it evaluated a PR head; only fail
-            // the job itself for events that run in the pull request's context.
+            // there is attributed to main even though it evaluated a PR head. The PR
+            // verdict is carried by the commit status posted on the PR head SHA; only
+            // fail the job itself for events that run in the pull request's context.
             const failRun = (msg) => {
               if (context.eventName === 'pull_request' || context.eventName === 'pull_request_review') {
                 core.setFailed(msg);
@@ -1251,48 +1244,6 @@ jobs:
 
             const ALLOWED_ASSOCIATIONS = new Set(['OWNER', 'MEMBER', 'COLLABORATOR']);
 
-            // If a failure verdict cannot be posted, an earlier success status would
-            // still satisfy the required context. This check run takes the required
-            // name in that case only, and the next posted success clears it.
-            const REQUIRED_CONTEXT = 'Engine Review Pass';
-            const UNDELIVERED_ID = 'engine-review-status-undelivered';
-
-            async function raiseUndeliveredFailure(description) {
-              try {
-                await github.rest.checks.create({
-                  owner,
-                  repo,
-                  head_sha: headSha,
-                  name: REQUIRED_CONTEXT,
-                  external_id: UNDELIVERED_ID,
-                  status: 'completed',
-                  conclusion: 'failure',
-                  output: { title: 'Failure verdict was not posted', summary: description },
-                });
-              } catch (err) {
-                failRun(`Failed to create fallback check run on ${headSha}: ${err.message}`);
-              }
-            }
-
-            async function clearUndeliveredFailures() {
-              try {
-                const runs = await github.paginate(github.rest.checks.listForRef, {
-                  owner,
-                  repo,
-                  ref: headSha,
-                  check_name: REQUIRED_CONTEXT,
-                  per_page: 100,
-                });
-                for (const run of runs) {
-                  if (run.external_id === UNDELIVERED_ID && run.conclusion === 'failure') {
-                    await github.rest.checks.update({ owner, repo, check_run_id: run.id, conclusion: 'success' });
-                  }
-                }
-              } catch (err) {
-                failRun(`Failed to clear fallback check run on ${headSha}: ${err.message}`);
-              }
-            }
-
             let statusPosted = false;
             async function setCommitStatus(state, description) {
               if (statusPosted) {
@@ -1306,44 +1257,69 @@ jobs:
                   repo,
                   sha: headSha,
                   state,
-                  context: REQUIRED_CONTEXT,
+                  context: 'Engine Review Pass',
                   description: description.slice(0, 140),
                   target_url: `https://github.com/${owner}/${repo}/actions/runs/${context.runId}`,
                 });
                 core.info(`Created commit status '${state}' on ${headSha}: ${description}`);
               } catch (err) {
-                failRun(`Failed to create commit status on ${headSha}: ${err.message}`);
-                if (state === 'failure') {
-                  await raiseUndeliveredFailure(description);
-                }
-                return;
-              }
-              if (state === 'success') {
-                await clearUndeliveredFailures();
+                core.warning(`Failed to create commit status on ${headSha}: ${err.message}`);
               }
             }
 
-            // Returns { failure: message } or { passEngines: [names] } for one pull request.
-            async function evaluatePullRequest(candidate) {
-              // A fork's token cannot post a verdict, so its PR could not retract a success
-              // posted earlier by a run with write access. Forks never get one.
-              if (candidate.head?.repo?.fork || candidate.head?.repo?.full_name !== candidate.base?.repo?.full_name) {
-                return { failure: 'Fork pull requests are not eligible. Push the branch to this repository.' };
+            // A failed or cancelled run of this job stays on the head SHA and blocks the
+            // PR even after a later run passes. Rerun the oldest one: it re-reads the
+            // reviews and, if it passes, reruns the next. One at a time, because a queued
+            // run is cancelled by the next one in the concurrency group. Best-effort: if
+            // this fails, the old result stands and the PR stays blocked until a rerun.
+            async function rerunStaleEvaluation() {
+              const stale = (conclusion) => conclusion === 'failure' || conclusion === 'cancelled';
+              try {
+                const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {
+                  owner,
+                  repo,
+                  head_sha: headSha,
+                  per_page: 100,
+                });
+                const candidates = runs
+                  .filter((r) => r.name === context.workflow && r.id !== context.runId && r.status === 'completed' && stale(r.conclusion))
+                  .sort((a, b) => a.id - b.id);
+                for (const run of candidates) {
+                  const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
+                    owner,
+                    repo,
+                    run_id: run.id,
+                    per_page: 100,
+                  });
+                  // Runs that are red for another job's sake would rerun forever.
+                  if (jobs.some((j) => j.name === 'Engine Review Pass' && stale(j.conclusion))) {
+                    await github.rest.actions.reRunWorkflowFailedJobs({ owner, repo, run_id: run.id });
+                    core.info(`Reran stale evaluation in run ${run.id}`);
+                    return;
+                  }
+                }
+              } catch (err) {
+                core.warning(`Could not rerun stale evaluations on ${headSha}: ${err.message}`);
               }
+            }
 
-              const headRef = candidate.head?.ref || '';
+            try {
+              const headRef = pr.head?.ref || '';
               const slashIndex = headRef.indexOf('/');
               const rawPrefix = slashIndex > 0 ? headRef.slice(0, slashIndex).trim() : '';
               const authorEngine = rawPrefix.toLowerCase();
 
               if (!ALLOWED_ENGINES.has(authorEngine)) {
-                return { failure: 'Invalid author engine. Please use an engine branch prefix such as gemini/ or claude/.' };
+                const msg = 'Invalid author engine. Please use an engine branch prefix such as gemini/ or claude/.';
+                await setCommitStatus('failure', msg);
+                failRun(msg);
+                return;
               }
 
               core.info(`Author engine: ${authorEngine} (from branch ${headRef})`);
               core.info(`Head SHA: ${headSha}`);
 
-              const prNumber = candidate.number;
+              const prNumber = pr.number;
               core.info(`Fetching reviews for pull request #${prNumber}...`);
 
               const reviews = await github.paginate(github.rest.pulls.listReviews, {
@@ -1455,46 +1431,24 @@ jobs:
 
               if (blockedMarkers.length > 0) {
                 const blockedEngines = blockedMarkers.map((m) => m.engine).join(', ');
-                return { failure: `Blocked by ${blockedEngines}` };
-              }
-
-              if (nonAuthorPassMarkers.length === 0) {
-                return { failure: 'No passing review from a non-author engine for current head SHA' };
-              }
-
-              return { passEngines: nonAuthorPassMarkers.map((m) => m.engine) };
-            }
-
-            try {
-              // The status belongs to the SHA, so every open PR at this head shares it.
-              // It may only pass if all of them pass.
-              const associated = await github.paginate(github.rest.repos.listPullRequestsAssociatedWithCommit, {
-                owner,
-                repo,
-                commit_sha: headSha,
-                per_page: 100,
-              });
-              const sharingHead = associated.filter((p) => p.state === 'open' && p.head?.sha === headSha);
-              const candidates = sharingHead.some((p) => p.number === pr.number) ? sharingHead : [pr, ...sharingHead];
-
-              const verdicts = [];
-              for (const candidate of candidates) {
-                verdicts.push({ number: candidate.number, ...(await evaluatePullRequest(candidate)) });
-              }
-
-              const failed = verdicts.filter((v) => v.failure);
-              if (failed.length > 0) {
-                const msg =
-                  candidates.length === 1 ? failed[0].failure : failed.map((v) => `PR #${v.number}: ${v.failure}`).join('; ');
+                const msg = `Blocked by ${blockedEngines}`;
                 await setCommitStatus('failure', msg);
-                core.info(`Engine Review Pass failed: ${msg}`);
+                failRun(`Engine Review Pass blocked: ${msg}`);
                 return;
               }
 
-              const passEngines = [...new Set(verdicts.flatMap((v) => v.passEngines))].join(', ');
+              if (nonAuthorPassMarkers.length === 0) {
+                const msg = 'No passing review from a non-author engine for current head SHA';
+                await setCommitStatus('failure', msg);
+                failRun(`Engine Review Pass failed: ${msg}`);
+                return;
+              }
+
+              const passEngines = nonAuthorPassMarkers.map((m) => m.engine).join(', ');
               const successMsg = `Passed by ${passEngines}`;
               await setCommitStatus('success', successMsg);
               core.info(`Engine Review Pass succeeded: ${successMsg}`);
+              await rerunStaleEvaluation();
             } catch (err) {
               core.error(`Unexpected error: ${err.message}`);
               await setCommitStatus('failure', `Error: ${err.message}`.slice(0, 140));
