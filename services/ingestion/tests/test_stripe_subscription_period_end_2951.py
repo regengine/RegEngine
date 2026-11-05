@@ -192,3 +192,48 @@ class TestGetSubscriptionPeriodEnd_Issue2951:
             f"a GET must not overwrite the stored renewal date, got "
             f"{stored.get('current_period_end')!r}"
         )
+
+
+class TestExtractSubscriptionFacilityQuantity:
+    def test_prefers_catalog_item_quantity(self, monkeypatch):
+        monkeypatch.setenv("STRIPE_PRICE_LIST_MONTHLY", "price_list_m")
+        subscription = {
+            "items": {"data": [{"quantity": 7, "price": {"id": "price_list_m"}}]},
+            "metadata": {"facility_quantity": "2"},
+        }
+        assert helpers_mod._extract_subscription_facility_quantity(subscription) == 7
+
+    def test_ignores_metered_addon_quantity(self, monkeypatch):
+        monkeypatch.setenv("STRIPE_PRICE_LIST_MONTHLY", "price_list_m")
+        monkeypatch.setenv("STRIPE_PRICE_METERED_LABEL_EVENTS", "price_metered")
+        subscription = {
+            "items": {
+                "data": [
+                    {"quantity": 1, "price": {"id": "price_metered"}},
+                    {"quantity": 7, "price": {"id": "price_list_m"}},
+                ]
+            },
+            "metadata": {"facility_quantity": "2"},
+        }
+        assert helpers_mod._extract_subscription_facility_quantity(subscription) == 7
+
+    def test_falls_back_to_metadata_when_only_addon_qty(self, monkeypatch):
+        monkeypatch.setenv("STRIPE_PRICE_METERED_LABEL_EVENTS", "price_metered")
+        subscription = {
+            "items": {"data": [{"quantity": 99, "price": {"id": "price_metered"}}]},
+            "metadata": {"facility_quantity": "4"},
+        }
+        assert helpers_mod._extract_subscription_facility_quantity(subscription) == 4
+
+    def test_falls_back_to_metadata(self):
+        subscription = {
+            "items": {"data": [{"price": {"id": "price_unknown"}}]},
+            "metadata": {"facility_quantity": "4"},
+        }
+        assert helpers_mod._extract_subscription_facility_quantity(subscription) == 4
+
+    def test_returns_none_when_unknown(self):
+        assert helpers_mod._extract_subscription_facility_quantity({"status": "active"}) is None
+        assert helpers_mod._extract_subscription_facility_quantity(
+            {"items": {"data": [{"quantity": 0}]}}
+        ) is None

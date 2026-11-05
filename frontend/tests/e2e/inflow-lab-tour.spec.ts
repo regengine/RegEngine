@@ -31,7 +31,7 @@ const WORKBENCH_TOUR = {
     path: '/tools/inflow-lab',
     stepCount: 4,
     actionStep: 1,
-    actionLabel: 'Run the demo',
+    actionLabel: 'Run the walkthrough',
     targets: [
         'section[aria-label="Inflow Lab environment boundary"]',
         '[data-tutorial="lab-primary-actions"]',
