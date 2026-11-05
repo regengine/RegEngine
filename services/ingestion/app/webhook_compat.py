@@ -441,7 +441,13 @@ async def ingest_events(
                 if summary is not None:
                     from shared.rules.enforcement import current_mode, should_reject
 
-                    should, reject_reason = should_reject(summary)
+                    if open_gaps:
+                        should, reject_reason = should_reject(
+                            summary,
+                            deferred_kdes=frozenset(gap.gap_key for gap in open_gaps),
+                        )
+                    else:
+                        should, reject_reason = should_reject(summary)
                     if should:
                         # Finding B — durable rejection audit row,
                         # written via its own session BEFORE the
