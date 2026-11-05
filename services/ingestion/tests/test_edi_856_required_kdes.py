@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 service_dir = Path(__file__).parent.parent
@@ -172,4 +172,32 @@ def test_multi_lot_receipt_may_share_a_reference(transaction_set: str) -> None:
         sender_tenant_id=_TENANT,
         partner_id=None,
         source="edi_inbound",
+    )
+
+
+def _check_945_lines(*lines: dict) -> None:
+    edi_ingestion_routes._reject_shared_tlc_source_for_distinct_lots(
+        tlc_source_reference="PACK-0310",
+        transaction_sets=[("945", {"line_items": list(lines)})],
+        traceability_lot_code="LOT-FORM",
+        sender_tenant_id=_TENANT,
+        partner_id=None,
+        source="edi_inbound",
+    )
+
+
+def test_one_short_lot_on_two_gtins_is_two_tlcs() -> None:
+    with pytest.raises(HTTPException) as refused:
+        _check_945_lines(
+            {"lot_number": "A1", "gtin": "00012345678901"},
+            {"lot_number": "A1", "gtin": "00012345678902"},
+        )
+
+    assert refused.value.detail["error"] == "edi_tlc_source_reference_with_multiple_lots"
+
+
+def test_one_short_lot_on_one_gtin_is_one_tlc() -> None:
+    _check_945_lines(
+        {"lot_number": "A1", "gtin": "00012345678901"},
+        {"lot_number": "A1", "gtin": "00012345678901"},
     )

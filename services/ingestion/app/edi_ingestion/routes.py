@@ -73,7 +73,7 @@ from .utils import (
     _valid_gln_or_none,
     _verify_partner_id,
 )
-from .validation import _validate_edi_as_fsma_event
+from .validation import _validate_edi_as_fsma_event, _warehouse_line_tlc
 
 logger = logging.getLogger("edi-ingestion")
 
@@ -124,10 +124,16 @@ def _reject_shared_tlc_source_for_distinct_lots(
         if _CTE_TYPE_BY_SET.get(transaction_set, WebhookCTEType.SHIPPING) == WebhookCTEType.SHIPPING
     ]
     lots: set[str] = set()
-    for _, extracted in shipping_sets:
+    for transaction_set, extracted in shipping_sets:
         for line in extracted.get("line_items") or [{}]:
             lot = line.get("lot_number")
-            lots.add(lot.strip() if isinstance(lot, str) and lot.strip() else traceability_lot_code)
+            lot = lot.strip() if isinstance(lot, str) else ""
+            if not lot:
+                lots.add(traceability_lot_code)
+            elif transaction_set == "945":
+                lots.add(_warehouse_line_tlc(lot, line))
+            else:
+                lots.add(lot)
     if len(lots) <= 1:
         return
     error = "edi_tlc_source_reference_with_multiple_lots"
