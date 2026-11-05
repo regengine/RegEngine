@@ -1273,7 +1273,7 @@ jobs:
             // run is cancelled by the next one in the concurrency group. Best-effort: if
             // this fails, the old result stands and the PR stays blocked until a rerun.
             async function rerunStaleEvaluation() {
-              const stale = (conclusion) => conclusion === 'failure' || conclusion === 'cancelled';
+              const stale = (conclusion) => ['failure', 'cancelled', 'timed_out'].includes(conclusion);
               try {
                 const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {
                   owner,
@@ -1285,17 +1285,22 @@ jobs:
                   .filter((r) => r.name === context.workflow && r.id !== context.runId && r.status === 'completed' && stale(r.conclusion))
                   .sort((a, b) => a.id - b.id);
                 for (const run of candidates) {
-                  const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
-                    owner,
-                    repo,
-                    run_id: run.id,
-                    per_page: 100,
-                  });
-                  // Runs that are red for another job's sake would rerun forever.
-                  if (jobs.some((j) => j.name === 'Engine Review Pass' && stale(j.conclusion))) {
-                    await github.rest.actions.reRunWorkflowFailedJobs({ owner, repo, run_id: run.id });
-                    core.info(`Reran stale evaluation in run ${run.id}`);
-                    return;
+                  try {
+                    const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
+                      owner,
+                      repo,
+                      run_id: run.id,
+                      per_page: 100,
+                    });
+                    // Runs that are red for another job's sake would rerun forever.
+                    if (jobs.some((j) => j.name === 'Engine Review Pass' && stale(j.conclusion))) {
+                      await github.rest.actions.reRunWorkflowFailedJobs({ owner, repo, run_id: run.id });
+                      core.info(`Reran stale evaluation in run ${run.id}`);
+                      return;
+                    }
+                  } catch (err) {
+                    // An expired run must not stop newer ones from being repaired.
+                    core.warning(`Could not rerun run ${run.id}: ${err.message}`);
                   }
                 }
               } catch (err) {
