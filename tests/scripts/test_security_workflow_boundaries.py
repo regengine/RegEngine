@@ -5,6 +5,8 @@ import subprocess
 from pathlib import Path
 from urllib.parse import urlsplit
 
+import re
+
 import pytest
 import yaml
 
@@ -25,7 +27,23 @@ def test_secret_scans_cover_main_and_non_main_prs():
     assert other_pr is None  # No branch or path filter can omit a non-main PR.
     assert other["jobs"]["secrets"]["if"] == "github.base_ref != 'main'"
     assert "secrets" in main["jobs"]["ci-status-gate"]["needs"]
-    assert "detect-secrets-hook" in (ROOT / "scripts/ci/check_secrets_baseline.sh").read_text()
+    wrapper = (ROOT / "scripts/ci/check_secrets_baseline.sh").read_text()
+    assert "detect-secrets-hook" in wrapper
+    # Filenames must follow an option terminator so dash-prefixed paths are scanned.
+    # Match the real hook invocation (not comments / error strings).
+    match = re.search(
+        r"(?m)^\s*detect-secrets-hook\b.*?status=\$\?",
+        wrapper,
+        flags=re.S,
+    )
+    assert match, "detect-secrets-hook invocation not found in wrapper"
+    hook_block = match.group(0)
+    # Require a standalone `--` argument (own line; optional shell line-
+    # continuation backslash), not a substring of `--exclude-files`.
+    term = re.search(r"(?m)^\s*--(?:\s*\\)?\s*$", hook_block)
+    assert term, "standalone -- option terminator missing before filenames"
+    assert '"$@"' in hook_block
+    assert term.start() < hook_block.index('"$@"')
     for workflow in (main, other):
         steps = workflow["jobs"]["secrets"]["steps"]
         assert any("gitleaks detect" in step.get("run", "") for step in steps)
