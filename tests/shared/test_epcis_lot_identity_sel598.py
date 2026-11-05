@@ -262,8 +262,9 @@ def test_export_lot_filter_bare_lot_reads_both_shapes():
 
     predicate, params = _lot_code_filter(SYN_LOT)
     assert "e.traceability_lot_code = :lot_code" in predicate
-    assert f"/10/{SYN_LOT}" in params.values()
-    assert f".{SYN_LOT}" in params.values()
+    assert params["lot_token"] == SYN_LOT
+    assert "urn:epc:class:lgtin:%" in predicate
+    assert "https://id.gs1.org/01/%" in predicate
     assert _row_matches_lot(SYN_LOT, SYN_LOT)
     assert _row_matches_lot(SYN_DL, SYN_LOT)
     assert _row_matches_lot(SYN_LGTIN, SYN_LOT)
@@ -282,3 +283,34 @@ def test_export_lot_filter_full_uri_also_reads_bare_rows():
     assert _row_matches_lot(SYN_LOT, SYN_DL)
     # A different GTIN's URI with the same lot is not the requested class.
     assert not _row_matches_lot(SYN_LGTIN_OTHER_GTIN, SYN_DL)
+
+
+def test_transformation_instance_inputs_preserve_product_and_serial():
+    first = "urn:epc:id:sgtin:0614141.123452.SERIAL9"
+    second = "urn:epc:id:sgtin:0614141.999990.SERIAL9"
+    inputs = _epcis_transformation_inputs({"inputEPCList": [first, second, f" {first} "]})
+    assert [item["traceability_lot_code"] for item in inputs] == [first, second]
+    assert [item["lot_token"] for item in inputs] == ["SERIAL9", "SERIAL9"]
+    assert [item["quantity"] for item in inputs] == [1.0, 1.0]
+
+
+@pytest.mark.parametrize("requested", [" LOT/A ", "LOT/A\n", "urn:epc:id:sgtin:0614141.123452.LOT/A"])
+def test_export_transformed_token_still_fetches_class_candidates(requested):
+    from ingestion.app.epcis_export import _lot_code_filter, _row_matches_lot
+
+    stored = f"https://id.gs1.org/01/{SYN_GTIN14}/10/LOT%2fA"
+    predicate, params = _lot_code_filter(requested)
+    assert "https://id.gs1.org/01/%" in predicate
+    assert params["lot_token"] == "LOT/A"
+    assert _row_matches_lot(stored, requested)
+    assert not _row_matches_lot(stored.replace("LOT", "lot"), requested)
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+def test_sgtin_normalizer_retains_full_identity_only_when_enabled(monkeypatch, enabled):
+    monkeypatch.setenv("LOT_IDENTITY_LOSSLESS", "1" if enabled else "0")
+    epc = "urn:epc:id:sgtin:0614141.123452.SERIAL9"
+    identity = normalize_epcis_lot(f" {epc} ")
+    assert identity.canonical_id == (epc if enabled else "SERIAL9")
+    assert identity.lot_token == "SERIAL9"
+    assert identity.gtin == SYN_GTIN_FROM_LGTIN

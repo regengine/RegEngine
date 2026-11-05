@@ -49,6 +49,12 @@ class _FakeResult:
     def fetchall(self) -> list[Any]:
         return list(self._rows)
 
+    def __iter__(self):
+        return iter(self._rows)
+
+    def close(self):
+        pass
+
 
 class _FakeSession:
     def __init__(self, execute_queue: list[Any] | None = None) -> None:
@@ -116,7 +122,9 @@ class TestQueryTenantEvents:
 
         sql, params = session.calls[0][1]
         expected_where = "WHERE e.tenant_id = :tenant_id"
-        expected_params = {"tenant_id": tenant_id, "row_limit": epcis_export._MAX_EXPORT_EVENTS + 1}
+        expected_params = {"tenant_id": tenant_id}
+        if lot_code is None:
+            expected_params["row_limit"] = epcis_export._MAX_EXPORT_EVENTS + 1
         if lot_code is not None:
             # SEL-598 dual-read: bare and full-class-URI TLCs both match.
             lot_predicate, lot_params = epcis_export._lot_code_filter(lot_code)
@@ -381,3 +389,23 @@ class TestExportFailsLoudly:
         response = client.post(path, json={"tenant_id": str(uuid4())})
         assert response.status_code == 413
         assert session.calls[0][1][1]["row_limit"] == 4
+
+
+@pytest.mark.parametrize("extra", [False, True])
+def test_lot_export_counts_exact_matches_before_cap(monkeypatch, extra):
+    monkeypatch.setattr(epcis_export, "_MAX_EXPORT_EVENTS", 2)
+    # More coarse candidates than the limit must not hide older exact matches.
+    collisions = [_event_row(traceability_lot_code="urn:epc:class:lgtin:0614141.123452.X.LOT/A") for _ in range(5)]
+    wanted = [_event_row(traceability_lot_code="https://id.gs1.org/01/00614141123452/10/LOT%2fA") for _ in range(3 if extra else 2)]
+    session = _FakeSession(execute_queue=[collisions + wanted])
+    monkeypatch.setattr(epcis_export, "get_db_safe", lambda: session)
+    request = epcis_export.ExportRequest(tenant_id=str(uuid4()), lot_code="LOT/A")
+    if extra:
+        with pytest.raises(epcis_export.HTTPException) as err:
+            epcis_export._load_export_rows(str(uuid4()), request)
+        assert err.value.status_code == 413
+    else:
+        rows = epcis_export._load_export_rows(str(uuid4()), request)
+        assert len(rows) == 2
+    assert "LIMIT" not in session.calls[0][1][0]
+    assert session.closed
