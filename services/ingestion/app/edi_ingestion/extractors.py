@@ -5,7 +5,7 @@ from typing import Any
 
 from .constants import _FROM_ENTITY_CODES, _TO_ENTITY_CODES
 from .parser import _first_segment
-from .utils import _safe_float
+from .utils import _safe_float, _valid_gln_or_none
 
 
 def _extract_envelope_ids(segments: list[list[str]]) -> dict[str, Any]:
@@ -515,18 +515,22 @@ def _extract_861_fields(segments: list[list[str]]) -> dict[str, Any]:
             entity_code = segment[1].upper() if len(segment) > 1 else ""
             name = segment[2] if len(segment) > 2 and segment[2] else None
             location_id = segment[4] if len(segment) > 4 and segment[4] else None
-            if entity_code == "SF" and not has_explicit_ship_from and (name or location_id):
-                # N1*SF names the location itself, so it replaces a supplier
-                # (SU) or shipper (SH) party that appeared earlier.
-                has_explicit_ship_from = True
-                data["ship_from_name"] = name
-                data["ship_from_gln"] = location_id
+            # Partners also send GLNs under qualifier 92. Accept a value only
+            # when it is itself a valid GLN, without sanitizing an internal ID.
+            gln = _valid_gln_or_none(location_id) if location_id and location_id.isascii() and location_id.isdigit() else None
+            if entity_code == "SF" and (name or gln):
+                if not has_explicit_ship_from or (name and not data["ship_from_name"]):
+                    # An actual ship-from overrides SU/SH; a later named SF
+                    # improves an identifier-only SF without mixing parties.
+                    has_explicit_ship_from = True
+                    data["ship_from_name"] = name
+                    data["ship_from_gln"] = gln
             elif entity_code in _FROM_ENTITY_CODES and not has_explicit_ship_from:
                 data["ship_from_name"] = data["ship_from_name"] or name
-                data["ship_from_gln"] = data["ship_from_gln"] or location_id
+                data["ship_from_gln"] = data["ship_from_gln"] or gln
             elif entity_code in _TO_ENTITY_CODES:
                 data["receiving_location_name"] = data["receiving_location_name"] or name
-                data["receiving_location_gln"] = data["receiving_location_gln"] or location_id
+                data["receiving_location_gln"] = data["receiving_location_gln"] or gln
 
         elif seg_id == "RCD":
             # RCD[5] is the condition code this extractor has always read.

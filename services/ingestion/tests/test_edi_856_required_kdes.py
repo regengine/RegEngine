@@ -177,3 +177,33 @@ def test_861_prefers_the_ship_from_party_over_a_supplier(
     assert _extract_861_fields(_parse_x12_segments(_receiving_advice_861(*parties).decode()))["ship_from_gln"] == (
         expected_gln
     )
+
+
+@pytest.mark.parametrize(
+    "parties",
+    [
+        ("N1*SF**92*6141410000014", _SHIP_FROM),
+        (_SHIP_FROM, "N1*SF**92*6141410000014"),
+    ],
+)
+def test_861_named_ship_from_wins_over_identifier_only(parties, captured):
+    """Do not discard an available SF name because its identifier came first."""
+    response = _post(
+        "/document",
+        {"traceability_lot_code": "LOT-861-KDE", "tlc_source_reference": "PACK-0311"},
+        _receiving_advice_861(*parties),
+    )
+    assert response.status_code == 201, response.text
+    event = captured[0].events[0]
+    assert event.kdes["immediate_previous_source"] == "Valley Fresh Farms"
+    assert _validate_event_kdes(event) == []
+
+
+@pytest.mark.parametrize("identifier", ["WAREHOUSE-1", "6141410000015", "X6141410000014"])
+@pytest.mark.parametrize("with_supplier", [False, True])
+def test_861_invalid_identifier_is_not_a_gln(identifier, with_supplier):
+    """Invalid identifier-only SF must neither become a GLN nor erase a name."""
+    parties = ((_SUPPLIER,) if with_supplier else ()) + (f"N1*SF**92*{identifier}",)
+    extracted = _extract_861_fields(_parse_x12_segments(_receiving_advice_861(*parties).decode()))
+    assert extracted["ship_from_name"] == ("Fresh Supply Co" if with_supplier else None)
+    assert extracted["ship_from_gln"] == ("0614141000005" if with_supplier else None)
