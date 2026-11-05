@@ -968,10 +968,17 @@ jobs:
           # because test-suite-check.yml does not trigger on that path.
           # test_prod_default_guards pins the localhost-default and
           # non-localhost-refusal guards on the operator helper scripts.
+          # test_check_secrets_baseline covers the detect-secrets wrapper
+          # exit map (0/3 pass, finding fail, baseline/setup vs missing hook).
+          # test_security_workflow_boundaries pins that PR secret workflows
+          # call the wrapper and that the wrapper terminates options before
+          # filenames — both must block merge, not only test-suite-check.
           pytest tests/scripts/test_bootstrap_staging_database.py \
             tests/scripts/test_v126_operator_guidance.py \
             tests/scripts/test_check_supply_chain.py \
             tests/scripts/test_prod_default_guards.py \
+            tests/scripts/test_check_secrets_baseline.py \
+            tests/scripts/test_security_workflow_boundaries.py \
             -v --no-cov -o "testpaths=tests"
 
       - name: Setup Node.js (published-spec contract needs the TS export)
