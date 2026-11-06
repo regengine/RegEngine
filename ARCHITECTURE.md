@@ -165,6 +165,7 @@ drifts from the tree):
 | `services/admin/app/metrics.py` | 1118 | admin observability | separate metric definitions from collectors/endpoints |
 | `services/admin/app/session_store.py` | 1047 | admin auth | split Redis and in-memory backends from session policy |
 | `services/ingestion/app/stripe_billing/routes.py` | 1029 | billing API | split plans/checkout, webhooks, portal/invoices, and metered-usage routes into separate modules |
+| `services/ingestion/app/fda_export/queries.py` | 1020 | export queries | split range, lot and trace queries from result shaping |
 | `services/ingestion/app/fda_export_service.py` | 1019 | export service | separate query assembly from writers |
 | `services/ingestion/app/remediation/service.py` | 1013 | remediation | split case lifecycle from notification side effects |
 
