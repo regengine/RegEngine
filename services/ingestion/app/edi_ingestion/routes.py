@@ -1534,12 +1534,13 @@ async def ingest_edi_document(
 
     events = []
     for slice_set, slice_extracted, slice_segments in event_inputs:
+        line_tlc = slice_extracted.get("traceability_lot_code", traceability_lot_code)
         try:
             events.append(
                 _build_ingest_event_for_set(
                     transaction_set=slice_set,
                     extracted=slice_extracted,
-                    traceability_lot_code=slice_extracted.get("traceability_lot_code", traceability_lot_code),
+                    traceability_lot_code=line_tlc,
                     product_description_override=product_description,
                     quantity_override=quantity_override,
                     unit_override=unit_of_measure_override,
@@ -1554,7 +1555,7 @@ async def ingest_edi_document(
             record = _record_edi_rejection(
                 tenant_id=sender_tenant_id,
                 transaction_set=slice_set,
-                traceability_lot_code=traceability_lot_code,
+                traceability_lot_code=line_tlc,
                 errors=[
                     {
                         "loc": ["quantity"],

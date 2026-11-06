@@ -497,3 +497,18 @@ def test_document_route_zero_quantity_writes_a_rejection_record(client, store, i
     assert records[0]["reason"] == "edi_non_positive_quantity"
     assert records[0]["needs_review"] is True
     assert ingested == []
+
+
+def test_zero_quantity_rejection_names_the_lines_lot(client, store, ingested):
+    """A line's own REF*LT lot is what was refused, not the lot on the form."""
+    line_lot = "06141410000012-OTHER"
+    raw = _zero_quantity_variant().replace(b"SN1**0*CA~", f"SN1**0*CA~REF*LT*{line_lot}~".encode())
+    raw = raw.replace(b"SE*10*0001~", b"SE*11*0001~")
+    assert line_lot != VALID_TLC
+
+    rejected = _post(client, raw, "/document")
+    assert rejected.status_code == 422, rejected.json()
+    assert rejected.json()["detail"]["error"] == "edi_non_positive_quantity"
+
+    record = rejection_log.list_edi_rejections(TENANT)[0]
+    assert record["traceability_lot_code"] == line_lot
