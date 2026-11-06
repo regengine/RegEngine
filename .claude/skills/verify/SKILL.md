@@ -29,18 +29,20 @@ RPID=/var/lib/postgresql/verify-redis.pid; rm -f "$RPID"
   || { echo "local service setup failed, or port 5432/6379 is held by something else; stop here"; false; }
 ```
 
-Roles must mirror `scripts/init-postgres.sh`: migrations run as a superuser
-owner, the app as NOBYPASSRLS roles. `get_tenant_context()` must exist before
+Roles must mirror `scripts/init-postgres.sh`: migrations run as the
+NOSUPERUSER/NOBYPASSRLS database owner `regengine_migrator` (v111 rejects an
+elevated migrator), the app as NOBYPASSRLS roles. `get_tenant_context()` must exist before
 `alembic upgrade head`, or the V043 migration fails with
 "app.tenant_id not set".
 
 ```bash
 psql -h 127.0.0.1 -U postgres -v ON_ERROR_STOP=1 \
-  -c "CREATE ROLE regengine_owner LOGIN PASSWORD 'pw' SUPERUSER;" \
-  -c "CREATE DATABASE regengine OWNER regengine_owner;" \
+  -c "CREATE ROLE regengine_migrator LOGIN PASSWORD 'pw' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION;" \
+  -c "CREATE DATABASE regengine OWNER regengine_migrator;" \
   -c "CREATE ROLE regengine LOGIN PASSWORD 'pw' NOSUPERUSER NOBYPASSRLS;" \
-  -c "CREATE ROLE regengine_sysadmin LOGIN PASSWORD 'pw' NOSUPERUSER NOBYPASSRLS;"
-psql -h 127.0.0.1 -U regengine_owner -d regengine -c "CREATE OR REPLACE FUNCTION get_tenant_context() RETURNS UUID AS \$f\$ DECLARE tid TEXT; BEGIN tid := NULLIF(current_setting('app.tenant_id', TRUE), ''); IF tid IS NULL THEN RAISE EXCEPTION 'app.tenant_id not set - tenant context required for RLS'; END IF; RETURN tid::UUID; END; \$f\$ LANGUAGE plpgsql STABLE;"
+  -c "CREATE ROLE regengine_sysadmin LOGIN PASSWORD 'pw' NOSUPERUSER NOBYPASSRLS;" \
+  -c "GRANT CONNECT ON DATABASE regengine TO regengine, regengine_sysadmin;"
+psql -h 127.0.0.1 -U regengine_migrator -d regengine -c "CREATE OR REPLACE FUNCTION get_tenant_context() RETURNS UUID AS \$f\$ DECLARE tid TEXT; BEGIN tid := NULLIF(current_setting('app.tenant_id', TRUE), ''); IF tid IS NULL THEN RAISE EXCEPTION 'app.tenant_id not set - tenant context required for RLS'; END IF; RETURN tid::UUID; END; \$f\$ LANGUAGE plpgsql STABLE;"
 ```
 
 ## Env and boot
@@ -57,7 +59,7 @@ S=<scratchpad dir>
   echo REGENGINE_AUTH_STRICT=
   echo DATABASE_URL=postgresql://regengine:pw@127.0.0.1:5432/regengine  # pragma: allowlist secret
   echo ADMIN_DATABASE_URL=postgresql+psycopg://regengine_sysadmin:pw@127.0.0.1:5432/regengine  # pragma: allowlist secret
-  echo MIGRATIONS_DATABASE_URL=postgresql://regengine_owner:pw@127.0.0.1:5432/regengine  # pragma: allowlist secret
+  echo MIGRATIONS_DATABASE_URL=postgresql://regengine_migrator:pw@127.0.0.1:5432/regengine  # pragma: allowlist secret
   echo REDIS_URL=redis://127.0.0.1:6379/0
   echo AUTH_TEST_BYPASS_TOKEN=verify-bypass-token-local
   echo AUTH_TEST_BYPASS_TENANT_ID=11111111-1111-1111-1111-111111111111
@@ -94,7 +96,8 @@ route under test is there (`ENABLED_ROUTERS` gates routers).
   `<dimension ref="...">` tag in `xl/worksheets/sheet1.xml` and re-zip.
 - No-persistence check: count rows in `supplier_cte_events`, `audit_logs` and
   `funnel_events` before and after via
-  `psql -h 127.0.0.1 -U regengine_owner -d regengine`.
+  `psql -h 127.0.0.1 -U postgres -d regengine` (superuser, so RLS does not
+  hide rows).
 
 ## Gotchas
 

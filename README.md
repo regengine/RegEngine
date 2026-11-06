@@ -190,9 +190,50 @@ docker compose -f docker-compose.dev.yml up -d
 
 export DATABASE_URL="postgresql://regengine:${POSTGRES_PASSWORD}@localhost:5432/regengine"
 export ADMIN_DATABASE_URL="postgresql://regengine_sysadmin:${POSTGRES_PASSWORD}@localhost:5432/regengine"
-export MIGRATIONS_DATABASE_URL="postgresql://regengine_owner:${POSTGRES_PASSWORD}@localhost:5432/regengine"
+export MIGRATIONS_DATABASE_URL="postgresql://regengine_migrator:${POSTGRES_PASSWORD}@localhost:5432/regengine"
+export REGENGINE_MIGRATIONS_ROLE=regengine_migrator
 export REDIS_URL="redis://localhost:6379/0"
 ./scripts/run-migrations.sh
+```
+
+Every local login is least-privilege, matching CI and production.
+[scripts/init-postgres.sh](scripts/init-postgres.sh) creates three
+NOSUPERUSER/NOBYPASSRLS roles: `regengine_migrator` owns the databases and
+runs Alembic (v111 refuses an elevated migrator), `regengine` is the runtime
+`DATABASE_URL` role, and `regengine_sysadmin` is the `ADMIN_DATABASE_URL`
+control-plane role. The container's `regengine_owner` user is a bootstrap
+superuser; it only creates roles and databases, so do not migrate or run the
+app as it. Init scripts only run on an empty volume. If your volume predates
+`regengine_migrator`, recreate it with
+`docker compose -f docker-compose.dev.yml down -v`.
+
+Required local secrets. Use any random local-only values and never reuse a
+production value:
+
+| Variable | Purpose |
+|---|---|
+| `AUTH_SECRET_KEY` (legacy alias `JWT_SECRET`) | Signs admin session JWTs ([services/shared/auth.py](services/shared/auth.py)). The frontend reads `JWT_SIGNING_KEY`, which must hold the same value. |
+| `AUDIT_INTEGRITY_KEY` | HMAC key for the audit-log hash chain ([services/shared/audit_logging/integrity.py](services/shared/audit_logging/integrity.py)). Use at least 32 bytes. |
+| `AUTH_OTP_HMAC_SECRET` | Keys email fingerprints and sign-in codes. Development falls back to an ephemeral per-process key, so set it whenever more than one process (for example the server and a seed script) must agree. |
+
+```bash
+export AUTH_SECRET_KEY="$(openssl rand -hex 32)"
+export JWT_SIGNING_KEY="$AUTH_SECRET_KEY"
+export AUDIT_INTEGRITY_KEY="$(openssl rand -hex 32)"
+export AUTH_OTP_HMAC_SECRET="$(openssl rand -hex 32)"
+```
+
+To seed a passwordless E2E login against this stack, run
+[scripts/seed_passwordless_e2e_user.py](scripts/seed_passwordless_e2e_user.py)
+with `REGENGINE_E2E_MODE=true`. It writes identity rows as
+`regengine_sysadmin` under RLS. No least-privilege role can write the
+`public.roles` reference table, so the first run on a fresh database needs a
+one-time Owner role. Pass the local bootstrap login only for that row:
+
+```bash
+REGENGINE_E2E_MODE=true \
+REGENGINE_E2E_ROLE_BOOTSTRAP_URL="postgresql://regengine_owner:${POSTGRES_PASSWORD}@localhost:5432/regengine" \
+  ./venv/bin/python scripts/seed_passwordless_e2e_user.py
 ```
 
 Mint a local test API key against this stack (seeds the test tenant and its

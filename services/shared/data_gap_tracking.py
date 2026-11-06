@@ -320,6 +320,43 @@ _AT_RISK_SQL = text(
 )
 
 
+# Open as of a moment, not as of now. The same predicate is in is_open_at. An
+# FDA export is regenerated later by /export/verify, and a gap that has closed
+# since must still read as open at the original moment or the bytes differ.
+_GAPS_OPEN_AT_SQL = text(
+    """
+    SELECT lot_code, cte_type, gap_kind, gap_key
+      FROM public.data_gap_events
+     WHERE tenant_id = CAST(:tid AS uuid)
+       AND lot_code = ANY(:lots)
+       AND opened_at <= CAST(:as_of AS timestamptz)
+       AND (closed_at IS NULL OR closed_at > CAST(:as_of AS timestamptz))
+    """
+)
+
+
+def fetch_gaps_open_at(
+    db_session: Any,
+    tenant_id: str,
+    lot_codes: Iterable[str],
+    as_of: datetime,
+) -> dict[tuple[str, str], tuple[str, ...]]:
+    """Gaps open at ``as_of``, by (lot code, lower-case CTE type).
+
+    Values are sorted ``"<gap_kind>: <gap_key>"`` labels, so a caller writing
+    them into an export gets the same bytes on every run. Raises on a database
+    error: unlike the writer, a reader's caller decides what failure means.
+    """
+    lots = sorted({lot.strip() for lot in lot_codes if lot and lot.strip()})
+    if not lots:
+        return {}
+    rows = db_session.execute(_GAPS_OPEN_AT_SQL, {"tid": tenant_id, "lots": lots, "as_of": as_of}).fetchall()
+    labels: dict[tuple[str, str], set[str]] = {}
+    for lot_code, cte_type, gap_kind, gap_key in rows:
+        labels.setdefault((lot_code, cte_type), set()).add(f"{gap_kind}: {gap_key}")
+    return {key: tuple(sorted(values)) for key, values in labels.items()}
+
+
 def fetch_supplier_summaries(
     db_session: Any,
     tenant_id: str,
