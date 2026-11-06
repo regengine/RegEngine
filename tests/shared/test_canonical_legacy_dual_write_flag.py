@@ -52,6 +52,28 @@ def test_default_and_on_values_keep_the_dual_write(monkeypatch, value):
     assert migration.legacy_dual_write_enabled() is True
 
 
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [("", "on"), ("   ", "on"), (" off ", "off"), ("OFF", "OFF"), ("1", "1")],
+)
+def test_settings_accept_empty_and_padded_flag_values(monkeypatch, value, expected):
+    """An empty or padded Railway value must not fail Settings() at import."""
+    from shared.base_config import BaseServiceSettings
+
+    monkeypatch.setenv(migration.DUAL_WRITE_FLAG_ENV, value)
+    assert BaseServiceSettings().canonical_legacy_dual_write == expected
+    assert migration.legacy_dual_write_enabled() is (expected.strip().lower() not in migration._FLAG_OFF_VALUES)
+
+
+def test_settings_reject_an_unknown_flag_value(monkeypatch):
+    from pydantic import ValidationError
+    from shared.base_config import BaseServiceSettings
+
+    monkeypatch.setenv(migration.DUAL_WRITE_FLAG_ENV, "maybe")
+    with pytest.raises(ValidationError):
+        BaseServiceSettings()
+
+
 def test_single_write_skips_legacy_and_counts_when_off(monkeypatch):
     monkeypatch.setenv(migration.DUAL_WRITE_FLAG_ENV, "off")
     session = _session_without_legacy_rows()

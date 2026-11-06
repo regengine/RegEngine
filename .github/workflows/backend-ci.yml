@@ -1565,6 +1565,7 @@ jobs:
           # gate had been enforcing. Promoting lint to a hard gate so
           # the next occurrence trips on PR open rather than in prod.
           if [[ "${{ needs.dependency-lock.result }}" != "success" \
+             || "${{ needs.image-import-check.result }}" != "success" \
              || "${{ needs.test.result }}" != "success" \
              || "${{ needs.lint.result }}" != "success" \
              || "${{ needs.lint-shared.result }}" != "success" \

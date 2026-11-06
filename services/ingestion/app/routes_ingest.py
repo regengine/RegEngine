@@ -43,11 +43,16 @@ from fastapi import (
 )
 from prometheus_client import REGISTRY, Counter, Histogram
 from pydantic import ValidationError
+from shared.auth import APIKey, require_api_key
+from shared.database import SessionLocal
+from shared.permissions import has_permission
+from shared.task_queue import enqueue_task
+from shared.tenant_rate_limiting import consume_tenant_rate_limit, rate_limit_reset_epoch
 
 # Advanced ingestion framework components
-from regengine_ingestion.audit import AuditLogger
-from regengine_ingestion.config import DatabaseConfig as FrameworkDatabaseConfig
-from regengine_ingestion.models import (
+from services.ingestion.regengine_ingestion.audit import AuditLogger
+from services.ingestion.regengine_ingestion.config import DatabaseConfig as FrameworkDatabaseConfig
+from services.ingestion.regengine_ingestion.models import (
     Document,
     DocumentHash as FrameworkDocumentHash,
     DocumentType,
@@ -55,13 +60,8 @@ from regengine_ingestion.models import (
     JobStatus,
     SourceMetadata as FrameworkSourceMetadata,
 )
-from regengine_ingestion.parsers import create_default_registry
-from regengine_ingestion.storage.database import DatabaseManager
-from shared.auth import APIKey, require_api_key
-from shared.database import SessionLocal
-from shared.permissions import has_permission
-from shared.task_queue import enqueue_task
-from shared.tenant_rate_limiting import consume_tenant_rate_limit, rate_limit_reset_epoch
+from services.ingestion.regengine_ingestion.parsers import create_default_registry
+from services.ingestion.regengine_ingestion.storage.database import DatabaseManager
 
 from .authz import IngestionPrincipal, get_ingestion_principal
 from .config import get_settings

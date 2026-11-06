@@ -17,25 +17,18 @@ from pathlib import Path
 os.environ.setdefault("USER_AGENT", "RegEngine/1.0 (+https://regengine.co)")
 
 # ── Path bootstrap ───────────────────────────────────────────────
-# Ensure services/ and services/shared are importable
+# Ensure the repo root and services/ (hence services/shared) are importable.
+# Only those two go on sys.path: production code imports the service
+# packages as services.<svc>.app.<module> (WI-02, 2026-11-04), so no single
+# service's app/ directory may shadow the others here, matching the image's
+# PYTHONPATH=/app:/app/services in the Dockerfile. backend-ci's
+# image-import-check and scripts/check_legacy_dead_code.py keep bare
+# `app.` imports out of production code.
 _APP_DIR = Path(__file__).resolve().parent
 _ROOT_DIR = _APP_DIR.parent
 _SERVICES_DIR = _ROOT_DIR / "services"
-_INGESTION_DIR = _SERVICES_DIR / "ingestion"
-_ADMIN_DIR = _SERVICES_DIR / "admin"
-_GRAPH_DIR = _SERVICES_DIR / "graph"
-_NLP_DIR = _SERVICES_DIR / "nlp"
-_COMPLIANCE_DIR = _SERVICES_DIR / "compliance"
 
-for p in [
-    str(_ROOT_DIR),
-    str(_SERVICES_DIR),
-    str(_INGESTION_DIR),
-    str(_ADMIN_DIR),
-    str(_GRAPH_DIR),
-    str(_NLP_DIR),
-    str(_COMPLIANCE_DIR),
-]:
+for p in [str(_ROOT_DIR), str(_SERVICES_DIR)]:
     if p not in sys.path:
         sys.path.insert(0, p)
 
