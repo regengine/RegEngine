@@ -234,6 +234,11 @@ def _has_text(value: Any) -> bool:
     return bool(value.strip()) if isinstance(value, str) else bool(value)
 
 
+def _first_text(*values: Any) -> Any:
+    """Return the first value the gate would count as present, or None."""
+    return next((value for value in values if _has_text(value)), None)
+
+
 def _positive_float_or_none(value: Any) -> float | None:
     try:
         parsed = float(str(value).strip())
@@ -871,6 +876,7 @@ async def ingest_edi_856(
     tlc_source = tlc_source_reference.strip() if tlc_source_reference else None
     # A blank override must not replace a real document value downstream.
     product_description = (product_description or "").strip() or None
+    unit_of_measure_override = (unit_of_measure_override or "").strip() or None
     ship_from_location_override = (ship_from_location_override or "").strip() or None
     ship_to_location_override = (ship_to_location_override or "").strip() or None
 
@@ -1192,7 +1198,7 @@ def _build_ingest_event_for_set(
             {
                 # The names the required-KDE gate checks (§1.1345(a)(4), (7), (8)).
                 "receive_date": event_date,
-                "immediate_previous_source": extracted.get("ship_from_name") or extracted.get("ship_from_gln"),
+                "immediate_previous_source": _first_text(extracted.get("ship_from_name"), extracted.get("ship_from_gln")),
                 "reference_document": extracted.get("reference_document_number"),
                 "tlc_source_reference": extracted.get("tlc_source_reference"),
                 "receiving_advice_number": extracted.get("receiving_advice_number"),
@@ -1274,7 +1280,7 @@ def _build_ingest_event_for_set(
         )
         if transaction_set == "944":
             kdes["receive_date"] = event_date
-            kdes["immediate_previous_source"] = extracted.get("ship_from_name") or extracted.get("ship_from_gln")
+            kdes["immediate_previous_source"] = _first_text(extracted.get("ship_from_name"), extracted.get("ship_from_gln"))
         else:
             kdes["ship_date"] = event_date
         if extracted.get("depositor_gln"):
@@ -1444,6 +1450,7 @@ async def ingest_edi_document(
     tlc_source = tlc_source_reference.strip() if tlc_source_reference else None
     # A blank override must not replace a real document value downstream.
     product_description = (product_description or "").strip() or None
+    unit_of_measure_override = (unit_of_measure_override or "").strip() or None
 
     # #1160 + #1165: validate and reserve the shared envelope once per
     # document, before validating any transaction set or warehouse line.

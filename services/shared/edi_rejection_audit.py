@@ -25,13 +25,11 @@ def persist_edi_rejection(record: dict[str, Any]) -> None:
     session = None
     try:
         from shared.database import SessionLocal  # noqa: PLC0415
+        from shared.tenant_context import set_tenant_guc  # noqa: PLC0415
         from sqlalchemy import text  # noqa: PLC0415
 
         session = SessionLocal()
-        session.execute(
-            text("SELECT set_config('app.tenant_id', :tenant_id, true)"),
-            {"tenant_id": str(record["tenant_id"])},
-        )
+        set_tenant_guc(session, str(record["tenant_id"]))
         session.execute(
             # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
             text(

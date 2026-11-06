@@ -750,3 +750,27 @@ def test_rejection_evidence_is_written_durably(client: TestClient, monkeypatch: 
     assert [row["rejection_id"] for row in written] == [response.json()["detail"]["rejection_id"]]
     assert written[0]["tenant_id"] == TENANT
     assert written[0]["errors"][0]["loc"] == ["tlc_source_reference"]
+
+
+@pytest.mark.parametrize("route", ROUTES)
+def test_blank_unit_override_keeps_the_document_unit(
+    client: TestClient, stored: list[dict[str, Any]], route: str
+) -> None:
+    response = _post(client, route, tlc_source_reference=TLC_SOURCE, unit_of_measure_override="   ")
+
+    assert response.status_code == 201, response.text
+    assert response.json()["ingestion_result"]["accepted"] == 1
+    assert stored[0]["unit_of_measure"] == "cases"
+
+
+def test_whitespace_861_ship_from_name_falls_back_to_the_gln(
+    client: TestClient, stored: list[dict[str, Any]], reserved: list[Any]
+) -> None:
+    gln = "6141410000014"
+    body = [f"N1*SF*   *92*{gln}" if item == SHIP_FROM else item for item in VALID_DOCUMENTS["861"]]
+
+    response = _post(client, "/document", _document("861", *body), tlc_source_reference=TLC_SOURCE)
+
+    assert response.status_code == 201, response.text
+    assert response.json()["ingestion_result"]["accepted"] == 1
+    assert stored[0]["kdes"]["immediate_previous_source"] == gln
