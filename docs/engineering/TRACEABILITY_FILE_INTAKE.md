@@ -302,8 +302,10 @@ assigned id and the GLN stays empty.
 - ISA13 dedup is per tenant, sender and receiver. While the first attempt
   is running, a retransmission gets HTTP 503 with `Retry-After`: nothing is
   confirmed stored yet, so send it again. Once events are stored, a
-  retransmission gets HTTP 409 `duplicate_interchange`. That includes a
-  partly accepted interchange, for which rejected lines need a new ISA13.
+  retransmission gets HTTP 409 `duplicate_interchange`.
+- An interchange stores completely or not at all. If any line is rejected
+  during ingest, nothing is stored, every event in `ingestion_result` is
+  rejected, and the ISA13 is freed, so the corrected document can reuse it.
   A request with an `Idempotency-Key` header can get that layer's own 409
   `idempotency_request_in_progress` first.
 - One functional group, one transaction-set type. A mix is HTTP 422
