@@ -170,6 +170,12 @@ A logged rejection is written to `fsma.edi_rejections` before its `rejection_id`
 is returned. If that write fails, the response is HTTP 503 and no id is issued,
 so retry the document.
 
+On `POST /api/v1/ingest/edi`, a line the event model refuses, such as a lot
+code under three characters, is HTTP 422 `edi_invalid_event`. It's logged like
+other rejections, and the ISA13 is freed for the corrected resend.
+`quantity_override`, `unit_of_measure_override`, and `product_description` count
+as the line's values during FSMA validation on `/document`.
+
 ### `POST /api/v1/ingest/edi` (856 only)
 
 One ST/SE set. A second set is HTTP 422 `multiple_transaction_sets`. The

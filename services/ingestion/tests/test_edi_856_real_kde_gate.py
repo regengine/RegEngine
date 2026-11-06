@@ -774,3 +774,54 @@ def test_whitespace_861_ship_from_name_falls_back_to_the_gln(
     assert response.status_code == 201, response.text
     assert response.json()["ingestion_result"]["accepted"] == 1
     assert stored[0]["kdes"]["immediate_previous_source"] == gln
+
+
+@pytest.mark.parametrize(
+    ("route", "error"),
+    [("", "edi_invalid_event"), ("/document", "fsma_validation_failed")],
+    ids=["legacy", "document"],
+)
+def test_too_short_line_lot_is_a_logged_422_and_frees_the_claim(
+    client: TestClient,
+    stored: list[dict[str, Any]],
+    monkeypatch: pytest.MonkeyPatch,
+    route: str,
+    error: str,
+) -> None:
+    written: list[dict[str, Any]] = []
+    released: list[Any] = []
+    monkeypatch.setattr(edi_rejection_audit, "persist_edi_rejection", written.append)
+    monkeypatch.setattr(edi_routes, "release_interchange", lambda *claim: released.append(claim))
+    raw = FIXTURE.read_bytes().replace(b"SN1**200*CA~", b"SN1**200*CA~REF*LT*AA~")
+
+    response = _post(client, route, raw, tlc_source_reference=TLC_SOURCE)
+
+    assert response.status_code == 422, response.text
+    assert response.json()["detail"]["error"] == error
+    assert len(written) == 1
+    assert stored == []
+    assert len(released) == 1
+
+
+@pytest.mark.parametrize("transaction_set", ["861", "944", "945"])
+def test_quantity_override_repairs_a_blank_line_quantity(
+    client: TestClient, stored: list[dict[str, Any]], transaction_set: str
+) -> None:
+    blanked = {
+        "861": ("RCD**200*CA", "RCD***CA"),
+        "944": ("W07*200*CA", "W07**CA"),
+        "945": ("W12*CC*200*200*0*CA", "W12*CC*200**0*CA"),
+    }[transaction_set]
+    body = [item.replace(*blanked) for item in VALID_DOCUMENTS[transaction_set]]
+
+    response = _post(
+        client,
+        "/document",
+        _document(transaction_set, *body),
+        tlc_source_reference=TLC_SOURCE,
+        quantity_override="150",
+    )
+
+    assert response.status_code == 201, response.text
+    assert response.json()["ingestion_result"]["accepted"] == 1
+    assert stored[0]["quantity"] == 150

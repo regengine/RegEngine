@@ -368,6 +368,46 @@ def _reject_missing_required_kdes(
     )
 
 
+def _reject_invalid_event(
+    exc: ValidationError,
+    *,
+    transaction_set: str,
+    sender_tenant_id: str,
+    traceability_lot_code: str,
+    extracted: dict[str, Any],
+    partner_id: str | None,
+    source: str,
+) -> None:
+    """Refuse a line the event model will not accept, such as a too-short lot.
+
+    The ISA13 claim is already held here. Raising releases it, so the corrected
+    resend is not a 409 replay.
+    """
+    errors = exc.errors(include_context=False, include_url=False)
+    rejection_record = _record_edi_rejection(
+        tenant_id=sender_tenant_id,
+        transaction_set=transaction_set,
+        traceability_lot_code=traceability_lot_code,
+        errors=errors,
+        extracted=extracted,
+        partner_id=partner_id,
+        source=source,
+        reason="edi_invalid_event",
+    )
+    raise HTTPException(
+        status_code=422,
+        detail={
+            "error": "edi_invalid_event",
+            "message": (
+                f"EDI {transaction_set} has a line that cannot become an FSMA event. "
+                "No events were persisted; each entry in errors says what to correct."
+            ),
+            "rejection_id": rejection_record["rejection_id"],
+            "errors": errors,
+        },
+    ) from exc
+
+
 def _preflight_856_required_kdes(
     *,
     extracted: dict[str, Any],
@@ -984,19 +1024,30 @@ async def ingest_edi_856(
             "partner_id": x_partner_id,
             "immediate_previous_source": ship_from_name,
         }
-        events.append(
-            IngestEvent(
-                cte_type=WebhookCTEType.SHIPPING,
-                traceability_lot_code=line_tlc,
-                product_description=product_name,
-                quantity=resolved_quantity,
-                unit_of_measure=resolved_unit,
-                location_gln=ship_from_gln,
-                location_name=ship_from_name,
-                timestamp=timestamp,
-                kdes={k: v for k, v in kdes.items() if v is not None and v != ""},
+        try:
+            events.append(
+                IngestEvent(
+                    cte_type=WebhookCTEType.SHIPPING,
+                    traceability_lot_code=line_tlc,
+                    product_description=product_name,
+                    quantity=resolved_quantity,
+                    unit_of_measure=resolved_unit,
+                    location_gln=ship_from_gln,
+                    location_name=ship_from_name,
+                    timestamp=timestamp,
+                    kdes={k: v for k, v in kdes.items() if v is not None and v != ""},
+                )
             )
-        )
+        except ValidationError as exc:
+            _reject_invalid_event(
+                exc,
+                transaction_set="856",
+                sender_tenant_id=sender_tenant_id,
+                traceability_lot_code=line_tlc,
+                extracted=extracted,
+                partner_id=x_partner_id,
+                source=source,
+            )
 
     payload = WebhookPayload(
         source=source,
@@ -1198,7 +1249,9 @@ def _build_ingest_event_for_set(
             {
                 # The names the required-KDE gate checks (§1.1345(a)(4), (7), (8)).
                 "receive_date": event_date,
-                "immediate_previous_source": _first_text(extracted.get("ship_from_name"), extracted.get("ship_from_gln")),
+                "immediate_previous_source": _first_text(
+                    extracted.get("ship_from_name"), extracted.get("ship_from_gln")
+                ),
                 "reference_document": extracted.get("reference_document_number"),
                 "tlc_source_reference": extracted.get("tlc_source_reference"),
                 "receiving_advice_number": extracted.get("receiving_advice_number"),
@@ -1280,7 +1333,9 @@ def _build_ingest_event_for_set(
         )
         if transaction_set == "944":
             kdes["receive_date"] = event_date
-            kdes["immediate_previous_source"] = _first_text(extracted.get("ship_from_name"), extracted.get("ship_from_gln"))
+            kdes["immediate_previous_source"] = _first_text(
+                extracted.get("ship_from_name"), extracted.get("ship_from_gln")
+            )
         else:
             kdes["ship_date"] = event_date
         if extracted.get("depositor_gln"):
@@ -1554,8 +1609,14 @@ async def ingest_edi_document(
     rejection_record: dict[str, Any] | None = None
     for slice_set, slice_extracted, _ in event_inputs:
         try:
+            # Overrides replace these values on the event, so validate them too.
+            override_values = {
+                "quantity": quantity_override,
+                "unit_of_measure": unit_of_measure_override,
+                "product_description": product_description,
+            }
             validated = _validate_edi_as_fsma_event(
-                slice_extracted,
+                {**slice_extracted, **{k: v for k, v in override_values.items() if v is not None}},
                 slice_set,
                 traceability_lot_code,
                 sender_tenant_id,
@@ -1750,19 +1811,32 @@ async def ingest_edi_document(
                 },
             )
 
-    events = [
-        _build_ingest_event_for_set(
-            transaction_set=slice_set,
-            extracted=slice_extracted,
-            traceability_lot_code=slice_extracted.get("traceability_lot_code", traceability_lot_code),
-            product_description_override=product_description,
-            quantity_override=quantity_override,
-            unit_override=unit_of_measure_override,
-            location_override=location_override,
-            segments=slice_segments,
-        )
-        for slice_set, slice_extracted, slice_segments in event_inputs
-    ]
+    events: list[IngestEvent] = []
+    for slice_set, slice_extracted, slice_segments in event_inputs:
+        event_tlc = slice_extracted.get("traceability_lot_code", traceability_lot_code)
+        try:
+            events.append(
+                _build_ingest_event_for_set(
+                    transaction_set=slice_set,
+                    extracted=slice_extracted,
+                    traceability_lot_code=event_tlc,
+                    product_description_override=product_description,
+                    quantity_override=quantity_override,
+                    unit_override=unit_of_measure_override,
+                    location_override=location_override,
+                    segments=slice_segments,
+                )
+            )
+        except ValidationError as exc:
+            _reject_invalid_event(
+                exc,
+                transaction_set=slice_set,
+                sender_tenant_id=sender_tenant_id,
+                traceability_lot_code=event_tlc,
+                extracted=slice_extracted,
+                partner_id=x_partner_id,
+                source=source,
+            )
 
     payload = WebhookPayload(
         source=f"{source}_{transaction_set}" if source == "edi_inbound" else source,
