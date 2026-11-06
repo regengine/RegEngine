@@ -603,8 +603,13 @@ async def ingest_events(
             db_session.commit()
         # After the commit so closes reference durable records; never raises.
         record_outcomes(db_session, tenant_id, gap_outcomes)
+        # The events are durable now. A graph outage must not fail the request,
+        # or the caller would release a claim on stored events.
         for event_id, event in pending_graph_sync:
-            _publish_graph_sync(event_id, event, tenant_id)
+            try:
+                _publish_graph_sync(event_id, event, tenant_id)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("compat_graph_sync_failed event_id=%s error_type=%s", event_id, type(exc).__name__)
     except Exception:
         if db_session:
             db_session.rollback()

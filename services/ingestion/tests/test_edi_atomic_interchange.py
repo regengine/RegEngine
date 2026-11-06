@@ -194,3 +194,17 @@ async def test_other_callers_keep_per_event_acceptance(harness: dict[str, Any]) 
     assert (result.accepted, result.rejected) == (1, 1)
     assert ("cte", "00012345678901-LOT1") in harness["journal"]
     assert len(harness["published"]) == 1
+
+
+async def test_graph_outage_after_commit_does_not_fail_a_stored_batch(
+    harness: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def _down(event_id: str, event: IngestEvent, tenant_id: str) -> None:
+        raise OSError("graph queue unavailable")
+
+    monkeypatch.setattr(webhook_compat, "_publish_graph_sync", _down)
+
+    result = await _ingest(all_or_nothing=True)
+
+    assert (result.accepted, result.rejected) == (2, 0)
+    assert sum(1 for kind, _ in harness["journal"] if kind == "cte") == 2
