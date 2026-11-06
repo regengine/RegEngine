@@ -34,7 +34,6 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, field_validator
 from shared.epcis_lot_identity import (
     lossless_enabled,
-    lot_token_only,
     normalize_epcis_lot,
     parse_class_uri,
 )
