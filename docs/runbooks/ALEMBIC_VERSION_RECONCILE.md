@@ -54,7 +54,7 @@ The three `absent_*` signatures (v088, v090 `4c5d6e7f8a9b`, v132) read
 `present_beyond_first_gap` on a v079 database. That is expected; read them
 with their neighbours. Verified on a scratch PostgreSQL 16 cluster on
 2026-10-30: the script runs with `ON_ERROR_STOP`, returns the signature rows
-(74 as of 2026-11-04) and the summary, and leaves no writes.
+(75 as of 2026-11-06) and the summary, and leaves no writes.
 
 Save the output next to the run date under
 `docs/operations/` as ALEMBIC_RECONCILE_(date).txt. It contains no
@@ -94,7 +94,7 @@ supported runner, not editing the row. The procedure is already written:
    ownership, extension ownership, memberships.
 2. `docs/operations/MIGRATION_V079_TO_V120_2026_09_05.md` "Controlled
    execution sequence": steps 1 to 8, with the target now
-   the current head (`08c7cf36ddbe`, v141, as of 2026-11-04) instead of
+   the current head (`9c0bfe465816`, v142, as of 2026-11-06) instead of
    `c6a120b4e901`.
 3. Before step 4 of that sequence, resolve decisions B1 to B7 in the
    decision record. The hand-applied changes without an Alembic

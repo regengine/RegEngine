@@ -110,7 +110,8 @@ WITH sig(ord, revision, label, kind, arg1, arg2, note) AS (
     (71, 'a3f7ce361b0e', 'v137', 'relation', 'fsma.epcis_document_receipts', '', 'HAND-APPLIED: supabase 20261025090100'),  -- pragma: allowlist secret
     (72, 'e7a1c9d2f4b0', 'v139', 'privilege_column_select', 'regengine', 'public.tenants', 'column status; NULL when the role is absent; supabase 20261028120000 renders it'),  -- pragma: allowlist secret
     (73, 'b8c1e4f2a901', 'v140', 'relation', 'public.partner_files', '', 'supabase 20261028100000 renders it; production application not recorded'),  -- pragma: allowlist secret
-    (74, '08c7cf36ddbe', 'v141', 'function', 'fsma.prevent_traceability_event_mutation', '', 'current head')  -- pragma: allowlist secret
+    (74, '08c7cf36ddbe', 'v141', 'function', 'fsma.prevent_traceability_event_mutation', '', ''),  -- pragma: allowlist secret
+    (75, '9c0bfe465816', 'v142', 'privilege_column_update_closed_at', 'regengine', 'public.data_gap_events', 'current head; NULL when the role is absent; supabase 20261104120000 renders it')  -- pragma: allowlist secret
 ),
 checked AS (
   SELECT ord, revision, label, kind, arg1, arg2, note,
@@ -171,6 +172,11 @@ checked AS (
           CASE WHEN EXISTS (SELECT 1 FROM pg_catalog.pg_roles r WHERE r.rolname = arg1)
                 AND pg_catalog.to_regclass(arg2) IS NOT NULL
                THEN pg_catalog.has_column_privilege(arg1, arg2, 'status', 'SELECT')
+               ELSE NULL END)
+      WHEN 'privilege_column_update_closed_at' THEN (
+          CASE WHEN EXISTS (SELECT 1 FROM pg_catalog.pg_roles r WHERE r.rolname = arg1)
+                AND pg_catalog.to_regclass(arg2) IS NOT NULL
+               THEN pg_catalog.has_column_privilege(arg1, arg2, 'closed_at', 'UPDATE')
                ELSE NULL END)
       WHEN 'data_user_emails_fingerprint' THEN (
           CASE WHEN pg_catalog.to_regclass('public.user_emails') IS NULL THEN NULL
@@ -270,7 +276,8 @@ WITH sig(ord, revision, label, kind, arg1, arg2, note) AS (
     (71, 'a3f7ce361b0e', 'v137', 'relation', 'fsma.epcis_document_receipts', '', 'HAND-APPLIED: supabase 20261025090100'),  -- pragma: allowlist secret
     (72, 'e7a1c9d2f4b0', 'v139', 'privilege_column_select', 'regengine', 'public.tenants', 'column status; NULL when the role is absent; supabase 20261028120000 renders it'),  -- pragma: allowlist secret
     (73, 'b8c1e4f2a901', 'v140', 'relation', 'public.partner_files', '', 'supabase 20261028100000 renders it; production application not recorded'),  -- pragma: allowlist secret
-    (74, '08c7cf36ddbe', 'v141', 'function', 'fsma.prevent_traceability_event_mutation', '', 'current head')  -- pragma: allowlist secret
+    (74, '08c7cf36ddbe', 'v141', 'function', 'fsma.prevent_traceability_event_mutation', '', ''),  -- pragma: allowlist secret
+    (75, '9c0bfe465816', 'v142', 'privilege_column_update_closed_at', 'regengine', 'public.data_gap_events', 'current head; NULL when the role is absent; supabase 20261104120000 renders it')  -- pragma: allowlist secret
 ),
 checked AS (
   SELECT ord, revision, label, note,
