@@ -162,6 +162,14 @@ CCYYMMDD or YYMMDD is HTTP 400 `invalid_edi_date`. A parsed date older
 than 90 days, or more than 24 hours in the future, keeps that calendar
 date on the event and snaps the ingest timestamp to now.
 
+A stored EDI document is retained verbatim. Its `fsma.ingestion_runs` row has
+source system `edi`, its bytes are in `fsma.manifest_blobs`, and each event
+carries the run id.
+
+A logged rejection is written to `fsma.edi_rejections` before its `rejection_id`
+is returned. If that write fails, the response is HTTP 503 and no id is issued,
+so retry the document.
+
 ### `POST /api/v1/ingest/edi` (856 only)
 
 One ST/SE set. A second set is HTTP 422 `multiple_transaction_sets`. The

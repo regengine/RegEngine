@@ -11,6 +11,7 @@ a logged 422 before the ISA13 is reserved so a corrected resend is not a replay.
 
 from __future__ import annotations
 
+import hashlib
 import sys
 from pathlib import Path
 from typing import Any, Iterator
@@ -37,11 +38,13 @@ import shared.cte_persistence as cte_persistence  # noqa: E402
 import shared.rules_engine as rules_engine  # noqa: E402
 from app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
 from app.edi_ingestion import router as edi_router  # noqa: E402
+from shared import edi_rejection_audit  # noqa: E402
 
 TENANT = "00000000-0000-0000-0000-000000000123"
 FIXTURE = Path(__file__).parent / "fixtures" / "edi_corpus" / "asn_856.edi"
 ROUTES = ["", "/document"]
 TLC_SOURCE = "0061414100001"
+receipts: list[Any] = []
 
 
 class _Savepoint:
@@ -125,6 +128,12 @@ def stored(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
     monkeypatch.setattr(canonical_persistence, "CanonicalEventStore", _NoCanonicalStore)
     monkeypatch.setattr(rules_engine, "RulesEngine", _NoRules)
     monkeypatch.setattr(edi_routes, "check_and_record_interchange", lambda **kwargs: (False, None))
+    monkeypatch.setattr(
+        webhook_compat,
+        "_open_ingestion_run",
+        lambda db, tenant_id, source, receipt: (receipts.append(receipt), "00000000-0000-0000-0000-000000000777")[1],
+    )
+    monkeypatch.setattr(webhook_compat, "_close_ingestion_run", lambda *a, **k: None)
     return calls
 
 
@@ -689,3 +698,55 @@ def test_blank_product_override_keeps_the_document_product(
     assert response.status_code == 201, response.text
     assert response.json()["ingestion_result"]["accepted"] == 1
     assert stored[0]["product_description"] == "ROMAINE-12CT"
+
+
+@pytest.mark.parametrize("route", ROUTES)
+def test_uploaded_856_is_retained_as_the_source_of_its_events(
+    client: TestClient, stored: list[dict[str, Any]], route: str
+) -> None:
+    receipts.clear()
+    raw = FIXTURE.read_bytes()
+
+    response = _post(client, route, raw, tlc_source_reference=TLC_SOURCE)
+
+    assert response.status_code == 201, response.text
+    assert response.json()["ingestion_result"]["ingestion_run_id"]
+    assert [receipt.sha256 for receipt in receipts] == [hashlib.sha256(raw).hexdigest()]
+    assert receipts[0].filename == "asn.edi"
+    assert receipts[0].raw_bytes == raw
+    assert receipts[0].source_system == "edi"
+    assert receipts[0].record_count == 1
+
+
+@pytest.mark.parametrize("route", ROUTES)
+def test_rejection_id_is_not_issued_without_durable_evidence(
+    client: TestClient,
+    stored: list[dict[str, Any]],
+    reserved: list[Any],
+    monkeypatch: pytest.MonkeyPatch,
+    route: str,
+) -> None:
+    def _unavailable(record: dict[str, Any]) -> None:
+        raise edi_rejection_audit.EdiRejectionAuditUnavailable("down")
+
+    monkeypatch.setattr(edi_rejection_audit, "persist_edi_rejection", _unavailable)
+
+    response = _post(client, route)
+
+    assert response.status_code == 503, response.text
+    assert "rejection_id" not in response.text
+    assert stored == []
+    assert reserved == []
+
+
+@pytest.mark.parametrize("route", ROUTES)
+def test_rejection_evidence_is_written_durably(client: TestClient, monkeypatch: pytest.MonkeyPatch, route: str) -> None:
+    written: list[dict[str, Any]] = []
+    monkeypatch.setattr(edi_rejection_audit, "persist_edi_rejection", written.append)
+
+    response = _post(client, route)
+
+    assert response.status_code == 422, response.text
+    assert [row["rejection_id"] for row in written] == [response.json()["detail"]["rejection_id"]]
+    assert written[0]["tenant_id"] == TENANT
+    assert written[0]["errors"][0]["loc"] == ["tlc_source_reference"]

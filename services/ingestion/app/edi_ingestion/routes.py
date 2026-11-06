@@ -34,12 +34,14 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, UploadFile
 from pydantic import ValidationError
+from shared.canonical_event import IngestionSource
+from shared.edi_rejection_audit import EdiRejectionAuditUnavailable
 
 from ..authz import IngestionPrincipal, require_permission
 from ..format_extractors import is_edi_content
 from ..shared.tenant_resolution import resolve_principal_tenant_id, resolve_tenant_id
 from ..shared.upload_limits import MAX_EDI_FILE_SIZE_BYTES, read_upload_with_limit
-from ..webhook_compat import ingest_events
+from ..webhook_compat import SourceFileReceipt, ingest_events
 from ..webhook_models import (
     REQUIRED_KDES_BY_CTE,
     IngestEvent,
@@ -91,7 +93,13 @@ def _record_edi_rejection(**kwargs):
     so ``app.edi_ingestion`` does not exist there.
     """
     rejection_log = importlib.import_module(".rejection_log", __package__)
-    return rejection_log.record_edi_rejection(**kwargs)
+    try:
+        return rejection_log.record_edi_rejection(**kwargs)
+    except EdiRejectionAuditUnavailable:
+        raise HTTPException(
+            status_code=503,
+            detail="EDI rejection could not be recorded; no events were persisted. Retry the document.",
+        ) from None
 
 
 # ISA13 claims taken by ``_enforce_envelope_integrity`` during the current
@@ -136,6 +144,23 @@ def _release_isa13_unless_stored(endpoint):
         return response
 
     return wrapper
+
+
+def _edi_source_receipt(
+    file: UploadFile,
+    raw_bytes: bytes,
+    principal: IngestionPrincipal,
+    record_count: int,
+) -> SourceFileReceipt:
+    """Retain the X12 document verbatim, so stored events trace to their bytes."""
+    return SourceFileReceipt(
+        filename=file.filename or "upload.edi",
+        raw_bytes=raw_bytes,
+        content_type=file.content_type,
+        initiated_by=getattr(principal, "key_id", None),
+        record_count=record_count,
+        source_system=IngestionSource.EDI.value,
+    )
 
 
 def _decode_edi_bytes(raw_bytes: bytes) -> str:
@@ -976,6 +1001,7 @@ async def ingest_edi_856(
         payload,
         principal_tenant_id=sender_tenant_id,
         x_regengine_api_key=x_regengine_api_key,
+        source_file=_edi_source_receipt(file, raw_bytes, principal, len(events)),
     )
 
     return EDIIngestResponse(
@@ -1740,6 +1766,7 @@ async def ingest_edi_document(
         payload,
         principal_tenant_id=sender_tenant_id,
         x_regengine_api_key=x_regengine_api_key,
+        source_file=_edi_source_receipt(file, raw_bytes, principal, len(events)),
     )
 
     return EDIIngestResponse(

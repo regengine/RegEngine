@@ -74,7 +74,7 @@ def ingested(monkeypatch: pytest.MonkeyPatch) -> list:
     """Stub the canonical write; capture each accepted payload."""
     calls: list = []
 
-    async def _fake_ingest_events(payload, *, principal_tenant_id=None, x_regengine_api_key=None):
+    async def _fake_ingest_events(payload, *, principal_tenant_id=None, x_regengine_api_key=None, **_):
         calls.append(payload)
         return IngestResponse(
             accepted=len(payload.events),
@@ -229,7 +229,7 @@ def test_ingest_failure_frees_isa13_for_retry(client, store, ingested, monkeypat
 def test_all_events_rejected_frees_isa13(client, store, monkeypatch, route):
     """201 with accepted=0 stored nothing, so the corrected resend must not 409."""
 
-    async def _rejecting(payload, *, principal_tenant_id=None, x_regengine_api_key=None):
+    async def _rejecting(payload, *, principal_tenant_id=None, x_regengine_api_key=None, **_):
         return IngestResponse(
             accepted=0,
             rejected=len(payload.events),

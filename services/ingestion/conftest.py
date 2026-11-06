@@ -29,6 +29,8 @@ os.environ.setdefault("SUBSCRIPTION_GATE_FAIL_OPEN", "true")
 import sys
 from pathlib import Path
 
+import pytest
+
 _SERVICE_DIR = Path(__file__).resolve().parent  # services/ingestion/
 _SERVICES_DIR = _SERVICE_DIR.parent  # services/
 # The service dir goes in first so `from app.X import ...` resolves against
@@ -42,3 +44,17 @@ from shared.paths import ensure_shared_importable
 
 ensure_shared_importable()
 # ------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _edi_rejections_skip_postgres():
+    """``fsma.edi_rejections`` needs Postgres, which these tests do not have.
+
+    Uses its own MonkeyPatch: requesting the shared fixture here would change
+    when other tests' ``monkeypatch`` changes are undone.
+    """
+    from shared import edi_rejection_audit
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(edi_rejection_audit, "persist_edi_rejection", lambda record: None)
+        yield
