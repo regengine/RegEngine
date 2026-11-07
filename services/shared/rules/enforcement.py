@@ -27,9 +27,13 @@ compliance failure. See ``types.EvaluationSummary.compliant`` docstring
 from __future__ import annotations
 
 import os
-from typing import Optional, Tuple
+from typing import FrozenSet, Optional, Sequence, Tuple
 
-from .types import EvaluationSummary
+from .types import EvaluationSummary, RuleEvaluationResult
+
+# Other fields a rule accepts for the same KDE. A rule that fails on a deferred
+# KDE reports these as missing too, so they don't make the failure a new one.
+_KDE_ALTERNATE_FIELDS = {"tlc_source_reference": ("kdes.tlc_source_gln",)}
 
 
 class EnforcementMode:
@@ -155,7 +159,22 @@ def current_mode() -> str:
     return raw
 
 
-def should_reject(summary: EvaluationSummary) -> Tuple[bool, Optional[str]]:
+def _is_deferred_failure(result: RuleEvaluationResult, deferred_kdes: FrozenSet[str]) -> bool:
+    """True when a non-critical failure comes only from deferred KDEs."""
+    if result.result != "fail" or result.severity == "critical":
+        return False
+    allowed = {f"kdes.{kde}" for kde in deferred_kdes}
+    for kde in deferred_kdes:
+        allowed.update(_KDE_ALTERNATE_FIELDS.get(kde, ()))
+    missing = {entry.get("field") for entry in result.evidence_fields_inspected if not entry.get("present")}
+    return bool(missing) and missing <= allowed
+
+
+def should_reject(
+    summary: EvaluationSummary,
+    *,
+    deferred_kdes: FrozenSet[str] = frozenset(),
+) -> Tuple[bool, Optional[str]]:
     """Return ``(reject, reason)`` for a rules evaluation.
 
     ``reject``: True means the caller should reject the event (typically
@@ -163,6 +182,12 @@ def should_reject(summary: EvaluationSummary) -> Tuple[bool, Optional[str]]:
 
     ``reason``: a short human-readable string suitable for the HTTP
     response body when rejecting. ``None`` when not rejecting.
+
+    ``deferred_kdes`` names KDEs the caller stores with an open data gap.
+    Under ``all``, a warning that fails only because of them does not
+    reject, or the gap could never be stored. Only server-side callers may
+    set this. The verdict stays ``fail``, so the exception queue still sees
+    it, and every other failure on the event still rejects.
     """
     mode = current_mode()
     if mode == EnforcementMode.OFF:
@@ -181,9 +206,13 @@ def should_reject(summary: EvaluationSummary) -> Tuple[bool, Optional[str]]:
             return True, _first_failure_reason(summary)
         return False, None
     if mode == EnforcementMode.ALL:
-        if summary.compliant is False:
-            return True, _first_failure_reason(summary)
-        return False, None
+        if summary.compliant is not False:
+            return False, None
+        deferred = [result for result in summary.results if _is_deferred_failure(result, deferred_kdes)]
+        # Fail closed: accept only if these results explain every failure.
+        if deferred and summary.errored == 0 and len(deferred) == summary.failed:
+            return False, None
+        return True, _first_failure_reason(summary, skip=deferred)
     return False, None
 
 
@@ -262,9 +291,13 @@ def handle_preeval_exception(err: BaseException, *, where: str) -> None:
     ) from err
 
 
-def _first_failure_reason(summary: EvaluationSummary) -> str:
+def _first_failure_reason(
+    summary: EvaluationSummary,
+    *,
+    skip: Sequence[RuleEvaluationResult] = (),
+) -> str:
     for result in summary.critical_failures or summary.results:
-        if result.result in ("fail", "error"):
+        if result.result in ("fail", "error") and not any(result is skipped for skipped in skip):
             rule_id = result.rule_id or "unknown_rule"
             why = result.why_failed or "failed"
             return f"{rule_id}: {why}"

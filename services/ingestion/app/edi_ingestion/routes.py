@@ -29,7 +29,7 @@ import importlib
 import logging
 import os
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, UploadFile
@@ -73,9 +73,15 @@ from .utils import (
     _valid_gln_or_none,
     _verify_partner_id,
 )
-from .validation import _validate_edi_as_fsma_event
+from .validation import _validate_edi_as_fsma_event, _warehouse_line_tlc
 
 logger = logging.getLogger("edi-ingestion")
+
+# X12 has no element for the TLC source reference (21 CFR 1.1340(a)(7)), so a
+# shipment arrives without it unless the uploader sends the form field. Store
+# the shipment with an open data gap rather than lose the rest of the record.
+# Receiving keeps the strict gate, as its rule for this KDE is critical.
+_EDI_DEFERRED_KDES = {WebhookCTEType.SHIPPING: frozenset({"tlc_source_reference"})}
 
 
 def _record_edi_rejection(**kwargs):
@@ -91,6 +97,70 @@ def _record_edi_rejection(**kwargs):
     """
     rejection_log = importlib.import_module(".rejection_log", __package__)
     return rejection_log.record_edi_rejection(**kwargs)
+
+
+def _reject_shared_tlc_source_for_distinct_lots(
+    *,
+    tlc_source_reference: str | None,
+    transaction_sets: Iterable[tuple[str, dict[str, Any]]],
+    traceability_lot_code: str,
+    sender_tenant_id: str,
+    partner_id: str | None,
+    source: str,
+) -> None:
+    """Refuse one TLC source reference across several shipped lots.
+
+    The form field is a single value copied to every event. On a document with
+    several lots it could link a lot to a source that never assigned its code,
+    which is worse than the open gap the lot gets without the field. Receiving
+    has no open gap to fall back on, as the field is required there, so
+    refusing it would leave a multi-lot receipt no way in.
+    """
+    if not (tlc_source_reference and tlc_source_reference.strip()):
+        return
+    shipping_sets = [
+        (transaction_set, extracted)
+        for transaction_set, extracted in transaction_sets
+        if _CTE_TYPE_BY_SET.get(transaction_set, WebhookCTEType.SHIPPING) == WebhookCTEType.SHIPPING
+    ]
+    lots: set[str] = set()
+    for transaction_set, extracted in shipping_sets:
+        for line in extracted.get("line_items") or [{}]:
+            lot = line.get("lot_number")
+            lot = lot.strip() if isinstance(lot, str) else ""
+            if not lot:
+                lots.add(traceability_lot_code)
+            elif transaction_set == "945":
+                lots.add(_warehouse_line_tlc(lot, line))
+            else:
+                lots.add(lot)
+    if len(lots) <= 1:
+        return
+    error = "edi_tlc_source_reference_with_multiple_lots"
+    message = (
+        "tlc_source_reference applies to one lot, but this document has several. "
+        "Send each lot separately, or resubmit without the field."
+    )
+    first_set, first_extracted = shipping_sets[0]
+    record = _record_edi_rejection(
+        tenant_id=sender_tenant_id,
+        transaction_set=first_set,
+        traceability_lot_code=traceability_lot_code,
+        errors=[{"loc": ["tlc_source_reference"], "type": error, "msg": message}],
+        extracted=first_extracted,
+        partner_id=partner_id,
+        source=source,
+        reason=error,
+    )
+    raise HTTPException(
+        status_code=422,
+        detail={
+            "error": error,
+            "message": message,
+            "lot_count": len(lots),
+            "rejection_id": record["rejection_id"],
+        },
+    )
 
 
 # ISA13 claims taken by ``_enforce_envelope_integrity`` during the current
@@ -585,6 +655,13 @@ def _enforce_interchange_structure(
 async def ingest_edi_856(
     file: UploadFile = File(..., description="X12 EDI file (856 ASN)"),
     traceability_lot_code: str = Form(..., description="FSMA Traceability Lot Code"),
+    tlc_source_reference: Optional[str] = Form(
+        None,
+        description=(
+            "TLC source reference (where the TLC was assigned), copied to each event's KDEs. "
+            "X12 cannot carry it: a shipment without it is stored with an open data gap."
+        ),
+    ),
     tenant_id: Optional[str] = Form(None, description="Optional tenant override"),
     source: str = Form("edi_856_inbound", description="Source system identifier"),
     product_description: Optional[str] = Form(None, description="Optional product description override"),
@@ -679,19 +756,25 @@ async def ingest_edi_856(
 
     # Event-date rejections run after the allowlist and before the ISA13
     # is reserved, so a corrected resend is not refused as a 409 replay.
-    _enforce_envelope_integrity(
-        extracted,
-        sender_tenant_id,
-        "856",
-        before_reserve=lambda: _preflight_event_date(
+    def _preflight() -> None:
+        _preflight_event_date(
             transaction_set="856",
             extracted=extracted,
             sender_tenant_id=sender_tenant_id,
             traceability_lot_code=traceability_lot_code,
             partner_id=x_partner_id,
             source=source,
-        ),
-    )
+        )
+        _reject_shared_tlc_source_for_distinct_lots(
+            tlc_source_reference=tlc_source_reference,
+            transaction_sets=[("856", extracted)],
+            traceability_lot_code=traceability_lot_code,
+            sender_tenant_id=sender_tenant_id,
+            partner_id=x_partner_id,
+            source=source,
+        )
+
+    _enforce_envelope_integrity(extracted, sender_tenant_id, "856", before_reserve=_preflight)
 
     lines = extracted.get("line_items") or []
     if len(lines) > 1:
@@ -765,6 +848,9 @@ async def ingest_edi_856(
             "ship_from_gln": ship_from_gln or ship_from_gln_raw,
             "ship_to_gln": ship_to_gln or ship_to_gln_raw,
             "reference_document_number": extracted.get("reference_document_number"),
+            # Shipping validation requires these exact names (21 CFR 1.1340(a)(7)-(8)).
+            "reference_document": extracted.get("reference_document_number"),
+            "tlc_source_reference": tlc_source_reference.strip() if tlc_source_reference else None,
             "carrier": extracted.get("carrier"),
             "asn_number": extracted.get("asn_number"),
             "edi_transaction_set": "856",
@@ -805,6 +891,7 @@ async def ingest_edi_856(
         payload,
         principal_tenant_id=sender_tenant_id,
         x_regengine_api_key=x_regengine_api_key,
+        deferred_kdes=_EDI_DEFERRED_KDES,
     )
 
     return EDIIngestResponse(
@@ -949,6 +1036,10 @@ def _build_ingest_event_for_set(
         "edi_isa13": extracted.get("isa13"),
         "edi_gs_control_number": extracted.get("gs_control_number"),
         "reference_document_number": extracted.get("reference_document_number"),
+        # Shipping/receiving validation requires these exact names
+        # (21 CFR 1.1340(a)(7)-(8), 1.1345(a)(7)-(8)) for every set.
+        "reference_document": extracted.get("reference_document_number"),
+        "tlc_source_reference": extracted.get("tlc_source_reference"),
         "event_date": event_date,
     }
 
@@ -1062,17 +1153,18 @@ def _build_ingest_event_for_set(
                 "g62_date_qualifier": extracted.get("g62_date_qualifier"),
                 "receive_date_raw": extracted.get("receive_date_raw"),
                 "ship_date_raw": extracted.get("ship_date_raw"),
-                "reference_document": extracted.get("reference_document_number"),
-                "tlc_source_reference": extracted.get("tlc_source_reference"),
             }
         )
         if transaction_set == "944":
-            kdes["receive_date"] = event_date
             kdes["immediate_previous_source"] = extracted.get("ship_from_name") or extracted.get("ship_from_gln")
-        else:
-            kdes["ship_date"] = event_date
         if extracted.get("depositor_gln"):
             kdes["depositor_gln"] = extracted["depositor_gln"]
+
+    # Every set needs the CTE's date KDE, not only 944/945.
+    if cte_type == WebhookCTEType.RECEIVING:
+        kdes["receive_date"] = event_date
+    else:
+        kdes["ship_date"] = event_date
 
     return IngestEvent(
         cte_type=cte_type,
@@ -1108,7 +1200,11 @@ async def ingest_edi_document(
         description="FSMA Traceability Lot Code for 856/850/810/861; required but ignored for 944/945 event TLCs, which use each line's lot code",
     ),
     tlc_source_reference: Optional[str] = Form(
-        None, description="Optional TLC source reference copied to 944/945 KDEs"
+        None,
+        description=(
+            "TLC source reference, copied to every event's KDEs. X12 cannot carry it: "
+            "a shipment without it is stored with an open data gap."
+        ),
     ),
     tenant_id: Optional[str] = Form(None, description="Optional tenant override"),
     source: str = Form("edi_inbound", description="Source system identifier"),
@@ -1242,6 +1338,14 @@ async def ingest_edi_document(
                 partner_id=x_partner_id,
                 source=source,
             )
+        _reject_shared_tlc_source_for_distinct_lots(
+            tlc_source_reference=tlc_source_reference,
+            transaction_sets=list(zip(slice_sets, extractions)),
+            traceability_lot_code=traceability_lot_code,
+            sender_tenant_id=sender_tenant_id,
+            partner_id=x_partner_id,
+            source=source,
+        )
 
     # Event-date rejections run after the allowlist and before the ISA13
     # is reserved, so a corrected resend is not refused as a 409 replay.
@@ -1252,12 +1356,13 @@ async def ingest_edi_document(
     # the shared header is copied onto each line.
     event_inputs: list[tuple[str, dict[str, Any], list[list[str]]]] = []
     first_event_indexes: list[int] = []
+    tlc_source_ref = tlc_source_reference.strip() if tlc_source_reference else None
     for slice_set, slice_extracted, slice_segments in zip(slice_sets, extractions, set_slices):
         first_event_indexes.append(len(event_inputs))
         if slice_set in ("856", "861", "944", "945"):
             header = {key: value for key, value in slice_extracted.items() if key != "line_items"}
+            header["tlc_source_reference"] = tlc_source_ref
             if slice_set in ("944", "945"):
-                header["tlc_source_reference"] = tlc_source_reference.strip() if tlc_source_reference else None
                 date_field = "receive_date_raw" if slice_set == "944" else "ship_date_raw"
                 header["_event_timestamp"], header["_event_date"] = _ship_timestamp_and_date(
                     header.get(date_field), None
@@ -1281,7 +1386,8 @@ async def ingest_edi_document(
                     }
                 event_inputs.append((slice_set, merged, slice_segments))
         else:
-            event_inputs.append((slice_set, slice_extracted, slice_segments))
+            with_ref = {**slice_extracted, "tlc_source_reference": tlc_source_ref}
+            event_inputs.append((slice_set, with_ref, slice_segments))
 
     # #1174: FSMA validation is fail-closed by default. A schema failure
     # returns HTTP 422 with per-field errors and nothing is persisted.
@@ -1519,6 +1625,7 @@ async def ingest_edi_document(
         payload,
         principal_tenant_id=sender_tenant_id,
         x_regengine_api_key=x_regengine_api_key,
+        deferred_kdes=_EDI_DEFERRED_KDES,
     )
 
     return EDIIngestResponse(

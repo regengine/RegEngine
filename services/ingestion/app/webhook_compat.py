@@ -20,7 +20,7 @@ import hashlib
 import logging
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Mapping, Optional, Union
 
 from fastapi import Depends, Header, HTTPException, Request
 from shared.api_key_store import APIKeyResponse
@@ -29,14 +29,16 @@ from shared.data_gap_tracking import (
     ValidationOutcome,
     gap_from_rule_reason,
     gaps_from_kde_errors,
+    open_gaps_for_stored_record,
     record_outcomes,
 )
 from shared.database import get_db_session as _get_db_session
 from shared.permissions import has_permission
 from shared.tenant_context import TenantContext, resolve_tenant_context
+from sqlalchemy.exc import SQLAlchemyError
 
 from .authz import IngestionPrincipal, get_ingestion_principal
-from .webhook_models import EventResult, IngestEvent, IngestResponse, WebhookPayload
+from .webhook_models import EventResult, IngestEvent, IngestResponse, WebhookCTEType, WebhookPayload
 from .webhook_router_v2 import (
     _check_rate_limit,
     _generate_alerts,
@@ -237,6 +239,7 @@ async def ingest_events(
     x_regengine_api_key: Optional[str] = None,
     principal: Optional[IngestionPrincipal] = None,
     source_file: Optional[SourceFileReceipt] = None,
+    deferred_kdes: Optional[Mapping[WebhookCTEType, frozenset[str]]] = None,
 ) -> IngestResponse:
     """Internal ingestion helper — not an HTTP route.
 
@@ -256,6 +259,12 @@ async def ingest_events(
     row is processed, retains the file verbatim, stamps ``ingestion_run_id``
     on every canonical event, and closes the run with counts covering every
     row of the file. The run id is returned on the response.
+
+    ``deferred_kdes`` names, per CTE, required KDEs the source format cannot
+    carry. An event missing only those is stored, with an open data gap and
+    ``open_gaps`` on its result, instead of being rejected. Only server-side
+    callers set this. Never derive it from the payload, which the sender
+    controls: that would let a caller switch off the KDE gate.
     """
     if not principal_tenant_id:
         raise PermissionError("ingest_events requires principal_tenant_id from authenticated context")
@@ -307,6 +316,7 @@ async def ingest_events(
     seen_in_batch: set[str] = set()
     # Data gap time to fix: written after the ingest commit, fail-open.
     gap_outcomes: list[ValidationOutcome] = []
+    closes_queued: set[tuple[str, str]] = set()
 
     try:
         if source_file is not None:
@@ -329,7 +339,9 @@ async def ingest_events(
             seen_in_batch.add(dedup_key)
 
             errors = _validate_event_kdes(event)
-            if errors:
+            open_gaps = gaps_from_kde_errors(errors)
+            deferrable = deferred_kdes.get(event.cte_type, frozenset()) if errors and deferred_kdes else frozenset()
+            if errors and not (open_gaps and all(gap.gap_key in deferrable for gap in open_gaps)):
                 results.append(
                     EventResult(
                         traceability_lot_code=event.traceability_lot_code,
@@ -344,7 +356,7 @@ async def ingest_events(
                         order=event_index,
                         lot_code=event.traceability_lot_code,
                         cte_type=event.cte_type.value,
-                        gaps=gaps_from_kde_errors(errors),
+                        gaps=open_gaps,
                     )
                 )
                 continue
@@ -429,7 +441,13 @@ async def ingest_events(
                 if summary is not None:
                     from shared.rules.enforcement import current_mode, should_reject
 
-                    should, reject_reason = should_reject(summary)
+                    if open_gaps:
+                        should, reject_reason = should_reject(
+                            summary,
+                            deferred_kdes=frozenset(gap.gap_key for gap in open_gaps),
+                        )
+                    else:
+                        should, reject_reason = should_reject(summary)
                     if should:
                         # Finding B — durable rejection audit row,
                         # written via its own session BEFORE the
@@ -485,6 +503,20 @@ async def ingest_events(
                         )
                         continue
 
+                # An incomplete record and its gap commit together: if the
+                # gap can't be written, the event is not accepted.
+                if open_gaps:
+                    try:
+                        open_gaps_for_stored_record(
+                            db_session,
+                            tenant_id,
+                            lot_code=event.traceability_lot_code,
+                            cte_type=event.cte_type.value,
+                            gaps=open_gaps,
+                        )
+                    except SQLAlchemyError as gap_err:
+                        raise RuntimeError("deferred gap write failed") from gap_err
+
                 # Accepted path. Savepoint commits the primary CTE write.
                 savepoint.commit()
                 results.append(
@@ -495,18 +527,35 @@ async def ingest_events(
                         event_id=store_result.event_id,
                         sha256_hash=store_result.sha256_hash,
                         chain_hash=store_result.chain_hash,
+                        open_gaps=[gap.gap_key for gap in open_gaps],
                     )
                 )
                 accepted += 1
-                gap_outcomes.append(
-                    ValidationOutcome(
-                        order=event_index,
-                        lot_code=event.traceability_lot_code,
-                        cte_type=event.cte_type.value,
-                        closing_record_id=store_result.event_id,
-                        closing_record_hash=store_result.sha256_hash,
+                # A record with deferred KDEs is stored but incomplete, so it
+                # must not close the lot's existing gaps. Its gaps are already
+                # written; requeue them only to follow a close queued earlier
+                # in this batch, as a replay could reopen another request's.
+                gap_scope = (event.traceability_lot_code.strip(), event.cte_type.value)
+                if not open_gaps:
+                    closes_queued.add(gap_scope)
+                    gap_outcomes.append(
+                        ValidationOutcome(
+                            order=event_index,
+                            lot_code=event.traceability_lot_code,
+                            cte_type=event.cte_type.value,
+                            closing_record_id=store_result.event_id,
+                            closing_record_hash=store_result.sha256_hash,
+                        )
                     )
-                )
+                elif gap_scope in closes_queued:
+                    gap_outcomes.append(
+                        ValidationOutcome(
+                            order=event_index,
+                            lot_code=event.traceability_lot_code,
+                            cte_type=event.cte_type.value,
+                            gaps=open_gaps,
+                        )
+                    )
                 _publish_graph_sync(store_result.event_id, event, tenant_id)
 
                 # Non-blocking failures → exception queue. Separate

@@ -329,6 +329,10 @@ class EventResult(BaseModel):
     sha256_hash: Optional[str] = None
     chain_hash: Optional[str] = None
     errors: List[str] = Field(default_factory=list)
+    open_gaps: List[str] = Field(
+        default_factory=list,
+        description="Required KDEs this accepted event still lacks; each has an open data gap",
+    )
 
 
 class IngestResponse(BaseModel):
