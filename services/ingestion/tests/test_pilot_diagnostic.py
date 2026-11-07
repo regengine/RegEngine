@@ -472,7 +472,7 @@ def test_validation_exception_does_not_log_raw_values(client, caplog):
     caplog.set_level(logging.INFO)
     response = post(client, csv_bytes(header, rows))
     assert response.status_code == 200
-    assert any(issue["reason"] == "parse_exception" for issue in response.json()["issues"])
+    assert any(issue["reason"] == "invalid_field" for issue in response.json()["issues"])
     assert private_value not in response.text + caplog.text
 
 
