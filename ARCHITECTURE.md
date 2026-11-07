@@ -1,20 +1,20 @@
 # RegEngine Architecture
 
-Last verified: 2026-07-31 — deployment model, runtime shape, infrastructure,
-dependency management, and the debt table were re-checked against code on
-this date. Sections carry their own dates where a claim was verified
-earlier and not re-checked.
-
-Partial re-verification 2026-08-26 (#2871): only the Alembic schema-head
-claim in **Infrastructure** below was re-checked against
-`alembic/versions/`. Every other section still carries its 2026-07-31
-date and was **not** re-verified on 2026-08-26.
+Runtime shape, router policy, and infrastructure below were checked against
+repository revision `07126f662c50a49a03ddd0cfc17e7c77ce8803a3` on 2026-11-04.
+They describe checked-in configuration and code, not proof of what is running
+in any environment. The technical-debt measurements remain dated historical
+observations; remeasure before using them for planning.
 
 ## Deployment Model
 
-RegEngine is deployed as **one consolidated FastAPI app** behind a Next.js
-frontend. The checked-in Railway config builds the repo-root `Dockerfile`, and
-that image starts `server.main:app`.
+The checked-in deployment target is **one consolidated FastAPI app** and a
+separate Next.js frontend. Railway configuration builds the repo-root
+`Dockerfile`; the image runs migrations and starts `server.main:app`.
+The checked-in production deployment workflow is manually dispatched and
+requires a successful backend CI gate. A merge does not establish that a
+revision has been deployed; verify the deployed revision and configuration
+separately.
 
 The repository still keeps six former service directories because they remain
 useful decomposition seams in the codebase:
@@ -35,37 +35,28 @@ useful decomposition seams in the codebase:
 - Legacy entrypoints like `services/ingestion/main.py` still exist for local
   debugging and compatibility, but they are not the checked-in production
   deploy target.
-- Production can auto-disable experimental routers unless
-  `ENABLE_EXPERIMENTAL_ROUTERS=true`. See
-  `docs/engineering/ROUTER_SURFACE.md` for the current surface audit.
+- Production requires `ENABLED_ROUTERS` to match the exact release-approved
+  set in `server/router_policy.py`; missing, extra, or unknown names abort
+  startup. Production rejects `DISABLED_ROUTERS` and
+  `ENABLE_EXPERIMENTAL_ROUTERS=true`. Non-production retains broad mounting
+  and a `DISABLED_ROUTERS` override, with additional protection for compliance
+  routers. Some base routes are mounted unconditionally. See
+  `docs/engineering/ROUTER_SURFACE.md` for the surface audit.
 
 ## Infrastructure
 
-- **Backend hosting:** Railway via one monolith container defined by
-  `railway.toml`.
+- **Backend hosting target:** Railway via one container configured by
+  `railway.toml`; this file does not prove the current live deployment.
 - **Frontend:** Next.js App Router app in `frontend/` with a separate CI
   workflow.
-- **Database:** PostgreSQL via `DATABASE_URL`. Schema is owned entirely by
-  Alembic (`alembic/versions/`, head is **v112** —
-  `d8b2056471a7_v112_seed_obligations_security_definer`, which makes
-  `seed_obligations_for_tenant` `SECURITY DEFINER` with a pinned `search_path`
-  and fail-closed behaviour; verified 2026-08-27);
-  the app performs no runtime DDL as of v098/v099. Neither v111 nor v112
-  creates a table, so the newest tables are
-  `fsma.rule_evaluation_deadletter` (v105, durable dead-letter for
-  rule-evaluation persistence, replayed by the
-  `rule_evaluation_deadletter_replay` scheduler job) and
-  `fsma.tenant_seed_state` (v106, per-tenant obligation seed marker so an
-  RLS deny-all empty read is no longer mistaken for an unseeded tenant).
-  The revisions after those add no tables: v107 fixes the CTE-correction
-  `BEFORE UPDATE` trigger to `RETURN NEW`, v108 adds the `result='error'`
-  value plus the v105 marker columns that never shipped, v109 adds a
-  tenant-bound `SECURITY DEFINER` team-roster reader, and v110 adds the
-  RLS INSERT policy letting authenticated users create their own developer
-  profile. v111 then FORCEs RLS on the two regulatory control-plane tables, and
-  v112 hardens the `seed_obligations_for_tenant` function used at onboarding.
-  `fsma.compliance_evidence_snapshots` (v103) and the v102 mock-audit drill
-  records are no longer the newest tables.
+- **Database:** PostgreSQL via `DATABASE_URL`, with schema managed by
+  Alembic (`alembic/versions/`). At the revision above,
+  `python3 scripts/check_alembic_revisions.py` reports the single head
+  `08c7cf36ddbe` (v141). This is the repository migration head, not evidence
+  that any database has reached it. The deployed migration runner requires a
+  separate `MIGRATIONS_DATABASE_URL` schema-owner credential; local scratch
+  databases may use `DATABASE_URL`. Application boot performs no schema DDL
+  as of v098/v099.
 - **Runtime helpers:** Redis is used by rate limiting, session/JWT paths,
   subscription/entitlement checks, idempotency caching, and task-processing
   helpers when configured. The local dev stack
@@ -79,18 +70,23 @@ useful decomposition seams in the codebase:
   contract.
 - **Graph:** Neo4j integration code and health checks exist, but the default
   local development stack does not start Neo4j.
-- **Edge / gateway:** there is no app-managed nginx layer in production — the
-  Railway container runs `gunicorn server.main:app` directly. The authoritative
-  defense against a client-supplied `X-RegEngine-Tenant-ID` header is the in-app
+- **Readiness:** `/readiness` requires PostgreSQL, Redis in strict deployed
+  runtimes, and healthy essential background units (the ingestion worker and,
+  when enabled, the embedded scheduler). Probe capacity exhaustion or timeout
+  also returns 503. Neo4j and rate-limiter health do not alone fail readiness;
+  `/health` is a separate liveness endpoint. See `server/main.py`.
+- **Edge / gateway:** the checked-in Railway container runs
+  `gunicorn server.main:app` directly. The defense against a client-supplied
+  `X-RegEngine-Tenant-ID` header is the in-app
   `TenantContextMiddleware` (`services/shared/middleware/tenant_context.py`),
   which rejects the header unless it carries a valid `REGENGINE_INTERNAL_SECRET`
   (covered by `tests/security/test_header_remediation.py`). `infra/gateway/nginx.conf`
-  is a reference-only config (with its own test suite) for if a gateway service is
-  ever provisioned; it is not in the production image.
+  is a reference-only config (with its own test suite); it is not in the
+  checked-in image. Verify any external gateway configuration separately.
 
 ## Current Architecture Direction
 
-- The deployed shape is already consolidated.
+- The checked-in backend deployment target is consolidated.
 - Current remediation work is about reducing drift between the monolith deploy
   path and older service-shaped scaffolding in code and docs.
 - The service directories are code-organization boundaries, not proof of six

@@ -1,239 +1,51 @@
 # RegEngine Operations Runbook
 
-## Quick Reference
+This runbook describes the checked-in local dependency stack and operational
+entry points. It does not establish the status of staging or production.
 
-| Action | Command |
-|--------|---------|
-| Start all services | `./scripts/start-stack.sh` |
-| Stop all services | `./scripts/stop-stack.sh` |
-| Check health | `./scripts/verify-health.sh` |
-| View logs | `docker-compose logs -f <service>` |
-| Provision launch-trust vendors | See [LAUNCH_TRUST_PROVISIONING.md](LAUNCH_TRUST_PROVISIONING.md) |
+## Local dependencies
 
----
-
-## Starting the Stack
+`docker-compose.dev.yml` defines PostgreSQL 17 and Redis 7 only. It requires
+`POSTGRES_PASSWORD` and initializes separate database logins through
+`scripts/init-postgres.sh`. Start and inspect the dependencies from the
+repository root:
 
 ```bash
-# From project root
-./scripts/start-stack.sh
+docker compose -f docker-compose.dev.yml up -d
+docker compose -f docker-compose.dev.yml ps
+docker compose -f docker-compose.dev.yml logs --tail 100 postgres redis
 ```
 
-This script:
-1. Starts infrastructure (Postgres, Redis, Neo4j, legacy event broker service, LocalStack)
-2. Waits for databases to be ready
-3. Starts application services in dependency order
-4. Runs health verification
+Use the setup instructions in [README.md](../../README.md) and `.env.example`
+for application configuration and run the consolidated backend separately.
+Stopping the stack with `docker compose -f docker-compose.dev.yml down` keeps
+its named data volume. Do not remove volumes while troubleshooting unless the
+owner has approved data loss and the recovery plan is understood.
 
----
+The older `scripts/start-stack.sh`, `scripts/stop-stack.sh`, and
+`scripts/verify-health.sh` target a multi-service setup and are not health or
+startup checks for this minimal stack.
 
-## Health Verification
+## Deployed backend
 
-```bash
-./scripts/verify-health.sh
-```
+The root Dockerfile starts `server.main:app` after the migration runner. Check
+`/health` for liveness and reported build SHA and `/readiness` for dependency
+readiness; compare the SHA with the intended release. Strict deployed readiness
+requires PostgreSQL and Redis. A successful probe alone does not prove that
+individual tenant workflows, exports, or backups work. See
+[PRODUCTION_DEPLOYMENT.md](PRODUCTION_DEPLOYMENT.md) for release checks.
 
-**Expected Output (Healthy):**
-```
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  RegEngine Health Check
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+If startup or readiness fails, inspect sanitized deployment logs and the
+reported dependency status. Confirm database role configuration and migration
+state before taking corrective action; use
+[DATABASE_ROLE_CUTOVER.md](DATABASE_ROLE_CUTOVER.md) and
+[MIGRATION_ROLLBACK.md](../runbooks/MIGRATION_ROLLBACK.md). Do not stamp an
+unknown database schema or delete data to make a deploy pass.
 
-Infrastructure:
-  ✅ Neo4j
-  ✅ Legacy event broker service
+## Other procedures
 
-Application Services:
-  ✅ Admin API
-  ✅ Ingestion
-  ✅ NLP
-  ✅ Graph
-  ✅ Opportunity
-  ✅ Compliance
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  Status: All systems operational
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-```
-
----
-
-## Service Ports
-
-| Service | Port | Health Endpoint |
-|---------|------|-----------------|
-| Admin API | 8400 | `/health` |
-| Ingestion | 8000 | `/health` |
-| NLP | 8100 | `/health` |
-| Graph | 8200 | `/health` |
-| Opportunity | 8300 | `/health` |
-| Compliance | 8500 | `/health` |
-| Neo4j Browser | 7474 | N/A |
-| Kafka UI | 8080 | N/A |
-| Frontend | 3000 | N/A |
-
----
-
-## Common Issues
-
-### Admin API Unhealthy
-
-**Symptoms**: Health check fails, API returns 500 errors
-
-**Diagnosis**:
-```bash
-docker-compose logs --tail 50 admin-api | grep -E "(error|ERROR|failed)"
-```
-
-**Common Causes**:
-1. **Database connection failed**: Check Postgres is running
-   ```bash
-   docker-compose exec postgres pg_isready -U regengine
-   ```
-2. **Missing migrations**: Run migrations manually
-   ```bash
-   docker-compose exec admin-api alembic upgrade head
-   ```
-3. **Missing secrets**: Verify `.env` has `AUTH_SECRET_KEY`, the database URLs, Redis, and any enabled-service credentials.
-
----
-
-### Neo4j Connection Failures
-
-**Symptoms**: Graph/Opportunity API can't query data
-
-**Diagnosis**:
-```bash
-docker-compose logs --tail 30 neo4j
-```
-
-**Common Causes**:
-1. **Auth mismatch**: `NEO4J_PASSWORD` in `.env` must match what Neo4j was initialized with
-2. **Memory issues**: Neo4j needs at least 2GB RAM
-   ```bash
-   docker stats neo4j
-   ```
-
-**Fix for auth mismatch** (destructive, resets data):
-```bash
-docker-compose down -v  # Removes volumes
-docker-compose up -d neo4j
-```
-
----
-
-### Legacy Event Broker (`redpanda` service) Issues
-
-**Symptoms**: Events not flowing between services
-
-**Diagnosis**:
-```bash
-# Check topics exist
-docker-compose exec redpanda rpk topic list
-
-# Check consumer lag
-docker-compose exec redpanda rpk group describe nlp-consumer
-```
-
-**Common Causes**:
-1. **Topics not created**: Services auto-create topics on first use
-2. **Consumer crashed**: Check service logs
-
----
-
-### Frontend Shows "X System(s) Unhealthy"
-
-**Root Cause**: Frontend can't reach backend APIs
-
-**Diagnosis**:
-1. Check `api-config.ts` has correct ports
-2. Verify services are running: `docker-compose ps`
-3. Check CORS is enabled on services
-
-**Quick Fix**:
-```bash
-./scripts/verify-health.sh  # Identify which services are down
-docker-compose restart <service-name>
-```
-
----
-
-## Logs
-
-### View Service Logs
-```bash
-# Single service
-docker-compose logs -f admin-api
-
-# Multiple services
-docker-compose logs -f admin-api ingestion-service
-
-# Last 100 lines
-docker-compose logs --tail 100 admin-api
-```
-
-### Filter for Errors
-```bash
-docker-compose logs admin-api 2>&1 | grep -E "(ERROR|error|Exception)"
-```
-
----
-
-## Rebuilding Services
-
-After code changes:
-```bash
-# Rebuild specific service
-docker-compose build admin-api
-docker-compose up -d admin-api
-
-# Rebuild all
-docker-compose build
-docker-compose up -d
-```
-
----
-
-## Environment Variables
-
-Required in `.env`:
-```bash
-# Authentication/session signing (REQUIRED)
-AUTH_SECRET_KEY=your-high-entropy-signing-key
-
-# Database (REQUIRED - generate with `openssl rand -base64 32`)
-NEO4J_PASSWORD=your-strong-password
-
-# AWS (for LocalStack, use test values in dev)
-AWS_ACCESS_KEY_ID=test
-AWS_SECRET_ACCESS_KEY=test
-```
-
----
-
-## Inbound Email Ingestion (Postmark)
-
-Lets a supplier email a CSV of FSMA 204 traceability data instead of using
-the `/api/v1/ingest/csv` upload endpoint. Served by the `email_ingest`
-router (`POST /webhooks/email/inbound`), which is **not** in
-`server/router_policy.py::PRODUCTION_ENABLED_ROUTERS`. Configuration,
-tenant onboarding (recipient address + `allowed_senders` allowlist in
-`fsma.tenant_inbound_addresses`), and known limitations are in
-[docs/engineering/EMAIL_INGESTION.md](../engineering/EMAIL_INGESTION.md).
-
----
-
-## Chaos Testing
-
-Run resilience tests (in a staging environment):
-```bash
-./scripts/chaos/run_all_chaos_tests.sh
-```
-
----
-
-## Support
-
-- **Docs**: See `/docs` folder
-- **API Docs**: http://localhost:8400/docs (Admin API)
-- **Frontend**: http://localhost:3000
+- [Incident response](INCIDENT_RESPONSE.md) and [disaster recovery](DISASTER_RECOVERY.md).
+- [Credential rotation](CREDENTIAL_ROTATION_RUNBOOK.md) and
+  [launch trust provisioning](LAUNCH_TRUST_PROVISIONING.md).
+- Inbound email is not included in the production router allowlist; see
+  [EMAIL_INGESTION.md](../engineering/EMAIL_INGESTION.md) before planning its use.

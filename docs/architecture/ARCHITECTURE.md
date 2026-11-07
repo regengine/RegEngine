@@ -1,12 +1,12 @@
 # RegEngine Architecture (FSMA-First)
 
-Last source verification: 2026-08-03 (candidate is not production-approved)
+Source reviewed against repository commit `07126f662c50a49a03ddd0cfc17e7c77ce8803a3` on 2026-11-04. Live deployment and regulatory status were not verified.
 
-> **The deployed shape is a single consolidated FastAPI monolith.**
+> **The checked-in backend deployment target is a consolidated FastAPI app.**
 > The directory structure under `services/` preserves decomposition
 > seams as code-organization boundaries only — they are not separate
-> deploys. See [`CONSOLIDATION.md`](CONSOLIDATION.md) for the source
-> of truth on what's actually deployed and why the legacy layout
+> deploys. See [`CONSOLIDATION.md`](CONSOLIDATION.md) for a
+> description of the checked-in runtime and why the legacy layout
 > still exists.
 
 ## Purpose
@@ -16,8 +16,8 @@ This document describes the architecture actually implemented in this repository
 ## Product Scope
 
 - Primary domain: FDA FSMA 204 traceability.
-- Primary outcomes: CTE/KDE capture, lot traceability, and 24-hour FDA export readiness.
-- Primary workflow: supplier onboarding → event ingestion → tamper-evident persistence → graph traversal → export.
+- Primary outcomes: CTE/KDE capture, lot traceability, and FDA-oriented evidence exports. Meeting a particular response deadline depends on operational use and evidence completeness.
+- Primary workflow: supplier onboarding → event ingestion → validation → evidence persistence → export. Graph-backed paths are release-disabled.
 
 ## System Architecture Diagram
 
@@ -34,36 +34,34 @@ graph TB
     subgraph "Data Stores"
         PG["PostgreSQL<br/>FSMA events, audit logs,<br/>API keys, tenants, task queue"]
         NEO["Neo4j (optional)<br/>Lot/facility lineage<br/>when graph router enabled"]
-        REDIS["Redis (optional)<br/>Rate limits,<br/>JWT/session paths"]
+        REDIS["Redis<br/>Runtime controls and sessions"]
     end
 
     subgraph "External Services"
         STRIPE["Stripe<br/>Billing"]
-        SUPA["Supabase Auth<br/>User authentication"]
         AI["OpenAI / Vertex / Ollama<br/>NLP extraction"]
     end
 
-    FE -->|"All API calls"| MONOLITH
+    FE -->|"Backend requests"| MONOLITH
 
     MONOLITH -->|"CTE persistence, hash chain,<br/>audit logs, API keys, tenants"| PG
     MONOLITH -->|"Lineage queries<br/>(when enabled)"| NEO
     MONOLITH -->|"Rate limits, session<br/>(when configured)"| REDIS
 
     MONOLITH -->|"Billing"| STRIPE
-    MONOLITH -->|"Auth"| SUPA
     MONOLITH -->|"NLP extraction"| AI
 ```
 
 ## Deployment Topology
 
-- **Backend:** one Railway service that builds the repo-root [`Dockerfile`](../../Dockerfile) and starts `server.main:app`. Railway's native TLS + routing terminates the public domain — no separate gateway.
-- **Frontend:** Next.js App Router app in `frontend/` deployed to Vercel (`regengine.co`) via its own workflow.
-- **Database:** one PostgreSQL database (production: Supabase Postgres 17)
+- **Backend:** the Railway configuration selects the repo-root [`Dockerfile`](../../Dockerfile); the image runs migrations and starts `server.main:app`.
+- **Frontend:** Next.js App Router app in `frontend/`, with separate deployment configuration. Live deployment was not verified.
+- **Database:** PostgreSQL
   reached through separate RLS-enforced `DATABASE_URL` (`regengine`) and
   `ADMIN_DATABASE_URL` (`regengine_sysadmin`) credentials. Alembic alone uses
   the schema-owner `MIGRATIONS_DATABASE_URL`; see the
   [database role cutover runbook](../operations/DATABASE_ROLE_CUTOVER.md).
-- **Optional infra:** Neo4j, Redis, and Kafka-compatible code paths exist in-tree but are not part of the default local dev stack (`docker-compose.dev.yml` starts only Postgres). Treat any in-tree reference to a 6-port topology as historical scaffolding unless you can trace it back to the current Dockerfile.
+- **Local and optional infrastructure:** `docker-compose.dev.yml` starts PostgreSQL and Redis. Neo4j and Kafka-compatible code paths also exist in-tree but are not in that stack. Do not infer live services from legacy multi-port compose files.
 
 ## Async / Event Backbone
 
@@ -72,7 +70,7 @@ graph TB
 
 ## Router Surface
 
-`server/main.py` mounts ~60 routers grouped into five domains:
+`server/main.py` composes routes across domains, subject to router policy:
 
 | Domain | Source | Examples |
 |---|---|---|
@@ -85,8 +83,7 @@ graph TB
 Production requires the exact `ENABLED_ROUTERS` set owned by
 [`server/router_policy.py`](../../server/router_policy.py); missing or extra
 routers abort startup. `DISABLED_ROUTERS` remains local/test-only, and
-production rejects the experimental bypass. The protected live surface is
-reported by `GET /api/v1/features`.
+production rejects the experimental bypass. The feature endpoint is `GET /api/v1/features`; a source-defined route or policy is not proof of a live deployment.
 
 ## Shared Bootstrap Pattern
 
@@ -97,11 +94,10 @@ Service-shaped subtrees still use the shared bootstrap from [`services/shared/pa
 
 ## FSMA Data Flow (Implemented)
 
-1. **Event ingest:** `POST /api/v1/webhooks/ingest` — [`services/ingestion/app/webhook_router_v2.py`](../../services/ingestion/app/webhook_router_v2.py)
+1. **Event ingest:** `POST /api/v1/webhooks/ingest` — [`services/ingestion/app/webhook_router_v2/`](../../services/ingestion/app/webhook_router_v2/)
 2. **Persistence + integrity chain:** [`services/shared/cte_persistence/`](../../services/shared/cte_persistence/) persists events, KDEs, hash-chain links, and compliance alerts inside one transaction.
 3. **Canonical normalization + rule evaluation:** runs inside the same savepoint as the primary write so a rule rejection (under `RULES_ENGINE_ENFORCE=cte_only|all`) rolls back the CTE write atomically. See [`services/shared/rules/enforcement.py`](../../services/shared/rules/enforcement.py).
-4. **Graph sync:** ingestion publishes sync signals consumed by the graph routers under [`services/graph/app/`](../../services/graph/app/).
-5. **FDA export + verification:** [`services/ingestion/app/fda_export/router.py`](../../services/ingestion/app/fda_export/router.py).
+4. **FDA export + verification:** [`services/ingestion/app/fda_export/router.py`](../../services/ingestion/app/fda_export/router.py).
 
 ## Data Stores
 
@@ -117,6 +113,7 @@ Service-shaped subtrees still use the shared bootstrap from [`services/shared/pa
 
 - [`services/admin/app/sqlalchemy_models.py`](../../services/admin/app/sqlalchemy_models.py) — admin schema (tenant/user/audit).
 - [`services/shared/api_key_store.py`](../../services/shared/api_key_store.py) — `api_keys` table (auth surface).
+- [`services/shared/agent_operator_models.py`](../../services/shared/agent_operator_models.py) — tenant-scoped operator persistence models.
 
 Extending the check to additional Bases is a deliberate decision per the criteria documented in `server/main.py`. Drift on `tenant_id` UUID columns or `audit_logs` hash-chain columns fails startup; other drift logs a structured warning.
 
@@ -130,7 +127,7 @@ Extending the check to additional Bases is a deliberate decision per the criteri
   `internal.tenants.create` scope at the OpenAPI-hidden `/v1/internal/tenants`
   endpoint.
 - **Shared auth dependency:** [`services/shared/auth.py`](../../services/shared/auth.py) (`require_api_key`).
-- **Tenant context middleware:** [`services/shared/middleware/`](../../services/shared/middleware/). Every request resolves a `TenantContext` from the authenticated principal before any handler sees it; legacy routers cannot use path/query/header tenant claims to pivot across tenants.
+- **Tenant context middleware:** [`services/shared/middleware/`](../../services/shared/middleware/). Authenticated tenant-bound paths derive tenant authority from the principal; see the middleware and route security tests for the applicable contract.
 - **RLS trust boundary:** both runtime roles are `NOBYPASSRLS`, and enabled
   application paths bind the authenticated tenant before data access. The
   `app.tenant_id` custom GUC is still caller-settable by anyone able to execute
@@ -144,8 +141,8 @@ Extending the check to additional Bases is a deliberate decision per the criteri
 From repo root:
 
 ```bash
-python -m pytest tests -q
-python -m pytest services/<service>/tests -q
+python3 -m pytest tests -q
+python3 -m pytest services/<service>/tests -q
 bash scripts/test-all.sh --quick
 ```
 

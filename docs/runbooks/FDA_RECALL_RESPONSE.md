@@ -3,10 +3,14 @@
 **Severity:** SEV1 by default -- any recall-related failure is critical
 **Owner:** On-call engineer
 **Last Updated:** 2026-04-08
-**FSMA 204 deadline to respond:** 24 hours from FDA records request
 
-> **The clock starts when the FDA calls or sends a records request.
-> Everything in this runbook is optimized for speed under that constraint.**
+> **Historical procedure:** This 2026-04-08 runbook describes separate service
+> deployments and has not been revalidated against the current deployment,
+> routes, export outputs, or operating process. Its suitability for current
+> incident use has not been verified. Verify applicability, current legal requirements, the actual
+> request deadline, and a current response procedure with the responsible team.
+> See [PRODUCTION_DEPLOYMENT.md](../operations/PRODUCTION_DEPLOYMENT.md) for the
+> checked-in backend configuration.
 
 ---
 
@@ -17,7 +21,7 @@
 3. [Phase 2: Records Assembly -- Generate the FDA Package](#3-phase-2-records-assembly)
 4. [Phase 3: Verify Data Integrity Before Submission](#4-phase-3-verify-data-integrity)
 5. [Phase 4: Tenant Isolation Check](#5-phase-4-tenant-isolation-check)
-6. [Phase 5: Submit to FDA](#6-phase-5-submit)
+6. [Phase 5: Record submission](#6-phase-5-record-submission)
 7. [When Export Hangs or Fails](#7-when-export-hangs)
 8. [Emergency: Data Integrity Failure](#8-emergency-data-integrity-failure)
 9. [Emergency: Manual Export (Bypass Application)](#9-emergency-manual-export)
@@ -28,7 +32,15 @@
 
 ## 1. Overview
 
-RegEngine's core promise: **"When the FDA calls, produce compliant traceability records within 24 hours."**
+This historical workflow describes assembling traceability records in response
+to a request. The ability to meet a particular request or deadline depends on
+the available records, the deployed version, and operational review; it is
+not established by this document. For covered records, [21 CFR 1.1455(c)(1)
+and (c)(3)](https://www.ecfr.gov/current/title-21/chapter-I/subchapter-A/part-1/subpart-S/subject-group-ECFRacd5c2e8ea7ccbf/section-1.1455)
+provide for records to be made available within 24 hours of an authorized FDA
+representative's request, or within a reasonable time FDA has agreed to. Confirm
+which requirements and deadline apply to the specific request with the
+responsible team; this is not a universal deadline for every recall.
 
 The recall response flows through these stages:
 
@@ -45,15 +57,15 @@ FDA Records Request
   |
   v
 [3] Verify Integrity: Hash chain verification, KDE completeness check, blocking defect scan
-  |                    Code: CTEPersistence.verify_chain() in services/shared/cte_persistence.py
+  |                    Code: CTEPersistence.verify_chain() in services/shared/cte_persistence/verification.py
   |
   v
 [4] Tenant Isolation: Confirm RLS is enforcing -- no cross-tenant data in the export
   |                    Database: Row-Level Security policies on all fsma.* tables
   |
   v
-[5] Submit: Check blocking defects, obtain signoffs, submit FDA package
-            API: POST /api/v1/requests/{id}/submit via request_workflow_router.py
+[5] Record submission: Check blocking defects and obtain signoffs
+                       Historical API: POST /api/v1/requests/{id}/submit
 ```
 
 ### Services Involved
@@ -71,7 +83,7 @@ FDA Records Request
 
 ## 2. Phase 1: Intake -- FDA Request Received (T+0)
 
-**Goal:** Create the request case and start the 24-hour clock.
+**Goal:** Record the request time and deadline confirmed for this request with the responsible team, then create the request case.
 
 ### 2.1 Create the Request Case
 
@@ -245,7 +257,7 @@ The hash chain lives in `fsma.hash_chain`. Each entry links to the previous via 
 chain_hash = SHA-256( previous_chain_hash | event_hash )
 ```
 
-The genesis entry uses `'GENESIS'` as the seed (see `compute_chain_hash()` in `cte_persistence.py:142-149`).
+The genesis entry uses `'GENESIS'` as the seed (see `compute_chain_hash()` in `services/shared/cte_persistence/hashing.py`).
 
 **Full chain verification query:**
 
@@ -309,7 +321,7 @@ if result.errors:
 session.close()
 ```
 
-The `verify_chain()` method (`cte_persistence.py:966-1030`) walks the entire chain from genesis to head, recomputing each `chain_hash` as `SHA-256(previous_chain_hash|event_hash)` and comparing to the stored value. Any mismatch means tampering or corruption.
+The `verify_chain()` method (`services/shared/cte_persistence/verification.py`) walks the entire chain from genesis to head, recomputing each `chain_hash` as `SHA-256(previous_chain_hash|event_hash)` and comparing to the stored value. Any mismatch means tampering or corruption.
 
 ### 4.3 Merkle Tree Verification (Supplemental)
 
@@ -395,21 +407,14 @@ ORDER BY tablename;
 
 ### 5.2 Test Tenant Isolation
 
-```sql
--- Connect as a non-superuser role, set tenant context
-SET app.current_tenant = '<tenant_id>';
-
--- Verify: query for events from a DIFFERENT tenant (should return 0)
-SELECT count(*) FROM fsma.cte_events
-WHERE tenant_id != current_setting('app.current_tenant');
--- MUST return 0. If it returns > 0, STOP. RLS is broken.
-
--- Verify: the export query returns only our tenant's data
-SELECT count(*), count(DISTINCT tenant_id)
-FROM fsma.cte_events
-WHERE tenant_id = '<tenant_id>';
--- count(DISTINCT tenant_id) MUST be exactly 1
-```
+The historical SQL used `app.current_tenant`, which is not the canonical
+`app.tenant_id` setting used by the checked-in tenant-context helpers. A zero
+row count with missing or incorrect context does not prove isolation. Do not
+use that retired SQL as an isolation test. Review the current
+[tenant-context helpers](../../services/shared/tenant_context.py) and
+[RLS coverage tests](../../tests/migrations/test_rls_coverage.py), then verify
+isolation using a reviewed, environment-specific procedure and synthetic data.
+The RLS-enabled flags above alone do not establish effective tenant isolation.
 
 ### 5.3 Cross-Check Export Content
 
@@ -424,42 +429,30 @@ unzip -p fda_package.zip '*.csv' | cut -d',' -f1 | sort -u | head -20
 
 ---
 
-## 6. Phase 5: Submit to FDA
+## 6. Phase 5: Record Submission
 
-**Goal:** Submit the verified package through the request workflow.
+The checked-in request-workflow endpoint records a submission and marks the
+case submitted; it does not itself establish delivery to FDA. Arrange and
+verify delivery through the approved channel for the particular request. See
+[request_workflow_router.py](../../services/ingestion/app/request_workflow_router.py)
+and [submission.py](../../services/shared/request_workflow/submission.py).
+This description is not a validated current procedure or proof that the route
+is deployed.
 
-### 6.1 Submit via API
+### 6.1 Checked-in workflow behavior
 
-```bash
-curl -X POST "https://<railway-url>/api/v1/requests/<request_case_id>/submit" \
-  -H "Authorization: Bearer <token>" \
-  -H "Content-Type: application/json" \
-  -d '{"force": false}'
-```
+The checked-in route requires submission metadata, including `submitted_by`.
+The service checks for blocking defects before recording the submission and
+supports a `force` flag that overrides blockers and emits a warning log. Do not
+assume that log is a complete audit record or that the route is enabled in the
+target environment. Review the current code and obtain the responsible team's
+approval before using any override.
 
-If `force: false` (default), submission is blocked if any of the 7 blocking defect types are present. The endpoint returns HTTP 422 with the blocker details.
+### 6.2 Verify delivery
 
-### 6.2 Force Submit (Emergency Override)
-
-If the 24-hour deadline is imminent and blocking defects cannot be resolved in time:
-
-```bash
-curl -X POST "https://<railway-url>/api/v1/requests/<request_case_id>/submit" \
-  -H "Authorization: Bearer <token>" \
-  -H "Content-Type: application/json" \
-  -d '{"force": true}'
-```
-
-> **Warning:** `force: true` bypasses blocking defects but logs the override in the audit trail. Use only when the cost of missing the FDA deadline exceeds the cost of submitting with known defects. Document the justification.
-
-### 6.3 Verify Submission
-
-```bash
-# Check the export audit log
-curl "https://<railway-url>/api/v1/fda/export/history" \
-  -H "Authorization: Bearer <token>" \
-  -G --data-urlencode "tenant_id=<tenant_id>"
-```
+A case marked `submitted` or an export-history entry is not evidence that FDA
+received the package. Confirm receipt using the approved channel for the
+specific request and preserve the relevant delivery evidence.
 
 ---
 
@@ -617,7 +610,7 @@ WHERE h.tenant_id = '<tenant_id>'
 
 ## 9. Emergency: Manual Export (Bypass Application)
 
-**Use only when:** The application export endpoint is down/hanging AND the 24-hour FDA deadline is imminent.
+**Historical trigger:** The application export endpoint was down or hanging and the confirmed request deadline was imminent. Do not use this procedure without current review and approval.
 
 ### 9.1 Direct SQL to FDA-Format CSV
 
@@ -744,7 +737,7 @@ INSERT INTO fsma.fda_export_log (
 | `/api/v1/fda/export/verify` | POST | Ingestion (8000) | Verify export integrity |
 | `/api/v1/requests` | POST | Ingestion (8000) | Create request case |
 | `/api/v1/requests/{id}/blockers` | GET | Ingestion (8000) | Check blocking defects |
-| `/api/v1/requests/{id}/submit` | POST | Ingestion (8000) | Submit FDA package |
+| `/api/v1/requests/{id}/submit` | POST | Ingestion (8000) | Record submission; does not establish FDA delivery |
 | `/api/v1/requests/{id}/signoffs` | POST | Ingestion (8000) | Add required signoff |
 | `/api/v1/requests/deadlines` | GET | Ingestion (8000) | Check all deadline statuses |
 
@@ -757,11 +750,11 @@ INSERT INTO fsma.fda_export_log (
 | `services/ingestion/app/request_workflow_router.py` | Request lifecycle endpoints (blockers, submit, signoffs) |
 | `services/shared/request_workflow/assembly.py` | `check_blocking_defects()` (7 checks), `add_signoff()`, `check_deadline_status()` |
 | `services/shared/request_workflow/submission.py` | `submit_package()` with force override |
-| `services/shared/cte_persistence.py` | `verify_chain()`, `verify_chain_merkle()`, `query_events_by_tlc()`, `log_export()` |
-| `services/shared/audit_logging.py` | `AuditIntegrity.verify_chain()` (HMAC-SHA256), `AuditLogger` |
+| `services/shared/cte_persistence/` | Chain verification, queries, and export logging |
+| `services/shared/audit_logging/` | `AuditIntegrity.verify_chain()` (HMAC-SHA256), `AuditLogger` |
 | `services/shared/canonical_event.py` | `TraceabilityEvent` model, normalization functions |
 | `services/shared/exception_queue.py` | `ExceptionQueueService` for blocking exception management |
-| `services/shared/identity_resolution.py` | `IdentityResolutionService` for entity disambiguation |
+| `services/shared/identity_resolution/service.py` | `IdentityResolutionService` for entity disambiguation |
 | `services/scheduler/main.py` | 5-minute `check_request_deadlines()` cron |
 | `services/scheduler/app/compliance_integration.py` | FDA recall alert matching (3-tier: lot code, supplier, FTL keyword) |
 
@@ -787,4 +780,4 @@ event_hash   = SHA-256(event_id | event_type | tlc | product | qty | uom | gln |
 chain_hash   = SHA-256(previous_chain_hash | event_hash)     -- or SHA-256('GENESIS' | event_hash) for first entry
 ```
 
-Implementation: `compute_event_hash()` and `compute_chain_hash()` in `services/shared/cte_persistence.py:115-149`.
+Implementation: `compute_event_hash()` and `compute_chain_hash()` in `services/shared/cte_persistence/hashing.py`.

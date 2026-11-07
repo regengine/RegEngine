@@ -43,7 +43,7 @@ The current set is tracked in code at [`ENFORCEMENT_AWARE_CALL_SITES`](../../ser
 |---|---|
 | `services/ingestion/app/webhook_compat.py` | Internal `ingest_events()` helper used by CSV import, sensitech, supplier portal, EDI ingestion |
 | `services/ingestion/app/epcis/persistence.py` | EPCIS XML ingestion persistence path |
-| `services/ingestion/app/webhook_router_v2.py` | `POST /api/v1/webhooks/ingest` HTTP route |
+| `services/ingestion/app/webhook_router_v2/rules_eval.py` | Rule evaluation used by the webhook ingest route |
 
 A drift test in [`services/shared/tests/test_rules_enforcement_manifest.py`](../../services/shared/tests/test_rules_enforcement_manifest.py) asserts the manifest matches the actual `should_reject()` importers. Adding a new caller without updating the manifest (or vice versa) fails CI.
 
@@ -71,7 +71,7 @@ If a route in this category later becomes authoritative (e.g. sandbox starts per
        ...
    ```
 3. Use `handle_preeval_exception(exc, where="<your_module>")` inside the canonical/rules try-block so a pre-eval crash surfaces correctly under enforcement.
-4. Add the new file path to `ENFORCEMENT_AWARE_CALL_SITES` in `shared/rules/enforcement.py`.
+4. Add the new file path to `ENFORCEMENT_AWARE_CALL_SITES` in `services/shared/rules/enforcement.py`.
 5. The drift test will start passing again on next run.
 
 ## Related

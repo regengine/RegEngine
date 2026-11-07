@@ -2,8 +2,8 @@
 
 > **Historical Phase 1A topology:** the multi-service instructions below are
 > retained for migration context and are not the current production deploy
-> contract. RegEngine now deploys the repo-root `Dockerfile` as one consolidated
-> Railway service running `server.main:app`. For the blocking production
+> contract. The checked-in configuration targets the repo-root `Dockerfile`
+> running `server.main:app`; it does not verify the live deployment. For the blocking production
 > database and router configuration, follow
 > [`DATABASE_ROLE_CUTOVER.md`](./DATABASE_ROLE_CUTOVER.md). In particular,
 > production requires separate `DATABASE_URL`, `ADMIN_DATABASE_URL`, and
@@ -37,7 +37,7 @@ Notes:
 
 ## 3. Required Environment Variables
 
-Use [`docs/ENV_SETUP_CHECKLIST.md`] for full inventory. This section is only the P0 minimum.
+The old environment checklist is archived at [ENV_SETUP_CHECKLIST.md](../archive/ENV_SETUP_CHECKLIST.md); it is historical, not a current inventory. This section is only the old P0 minimum.
 
 ### 3.1 admin-service
 

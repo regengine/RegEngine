@@ -1,10 +1,12 @@
 # RegEngine Content Ingestion Guide
 
-This guide explains how to ingest regulatory documents and extract provisions using RegEngine's domain-specific extractors.
+> **Historical guide:** The regulatory-content extraction workflow and commands below reference paths absent from the current checkout, including the listed NYDFS tests. Do not use them as current setup instructions. For the supported FSMA intake path, see the [repository README](../../README.md) and [local setup guide](../guides/LOCAL_SETUP_GUIDE.md).
+
+This historical guide described regulatory-document ingestion and provision extraction using domain-specific extractors.
 
 ## Overview
 
-RegEngine supports automated ingestion and extraction of regulatory content from multiple frameworks:
+The historical framework list below is not a verified statement of current product support:
 
 - **NYDFS Part 500**: NY Department of Financial Services cybersecurity requirements
 - **DORA**: EU Digital Operational Resilience Act (placeholder)
@@ -39,7 +41,7 @@ python scripts/demo/load_demo_data.py \
 
 ### NYDFS Part 500 Extractor
 
-The NYDFS extractor is optimized for New York cybersecurity regulations.
+The historical guide described an extractor for New York cybersecurity regulations; its current availability and behavior have not been verified.
 
 **Features**:
 - Section reference detection (§ 500.XX)

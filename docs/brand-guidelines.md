@@ -26,7 +26,7 @@
 
 The wordmark uses a camelCase split: **Reg** in the primary text color, **Engine** in emerald green (`var(--re-brand)`). The icon represents layered traceability -- stacked data planes flowing through the compliance stack.
 
-The wordmark is rendered by the `RegEngineWordmark` component (`src/components/layout/regengine-wordmark.tsx`), which is the single source of truth for all wordmark rendering across the site.
+The wordmark is rendered by the `RegEngineWordmark` component (`frontend/src/components/layout/regengine-wordmark.tsx`), which is the single source of truth for all wordmark rendering across the site.
 
 ### Usage Rules
 
@@ -311,11 +311,11 @@ RegEngine replaces the compliance spreadsheet -- not the ERP. Position against m
 |----------|----------|
 | Brand guidelines (this doc) | `docs/brand-guidelines.md` |
 | CSS design tokens | `frontend/src/app/globals.css` |
-| TypeScript design tokens | `frontend/src/design-system/tokens.ts` |
+| Design token data | `frontend/src/design-system/design-tokens.json` |
 | Design system docs | `frontend/src/styles/DESIGN_SYSTEM.md` |
 | Wordmark component | `frontend/src/components/layout/regengine-wordmark.tsx` |
 
-Agent personas (especially `.agent/personas/ui.md`) should reference this document for all visual and voice decisions.
+Consult this document for visual and voice decisions. Current agent specifications are in `.github/agents/`.
 
 ---
 

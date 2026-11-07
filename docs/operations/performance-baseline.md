@@ -116,7 +116,7 @@ cat test-results/load/summary-*.json
 
 ### Database Metrics (To Be Added)
 
-See: `docs/database-optimization.md`
+See: [database optimization guide](database-optimization.md)
 
 - Query execution time
 - Connection pool usage

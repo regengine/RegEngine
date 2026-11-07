@@ -1,5 +1,7 @@
 # RegEngine Product Overview (FSMA-First)
 
+> **Historical overview:** This April 2026 product overview is superseded for product scope by the [October 2026 PRD](PRODUCT_PRD_2026-10.md). The notes below are not evidence of current deployment, product availability, or adoption. For current checked-in implementation see the [repository README](../../README.md) and verify the deployed revision separately.
+
 Last updated: April 30, 2026
 Audience: Engineering, product, solutions, and implementation teams
 
@@ -25,14 +27,14 @@ Primary users and buyers:
 
 The current product wedge in this repository is food and beverage traceability under FSMA 204.
 
-## 3) What Is Implemented Today
+## 3) Implementation Notes
 
 ### 3.1 Ingestion and Persistence
 
 - Webhook ingestion endpoint: `POST /api/v1/webhooks/ingest`
-  - Router: `services/ingestion/app/webhook_router_v2.py`
+  - Router: `services/ingestion/app/webhook_router_v2/routes.py`
 - CSV ingestion path is wired through the same persistence path.
-- Persistence module: `services/shared/cte_persistence.py`
+- Persistence module: `services/shared/cte_persistence/`
   - Stores CTE events, KDEs, chain links, and alerts.
   - Supports idempotency handling and integrity verification.
 
@@ -53,7 +55,7 @@ FSMA graph routes live under:
 
 - `services/graph/app/routers/fsma/`
 
-These support lot-level lineage, recall-oriented traversal, and FSMA metrics/compliance query workflows.
+These contain lot-level lineage, recall-oriented traversal, and FSMA metrics/compliance query workflows. Graph routes are excluded from the checked-in production router allowlist; route availability in a deployment must be verified separately.
 
 ### 3.4 Onboarding and Frontend Flows
 
@@ -69,7 +71,7 @@ Active frontend flows include:
 The current design-partner wedge is the Inflow Workbench:
 
 - Preflight Mode validates incoming supplier data before evidence persistence.
-- Commit Gate blocks invalid or low-readiness data from `production_evidence`.
+- Commit Gate returns an eligibility decision for the selected mode. Direct ingestion does not universally consult that decision, so it should not be treated as a write-enforcement boundary.
 - Fix Queue turns validation failures into remediation tasks.
 - Scenario Library saves replayable runs for demos, onboarding, and regression checks.
 - Readiness Score is visible in Inflow Lab and surfaced in compliance and supplier dashboards.
@@ -80,12 +82,12 @@ Workbench state is backed by Postgres tables with tenant scoping and RLS. File-b
 
 ### 4.1 Runtime Topology
 
-- Frontend: Next.js 15 App Router (`frontend/`)
-- Backend: FastAPI services (`services/`)
+- Frontend: Next.js App Router (`frontend/`; see `frontend/package.json` for the current version)
+- Backend: the consolidated FastAPI application in `server/main.py` mounts routers from `services/`
 - Stores: PostgreSQL, Neo4j, Redis
 - Typical deployment references in repo docs: Vercel + Railway
 
-Primary service entrypoints:
+The repository also retains individual service entrypoints, for example:
 
 - `services/admin/main.py`
 - `services/ingestion/main.py`
@@ -120,9 +122,9 @@ If a proposal is not tied to FSMA traceability, onboarding, export, or complianc
 - Source-of-truth docs for current direction:
   - `README.md`
   - `AGENTS.md`
-  - `docs/AI_ENGINEERING_STANDARDS.md`
-  - `docs/ARCHITECTURE.md`
-  - `docs/PRODUCT_ROADMAP.md`
+  - `docs/engineering/AI_ENGINEERING_STANDARDS.md`
+  - `ARCHITECTURE.md`
+  - `docs/product/PRODUCT_PRD_2026-10.md` (dated plan)
   - `docs/specs/FSMA_204_MVP_SPEC.md`
 
 ## 8) Near-Term Priorities (Operational)
