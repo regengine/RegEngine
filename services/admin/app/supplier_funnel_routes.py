@@ -598,6 +598,7 @@ async def reset_supplier_demo(
             city=facility.city,
             state=facility.state,
             postal_code=facility.postal_code,
+            phone=facility.phone,
             fda_registration_number=facility.fda_registration_number,
             roles=facility.roles or [],
             categories=selected_categories,
