@@ -4,6 +4,8 @@ import type { LucideIcon } from "lucide-react";
 export type MarketingNavLink = {
     label: string;
     href: string;
+    /** Brand-coloured link text. Only the public workspace link uses it. */
+    emphasis?: "brand";
 };
 
 export type MarketingToolLink = {
@@ -15,6 +17,7 @@ export type MarketingToolLink = {
 
 export const MARKETING_PRIMARY_NAV: MarketingNavLink[] = [
     { label: "Product", href: "/product" },
+    { label: "Demo workspace", href: "/demo", emphasis: "brand" },
     { label: "Integrations", href: "/integrations" },
     { label: "Readiness", href: "/retailer-readiness" },
     { label: "Pricing", href: "/pricing" },
@@ -34,6 +37,7 @@ export const MARKETING_ALL_TOOLS_LINK: MarketingToolLink = {
 
 export const MARKETING_FOOTER_PRODUCT_LINKS: MarketingNavLink[] = [
     { label: "Pricing", href: "/pricing" },
+    { label: "Demo workspace", href: "/demo" },
     { label: "Integrations", href: "/integrations" },
     { label: "Get Started", href: "/signup" },
 ];

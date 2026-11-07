@@ -17,7 +17,15 @@ type ConversionEvent =
   | 'readiness_assessment_submit'
   | 'book_call_click'
   | 'contact_form_submit'
-  | 'webinar_register_click';
+  | 'webinar_register_click'
+  | 'scenario_tab'
+  | 'row_click'
+  | 'send_correction_link'
+  | 'reset_demo'
+  | 'toggle_rows';
+
+/** Which public surface a workbench interaction happened on. */
+export type DemoSurface = 'landing' | 'workspace';
 
 type EventValue = string | number | boolean;
 type Attribution = Partial<Record<'utm_source' | 'utm_medium' | 'utm_campaign', string>>;
@@ -31,6 +39,11 @@ const EVENT_NAMES = new Set<ConversionEvent>([
   'book_call_click',
   'contact_form_submit',
   'webinar_register_click',
+  'scenario_tab',
+  'row_click',
+  'send_correction_link',
+  'reset_demo',
+  'toggle_rows',
 ]);
 const UTM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign'] as const;
 const EVENT_EXTRA_KEYS: Record<ConversionEvent, readonly string[]> = {
@@ -42,12 +55,18 @@ const EVENT_EXTRA_KEYS: Record<ConversionEvent, readonly string[]> = {
   book_call_click: ['placement', 'tool'],
   contact_form_submit: ['outcome', 'error_code'],
   webinar_register_click: ['webinar', 'placement'],
+  scenario_tab: ['surface', 'scenario'],
+  row_click: ['surface', 'scenario', 'cte', 'gap'],
+  send_correction_link: ['surface', 'scenario', 'cte'],
+  reset_demo: ['surface', 'scenario'],
+  toggle_rows: ['surface', 'scenario'],
 };
 const ENUM_VALUES: Record<string, readonly string[]> = {
   form: ['email_gate', 'lead_gate'],
   step: ['verify', 'confirm', 'gate', 'enrich'],
   outcome: ['success', 'error'],
   error_code: ['validation', 'rate_limited', 'unavailable', 'server'],
+  surface: ['landing', 'workspace'],
 };
 const CODE_VALUE = /^[a-z0-9]+(?:[-_][a-z0-9]+)*$/;
 const GRADE_VALUE = /^[A-F]$/;
@@ -179,12 +198,18 @@ export function filterConversionAnalyticsEvent<T extends { url: string }>(event:
 }
 
 function cleanExtra(key: string, value: unknown): EventValue | undefined {
+  if (key === 'gap') return typeof value === 'boolean' ? value : undefined;
   const cleaned = cleanString(value);
   if (!cleaned) return undefined;
   if (ENUM_VALUES[key]) return ENUM_VALUES[key].includes(cleaned) ? cleaned : undefined;
   if (key === 'grade') return GRADE_VALUE.test(cleaned) ? cleaned : undefined;
-  if (key === 'tool' || key === 'placement' || key === 'webinar') {
+  if (key === 'tool' || key === 'placement' || key === 'webinar' || key === 'scenario') {
     return CODE_VALUE.test(cleaned) ? cleaned : undefined;
+  }
+  if (key === 'cte') {
+    // CTE names come from the static dataset ("Initial packing"); keep them as codes.
+    const code = cleaned.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+    return CODE_VALUE.test(code) ? code : undefined;
   }
   // The current allowlisted extras all represent fixed labels, not numeric data.
   return undefined;
@@ -259,4 +284,24 @@ export function trackContactFormSubmit(outcome: Outcome, error_code?: ErrorCode)
 
 export function trackWebinarRegisterClick(webinarSlug: string, placement: string): void {
   trackConversionEvent('webinar_register_click', { webinar: webinarSlug, placement });
+}
+
+export function trackScenarioTab(surface: DemoSurface, scenario: string): void {
+  trackConversionEvent('scenario_tab', { surface, scenario });
+}
+
+export function trackRowClick(surface: DemoSurface, scenario: string, cte: string, gap: boolean): void {
+  trackConversionEvent('row_click', { surface, scenario, cte, gap });
+}
+
+export function trackSendCorrectionLink(surface: DemoSurface, scenario: string, cte: string): void {
+  trackConversionEvent('send_correction_link', { surface, scenario, cte });
+}
+
+export function trackResetDemo(surface: DemoSurface, scenario?: string): void {
+  trackConversionEvent('reset_demo', { surface, scenario });
+}
+
+export function trackToggleRows(surface: DemoSurface, scenario: string): void {
+  trackConversionEvent('toggle_rows', { surface, scenario });
 }
