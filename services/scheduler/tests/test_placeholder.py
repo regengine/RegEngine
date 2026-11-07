@@ -18,12 +18,10 @@ class TestSchedulerConfig:
         """Config class should instantiate with sensible defaults."""
         database_url = "postgresql://regengine:regengine@localhost:5432/regengine"  # pragma: allowlist secret
         monkeypatch.setenv("DATABASE_URL", database_url)
-        monkeypatch.delenv("KAFKA_BOOTSTRAP_SERVERS", raising=False)
         from app.config import SchedulerSettings
 
         settings = SchedulerSettings()
         assert settings.database_url.startswith("postgresql://")
-        assert settings.kafka_bootstrap_servers == "redpanda:9092"
         assert settings.fda_warning_letters_interval == 60
         assert settings.fda_recalls_interval == 30
         assert settings.health_port == 8600
@@ -92,23 +90,3 @@ class TestCircuitBreakerConfig:
         assert settings.circuit_breaker_recovery_timeout == 600
 
 
-class TestKafkaTopicConfig:
-    """Verify Kafka topic configuration defaults."""
-
-    def test_enforcement_topic(self):
-        from app.config import SchedulerSettings
-
-        settings = SchedulerSettings()
-        assert settings.kafka_topic_enforcement == "enforcement.changes"
-
-    def test_alerts_topic(self):
-        from app.config import SchedulerSettings
-
-        settings = SchedulerSettings()
-        assert settings.kafka_topic_alerts == "alerts.regulatory"
-
-    def test_fsma_topic(self):
-        from app.config import SchedulerSettings
-
-        settings = SchedulerSettings()
-        assert settings.kafka_topic_fsma == "fsma.events.extracted"

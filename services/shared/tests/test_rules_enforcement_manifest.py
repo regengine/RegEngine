@@ -19,7 +19,6 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-import pytest
 from shared.rules.enforcement import ENFORCEMENT_AWARE_CALL_SITES
 
 REPO_ROOT = Path(__file__).resolve().parents[3]

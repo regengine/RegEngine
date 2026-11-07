@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import threading
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
-import pytest
 from shared.dlq import DLQProducer as DLQProducerAlias
 from shared.observability.dlq_producer import DLQProducer
 

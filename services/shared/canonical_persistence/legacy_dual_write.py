@@ -51,6 +51,52 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional
 from sqlalchemy import event as sa_event, inspect as sa_inspect, text
 from sqlalchemy.orm import Session
 
+# ---------------------------------------------------------------------------
+# CANONICAL_LEGACY_DUAL_WRITE (tech-debt WI-12, PR B — 2026-11-04)
+# ---------------------------------------------------------------------------
+#
+# ``on`` (default) keeps the dual-write exactly as it is. ``off`` makes the
+# writer skip the legacy ``fsma.cte_events`` / ``fsma.cte_kdes`` write and
+# count the skip in ``legacy_dual_write_skipped_total`` so the rollout can be
+# watched. Christopher flips the flag per DEVOPS_NOTES.md ("Legacy cte_events
+# dual-write flag"); the agent does not. ``CanonicalEventStore(dual_write=
+# False)`` remains the per-caller opt-out and is not counted here.
+DUAL_WRITE_FLAG_ENV = "CANONICAL_LEGACY_DUAL_WRITE"
+_FLAG_OFF_VALUES = frozenset({"off", "0", "false", "no"})
+
+
+def legacy_dual_write_enabled() -> bool:
+    """True unless ``CANONICAL_LEGACY_DUAL_WRITE`` is set to an off value."""
+    return os.getenv(DUAL_WRITE_FLAG_ENV, "on").strip().lower() not in _FLAG_OFF_VALUES
+
+
+def _safe_counter(name: str, description: str, labelnames: list[str]):
+    """Return an existing Prometheus Counter when this module is re-imported."""
+    from prometheus_client import REGISTRY, Counter
+
+    try:
+        return Counter(name, description, labelnames)
+    except ValueError:
+        collector = REGISTRY._names_to_collectors.get(name)  # type: ignore[attr-defined]
+        if collector is None and name.endswith("_total"):
+            collector = REGISTRY._names_to_collectors.get(name[:-6])  # type: ignore[attr-defined]
+        if collector is not None:
+            return collector
+        return Counter(name, description, labelnames, registry=None)
+
+
+LEGACY_DUAL_WRITE_SKIPPED = _safe_counter(
+    "legacy_dual_write_skipped_total",
+    "Canonical events persisted without the legacy fsma.cte_events dual-write "
+    "because CANONICAL_LEGACY_DUAL_WRITE=off (WI-12)",
+    ["path"],
+)
+
+
+def record_legacy_dual_write_skipped(path: str, count: int = 1) -> None:
+    """Count canonical writes that skipped the legacy table (``path`` is single|batch)."""
+    LEGACY_DUAL_WRITE_SKIPPED.labels(path=path).inc(count)
+
 if TYPE_CHECKING:
     from shared.canonical_event import TraceabilityEvent
 
