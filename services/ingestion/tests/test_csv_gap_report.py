@@ -4,6 +4,7 @@ import csv
 import io
 from types import SimpleNamespace
 
+import pytest
 from app import csv_templates as ct
 from app.supplier_readiness.shipping import score_shipping_readiness
 
@@ -182,3 +183,32 @@ def test_unreadable_multiline_record_reports_starting_physical_row():
     assert not events
     assert errors[0].startswith("Line 3:")
     assert next(e for e in log if e.reason == "unreadable_csv").row_number == 3
+
+
+def test_stray_quote_rejects_only_its_physical_row():
+    text = _csv(_row(product_description="Synthetic valid"), None, _row(), _row(traceability_lot_code="SYNTH-002"))
+    text = text.replace("Synthetic greens", '"Synthetic" greens', 1)
+    events, errors, _, log = _parse(text)
+    assert [event.traceability_lot_code for event in events] == ["SYNTH-001", "SYNTH-002"]
+    assert len(errors) == 1 and errors[0].startswith("Row 4:")
+    assert {e.row_number for e in log if e.disposition == "rejected"} == {4}
+    assert {e.row_number for e in log if e.disposition == "accepted"} == {2, 5}
+    assert "Synthetic" not in str(errors) + str(log)
+
+
+def test_csv_gln_validation_can_be_disabled(monkeypatch):
+    monkeypatch.setenv("STRICT_GLN_VALIDATION", "false")
+    events, errors, _, log = _parse(_csv(_row(location_gln="3456789012341")))
+    assert len(events) == 1 and not errors
+    assert not any(e.reason == "invalid_gln" for e in log)
+
+
+@pytest.mark.parametrize("fields", [("cte_type",), ("traceability_lot_code",), ("cte_type", "traceability_lot_code")])
+def test_broken_link_uses_mapped_lot_and_cte_columns(fields):
+    text = _csv(_row(quantity=""), _row(cte_type="receiving"))
+    mapping = {f"partner_{field}": field for field in fields}
+    for source, canonical in mapping.items():
+        text = text.replace(canonical, source, 1)
+    events, errors, warnings = ct.parse_csv_rows(text, header_mapping=mapping)
+    assert len(events) == 1 and len(errors) == 1
+    assert any("Row 3: broken shipment link: shipping row(s) 2" in w for w in warnings)

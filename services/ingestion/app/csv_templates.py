@@ -16,6 +16,7 @@ import io
 import itertools
 import logging
 import math
+import os
 import re
 from collections.abc import Mapping, Sequence
 from datetime import datetime, timezone
@@ -1072,7 +1073,7 @@ class _PhysicalDataLineLayout(NamedTuple):
 
 def _physical_data_line_layout(text: str) -> _PhysicalDataLineLayout:
     """Map DictReader data records to physical lines; list blank lines it omits."""
-    reader = csv.reader(io.StringIO(text), strict=True)
+    reader = csv.reader(io.StringIO(text))
     header_line = 0
     record_lines: list[int] = []
     blank_lines: list[int] = []
@@ -1308,7 +1309,7 @@ def parse_csv_rows(
         )
         return ([], [detail], [])
 
-    reader = csv.DictReader(io.StringIO(text), strict=True)
+    reader = csv.DictReader(io.StringIO(text))
     line_layout = _physical_data_line_layout(text)
 
     # Read the header and every record the loop below can reach before
@@ -1316,11 +1317,17 @@ def parse_csv_rows(
     # endings, a field over csv.field_size_limit(), usually from an unclosed
     # quote) is rejected whole with its line named, never partially ingested.
     records: list[dict] = []
+    invalid_quote_rows: set[int] = set()
+    physical_lines = text.splitlines(keepends=True)
     skipped_overflow = 0
     overflow_tail_unreadable = False
     header = None
     try:
         header = reader.fieldnames
+        # Headers must not swallow data rows through an unterminated quote.
+        # Strictness here is confined to the header, never the whole file.
+        if header is not None:
+            list(csv.reader(io.StringIO("".join(physical_lines[: reader.line_num])), strict=True))
         if header and any(name.strip() for name in header):
             seen_columns: dict[str, int] = {}
             for position, name in enumerate(header, start=1):
@@ -1341,6 +1348,17 @@ def parse_csv_rows(
                     return ([], [detail], [])
                 seen_columns[normalized] = position
         for record in reader:
+            index = len(records)
+            start = line_layout.record_lines[index] if index < len(line_layout.record_lines) else reader.line_num
+            # The lenient reader retains recoverable record boundaries. Check
+            # each record separately so bad quoting cannot discard its neighbours.
+            raw_record = "".join(physical_lines[start - 1 : reader.line_num])
+            try:
+                list(csv.reader(io.StringIO(raw_record), strict=True))
+            except csv.Error as exc:
+                if "unexpected end of data" in str(exc):
+                    raise  # Boundaries are ambiguous: retain whole-file handling.
+                invalid_quote_rows.add(start)
             records.append(record)
             if len(records) > MAX_CSV_ROWS:
                 break
@@ -1593,6 +1611,11 @@ def parse_csv_rows(
                 detail=limit_detail,
             )
             break
+        if row_num in invalid_quote_rows:
+            detail = f"Row {row_num}: invalid CSV quoting; close quoted fields and separate them with commas"
+            parse_errors.append(detail)
+            _append_row_log(row_log, row_number=row_num, disposition="rejected", reason="unreadable_csv", detail=detail)
+            continue
         # DictReader files values past the last header column under the None
         # restkey. A non-blank one rejects the row below rather than being
         # dropped; blank ones (a trailing comma) carry nothing and are ignored.
@@ -1746,7 +1769,7 @@ def parse_csv_rows(
                     detail="Location name was normalised (abbreviations expanded)",
                 )
 
-            if loc_gln:
+            if loc_gln and os.getenv("STRICT_GLN_VALIDATION", "true").lower() == "true":
                 valid_gln, gln_error = validate_gln(loc_gln)
                 if not valid_gln:
                     _reject("invalid_gln", f"Row {row_num}: location_gln: {gln_error}", "location_gln")
@@ -1933,6 +1956,11 @@ def parse_csv_rows(
     for index, record in enumerate(records):
         number = line_layout.record_lines[index] if index < len(line_layout.record_lines) else index + 2
         normalized = {normalize_csv_header(k): (v or "").strip() for k, v in record.items() if k}
+        # Match parse-time mapping precedence when identifying rejected shipments.
+        for source_key, canonical_field in (header_mapping or {}).items():
+            value = normalized.get(source_key)
+            if value and not _row_provides(normalized, canonical_field):
+                normalized[canonical_field] = value
         if number in rejected_rows and _detect_row_cte_type(normalized, fallback_cte) == "shipping":
             lot = _first_present(normalized, _LOT_CODE_COLUMNS)
             if lot:
