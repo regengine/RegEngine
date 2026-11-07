@@ -752,6 +752,17 @@ class TestOpenAndCloseIngestionRun:
 
         created: dict = {}
 
+        # Bytes go through persist_partner_upload. Pin the explicit local
+        # bytea fallback so the run's bytes land in fsma.manifest_blobs and
+        # the test never reaches a real bucket.
+        import app.remediation.audit_utils as audit_utils
+        import app.s3_utils as s3_utils
+
+        monkeypatch.setenv("REGENGINE_ENV", "development")
+        monkeypatch.setenv("REGENGINE_ALLOW_MANIFEST_BYTEA_FALLBACK", "1")
+        monkeypatch.setattr(s3_utils, "is_object_storage_configured", lambda: False)
+        monkeypatch.setattr(audit_utils, "audit_event", lambda *a, **k: None)
+
         class _Store:
             def __init__(self, db_session, dual_write):
                 created["store_session"] = db_session
