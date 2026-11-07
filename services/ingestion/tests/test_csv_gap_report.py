@@ -82,6 +82,31 @@ def test_multiline_cell_keeps_physical_rows():
     assert {e.row_number for e in log if e.disposition == "accepted"} == {2, 7}
 
 
+def test_quoted_control_characters_keep_all_rows_and_source_numbers():
+    text = _csv(
+        _row(product_description="Synthetic x\ry, greens"),
+        _row(product_description="Synthetic p\nq, greens"),
+        _row(product_description="Synthetic x\x0by, greens"),
+        _row(traceability_lot_code="SYNTH-002"),
+    )
+    events, errors, _, log = _parse(text)
+    assert len(events) == 4
+    assert not errors
+    assert [(e.row_number, e.disposition) for e in log] == [
+        (2, "accepted"), (3, "accepted"), (5, "accepted"), (6, "accepted")
+    ]
+
+
+def test_unreadable_file_control_characters_do_not_add_physical_rows():
+    text = _csv(_row(product_description="Synthetic x\ry\x0bz, greens"))
+    events, errors, _, log = _parse(text + '"synthetic-unclosed-cell')
+    assert not events
+    assert errors[0].startswith("Line 3:")
+    assert [(e.row_number, e.reason) for e in log] == [
+        (3, "unreadable_csv"), (2, "unreadable_file")
+    ]
+
+
 def test_missing_kdes_name_law_and_retailer_separately_without_dates():
     _, _, warnings, _ = _parse(_csv(_row(ship_to_location="")))
     assert any("ship to location: required by law (21 CFR 1.1340(a)(4))" in w for w in warnings)

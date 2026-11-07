@@ -1318,7 +1318,7 @@ def parse_csv_rows(
     # quote) is rejected whole with its line named, never partially ingested.
     records: list[dict] = []
     invalid_quote_rows: set[int] = set()
-    physical_lines = text.splitlines(keepends=True)
+    physical_lines = io.StringIO(text).readlines()
     skipped_overflow = 0
     overflow_tail_unreadable = False
     header = None
@@ -1402,7 +1402,7 @@ def parse_csv_rows(
         _append_row_log(row_log, row_number=line, disposition="rejected", reason="unreadable_csv", detail=detail)
         # This path rejects the file as a whole. Account for the other physical
         # lines too, without pretending earlier parsed records were ingested.
-        for number, physical in enumerate(text.splitlines(), start=1):
+        for number, physical in enumerate(io.StringIO(text).readlines(), start=1):
             if number == line or number == line_layout.header_line:
                 continue
             _append_row_log(
