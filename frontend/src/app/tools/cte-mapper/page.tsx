@@ -8,6 +8,7 @@ import { EmailGate } from "@/components/tools/EmailGate";
 import { RelatedTools } from "@/components/tools/RelatedTools";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { RelatedLinks } from "@/components/seo/related-links";
 
 export const metadata: Metadata = {
     title: "FSMA 204 CTE Mapper by Role | RegEngine",
@@ -94,6 +95,14 @@ export default function CTEMapperPage() {
                 { href: "/tools/ftl-checker", title: "FTL Checker", description: "Verify which of your food products are covered by FDA FSMA 204 requirements." },
                 { href: "/tools/drill-simulator", title: "Recall drill (Preview)", description: "Self-paced rehearsal for your §1.1455(c) records-on-request workflow." },
             ]} />
+            <RelatedLinks
+              width="tool"
+              heading="Related"
+              links={[
+                { href: "/fsma-204/harvesting", label: "Harvesting Critical Tracking Event" },
+                { href: "/blog/fsma-204-cte-kde-guide", label: "FSMA 204 CTE and KDE guide" }
+              ]}
+            />
         </>
     );
 }

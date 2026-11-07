@@ -7,6 +7,7 @@ import { Section } from "@/components/layout/section";
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
 import { Card } from "@/components/ui/card";
+import { RelatedLinks } from "@/components/seo/related-links";
 
 export const metadata: Metadata = {
   title: "FSMA 204 Compliance Guide: What Your Farm Needs to Know | RegEngine",
@@ -376,6 +377,18 @@ export default function FSMA204BusinessGuidePage() {
           </p>
         </div>
       </Section>
+
+      <RelatedLinks
+        width="marketing"
+        links={[
+          { href: "/tools", label: "Free FSMA 204 tools" },
+          { href: "/fsma-204/harvesting", label: "Harvesting CTE detail" },
+          { href: "/tools/ftl-checker", label: "FTL List Checker" },
+          { href: "/tools/cte-mapper", label: "CTE Mapper" },
+          { href: "/tools/kde-checker", label: "KDE Field Checklist" },
+        ]}
+      />
+
     </div>
   );
 }
