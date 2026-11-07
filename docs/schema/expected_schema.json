@@ -1352,6 +1352,55 @@
     },
     "foreign_keys": []
   },
+  "fsma.edi_rejections": {
+    "columns": {
+      "errors": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "extracted": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "needs_review": {
+        "nullable": false,
+        "type": "boolean"
+      },
+      "partner_id": {
+        "nullable": true,
+        "type": "text"
+      },
+      "reason": {
+        "nullable": false,
+        "type": "text"
+      },
+      "recorded_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "rejection_id": {
+        "nullable": false,
+        "type": "text"
+      },
+      "source": {
+        "nullable": true,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "traceability_lot_code": {
+        "nullable": true,
+        "type": "text"
+      },
+      "transaction_set": {
+        "nullable": false,
+        "type": "text"
+      }
+    },
+    "foreign_keys": []
+  },
   "fsma.entity_aliases": {
     "columns": {
       "alias_id": {

@@ -134,6 +134,8 @@ class SourceFileReceipt:
     initiated_by: Optional[str] = None
     record_count: int = 0
     parse_errors: List[str] = field(default_factory=list)
+    # An IngestionSource value, for callers whose ``source`` label is free-form.
+    source_system: Optional[str] = None
 
     @property
     def sha256(self) -> str:
@@ -165,7 +167,7 @@ def _open_ingestion_run(db_session, tenant_id: str, source: str, receipt: Source
     store = CanonicalEventStore(db_session, dual_write=False)
     run = IngestionRun(
         tenant_id=tenant_id,
-        source_system=_run_source_system(source),
+        source_system=_run_source_system(receipt.source_system or source),
         source_file_name=receipt.filename,
         source_file_hash=receipt.sha256,
         source_file_size=len(receipt.raw_bytes),
