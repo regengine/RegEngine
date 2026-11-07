@@ -93,6 +93,25 @@ FSMA pipeline as the export stage's public attestation surface, and both
 assert they read no tenant data. **Neither has a recorded sign-off against
 the Promotion Rule below** — that review is outstanding (#2838).
 
+A third joined them by release-gate promotion rather than unconditional
+mounting:
+
+- `sandbox` — `POST /api/v1/sandbox/evaluate` and `POST /api/v1/sandbox/trace`
+  (`services/ingestion/app/sandbox/router.py`). Public FSMA 204 checker behind
+  the Inflow Lab CSV evaluator. No auth, no tenant context, and nothing
+  persisted; bounded by a per-IP rate limit and 2 MB / 500-event payload caps.
+  Promoted into `ENABLED_ROUTERS` by #3825 **with** sign-off against the
+  Promotion Rule below: tenant-isolation, contract, and failure-mode tests all
+  live in `services/ingestion/tests/test_sandbox_production_promotion_3825.py`.
+  It belongs to the FSMA pipeline as the `validate` stage's public front end —
+  the same rule engine the authenticated ingest path runs, over data the
+  caller supplies and the platform does not keep.
+
+  The persisted share endpoints that once shared this router were deliberately
+  left out, under the separate `sandbox_share` owner: that write path is
+  unauthenticated and tenant-less, its `share_url` points at a deleted page,
+  and its rate limit is per-process. See `sandbox/share_router.py`.
+
 Together with `remediation` (15 routes across its two routers), these three
 account for 17 routes that were absent from the router inventory before
 2026-08-26.

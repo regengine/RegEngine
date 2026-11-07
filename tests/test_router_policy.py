@@ -34,6 +34,9 @@ EXPECTED_PRODUCTION_ROUTERS = {
     "export_monitoring",
     "admin",
     "fsma_compliance",
+    # #3825: stateless sandbox evaluator (/evaluate, /trace). The persisted
+    # share endpoints live under the separate, unpromoted "sandbox_share".
+    "sandbox",
 }
 
 
@@ -105,9 +108,12 @@ def test_production_mounts_only_approved_routers():
     assert policy.disabled_routers == VALID_ROUTER_NAMES - EXPECTED_PRODUCTION_ROUTERS
     assert not policy.is_enabled("graph")
     assert not policy.is_enabled("nlp")
-    assert not policy.is_enabled("sandbox")
     assert not policy.is_enabled("recall_simulations")
     assert not policy.is_enabled("supplier_validation")
+    # #3825: the stateless sandbox evaluator is promoted; its persisted share
+    # endpoints are not, and must stay unreachable in production.
+    assert policy.is_enabled("sandbox")
+    assert not policy.is_enabled("sandbox_share")
 
 
 def test_nonproduction_retains_broad_behavior_and_denylist():
@@ -119,6 +125,7 @@ def test_nonproduction_retains_broad_behavior_and_denylist():
     assert not policy.is_enabled("graph")
     assert not policy.is_enabled("nlp")
     assert policy.is_enabled("sandbox")
+    assert policy.is_enabled("sandbox_share")
     assert policy.is_enabled("admin")
     assert policy.experimental_bypass_enabled is True
 

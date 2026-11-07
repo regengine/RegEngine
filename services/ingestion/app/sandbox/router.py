@@ -1,27 +1,31 @@
 """
 Sandbox Evaluation Router.
 
-Provides POST /api/v1/sandbox/evaluate — a stateless endpoint that accepts
-raw CTE events (JSON or CSV), runs normalization + FSMA 204 rule evaluation,
-and returns results WITHOUT persisting anything.
+Provides two stateless endpoints that accept raw CTE events (JSON or CSV),
+run normalization + FSMA 204 rule evaluation or in-memory lot tracing, and
+return results WITHOUT persisting anything:
 
-This powers the live demo on the marketing site, letting prospects drop their
-own data and see RegEngine's validation in action.
+    POST /api/v1/sandbox/evaluate
+    POST /api/v1/sandbox/trace
 
-No auth required. No data stored. Rate-limited to prevent abuse.
+This backs the Inflow Lab CSV evaluator (frontend
+``app/tools/inflow-lab/components/InflowLabClient.tsx``).
+
+No auth required. No data stored. Rate-limited per IP to prevent abuse.
+
+#3825: statelessness is what makes this surface production-eligible, and it
+is asserted by ``services/ingestion/tests/test_sandbox_production_promotion_3825.py``.
+The persisted share endpoints that used to live here now sit in
+``share_router.py`` under the separate, non-promoted ``sandbox_share`` owner —
+do not reintroduce a write path into this module.
 """
 
 from __future__ import annotations
 
-import hashlib
-import secrets
-from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
 
 import structlog
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import ValidationError
-from sqlalchemy import text
 
 from .csv_parser import (
     _collect_value_normalizations,
@@ -38,8 +42,6 @@ from .models import (
     RuleResultResponse,
     SandboxRequest,
     SandboxResponse,
-    SandboxShareRequest,
-    SandboxShareResponse,
     SandboxTraceRequest,
     TraceGraphResponse,
 )
@@ -272,127 +274,3 @@ async def sandbox_trace(payload: SandboxTraceRequest, request: Request) -> Trace
     """Stateless in-memory lot tracing for the sandbox."""
     return await _sandbox_trace_impl(payload, request)
 
-
-# ---------------------------------------------------------------------------
-# Share endpoints
-# ---------------------------------------------------------------------------
-
-# In-memory share rate limiter (10/hour per IP)
-_share_buckets: Dict[str, list] = {}
-_SHARE_RATE_LIMIT = 10
-_SHARE_WINDOW = 3600
-# #2711: cap unbounded key growth — when exceeded, evict buckets whose
-# newest entry has aged out of the window (an IP that never returns
-# otherwise keeps its bucket forever).
-_SHARE_BUCKET_CAP = 10000
-
-
-def _evict_stale_share_buckets(now: float) -> None:
-    """Drop empty/aged-out share buckets once the dict exceeds the cap (#2711)."""
-    if len(_share_buckets) <= _SHARE_BUCKET_CAP:
-        return
-    cutoff = now - _SHARE_WINDOW
-    for stale_key in [k for k, v in _share_buckets.items() if not v or v[-1] < cutoff]:
-        _share_buckets.pop(stale_key, None)
-
-
-@router.post(
-    "/share",
-    response_model=SandboxShareResponse,
-    summary="Create a shareable link for sandbox results",
-)
-async def sandbox_share(payload: SandboxShareRequest, request: Request) -> SandboxShareResponse:
-    """Store evaluation results and return a shareable URL."""
-    # Trusted-proxy-aware client IP (see resolve_client_ip); falls back to the
-    # socket peer when no trusted proxy is configured.
-    client_ip = resolve_client_ip(request)
-
-    # Rate limit shares (10/hour per IP)
-    now = datetime.now(timezone.utc).timestamp()
-    bucket = _share_buckets.setdefault(client_ip, [])
-    bucket[:] = [t for t in bucket if now - t < _SHARE_WINDOW]
-    if len(bucket) >= _SHARE_RATE_LIMIT:
-        raise HTTPException(status_code=429, detail="Share rate limit exceeded. Try again later.")
-    bucket.append(now)
-    _evict_stale_share_buckets(now)
-
-    # Same payload guard as /evaluate: shares store the CSV the user
-    # evaluated, which was already capped at 2MB there.
-    if len(payload.csv) > 2_000_000:
-        raise HTTPException(
-            status_code=413,
-            detail="CSV text too large for sandbox (max 2MB). Contact us for unlimited evaluation.",
-        )
-
-    share_id = secrets.token_urlsafe(12)
-    ip_hash = hashlib.sha256(client_ip.encode()).hexdigest()[:16]
-    expires_at = datetime.now(timezone.utc) + timedelta(days=30)
-
-    try:
-        from shared.database import get_db
-
-        with get_db() as db:
-            db.execute(
-                text(
-                    "INSERT INTO sandbox_shares (id, csv_text, result_json, ip_hash, expires_at) "
-                    "VALUES (:id, :csv, :result, :ip_hash, :expires_at)"
-                ),
-                {
-                    "id": share_id,
-                    "csv": payload.csv,
-                    "result": payload.result.model_dump_json(),
-                    "ip_hash": ip_hash,
-                    "expires_at": expires_at,
-                },
-            )
-            db.commit()
-    except Exception as e:
-        logger.error("sandbox_share_error", error=str(e))
-        raise HTTPException(status_code=503, detail="Sharing is temporarily unavailable.")
-
-    return SandboxShareResponse(
-        share_id=share_id,
-        share_url=f"/sandbox/results/{share_id}?utm_source=sandbox_share&utm_medium=link",
-        expires_at=expires_at.isoformat(),
-    )
-
-
-@router.get(
-    "/share/{share_id}",
-    response_model=SandboxResponse,
-    summary="Retrieve shared sandbox results",
-)
-async def sandbox_share_get(share_id: str) -> SandboxResponse:
-    """Retrieve shared evaluation results by ID."""
-    if len(share_id) > 20:
-        raise HTTPException(status_code=400, detail="Invalid share ID")
-
-    try:
-        from shared.database import get_db
-
-        with get_db() as db:
-            row = db.execute(
-                text(
-                    "UPDATE sandbox_shares SET view_count = view_count + 1 "
-                    "WHERE id = :id AND expires_at > now() "
-                    "RETURNING result_json"
-                ),
-                {"id": share_id},
-            ).fetchone()
-            db.commit()
-    except Exception as e:
-        logger.error("sandbox_share_get_error", error=str(e))
-        raise HTTPException(status_code=503, detail="Share retrieval temporarily unavailable.")
-
-    if not row:
-        raise HTTPException(status_code=404, detail="Shared result not found or expired.")
-
-    import json
-
-    result_data = row[0] if isinstance(row[0], dict) else json.loads(row[0])
-    try:
-        return SandboxResponse(**result_data)
-    except ValidationError:
-        # Stored result predates the current response shape. Report it as
-        # gone rather than turning a schema drift into a 500.
-        raise HTTPException(status_code=404, detail="Shared result not found or expired.")

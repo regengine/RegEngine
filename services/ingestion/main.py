@@ -216,6 +216,7 @@ _VALID_ROUTER_NAMES = {
     "readiness",
     "incidents",
     "sandbox",
+    "sandbox_share",
     "inflow_workbench",
     "supplier_validation",
     "disaster_recovery",
@@ -350,6 +351,14 @@ if _router_enabled("sandbox"):
     from app.sandbox.router import router as sandbox_router
 
     app.include_router(sandbox_router)
+
+# #3825: persisted sandbox share links, split out of the evaluator above so the
+# stateless surface could be promoted into the production allowlist without
+# them. Mirrors server/main.py — keep the two mount sites in sync.
+if _router_enabled("sandbox_share"):
+    from app.sandbox.share_router import router as sandbox_share_router
+
+    app.include_router(sandbox_share_router)
 
 # Inflow Lab Workbench (scenarios, saved runs, fix queue, commit gates)
 if _router_enabled("inflow_workbench"):

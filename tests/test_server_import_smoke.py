@@ -130,7 +130,7 @@ print("DOCS_RESULT_JSON=" + json.dumps({
         if route in {
             "POST /v1/scrape/cppa",
             "GET /v1/ingest/discovery/queue",
-            "POST /api/v1/sandbox/evaluate",
+            "POST /api/v1/sandbox/share",
             "POST /api/v1/query/traceability",
             "GET /api/v1/provisions/by-request",
             "GET /api/v1/simulations/scenarios",

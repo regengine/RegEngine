@@ -76,7 +76,12 @@ def test_checked_in_manifest_matches_live_route_and_dependency_graph(manifest):
         # +1 tenant-scoped: admin:PUT:/v1/supplier/admin/facilities/{facility_id}/agreed-sending-hours,
         # tenant Owner or Admin only (tenant.admin), tenant-filtered.
         # +1 tenant-scoped: CSV diagnostic preview, without event persistence.
-        "enabled_operation_count": 259,
+        # +2 public (#3825): sandbox:POST:/api/v1/sandbox/evaluate and
+        # sandbox:POST:/api/v1/sandbox/trace, promoted into the production
+        # allowlist for the Inflow Lab CSV evaluator. Both are stateless and
+        # tenantless; the persisted /share pair stayed disabled under the
+        # separate sandbox_share owner.
+        "enabled_operation_count": 261,
         # 178/161 includes graph:GET:/api/v1/provisions/by-request: it is added
         # to the graph v1_router AFTER router.include_router(v1_router), so the
         # eager route copies of fastapi < 0.137 (under which the previous
@@ -95,11 +100,13 @@ def test_checked_in_manifest_matches_live_route_and_dependency_graph(manifest):
         # 180/163 removes the 3 inbound_email operations: that router
         # resolved a tenant from the recipient address alone, with no sender
         # allowlist, and was deleted in favour of email_ingest.
-        "disabled_operation_count": 180,
-        "disabled_unique_path_count": 163,
+        # 178/161 moves sandbox evaluate+trace into the enabled set (#3825).
+        # The 2 sandbox_share operations remain here and must probe 404.
+        "disabled_operation_count": 178,
+        "disabled_unique_path_count": 161,
         "enabled_by_classification": {
             "global-sysadmin": 16,
-            "public": 30,
+            "public": 32,
             "tenant-scoped": 206,
             "workload-only": 7,
         },
@@ -297,9 +304,9 @@ def test_checkout_manifest_adapter_rejects_broad_auth_failure_downgrade(inventor
 
 
 def test_every_omitted_router_path_returns_exact_404(production_route_app, manifest):
-    # 180 includes agent_org onboard; the 3 inbound_email operations were
-    # removed with that router — see the comment on disabled_operation_count.
-    assert probe_omitted_paths_exact_404(production_route_app, manifest) == 180
+    # 178 after #3825 moved sandbox evaluate+trace into the production
+    # surface — see the comment on disabled_operation_count.
+    assert probe_omitted_paths_exact_404(production_route_app, manifest) == 178
 
 
 def test_representative_auth_negative_contracts_are_not_vacuous(production_route_app):
@@ -311,7 +318,11 @@ def test_representative_auth_negative_contracts_are_not_vacuous(production_route
         graph = client.post("/api/v1/query/traceability", json={})
         overlay = client.get("/v1/overlay/controls")
         nlp = client.post("/api/v1/analyze", json={})
+        # #3825: the stateless evaluator is now part of the production surface,
+        # so it must answer (400 on an empty body) rather than 404 — while the
+        # persisted share endpoint it was split from stays unreachable.
         sandbox = client.post("/api/v1/sandbox/evaluate", json={})
+        sandbox_share = client.post("/api/v1/sandbox/share", json={})
 
     assert tenant.status_code == 401
     assert metrics.status_code == 403
@@ -320,7 +331,8 @@ def test_representative_auth_negative_contracts_are_not_vacuous(production_route
     assert graph.status_code == 404
     assert overlay.status_code == 404
     assert nlp.status_code == 404
-    assert sandbox.status_code == 404
+    assert sandbox.status_code == 400
+    assert sandbox_share.status_code == 404
 
 
 def test_unowned_operation_fails_manifest_generation(inventory_app):

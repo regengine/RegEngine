@@ -26,7 +26,11 @@ sys.path.insert(0, str(service_dir))
 pytest.importorskip("fastapi")
 
 import shared.database as shared_db
-from app.sandbox.router import router as sandbox_router
+
+# #3825: the persisted share endpoints moved out of sandbox/router.py into
+# their own module so the stateless evaluator could be promoted into the
+# production router allowlist without them.
+from app.sandbox.share_router import router as sandbox_router
 
 
 @pytest.fixture()

@@ -47,12 +47,15 @@ from app.sandbox.csv_parser import (  # noqa: E402
 )
 from app.sandbox.evaluators import _evaluate_relational_in_memory  # noqa: E402
 from app.sandbox.router import router as sandbox_router  # noqa: E402
+# #3825: persisted /share endpoints now live in their own router/module.
+from app.sandbox.share_router import router as sandbox_share_router  # noqa: E402
 from app.sandbox.validation import (  # noqa: E402
     _detect_entity_mismatches,
     _validate_kdes,
 )
 
 sandbox_router_mod = sys.modules["app.sandbox.router"]
+share_router_mod = sys.modules["app.sandbox.share_router"]
 
 
 # ---------------------------------------------------------------------------
@@ -69,13 +72,13 @@ def _clean_limiter_state(monkeypatch):
     rate_limiting._redis_client = None
     rate_limiting._redis_failed = False
     rate_limiting._redis_retry_at = 0.0
-    sandbox_router_mod._share_buckets.clear()
+    share_router_mod._share_buckets.clear()
     yield
     rate_limiting._rate_buckets.clear()
     rate_limiting._redis_client = None
     rate_limiting._redis_failed = False
     rate_limiting._redis_retry_at = 0.0
-    sandbox_router_mod._share_buckets.clear()
+    share_router_mod._share_buckets.clear()
 
 
 @pytest.fixture()
@@ -84,6 +87,7 @@ def client(monkeypatch) -> TestClient:
     monkeypatch.setattr(sandbox_router_mod, "_check_sandbox_rate_limit", lambda ip: None)
     app = FastAPI()
     app.include_router(sandbox_router)
+    app.include_router(sandbox_share_router)
     return TestClient(app)
 
 
