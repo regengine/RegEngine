@@ -73,7 +73,7 @@ WITH sig(ord, revision, label, kind, arg1, arg2, note) AS (
     (34, 'c35358cae7d4', 'v107', 'func_src', 'fsma.prevent_cte_mutation', 'RETURN NEW', ''),  -- pragma: allowlist secret
     (35, 'a43b0fb1edd0', 'v108', 'column', 'fsma.traceability_events', 'evaluation_error', ''),  -- pragma: allowlist secret
     (36, '51701aedee57', 'v109', 'function', 'fsma.get_team_roster', '', ''),  -- pragma: allowlist secret
-    (37, '6f8c2d1a4b90', 'v110', 'policy', 'developers_insert_own_profile', 'public.developer_profiles', ''),  -- pragma: allowlist secret
+    (37, '6f8c2d1a4b90', 'v110', 'data', '', '', 'portal-only: upgrade() is a no-op unless REGENGINE_SUPABASE_PORTAL_MIGRATIONS=1, so developers_insert_own_profile is expected absent on the Railway/Alembic database; not observable'),  -- pragma: allowlist secret
     (38, 'df664d92adba', 'v111', 'force_rls', 'public.controls', '', ''),  -- pragma: allowlist secret
     (39, 'd8b2056471a7', 'v112', 'func_secdef', 'seed_obligations_for_tenant', '', 'any schema'),  -- pragma: allowlist secret
     (40, '4e9c1f7a02b6', 'v113', 'function', 'public.get_invite_tenant_by_token_hash', '', ''),  -- pragma: allowlist secret
@@ -239,7 +239,7 @@ WITH sig(ord, revision, label, kind, arg1, arg2, note) AS (
     (34, 'c35358cae7d4', 'v107', 'func_src', 'fsma.prevent_cte_mutation', 'RETURN NEW', ''),  -- pragma: allowlist secret
     (35, 'a43b0fb1edd0', 'v108', 'column', 'fsma.traceability_events', 'evaluation_error', ''),  -- pragma: allowlist secret
     (36, '51701aedee57', 'v109', 'function', 'fsma.get_team_roster', '', ''),  -- pragma: allowlist secret
-    (37, '6f8c2d1a4b90', 'v110', 'policy', 'developers_insert_own_profile', 'public.developer_profiles', ''),  -- pragma: allowlist secret
+    (37, '6f8c2d1a4b90', 'v110', 'data', '', '', 'portal-only: upgrade() is a no-op unless REGENGINE_SUPABASE_PORTAL_MIGRATIONS=1, so developers_insert_own_profile is expected absent on the Railway/Alembic database; not observable'),  -- pragma: allowlist secret
     (38, 'df664d92adba', 'v111', 'force_rls', 'public.controls', '', ''),  -- pragma: allowlist secret
     (39, 'd8b2056471a7', 'v112', 'func_secdef', 'seed_obligations_for_tenant', '', 'any schema'),  -- pragma: allowlist secret
     (40, '4e9c1f7a02b6', 'v113', 'function', 'public.get_invite_tenant_by_token_hash', '', ''),  -- pragma: allowlist secret
@@ -383,6 +383,8 @@ SELECT
   (SELECT count(*) FROM observable WHERE NOT present)              AS observable_absent,
   (SELECT string_agg(label || ':' || revision, ', ' ORDER BY ord)
      FROM observable
-     WHERE present AND ord > COALESCE((SELECT ord FROM first_gap), 0)) AS present_beyond_first_gap;
+     WHERE present
+       AND (SELECT ord FROM first_gap) IS NOT NULL
+       AND ord > (SELECT ord FROM first_gap))                        AS present_beyond_first_gap;
 
 ROLLBACK;
