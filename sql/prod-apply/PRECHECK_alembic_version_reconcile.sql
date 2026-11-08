@@ -41,7 +41,7 @@ WITH sig(ord, revision, label, kind, arg1, arg2, note) AS (
     (2, 'c1d2e3f4a5b6', 'v079', 'relation', 'fsma.ingestion_run_receipts', '', 'second v079 label; use revision ids'),  -- pragma: allowlist secret
     (3, 'd2e3f4a5b6c7', 'v080', 'relation', 'fsma.agent_artifacts', '', ''),  -- pragma: allowlist secret
     (4, '3e7a1c5b9f24', 'v081', 'column', 'fsma.key_data_elements', 'tenant_id', ''),  -- pragma: allowlist secret
-    (5, 'a7b8c9d0e1f2', 'v081', 'index', 'fsma.idx_cte_events_tenant_sha', '', ''),  -- pragma: allowlist secret
+    (5, 'a7b8c9d0e1f2', 'v081', 'index', 'fsma.idx_cte_events_tenant_sha256', '', ''),  -- pragma: allowlist secret
     (6, '70d5e59e3257', 'v082', 'merge', '', '', 'merge revision; nothing to observe'),  -- pragma: allowlist secret
     (7, 'e3f4a5b6c7d8', 'v083', 'column', 'fsma.cte_kdes_backfill_log_v059', 'tenant_id', ''),  -- pragma: allowlist secret
     (8, 'da5d93004161', 'v084', 'relation', 'public.user_emails', '', 'passwordless auth schema'),  -- pragma: allowlist secret
@@ -53,13 +53,13 @@ WITH sig(ord, revision, label, kind, arg1, arg2, note) AS (
     (14, '44225a26ed58', 'v090', 'column', 'public.audit_logs', 'sequence_num', ''),  -- pragma: allowlist secret
     (15, '4c5d6e7f8a9b', 'v090', 'absent_fk', 'fsma.hash_chain', 'fsma.cte_events', 'also hand-applied by supabase 20260403235145'),  -- pragma: allowlist secret
     (16, 'd1bdfe74d1fd', 'v090', 'merge', '', '', ''),  -- pragma: allowlist secret
-    (17, 'a128f7f95db8', 'v090', 'policy', 'tenant_isolation_tasks', 'fsma.task_queue', 'AMBIGUOUS: supabase 20261025100200 recreates a policy of the same name'),  -- pragma: allowlist secret
+    (17, 'a128f7f95db8', 'v090', 'data', '', '', 'rewrote tenant_isolation_tasks on fsma.task_queue; v096 rewrote it again and v111 (b71d9e4c2a60) dropped it for task_queue_runtime_*; not observable on a migrated database'),  -- pragma: allowlist secret
     (18, '127a24ffb54c', 'v091', 'constraint', 'uq_request_signoffs_tenant_case_type', 'fsma.request_signoffs', ''),  -- pragma: allowlist secret
     (19, 'b3c8e1f4a627', 'v092', 'privilege_absent', 'anon', 'fsma.cte_events', 'client-role lockdown; NULL when role anon is absent'),  -- pragma: allowlist secret
     (20, '16cb29a3938c', 'v093', 'relation', 'public.scheduler_seen_items', '', ''),  -- pragma: allowlist secret
     (21, 'feb267263e0a', 'v094', 'data_user_emails_fingerprint', '', '', 'data backfill; NULL when public.user_emails is absent'),  -- pragma: allowlist secret
     (22, 'c7a1e5f2b9d4', 'v095', 'relation', 'fsma.remediation_cases', '', ''),  -- pragma: allowlist secret
-    (23, 'c3a51e2f7b90', 'v096', 'policy', 'tenant_isolation_audit', 'fsma.fsma_audit_trail', ''),  -- pragma: allowlist secret
+    (23, 'c3a51e2f7b90', 'v096', 'data', '', '', 'rewrote tenant_isolation_audit on fsma.fsma_audit_trail; v111 (b71d9e4c2a60) dropped it for fsma_audit_trail_runtime_*; not observable on a migrated database'),  -- pragma: allowlist secret
     (24, 'e4d7b2a9c561', 'v097', 'func_config_search_path', 'public.get_tenant_context', '', ''),  -- pragma: allowlist secret
     (25, '8b2f4e6a9c31', 'v098', 'relation', 'fsma.exchange_packages', '', ''),  -- pragma: allowlist secret
     (26, '2aa607050c84', 'v099', 'function', 'public.set_admin_context', '', ''),  -- pragma: allowlist secret
@@ -85,7 +85,7 @@ WITH sig(ord, revision, label, kind, arg1, arg2, note) AS (
     (46, '8b866e4b4798', 'v119', 'data', '', '', 'seed reconcile; not catalog-observable'),  -- pragma: allowlist secret
     (47, 'c6a120b4e901', 'v120', 'data', '', '', 'rule citations; not catalog-observable'),  -- pragma: allowlist secret
     (48, '7551be5c64ac', 'v121', 'index', 'fsma.idx_label_charges_tenant_created', '', ''),  -- pragma: allowlist secret
-    (49, '8301f3cad96a', 'v121', 'relation', 'fsma.tenant_inbound_email_addresses', '', ''),  -- pragma: allowlist secret
+    (49, '8301f3cad96a', 'v121', 'data', '', '', 'created fsma.tenant_inbound_email_addresses; v126 (486eb6809921) drops it once empty, so absence is expected on a migrated database'),  -- pragma: allowlist secret
     (50, 'ceb552c6d36d', 'v121', 'relation', 'billing.tenant_usage_counters', '', ''),  -- pragma: allowlist secret
     (51, '5541fb62ee2d', 'v121', 'merge', '', '', ''),  -- pragma: allowlist secret
     (52, 'bd0c6549153a', 'v121', 'relation', 'agent_org.agent_pods', '', ''),  -- pragma: allowlist secret
@@ -207,7 +207,7 @@ WITH sig(ord, revision, label, kind, arg1, arg2, note) AS (
     (2, 'c1d2e3f4a5b6', 'v079', 'relation', 'fsma.ingestion_run_receipts', '', 'second v079 label; use revision ids'),  -- pragma: allowlist secret
     (3, 'd2e3f4a5b6c7', 'v080', 'relation', 'fsma.agent_artifacts', '', ''),  -- pragma: allowlist secret
     (4, '3e7a1c5b9f24', 'v081', 'column', 'fsma.key_data_elements', 'tenant_id', ''),  -- pragma: allowlist secret
-    (5, 'a7b8c9d0e1f2', 'v081', 'index', 'fsma.idx_cte_events_tenant_sha', '', ''),  -- pragma: allowlist secret
+    (5, 'a7b8c9d0e1f2', 'v081', 'index', 'fsma.idx_cte_events_tenant_sha256', '', ''),  -- pragma: allowlist secret
     (6, '70d5e59e3257', 'v082', 'merge', '', '', 'merge revision; nothing to observe'),  -- pragma: allowlist secret
     (7, 'e3f4a5b6c7d8', 'v083', 'column', 'fsma.cte_kdes_backfill_log_v059', 'tenant_id', ''),  -- pragma: allowlist secret
     (8, 'da5d93004161', 'v084', 'relation', 'public.user_emails', '', 'passwordless auth schema'),  -- pragma: allowlist secret
@@ -219,13 +219,13 @@ WITH sig(ord, revision, label, kind, arg1, arg2, note) AS (
     (14, '44225a26ed58', 'v090', 'column', 'public.audit_logs', 'sequence_num', ''),  -- pragma: allowlist secret
     (15, '4c5d6e7f8a9b', 'v090', 'absent_fk', 'fsma.hash_chain', 'fsma.cte_events', 'also hand-applied by supabase 20260403235145'),  -- pragma: allowlist secret
     (16, 'd1bdfe74d1fd', 'v090', 'merge', '', '', ''),  -- pragma: allowlist secret
-    (17, 'a128f7f95db8', 'v090', 'policy', 'tenant_isolation_tasks', 'fsma.task_queue', 'AMBIGUOUS: supabase 20261025100200 recreates a policy of the same name'),  -- pragma: allowlist secret
+    (17, 'a128f7f95db8', 'v090', 'data', '', '', 'rewrote tenant_isolation_tasks on fsma.task_queue; v096 rewrote it again and v111 (b71d9e4c2a60) dropped it for task_queue_runtime_*; not observable on a migrated database'),  -- pragma: allowlist secret
     (18, '127a24ffb54c', 'v091', 'constraint', 'uq_request_signoffs_tenant_case_type', 'fsma.request_signoffs', ''),  -- pragma: allowlist secret
     (19, 'b3c8e1f4a627', 'v092', 'privilege_absent', 'anon', 'fsma.cte_events', 'client-role lockdown; NULL when role anon is absent'),  -- pragma: allowlist secret
     (20, '16cb29a3938c', 'v093', 'relation', 'public.scheduler_seen_items', '', ''),  -- pragma: allowlist secret
     (21, 'feb267263e0a', 'v094', 'data_user_emails_fingerprint', '', '', 'data backfill; NULL when public.user_emails is absent'),  -- pragma: allowlist secret
     (22, 'c7a1e5f2b9d4', 'v095', 'relation', 'fsma.remediation_cases', '', ''),  -- pragma: allowlist secret
-    (23, 'c3a51e2f7b90', 'v096', 'policy', 'tenant_isolation_audit', 'fsma.fsma_audit_trail', ''),  -- pragma: allowlist secret
+    (23, 'c3a51e2f7b90', 'v096', 'data', '', '', 'rewrote tenant_isolation_audit on fsma.fsma_audit_trail; v111 (b71d9e4c2a60) dropped it for fsma_audit_trail_runtime_*; not observable on a migrated database'),  -- pragma: allowlist secret
     (24, 'e4d7b2a9c561', 'v097', 'func_config_search_path', 'public.get_tenant_context', '', ''),  -- pragma: allowlist secret
     (25, '8b2f4e6a9c31', 'v098', 'relation', 'fsma.exchange_packages', '', ''),  -- pragma: allowlist secret
     (26, '2aa607050c84', 'v099', 'function', 'public.set_admin_context', '', ''),  -- pragma: allowlist secret
@@ -251,7 +251,7 @@ WITH sig(ord, revision, label, kind, arg1, arg2, note) AS (
     (46, '8b866e4b4798', 'v119', 'data', '', '', 'seed reconcile; not catalog-observable'),  -- pragma: allowlist secret
     (47, 'c6a120b4e901', 'v120', 'data', '', '', 'rule citations; not catalog-observable'),  -- pragma: allowlist secret
     (48, '7551be5c64ac', 'v121', 'index', 'fsma.idx_label_charges_tenant_created', '', ''),  -- pragma: allowlist secret
-    (49, '8301f3cad96a', 'v121', 'relation', 'fsma.tenant_inbound_email_addresses', '', ''),  -- pragma: allowlist secret
+    (49, '8301f3cad96a', 'v121', 'data', '', '', 'created fsma.tenant_inbound_email_addresses; v126 (486eb6809921) drops it once empty, so absence is expected on a migrated database'),  -- pragma: allowlist secret
     (50, 'ceb552c6d36d', 'v121', 'relation', 'billing.tenant_usage_counters', '', ''),  -- pragma: allowlist secret
     (51, '5541fb62ee2d', 'v121', 'merge', '', '', ''),  -- pragma: allowlist secret
     (52, 'bd0c6549153a', 'v121', 'relation', 'agent_org.agent_pods', '', ''),  -- pragma: allowlist secret
