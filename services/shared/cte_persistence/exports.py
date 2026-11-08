@@ -7,6 +7,7 @@ Mechanically extracted from ``core.py`` (file split — no logic changes).
 from __future__ import annotations
 
 import hashlib
+from datetime import datetime
 from typing import Optional
 from uuid import uuid4
 
@@ -66,6 +67,7 @@ class ExportLogMixin:
         export_type: str = "fda_spreadsheet",
         include_pii: bool = False,
         query_event_type: Optional[str] = None,
+        generated_at: Optional[datetime] = None,
     ) -> str:
         """Log an FDA export event and return the export log ID.
 
@@ -86,6 +88,10 @@ class ExportLogMixin:
         tampered — so both are recorded on the audit row. A schema that
         predates the v113 migration falls back to the legacy insert below,
         leaving them NULL, which the verifier reads as "not reproducible".
+
+        ``generated_at`` is the moment the export's Open Data Gaps column
+        describes, so ``/export/verify`` can read gaps as of the same moment.
+        Omitted, the column default applies.
         """
         export_id = str(uuid4())
         fingerprint = self._compute_export_fingerprint(
@@ -105,10 +111,11 @@ class ExportLogMixin:
                         id, tenant_id, export_type, query_tlc,
                         query_start_date, query_end_date, record_count,
                         export_hash, generated_by, export_fingerprint,
-                        include_pii, query_event_type
+                        include_pii, query_event_type, generated_at
                     ) VALUES (
                         :id, :tid, :etype, :tlc, :start, :end, :count,
-                        :hash, :by, :fp, :pii, :qetype
+                        :hash, :by, :fp, :pii, :qetype,
+                        COALESCE(CAST(:generated_at AS timestamptz), now())
                     )
                     ON CONFLICT (tenant_id, export_fingerprint)
                         WHERE export_fingerprint IS NOT NULL
@@ -129,6 +136,7 @@ class ExportLogMixin:
                     "fp": fingerprint,
                     "pii": bool(include_pii),
                     "qetype": query_event_type,
+                    "generated_at": generated_at,
                 },
             ).fetchone()
         except Exception:

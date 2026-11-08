@@ -71,10 +71,6 @@ PAYLOAD_KEYS = (
     "NEO4J_URI",
     "NEO4J_USER",
     "NEO4J_PASSWORD",
-    "KAFKA_BOOTSTRAP_SERVERS",
-    "KAFKA_USERNAME",
-    "KAFKA_PASSWORD",
-    "KAFKA_SECURITY_PROTOCOL",
     "OBJECT_STORAGE_ACCESS_KEY_ID",
     "OBJECT_STORAGE_SECRET_ACCESS_KEY",
     "OBJECT_STORAGE_REGION",
@@ -115,10 +111,6 @@ def build_secret_payload(environment: str) -> dict[str, str]:
         "NEO4J_URI": os.getenv("NEO4J_URI", "bolt://localhost:7687"),
         "NEO4J_USER": os.getenv("NEO4J_USER", "neo4j"),
         "NEO4J_PASSWORD": os.getenv("NEO4J_PASSWORD", ""),
-        "KAFKA_BOOTSTRAP_SERVERS": os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092"),
-        "KAFKA_USERNAME": os.getenv("KAFKA_USERNAME", ""),
-        "KAFKA_PASSWORD": os.getenv("KAFKA_PASSWORD", ""),
-        "KAFKA_SECURITY_PROTOCOL": os.getenv("KAFKA_SECURITY_PROTOCOL", "PLAINTEXT"),
         "OBJECT_STORAGE_ACCESS_KEY_ID": os.getenv("OBJECT_STORAGE_ACCESS_KEY_ID", ""),
         "OBJECT_STORAGE_SECRET_ACCESS_KEY": os.getenv("OBJECT_STORAGE_SECRET_ACCESS_KEY", ""),
         "OBJECT_STORAGE_REGION": os.getenv("OBJECT_STORAGE_REGION", "us-east-1"),
@@ -137,8 +129,6 @@ NON_SECRET_KEYS = frozenset(
         "POSTGRES_DB",
         "NEO4J_URI",
         "NEO4J_USER",
-        "KAFKA_BOOTSTRAP_SERVERS",
-        "KAFKA_SECURITY_PROTOCOL",
         "OBJECT_STORAGE_REGION",
         "OBJECT_STORAGE_ENDPOINT_URL",
     }
@@ -242,10 +232,6 @@ def main() -> None:
         "\nAll required secrets are present.\n"
         "Keys validated (names only; values are never printed here):\n"
         "  - ENVIRONMENT\n"
-        "  - KAFKA_BOOTSTRAP_SERVERS\n"
-        "  - KAFKA_PASSWORD\n"
-        "  - KAFKA_SECURITY_PROTOCOL\n"
-        "  - KAFKA_USERNAME\n"
         "  - NEO4J_PASSWORD\n"
         "  - NEO4J_URI\n"
         "  - NEO4J_USER\n"

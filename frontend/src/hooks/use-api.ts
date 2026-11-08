@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from '@/lib/api-client';
+import { apiClient, rawFetch } from '@/lib/api-client';
 import { apiError, isAuthError, requestIdFromResponse } from '@/lib/api-error';
 import type { IngestURLRequest } from '@/types/api';
 import type { LabelBatchInitRequest } from '@/types/labels';
@@ -51,7 +51,7 @@ async function fetchAggregatedStatus(): Promise<SystemStatusResponse> {
 
   const results = await Promise.allSettled(
     serviceNames.map(async (name) => {
-      const res = await fetch(`/api/${name}/health`, {
+      const res = await rawFetch(`/api/${name}/health`, {
         credentials: 'include',
         signal: AbortSignal.timeout(4000),
       });

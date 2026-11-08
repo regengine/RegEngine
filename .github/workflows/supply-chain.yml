@@ -44,6 +44,10 @@ on:
       - 'infra/**'
       - 'requirements.in'
       - 'requirements.lock'
+      - 'requirements-dev.in'
+      - 'requirements-dev.lock'
+      - 'requirements-experimental.in'
+      - 'requirements-experimental.lock'
       - 'frontend/package.json'
       - 'frontend/package-lock.json'
 

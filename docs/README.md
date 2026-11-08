@@ -72,7 +72,7 @@ the entire documentation tree.
 
 ## API Reference
 - [OpenAPI Specs](openapi/)
-- [Schemas](schemas/)
+- [Schemas](schema/)
 
 ## Other
 - [Runbooks](runbooks/)

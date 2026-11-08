@@ -2,6 +2,7 @@ import os
 
 import psycopg
 import pytest
+from tests.migrations.rls_db import skip_or_fail_without_db
 from psycopg.rows import dict_row
 
 # Get DB URL from env or use default
@@ -22,7 +23,7 @@ def db_connection():
         yield conn
         conn.close()
     except (psycopg.OperationalError, psycopg.ProgrammingError) as e:
-        pytest.skip(f"Database unavailable: {e}")
+        skip_or_fail_without_db(f"Database unavailable: {e}")
 
 
 class TestFSMA204Invariants:

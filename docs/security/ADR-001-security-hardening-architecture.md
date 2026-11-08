@@ -265,4 +265,4 @@ Add `kid` (Key ID) header to JWTs and implement a key registry supporting multip
 - Deploy Checklist: `docs/archive/DEPLOY_CHECKLIST_SECURITY_HARDENING.md` (historical)
 - Backend Audit: `BACKEND_AUDIT_2026-03-20.md`
 - Frontend Audit: `FRONTEND_AUDIT_2026-03-20.md`
-- FSMA SLOs: `nfr/fsma_slos.yaml`
+- FSMA SLOs: `docs/nfr/fsma_slos.yaml`

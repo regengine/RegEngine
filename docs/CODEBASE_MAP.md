@@ -29,8 +29,10 @@ The `services/*` directories organize router domains and code paths used by the
 consolidated app; their presence does not establish separate deployments. Any
 document, manifest or runbook that
 describes a six-service topology is describing the retired architecture; all
-five files in `runbooks/` carry an explicit `LEGACY:` banner saying so, and
-`infra/k8s/` describes that same retired topology.
+five narrative runbooks under `docs/runbooks/legacy/` carry an explicit `LEGACY:` banner saying so. The
+manifests, gateway config, swarm runtime and workflow of that topology live
+under `docs/archive/retired-topology/` (moved 2026-10-30) and are loaded by
+no build, test or deploy.
 
 Railway's healthcheck path is `/readiness` (`railway.toml`). Its container
 filesystem is ephemeral and `railway.toml` declares **no volume** — anything
@@ -47,10 +49,10 @@ written to local disk is lost on every deploy.
 | `regengine/` | The source-installable Python SDK/CLI (`regengine-verify` etc.), packaged separately from the platform. |
 | `tests/` | Cross-cutting suites: data integrity, SDK, scripts, shared. |
 | `scripts/` | Operational and CI helper scripts. |
-| `.github/workflows/` | CI and deployment workflow definitions (see §7). |
+| `.github/workflows/` | 33 workflows (see §7). |
 | `docs/` | Reference documentation. **`docs/archive/` is historical** — those files describe the tree as it was on their date and are deliberately not kept current. |
-| `runbooks/` | Operational runbooks; all five currently carry a `LEGACY:` banner. |
-| `infra/k8s/` | Manifests for the retired k8s topology. |
+| `runbooks/` | Six operator SQL files named by docs, tests and the v098/v126 revisions (see its README). Current narrative runbooks are under `docs/runbooks/`; the five legacy ones under `docs/runbooks/legacy/`. |
+| `infra/` | `otel-collector-config.yaml` (pinned by `tests/infra/`), monitoring dashboards and module READMEs. The k8s manifests moved to `docs/archive/retired-topology/k8s/`. |
 
 ## 3. `services/` — domain code inside the monolith
 
@@ -69,12 +71,30 @@ relative weight, not a contract.
 
 ## 4. Router gating
 
-[`server/router_policy.py`](../server/router_policy.py) requires an exact
-`ENABLED_ROUTERS` allowlist in production. Missing or extra names abort startup;
-`DISABLED_ROUTERS` and the experimental bypass are rejected in production.
-Development and test have separate controls. A route in source is not proof it
-is available in a target environment; graph and NLP are excluded from the
-checked-in production set. See the [router surface audit](engineering/ROUTER_SURFACE.md).
+`server/routers_mount.py` makes 81 `include_owned_router` calls (the router
+registration split out of `server/main.py` in WI-14, moved earlier from bare
+`include_router` to `server/router_policy.py`'s owned form; `server/main.py`
+itself mounts only the scheduler-status router), but
+**not all of them are live in production.** `EXPERIMENTAL_ROUTERS` names domains
+that are auto-disabled unless `ENABLE_EXPERIMENTAL_ROUTERS` is set (this block
+is rendered from the frozenset and checked by `scripts/check_docs_counts.py`):
+
+```
+agent_org  audit  discovery  exchange  export  graph  label_vision
+nlp  qr_decoder  recall_simulations  sandbox  scraping  sensitech  sop
+sources
+```
+
+This is the single most common source of confusion in this codebase: **a route
+that exists in the source can still 404 in production.** Before reporting that
+an endpoint is broken, or wiring a frontend hook to it, check whether its
+domain is in that set. `billing` is **not** experimental — it is live.
+
+Two consequences worth internalising:
+- `graph` and `nlp` are experimental, so on the production path Neo4j is never
+  contacted by the readiness probe (§6).
+- Any doc or client asserting an experimental route is production-available is
+  wrong regardless of what the source shows.
 
 ## 5. Database
 
@@ -105,18 +125,24 @@ system's own monitoring.
 Backend tests run under pytest from the repo root. `pyproject.toml` sets
 `--import-mode=importlib` and `asyncio_mode = "auto"`.
 
-`pyproject.toml` includes `services/shared/tests` and `infra/gateway/tests`
-in the default `testpaths`; collection alone does not establish that tests pass.
-Some suites require live infrastructure or credentials. Workflow definitions
-in `.github/workflows/` describe configured checks, not their current results.
+`services/shared/tests` joined `testpaths` with #2923, so a default repo-wide
+run collects it; `test-suite-check.yml` asserts every `testpaths` root is
+represented in the collection.
+
+CI is 33 workflows under `.github/workflows/`; `backend-ci.yml`,
+`frontend-ci.yml`, `pr-gate.yml` and `security.yml` are the ones that gate a
+normal change.
 
 ## 8. Keeping this file honest
 
 `scripts/check_docs_links.py` fails CI when a document in the live set — root
-`*.md`, `runbooks/`, and this file — references a repo path that does not
-exist. It runs as the `docs-link-check` hard gate in `backend-ci.yml`. Paths
-named deliberately *because* they were removed are declared in
-`.docs-link-allowlist` with a reason, so the exemption is auditable.
+`*.md`, `runbooks/`, `docs/runbooks/legacy/`, `docs/compliance/` and this file — references a repo path that does not
+exist. It runs as `PR Gate: Docs` in `pr-gate.yml` next to
+`scripts/check_docs_counts.py`, which fails when the counts and lists this
+file and `ARCHITECTURE.md` state differ from the tree; `tests/scripts/` runs
+both over the real tree as well. Paths named deliberately *because* they were
+removed are declared in `.docs-link-allowlist` with a reason, so the exemption
+is auditable.
 
 The check does not currently cover `docs/**`; that tree carries a substantial
 backlog of stale references, concentrated in `docs/archive/` where staleness is

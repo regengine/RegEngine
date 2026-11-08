@@ -6,9 +6,8 @@ These types are used by all audit subsystems (integrity, storage, writer).
 """
 
 import json
-import uuid
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -39,18 +38,18 @@ class AuditEventType(str, Enum):
     LOGIN_SUCCESS = "login_success"
     LOGIN_FAILURE = "login_failure"
     LOGOUT = "logout"
-    PASSWORD_CHANGE = "password_change"
-    PASSWORD_RESET_REQUEST = "password_reset_request"
-    PASSWORD_RESET_COMPLETE = "password_reset_complete"
+    PASSWORD_CHANGE = "password_change"  # noqa: S105 -- audit event name, not a credential
+    PASSWORD_RESET_REQUEST = "password_reset_request"  # noqa: S105 -- audit event name, not a credential
+    PASSWORD_RESET_COMPLETE = "password_reset_complete"  # noqa: S105 -- audit event name, not a credential
     MFA_ENABLED = "mfa_enabled"
     MFA_DISABLED = "mfa_disabled"
     MFA_CHALLENGE = "mfa_challenge"
     SESSION_CREATED = "session_created"
     SESSION_EXPIRED = "session_expired"
     SESSION_REVOKED = "session_revoked"
-    TOKEN_ISSUED = "token_issued"
-    TOKEN_REVOKED = "token_revoked"
-    TOKEN_REFRESH = "token_refresh"
+    TOKEN_ISSUED = "token_issued"  # noqa: S105 -- audit event name, not a credential
+    TOKEN_REVOKED = "token_revoked"  # noqa: S105 -- audit event name, not a credential
+    TOKEN_REFRESH = "token_refresh"  # noqa: S105 -- audit event name, not a credential
 
     # Authorization events
     ACCESS_GRANTED = "access_granted"
