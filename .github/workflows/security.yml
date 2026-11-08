@@ -181,10 +181,35 @@ jobs:
         env:
           GITLEAKS_VERSION: v8.30.0
           GITLEAKS_SHA256: 79a3ab579b53f71efd634f3aaf7e04a0fa0cf206b7ed434638d1547a2470a66e  # pragma: allowlist secret
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
-          # The release host answers 5xx now and then; retry before failing the
-          # gate on a download that never reached the scan.
-          curl -sSfL --retry 5 --retry-delay 5 --retry-all-errors "https://github.com/gitleaks/gitleaks/releases/download/${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION#v}_linux_x64.tar.gz" -o /tmp/gitleaks.tar.gz
+          # The release host answers 5xx in bursts (two PR Gate runs on
+          # 2026-11-08 died here with six straight 504s). Try the release
+          # download URL with a longer retry window, then the same asset
+          # through the release-asset API, which is served by a different
+          # GitHub edge. The sha256 check below makes the source immaterial.
+          ASSET="gitleaks_${GITLEAKS_VERSION#v}_linux_x64.tar.gz"
+          fetch_from_release_page() {
+            curl -sSfL --retry 8 --retry-delay 10 --retry-all-errors \
+              "https://github.com/gitleaks/gitleaks/releases/download/${GITLEAKS_VERSION}/${ASSET}" \
+              -o /tmp/gitleaks.tar.gz
+          }
+          fetch_from_release_api() {
+            local asset_id
+            asset_id="$(curl -sSf --retry 5 --retry-delay 10 --retry-all-errors \
+              -H "Authorization: Bearer ${GITHUB_TOKEN}" -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/gitleaks/gitleaks/releases/tags/${GITLEAKS_VERSION}" \
+              | jq -r --arg name "$ASSET" '.assets[] | select(.name == $name) | .id')"
+            test -n "$asset_id"
+            curl -sSfL --retry 5 --retry-delay 10 --retry-all-errors \
+              -H "Authorization: Bearer ${GITHUB_TOKEN}" -H "Accept: application/octet-stream" \
+              "https://api.github.com/repos/gitleaks/gitleaks/releases/assets/${asset_id}" \
+              -o /tmp/gitleaks.tar.gz
+          }
+          fetch_from_release_page || {
+            echo "::warning::gitleaks release download failed; retrying through the release-asset API"
+            fetch_from_release_api
+          }
           echo "${GITLEAKS_SHA256}  /tmp/gitleaks.tar.gz" | sha256sum -c -
           tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
           sudo install -m 0755 /tmp/gitleaks /usr/local/bin/gitleaks
