@@ -36,6 +36,7 @@ from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query
 from pydantic import ValidationError
 
 from ..authz import IngestionPrincipal, require_permission
+from ..edi_interchange import EDIInterchange
 from ..format_extractors import is_edi_content
 from ..shared.tenant_resolution import resolve_principal_tenant_id, resolve_tenant_id
 from ..shared.upload_limits import MAX_EDI_FILE_SIZE_BYTES, read_upload_with_limit
@@ -121,11 +122,9 @@ def _release_isa13_unless_stored(endpoint):
     quantity, so a corrected resend under the same ISA13 can store accepted
     lines twice or drop a corrected quantity.
 
-    Releasing on an exception or cancellation assumes nothing was committed.
-    That does not hold if ``ingest_events`` commits and then raises (session
-    cleanup) or the response cannot be built: the claim is freed for stored
-    events. The ``(tenant_id, idempotency_key)`` unique key on the event
-    tables is then what stops an identical resend from storing them twice.
+    An exception after commit can release the Redis claim. The PostgreSQL
+    interchange receipt commits with the events, so it still rejects resends
+    (including changed content) if cleanup fails or the cache is unavailable.
     """
 
     @functools.wraps(endpoint)
@@ -842,6 +841,7 @@ async def ingest_edi_856(
         principal_tenant_id=sender_tenant_id,
         x_regengine_api_key=x_regengine_api_key,
         all_or_nothing=True,
+        edi_interchange=EDIInterchange.from_envelope(extracted),
     )
 
     return EDIIngestResponse(
@@ -1585,6 +1585,7 @@ async def ingest_edi_document(
         principal_tenant_id=sender_tenant_id,
         x_regengine_api_key=x_regengine_api_key,
         all_or_nothing=True,
+        edi_interchange=EDIInterchange.from_envelope(extracted),
     )
 
     return EDIIngestResponse(
