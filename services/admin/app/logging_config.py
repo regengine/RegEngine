@@ -5,7 +5,7 @@ compatibility so existing `from app.logging_config import configure_logging`
 imports continue to work without changes.
 
 Usage:
-    from app.logging_config import configure_logging
+    from services.admin.app.logging_config import configure_logging
 
     configure_logging(level="INFO")
 """

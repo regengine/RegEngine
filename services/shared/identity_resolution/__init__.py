@@ -12,11 +12,13 @@ Package layout:
     shared/identity_resolution/service.py        — composed IdentityResolutionService class
 """
 
-from shared.identity_resolution.constants import (  # noqa: F401
+from shared.identity_resolution.constants import (  # noqa: F401 -- re-export for existing importers
     AMBIGUOUS_THRESHOLD_HIGH,
     AMBIGUOUS_THRESHOLD_LOW,
     VALID_ALIAS_TYPES,
     VALID_ENTITY_TYPES,
     VALID_REVIEW_STATUSES,
 )
-from shared.identity_resolution.service import IdentityResolutionService  # noqa: F401
+from shared.identity_resolution.service import (
+    IdentityResolutionService,  # noqa: F401 -- re-export for existing importers
+)

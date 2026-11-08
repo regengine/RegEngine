@@ -142,7 +142,7 @@ def replay_all_tenants(session, *, batch_size: int = 200) -> Dict[str, int]:
                 set_tenant_guc(session, tid)
                 summary = replay_deadletter_for_tenant(session, tid, batch_size=batch_size)
             session.commit()
-        except Exception:  # noqa: BLE001 — one tenant must not poison the tick
+        except Exception:  # noqa: BLE001 -- one tenant must not poison the tick
             session.rollback()
             logger.exception("deadletter_replay_tenant_failed tenant_id=%s", tid)
             continue

@@ -25,24 +25,6 @@ class SchedulerSettings(BaseServiceSettings):
         description="PostgreSQL connection URL",
     )
 
-    # Kafka
-    kafka_bootstrap_servers: str = Field(
-        default="redpanda:9092",
-        description="Kafka bootstrap servers",
-    )
-    kafka_topic_enforcement: str = Field(
-        default="enforcement.changes",
-        description="Topic for enforcement change events",
-    )
-    kafka_topic_alerts: str = Field(
-        default="alerts.regulatory",
-        description="Topic for alert events",
-    )
-    kafka_topic_fsma: str = Field(
-        default="fsma.events.extracted",
-        description="Topic for FSMA trace events (consumed by graph service)",
-    )
-
     # API Keys
     scheduler_api_key: str = Field(
         default="",

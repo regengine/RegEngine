@@ -11,14 +11,14 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import sessionmaker
 
-from tests.migrations.rls_db import guarded_live_database_url
+from tests.migrations.rls_db import guarded_live_database_url, skip_or_fail_without_db
 
 
 @pytest.fixture
 def database_roles():
     provider_url = guarded_live_database_url()
     if not provider_url:
-        pytest.skip("no designated migrated scratch database")
+        skip_or_fail_without_db("no designated migrated scratch database")
     admin_url = os.getenv("ADMIN_DATABASE_URL", "")
     if not admin_url:
         pytest.fail("a direct admin test credential is required")

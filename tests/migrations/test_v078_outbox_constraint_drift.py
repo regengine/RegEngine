@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Iterator
 
 import pytest
+from tests.migrations.rls_db import skip_or_fail_without_db
 
 testcontainers = pytest.importorskip("testcontainers")  # noqa: F841
 pytest.importorskip("testcontainers.postgres")
@@ -38,7 +39,7 @@ def pg_engine() -> Iterator[Engine]:
         container = PostgresContainer("postgres:16", driver="psycopg")
         container.start()
     except Exception as exc:
-        pytest.skip(f"PostgresContainer unavailable: {exc}")
+        skip_or_fail_without_db(f"PostgresContainer unavailable: {exc}")
 
     url = container.get_connection_url().replace("postgresql+psycopg2://", "postgresql+psycopg://")
     engine = create_engine(url, future=True)

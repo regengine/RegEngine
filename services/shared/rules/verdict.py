@@ -24,7 +24,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-PASS = "PASS"
+PASS = "PASS"  # noqa: S105 -- rule verdict literal
 FAIL = "FAIL"
 EVALUATION_ERROR = "EVALUATION_ERROR"
 NO_VERDICT = "NO_VERDICT"

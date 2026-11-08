@@ -153,7 +153,6 @@ class TestProcessAndEmitWithMarkers:
 
         monkeypatch.setattr(routes_ingest, "put_bytes", lambda *a, **k: "s3://raw/x")
         monkeypatch.setattr(routes_ingest, "put_json", lambda *a, **k: "s3://processed/y")
-        monkeypatch.setattr(routes_ingest, "send", lambda *a, **k: None)
 
         event = routes_ingest._process_and_emit(
             raw_bytes=b"regulation text for marker ingest",
@@ -193,7 +192,6 @@ class TestIngestDirectErrorPassthrough:
 
         monkeypatch.setattr(routes_ingest, "put_bytes", lambda *a, **k: "s3://raw/x")
         monkeypatch.setattr(routes_ingest, "put_json", lambda *a, **k: "s3://processed/y")
-        monkeypatch.setattr(routes_ingest, "send", lambda *a, **k: None)
         monkeypatch.setattr(routes_ingest, "get_db_manager", lambda: None)
 
         event = await routes_ingest.ingest_direct(

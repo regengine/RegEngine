@@ -6,13 +6,7 @@ the NLP and admin service startup paths honour the flag.
 
 from __future__ import annotations
 
-import importlib
-import sys
-import threading
-import types
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 # ---------------------------------------------------------------------------
 # Unit tests for shared.event_backbone.kafka_enabled()
