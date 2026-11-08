@@ -299,7 +299,8 @@ checked AS (
           WHERE n.nspname || '.' || p.proname = arg1
             AND p.prosrc ILIKE '%' || arg2 || '%')
       WHEN 'func_secdef' THEN EXISTS (
-          SELECT 1 FROM pg_catalog.pg_proc p WHERE p.proname = arg1 AND p.prosecdef)
+          SELECT 1 FROM pg_catalog.pg_proc p
+          WHERE p.proname = arg1 AND p.prosecdef)
       WHEN 'func_config_search_path' THEN EXISTS (
           SELECT 1 FROM pg_catalog.pg_proc p
           JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
@@ -323,10 +324,47 @@ checked AS (
       WHEN 'force_rls' THEN (
           SELECT c.relforcerowsecurity FROM pg_catalog.pg_class c
           WHERE c.oid = pg_catalog.to_regclass(arg1))
+      WHEN 'privilege_absent' THEN (
+          CASE WHEN EXISTS (SELECT 1 FROM pg_catalog.pg_roles r WHERE r.rolname = arg1)
+                AND pg_catalog.to_regclass(arg2) IS NOT NULL
+               THEN NOT pg_catalog.has_table_privilege(arg1, arg2, 'SELECT')
+               ELSE NULL END)
+      WHEN 'privilege_column_update' THEN (
+          CASE WHEN EXISTS (SELECT 1 FROM pg_catalog.pg_roles r WHERE r.rolname = arg1)
+                AND pg_catalog.to_regclass(arg2) IS NOT NULL
+               THEN pg_catalog.has_column_privilege(arg1, arg2, 'name', 'UPDATE')
+               ELSE NULL END)
+      WHEN 'privilege_column_select' THEN (
+          CASE WHEN EXISTS (SELECT 1 FROM pg_catalog.pg_roles r WHERE r.rolname = arg1)
+                AND pg_catalog.to_regclass(arg2) IS NOT NULL
+               THEN pg_catalog.has_column_privilege(arg1, arg2, 'status', 'SELECT')
+               ELSE NULL END)
+      WHEN 'privilege_column_update_closed_at' THEN (
+          CASE WHEN EXISTS (SELECT 1 FROM pg_catalog.pg_roles r WHERE r.rolname = arg1)
+                AND pg_catalog.to_regclass(arg2) IS NOT NULL
+               THEN pg_catalog.has_column_privilege(arg1, arg2, 'closed_at', 'UPDATE')
+               ELSE NULL END)
+      WHEN 'data_user_emails_fingerprint' THEN (
+          CASE WHEN pg_catalog.to_regclass('public.user_emails') IS NULL THEN NULL
+               WHEN NOT EXISTS (
+                   SELECT 1 FROM pg_catalog.pg_attribute a
+                   WHERE a.attrelid = pg_catalog.to_regclass('public.user_emails')
+                     AND a.attname = 'email_fingerprint' AND NOT a.attisdropped) THEN FALSE
+               ELSE NULL END)
+      WHEN 'data_roles_review_decide' THEN (
+          CASE WHEN pg_catalog.to_regclass('public.roles') IS NULL THEN NULL
+               WHEN NOT EXISTS (
+                   SELECT 1 FROM pg_catalog.pg_attribute a
+                   WHERE a.attrelid = pg_catalog.to_regclass('public.roles')
+                     AND a.attname = 'permissions' AND NOT a.attisdropped) THEN FALSE
+               ELSE NULL END)
       ELSE NULL
     END AS present
   FROM sig
 ),
+-- The CASE above is a verbatim copy of the one in section 2: every kind the
+-- detailed rows can evaluate must count in the summary, or a privilege gap
+-- could never stop supported_through_revision from advancing.
 observable AS (
   SELECT * FROM checked WHERE present IS NOT NULL
 ),
