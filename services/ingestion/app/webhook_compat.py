@@ -274,6 +274,7 @@ async def ingest_events(
     The ingestion run and its retained file are kept as the record of the
     attempt. Graph sync waits for the commit, because a publish cannot be
     recalled. Off by default: other callers keep per-event acceptance.
+
     ``edi_interchange`` serializes EDI retries in PostgreSQL. Its replay
     receipt commits with the events, surviving Redis loss and response errors.
     """

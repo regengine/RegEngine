@@ -117,10 +117,9 @@ def _release_isa13_unless_stored(endpoint):
     a server error, or a result with no accepted events stores nothing, and
     keeping the claim would hold up the partner's corrected resend.
 
-    A partly accepted interchange keeps its claim. Releasing it is not safe
-    yet: event idempotency keys include ``edi_line_index`` and leave out
-    quantity, so a corrected resend under the same ISA13 can store accepted
-    lines twice or drop a corrected quantity.
+    EDI ingest is all-or-nothing: a rejected batch stores no events or
+    database receipt and can be corrected. Any accepted events retain the
+    claim defensively; a changed-content resend must not modify stored lines.
 
     An exception after commit can release the Redis claim. The PostgreSQL
     interchange receipt commits with the events, so it still rejects resends

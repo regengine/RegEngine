@@ -171,7 +171,7 @@ def test_expired_receipt_can_be_reused_without_growing_rows(db):
 @pytest.fixture()
 def ingest_db(db, monkeypatch):
     """Real ingest and transaction, with controllable event writes and cleanup."""
-    faults = {"cleanup": None, "commit": None, "reject": False, "cancel_before": False}
+    faults = {"cleanup": None, "commit": None, "reject": False, "cancel_before": False, "reject_lot": None}
 
     def sessions():
         with _session(db) as session:
@@ -192,7 +192,7 @@ def ingest_db(db, monkeypatch):
     def store(self, **kwargs):
         if faults["cancel_before"]:
             raise asyncio.CancelledError()
-        if faults["reject"]:
+        if faults["reject"] or kwargs["traceability_lot_code"] == faults["reject_lot"]:
             raise ValueError("storage refused")
         self.session.execute(
             text("INSERT INTO public.edi_test_events VALUES ('cte', :tenant, :qty)"),
@@ -223,7 +223,7 @@ def ingest_db(db, monkeypatch):
     return faults
 
 
-def _ingest(quantity=1, interchange=ENVELOPE):
+def _ingest(quantity=1, interchange=ENVELOPE, count=1):
     payload = WebhookPayload(
         tenant_id=TENANT,
         source="edi_test",
@@ -240,7 +240,13 @@ def _ingest(quantity=1, interchange=ENVELOPE):
             )
         ],
     )
-    return asyncio.run(compat.ingest_events(payload, principal_tenant_id=TENANT, edi_interchange=interchange))
+    original = payload.events[0]
+    payload.events = [original.model_copy(update={"traceability_lot_code": f"SYNTHETIC-LOT-{i}"}) for i in range(count)]
+    return asyncio.run(
+        compat.ingest_events(
+            payload, principal_tenant_id=TENANT, edi_interchange=interchange, all_or_nothing=interchange is not None
+        )
+    )
 
 
 @pytest.mark.parametrize("failure", ["cleanup", "cancel", "lost_ack"])
@@ -302,6 +308,10 @@ def test_real_routes_reject_changed_resend_after_post_commit_error_without_redis
         second = client.post(f"/api/v1/ingest/edi{route}", data=data, files={"file": ("asn.edi", changed)})
         assert second.status_code == 409, second.text
         assert second.json()["detail"]["idempotent_replay"] is True
+        # A different lot would also get a different event idempotency key.
+        data["traceability_lot_code"] = "00012345678901-LOT002"
+        changed_lot = client.post(f"/api/v1/ingest/edi{route}", data=data, files={"file": ("asn.edi", raw)})
+        assert changed_lot.status_code == 409, changed_lot.text
         assert _counts(db) == (1, 2)
 
 
@@ -385,3 +395,44 @@ def test_non_edi_ingestion_does_not_require_an_interchange_receipt(db, ingest_db
     result = _ingest(interchange=None)
     assert result.accepted == 1
     assert _counts(db) == (0, 2)
+
+
+def test_atomic_rejection_rolls_back_earlier_events_and_allows_corrected_resend(db, ingest_db):
+    ingest_db["reject_lot"] = "SYNTHETIC-LOT-1"
+    first = _ingest(count=2)
+    assert (first.accepted, first.rejected) == (0, 2)
+    assert _counts(db) == (0, 0)
+    ingest_db["reject_lot"] = None
+    corrected = _ingest(quantity=99, count=2)
+    assert (corrected.accepted, corrected.rejected) == (2, 0)
+    assert _counts(db) == (1, 4)
+
+
+@pytest.mark.parametrize("route", ["", "/document"])
+def test_database_lock_returns_retryable_503_through_production_handlers(db, ingest_db, monkeypatch, route):
+    from shared.error_handling import install_exception_handlers
+
+    monkeypatch.setattr(dedup, "_redis_client", lambda: None)
+    monkeypatch.delenv("EDI_REQUIRE_PARTNER_ID", raising=False)
+    monkeypatch.delenv("EDI_PARTNER_ALLOWLIST", raising=False)
+    monkeypatch.setattr(routes, "ingest_events", compat.ingest_events)
+    app = FastAPI()
+    app.include_router(router)
+    install_exception_handlers(app)
+    app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
+        key_id="test-key", tenant_id=TENANT, scopes=["*"], auth_mode="test"
+    )
+    raw = (Path(__file__).parent / "fixtures/edi_corpus/asn_856.edi").read_bytes()
+    envelope = EDIInterchange.from_envelope(routes._extract_856_fields(routes._parse_x12_segments(raw.decode())))
+    data = {"tenant_id": TENANT, "traceability_lot_code": "00012345678901-LOT001"}
+    with _session(db) as owner, TestClient(app) as client:
+        envelope.reserve(owner, TENANT)
+        response = client.post(f"/api/v1/ingest/edi{route}", data=data, files={"file": ("asn.edi", raw)})
+        assert response.status_code == 503, response.text
+        assert response.headers["Retry-After"] == "30"
+        assert "still being processed" in response.json()["error"]["message"]
+        assert _counts(db) == (0, 0)
+        owner.rollback()
+        retry = client.post(f"/api/v1/ingest/edi{route}", data=data, files={"file": ("asn.edi", raw)})
+        assert retry.status_code == 201, retry.text
+        assert _counts(db) == (1, 2)
