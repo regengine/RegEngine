@@ -149,7 +149,7 @@ def test_key_file_flag_defaults_outside_repo(keygen, monkeypatch):
 
 
 def test_mask_payload_hides_every_credential(bundle):
-    secret_names = ["POSTGRES_PASSWORD", "NEO4J_PASSWORD", "KAFKA_PASSWORD",
+    secret_names = ["POSTGRES_PASSWORD", "NEO4J_PASSWORD",
                     "OBJECT_STORAGE_ACCESS_KEY_ID", "OBJECT_STORAGE_SECRET_ACCESS_KEY"]
     payload = {name: uuid.uuid4().hex for name in secret_names}
     payload["POSTGRES_HOST"] = "localhost"

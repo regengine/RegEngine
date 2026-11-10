@@ -34,7 +34,7 @@ from __future__ import annotations
 import os
 import warnings
 from contextlib import contextmanager
-from typing import Iterator
+from typing import Iterator, NoReturn
 
 import pytest
 from sqlalchemy import create_engine, text
@@ -90,10 +90,42 @@ def _normalize_psycopg(url: str) -> str:
     return url
 
 
-def skip_or_fail_db(reason: str) -> None:
+# Printed by every database-availability skip so a developer can turn the
+# skip into a run without reading CI (WI-10). The same text lives in
+# CONTRIBUTING.md under "Running database tests locally"; keep them in step.
+LOCAL_DB_SETUP = """\
+To run the database tests locally against a disposable Postgres:
+  docker compose -f docker-compose.dev.yml up -d postgres      # needs POSTGRES_PASSWORD in the environment
+  psql "postgresql://regengine_owner:${POSTGRES_PASSWORD}@localhost:5432/regengine" -c "CREATE DATABASE regengine_test"
+  export REGENGINE_MIGRATION_TEST_DB="postgresql://regengine_owner:${POSTGRES_PASSWORD}@localhost:5432/regengine_test"
+  DATABASE_URL="$REGENGINE_MIGRATION_TEST_DB" alembic upgrade head
+  python3 -m pytest tests/shared tests/migrations -q --no-cov --require-db
+The dev-stack database itself (regengine / regengine_admin on localhost) is refused by the guards:
+the suites run `alembic upgrade head` and seed rows into their target, so point them at a scratch
+database. `--require-db` (or REGENGINE_REQUIRE_DB=1) turns every database-availability skip into a
+failure, which is how CI runs these suites."""
+
+
+def skip_or_fail_without_db(reason: str, *, gate: str = "database test") -> NoReturn:
+    """Skip ``reason``, or fail when a database was demanded (WI-10).
+
+    ``pytest --require-db`` (root conftest) and ``REGENGINE_REQUIRE_DB=1`` are
+    the same contract: with either set, a missing or unmigrated database is a
+    failure, never a skip, so a lost ``DATABASE_URL`` cannot turn a CI job
+    green. Without them the skip message carries the local setup recipe.
+    """
     if _require_db():
-        pytest.fail(f"{reason} (REGENGINE_REQUIRE_DB=1 — RLS gate must run a real Postgres, not skip)")
-    pytest.skip(reason)
+        pytest.fail(
+            f"{reason} (--require-db / REGENGINE_REQUIRE_DB=1 — {gate} must execute, not skip)\n\n"
+            f"{LOCAL_DB_SETUP}",
+            pytrace=False,
+        )
+    pytest.skip(f"{reason} — {LOCAL_DB_SETUP.splitlines()[0]} see CONTRIBUTING.md")
+
+
+def skip_or_fail_db(reason: str) -> None:
+    """RLS-gate wording of :func:`skip_or_fail_without_db` (#2530)."""
+    skip_or_fail_without_db(reason, gate="RLS gate")
 
 
 def _validated_explicit_url() -> str | None:
@@ -162,9 +194,10 @@ def guarded_live_database_url() -> str | None:
         # silently skip, which is the rot the live-db-suite CI job exists
         # to prevent.
         pytest.fail(
-            "REGENGINE_REQUIRE_DB=1 but no designated live test DB survived the reuse "
-            "policy (need CI DATABASE_URL/ADMIN_DATABASE_URL pointing at a non-dev-stack "
-            "Postgres, or REGENGINE_MIGRATION_TEST_DB)"
+            "--require-db / REGENGINE_REQUIRE_DB=1 but no designated live test DB survived the "
+            "reuse policy (need CI DATABASE_URL/ADMIN_DATABASE_URL pointing at a non-dev-stack "
+            f"Postgres, or REGENGINE_MIGRATION_TEST_DB)\n\n{LOCAL_DB_SETUP}",
+            pytrace=False,
         )
     return None
 

@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { PricingPageClient } from '@/components/pricing/PricingPageClient';
 import type { PricingComparisonRow, PricingFaqItem } from '@/components/pricing/PricingPageClient';
 import { Container } from '@/components/layout/container';
+import { rawFetch } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 
 export const metadata: Metadata = {
@@ -42,7 +43,8 @@ async function fetchBillingPlans(): Promise<BillingPlan[] | null> {
 
     try {
         const base = adminServiceUrl.replace(/\/+$/, '');
-        const res = await fetch(`${base}/billing/plans`, {
+        // Server-side render with Next's revalidate option; no session headers apply.
+        const res = await rawFetch(`${base}/billing/plans`, {
             headers: {
                 'Content-Type': 'application/json',
             },

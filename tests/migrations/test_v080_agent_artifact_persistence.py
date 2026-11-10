@@ -13,6 +13,7 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
+from tests.migrations.rls_db import skip_or_fail_without_db
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import DBAPIError
@@ -56,7 +57,7 @@ def pg_engine() -> Engine:
         container = PostgresContainer("postgres:16")
         pg = container.start()
     except DockerException as exc:
-        pytest.skip(f"PostgresContainer unavailable: {exc}")
+        skip_or_fail_without_db(f"PostgresContainer unavailable: {exc}")
 
     engine = create_engine(pg.get_connection_url(driver="psycopg"), future=True)
     try:

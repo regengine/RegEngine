@@ -499,11 +499,12 @@ class _Builder:
                 if last and last.kind == "received" and last.location_gln == first.location_gln and last.at < first.at:
                     candidates.append(other)
             after = max((c.last_event.at for c in candidates), default=None)
+            def _lots_text(candidate) -> str:
+                items = candidate.latest_contents.lots.items() if candidate.latest_contents else []
+                return ", ".join(f"{lot} {qty}" for lot, qty in items)
+
             candidate_text = (
-                "; ".join(
-                    f"{c.pallet_id} ({', '.join(f'{lot} {qty}' for lot, qty in (c.latest_contents.lots.items() if c.latest_contents else []))})"
-                    for c in candidates
-                )
+                "; ".join(f"{c.pallet_id} ({_lots_text(c)})" for c in candidates)
                 or "none identified"
             )
             required = RequiredRecord(
@@ -540,7 +541,7 @@ class _Builder:
     def _check_conflicting_contents(self) -> None:
         for pallet_id, tl in sorted(self.timelines.items()):
             groups = tl.contents_groups
-            for previous, current in zip(groups, groups[1:]):
+            for previous, current in zip(groups, groups[1:], strict=False):  # consecutive pairs
                 if current.derived_from:
                     continue  # a repack legitimately restates contents
                 if previous.lots != current.lots:

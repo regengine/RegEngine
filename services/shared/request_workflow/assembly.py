@@ -668,8 +668,6 @@ class AssemblyMixin:
                     for sr in stale_rows:
                         event_mod = sr.get("event_modified")
                         eval_at = sr.get("evaluated_at")
-                        cur_ver = sr.get("current_version")
-                        eval_ver = sr.get("eval_version")
                         if event_mod and eval_at and event_mod > eval_at:
                             reason = "event_modified"
                         else:

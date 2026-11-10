@@ -177,13 +177,12 @@ def _install_graceful_shutdown_handlers() -> None:
     deploy. Python's default SIGTERM disposition terminates the process
     without unwinding — `SchedulerService.shutdown()` never runs,
     `BlockingScheduler.shutdown(wait=True)` never gets to cancel
-    in-flight jobs, and `kafka_producer.close()` never flushes. Any
-    Kafka producer buffer at the moment of the kill is lost (#1255).
+    in-flight jobs, and the webhook outbox is never flushed (#1255).
 
     By raising :class:`KeyboardInterrupt` from our SIGTERM handler we
     hit the existing ``try/except (KeyboardInterrupt, SystemExit):``
     block in ``SchedulerService.start`` which cleanly shuts the
-    BlockingScheduler and the Kafka producer.
+    BlockingScheduler and the webhook notifier.
     """
     import signal
 

@@ -15,6 +15,7 @@ import { Field } from '@/components/ui/field';
 import { Input, fieldControlClasses } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getServiceURL } from '@/lib/api-config';
+import { requestPublicJson as requestJson } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 
 /* ------------------------------------------------------------------ */
@@ -64,28 +65,6 @@ interface SupplierPreflightResult {
         total_rule_failures: number;
         blocking_reasons: string[];
     };
-}
-
-async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
-    const response = await fetch(url, {
-        ...init,
-        headers: {
-            ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
-            ...(init?.headers || {}),
-        },
-    });
-    const data = await response.text().then((text) => {
-        if (!text) return null;
-        try {
-            return JSON.parse(text);
-        } catch {
-            return text;
-        }
-    });
-    if (!response.ok) {
-        throw { status: response.status, data };
-    }
-    return data as T;
 }
 
 function getRequestErrorMessage(error: unknown, fallback: string): string {

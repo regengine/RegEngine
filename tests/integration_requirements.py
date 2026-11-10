@@ -2,19 +2,16 @@
 
 from __future__ import annotations
 
-import os
 from typing import Any, NoReturn
 
-import pytest
 from shared.db_url import sync_postgres_url
+
+from tests.migrations.rls_db import skip_or_fail_without_db
 
 
 def _skip_or_fail(reason: str) -> NoReturn:
     """Keep optional local integration tests friendly but make CI gates strict."""
-    require_db = os.getenv("REGENGINE_REQUIRE_DB", "").strip().lower() in {"1", "true", "yes"}
-    if require_db:
-        pytest.fail(f"{reason} (REGENGINE_REQUIRE_DB=1 — integration gate must execute)")
-    pytest.skip(reason)
+    skip_or_fail_without_db(reason, gate="integration gate")
 
 
 def sqlalchemy_session_or_skip(database_url: str | None, *, reason: str):
@@ -58,7 +55,7 @@ def start_container_or_skip(container: Any, *, reason: str):
     try:
         return container.start()
     except Exception as exc:
-        pytest.skip(f"{reason}: {exc}")
+        _skip_or_fail(f"{reason}: {exc}")
 
 
 def create_started_container_or_skip(container_cls: Any, *args: Any, reason: str, **kwargs: Any):
@@ -67,4 +64,4 @@ def create_started_container_or_skip(container_cls: Any, *args: Any, reason: str
         container = container_cls(*args, **kwargs)
         return container, container.start()
     except Exception as exc:
-        pytest.skip(f"{reason}: {exc}")
+        _skip_or_fail(f"{reason}: {exc}")

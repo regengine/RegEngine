@@ -20,7 +20,6 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from services.scheduler.app.models import (
     EnforcementItem,
@@ -44,14 +43,13 @@ def _make_item(source_id: str = "fda_recall:001") -> EnforcementItem:
 def _build_scheduler_service_without_init():
     """Construct SchedulerService with all heavy dependencies stubbed.
 
-    APScheduler, Kafka, Redis, DistributedContext, and the DB-backed state
+    APScheduler, Redis, DistributedContext, and the DB-backed state
     manager must all be avoidable so these tests can run in CI without
     any of that infrastructure.
     """
     from services.scheduler import service as scheduler_service
 
     with (
-        patch.object(scheduler_service, "get_kafka_producer", return_value=MagicMock()),
         patch.object(scheduler_service, "WebhookNotifier", return_value=MagicMock()),
         patch.object(scheduler_service, "DistributedContext", return_value=MagicMock()),
         patch.object(scheduler_service, "StateManager", return_value=MagicMock()),
@@ -64,74 +62,8 @@ def _build_scheduler_service_without_init():
     return svc
 
 
-@pytest.fixture
-def kafka_backbone(monkeypatch):
-    """Opt the test into the legacy Kafka emission path (#1159)."""
-    monkeypatch.setenv("EVENT_BACKBONE", "kafka")
-
-
 class TestEmitThenAckInvariant:
     """#1136 — items must not be marked seen until emission succeeds."""
-
-    def test_items_not_marked_seen_when_kafka_emit_raises(self, kafka_backbone):
-        svc = _build_scheduler_service_without_init()
-        svc.state_manager = MagicMock()
-        svc.kafka_producer = MagicMock()
-        svc.kafka_producer.emit_batch.side_effect = ConnectionError("broker down")
-        svc.kafka_producer.emit_fsma_batch.return_value = (0, 0)
-        svc.notifier = MagicMock()
-        svc.notifier.notify.return_value = []
-
-        item = _make_item()
-        svc._process_new_items([item], SourceType.FDA_RECALL)
-
-        # The whole point of the fix — mark_seen MUST NOT be called
-        # when Kafka emission fails.
-        assert svc.state_manager.mark_seen.call_count == 0
-
-    def test_items_marked_seen_when_kafka_emit_succeeds(self, kafka_backbone):
-        svc = _build_scheduler_service_without_init()
-        svc.state_manager = MagicMock()
-        svc.kafka_producer = MagicMock()
-        # emit_batch returns (success_count, failure_count) — zero failures.
-        svc.kafka_producer.emit_batch.return_value = (1, 0)
-        svc.kafka_producer.emit_fsma_batch.return_value = (1, 0)
-        svc.notifier = MagicMock()
-        svc.notifier.notify.return_value = []
-
-        item = _make_item()
-        # Alerting succeeds — this test pins the Kafka emit/ack contract,
-        # and a real (unstubbed) integration failure would withhold the ack.
-        with patch(
-            "services.scheduler.app.compliance_integration.get_compliance_integration",
-            return_value=MagicMock(),
-        ):
-            svc._process_new_items([item], SourceType.FDA_RECALL)
-
-        svc.state_manager.mark_seen.assert_called_once()
-        kwargs = svc.state_manager.mark_seen.call_args.kwargs
-        assert kwargs["source_id"] == item.source_id
-        assert kwargs["source_type"] == SourceType.FDA_RECALL.value
-
-    def test_partial_kafka_failure_leaves_items_unmarked(self, kafka_backbone):
-        """emit_batch reports 1 success + 1 failure → do NOT mark seen.
-
-        If any item fails to emit, the whole batch stays un-marked so the
-        next scheduler tick re-discovers and re-emits (downstream is
-        idempotent on source_id). This is the safe default.
-        """
-        svc = _build_scheduler_service_without_init()
-        svc.state_manager = MagicMock()
-        svc.kafka_producer = MagicMock()
-        svc.kafka_producer.emit_batch.return_value = (1, 1)
-        svc.kafka_producer.emit_fsma_batch.return_value = (0, 0)
-        svc.notifier = MagicMock()
-        svc.notifier.notify.return_value = []
-
-        items = [_make_item("a"), _make_item("b")]
-        svc._process_new_items(items, SourceType.FDA_RECALL)
-
-        assert svc.state_manager.mark_seen.call_count == 0
 
     def test_filter_new_items_does_not_mark_seen(self):
         """Regression guard: _filter_new_items must never call mark_seen."""
@@ -159,20 +91,19 @@ class TestEmitThenAckInvariant:
 
 
 class TestPgBackboneGating:
-    """#1159 — with EVENT_BACKBONE=pg (the production default) Kafka
-    emission is skipped entirely and must not block the seen-ack."""
+    """#1159 / WI-05 — the PostgreSQL task queue is the only backbone, so no
+    emission step gates the seen-ack; webhooks and alerting still do."""
 
-    def test_pg_mode_skips_kafka_and_marks_seen(self, monkeypatch):
+    def test_pg_mode_marks_seen_without_emission(self, monkeypatch):
         monkeypatch.delenv("EVENT_BACKBONE", raising=False)
 
         svc = _build_scheduler_service_without_init()
         svc.state_manager = MagicMock()
-        svc.kafka_producer = MagicMock()
         svc.notifier = MagicMock()
         svc.notifier.notify.return_value = []
 
         item = _make_item()
-        # Alerting succeeds — this test pins pg-mode Kafka gating/acking,
+        # Alerting succeeds — this test pins pg-mode acking,
         # and a real (unstubbed) integration failure would withhold the ack.
         with patch(
             "services.scheduler.app.compliance_integration.get_compliance_integration",
@@ -180,10 +111,7 @@ class TestPgBackboneGating:
         ):
             svc._process_new_items([item], SourceType.FDA_RECALL)
 
-        # No Kafka traffic at all in pg mode...
-        svc.kafka_producer.emit_batch.assert_not_called()
-        svc.kafka_producer.emit_fsma_batch.assert_not_called()
-        # ...and the item is still acked so the next tick doesn't re-alert.
+        # The item is acked so the next tick doesn't re-alert.
         svc.state_manager.mark_seen.assert_called_once()
 
     def test_pg_mode_still_delivers_webhooks_and_compliance_alerts(self, monkeypatch):
@@ -191,7 +119,6 @@ class TestPgBackboneGating:
 
         svc = _build_scheduler_service_without_init()
         svc.state_manager = MagicMock()
-        svc.kafka_producer = MagicMock()
         svc.notifier = MagicMock()
         svc.notifier.notify.return_value = []
 
@@ -218,7 +145,6 @@ class TestPgBackboneGating:
 
         svc = _build_scheduler_service_without_init()
         svc.state_manager = MagicMock()
-        svc.kafka_producer = MagicMock()
         svc.notifier = MagicMock()
         svc.notifier.notify.return_value = []
 
@@ -248,7 +174,6 @@ class TestPgBackboneGating:
 
         svc = _build_scheduler_service_without_init()
         svc.state_manager = MagicMock()
-        svc.kafka_producer = MagicMock()
         svc.notifier = MagicMock()
         svc.notifier.notify.return_value = []
 
@@ -267,7 +192,6 @@ class TestPgBackboneGating:
 
         svc = _build_scheduler_service_without_init()
         svc.state_manager = MagicMock()
-        svc.kafka_producer = MagicMock()
         svc.notifier = MagicMock()
         svc.notifier.notify.return_value = []
 
@@ -288,7 +212,6 @@ class TestPgBackboneGating:
 
         svc = _build_scheduler_service_without_init()
         svc.state_manager = MagicMock()
-        svc.kafka_producer = MagicMock()
         svc.notifier = MagicMock()
         svc.notifier.notify.return_value = []
 
@@ -312,7 +235,6 @@ class TestUnpersistedWebhookWithholdsAck:
 
         svc = _build_scheduler_service_without_init()
         svc.state_manager = MagicMock()
-        svc.kafka_producer = MagicMock()
         counter = {"count": 0}
         notifier = MagicMock()
 
@@ -346,7 +268,6 @@ class TestUnpersistedWebhookWithholdsAck:
 
         svc = _build_scheduler_service_without_init()
         svc.state_manager = MagicMock()
-        svc.kafka_producer = MagicMock()
         notifier = MagicMock()
         failure = MagicMock()
         failure.success = False

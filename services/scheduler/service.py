@@ -16,8 +16,9 @@ Features:
 - FDA Warning Letters, Import Alerts, and Recalls scraping
 - Circuit breaker pattern for resilient execution
 - Deduplication via PostgreSQL state persistence
-- Kafka event emission for downstream processing (only when
-  ``EVENT_BACKBONE=kafka`` — see #1159)
+- Emit-then-ack gating: items are marked seen only after webhook delivery
+  and compliance alerting succeed (the Kafka emission path was retired in
+  WI-05; the PostgreSQL task queue is the only backbone)
 - Webhook notifications for real-time alerts
 - Recall→tenant compliance alerting
 - Prometheus metrics for observability
@@ -44,7 +45,6 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from pytz import utc
-from shared.event_backbone import kafka_enabled
 from shared.observability import setup_standalone_observability
 from shared.observability.context import wrap_job_with_new_correlation
 from shared.task_types import NON_WORKER_TASK_TYPES, PURGEABLE_TASK_TYPES
@@ -53,8 +53,6 @@ from sqlalchemy.exc import SQLAlchemyError
 from services.scheduler.app.circuit_breaker import CircuitBreaker, CircuitOpenError, circuit_registry
 from services.scheduler.app.config import get_settings
 from services.scheduler.app.distributed import DistributedContext
-from services.scheduler.app.fda_fsma_transformer import get_fsma_transformer
-from services.scheduler.app.kafka_producer import get_kafka_producer
 from services.scheduler.app.metrics import metrics
 from services.scheduler.app.models import (
     EnforcementItem,
@@ -108,7 +106,6 @@ class SchedulerService:
         self.notifier = WebhookNotifier(
             outbox_path=self.settings.webhook_outbox_path or None,
         )
-        self.kafka_producer = get_kafka_producer()
         self.distributed_context = DistributedContext()
 
         # Fortune Top 15 Resilience Configuration
@@ -395,93 +392,16 @@ class SchedulerService:
             count=len(items),
         )
 
-        # #1159 — the default production event backbone is PostgreSQL;
-        # Kafka emission only happens when EVENT_BACKBONE=kafka. In pg
-        # mode no Kafka consumers are deployed, emitting would stall each
-        # tick on broker flush timeouts, and the emit-then-ack gate below
-        # would never allow items to be marked seen. Treat the skipped
-        # emission as successful so webhook delivery and compliance
-        # alerting still ack items.
-        if not kafka_enabled():
-            primary_emit_succeeded = True
-            logger.info(
-                "kafka_emission_skipped",
-                backbone="pg",
-                source_type=source_type.value,
-                count=len(items),
-            )
-        else:
-            # Emit to Kafka (enforcement events). This is the authoritative
-            # emission: if it raises, items stay un-marked and will be retried.
-            primary_emit_succeeded = False
-            try:
-                success, failures = self.kafka_producer.emit_batch(items)
-                logger.info(
-                    "kafka_events_emitted",
-                    source_type=source_type.value,
-                    success=success,
-                    failures=failures,
-                )
-                # Any hard failure means "not safe to mark seen" — retry next tick.
-                # (Partial per-item failures from emit_batch() are tracked by its
-                # own retry/DLQ; see #1147 follow-up.)
-                primary_emit_succeeded = failures == 0
-                if failures > 0:
-                    metrics.record_kafka_emit_failure(
-                        source_type=source_type.value,
-                        failure_mode="partial_batch",
-                        count=failures,
-                    )
-            except (ConnectionError, TimeoutError, OSError, RuntimeError) as e:
-                logger.error(
-                    "kafka_emission_failed",
-                    source_type=source_type.value,
-                    count=len(items),
-                    error=str(e),
-                )
-                metrics.record_kafka_emit_failure(
-                    source_type=source_type.value,
-                    failure_mode="hard_exception",
-                    count=len(items),
-                )
-
-            # Transform FDA recalls to FSMA events and emit to graph consumer
-            try:
-                transformer = get_fsma_transformer()
-                fsma_events = transformer.transform_batch(items)
-
-                if fsma_events:
-                    fsma_success, fsma_failures = self.kafka_producer.emit_fsma_batch(fsma_events)
-                    if fsma_failures > 0:
-                        # #2697: fsma emission failures do not gate the
-                        # seen-ack (gating risks reprocessing loops for a
-                        # best-effort mirror) — but they must be loud, not
-                        # an info line.
-                        logger.error(
-                            "fsma_events_emit_failures",
-                            success=fsma_success,
-                            failures=fsma_failures,
-                            topic="fsma.events.extracted",
-                        )
-                        metrics.record_kafka_emit_failure(
-                            source_type=source_type.value,
-                            failure_mode="fsma_partial_batch",
-                            count=fsma_failures,
-                        )
-                    else:
-                        logger.info(
-                            "fsma_events_emitted",
-                            success=fsma_success,
-                            failures=fsma_failures,
-                            topic="fsma.events.extracted",
-                        )
-            except (ValueError, TypeError, KeyError, RuntimeError) as e:
-                logger.error("fsma_transformation_failed", error=str(e))
-                metrics.record_kafka_emit_failure(
-                    source_type=source_type.value,
-                    failure_mode="fsma_transform_exception",
-                    count=len(items),
-                )
+        # The PostgreSQL task queue is the only event backbone (the Kafka
+        # emission branch was retired in WI-05). There is no primary
+        # emission step on this path, so the emit-then-ack gate below is
+        # driven by webhook delivery and compliance alerting alone.
+        primary_emit_succeeded = True
+        logger.info(
+            "event_backbone_pg_no_emission",
+            source_type=source_type.value,
+            count=len(items),
+        )
 
         # Send webhook notifications. A delivery that fails with no durable
         # outbox behind it is lost on restart, so the batch must NOT be
@@ -1528,11 +1448,6 @@ class SchedulerService:
             self.scheduler.shutdown(wait=True)
         except (RuntimeError, SchedulerNotRunningError) as e:
             logger.warning("scheduler_shutdown_skipped", error=str(e))
-
-        try:
-            self.kafka_producer.close()
-        except (RuntimeError, ConnectionError, OSError) as e:
-            logger.error("kafka_close_failed", error=str(e))
 
         # #1150 — release webhook HTTP session cleanly so open sockets
         # don't block the process exit.

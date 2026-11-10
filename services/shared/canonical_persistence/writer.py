@@ -10,13 +10,10 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
-from uuid import UUID, uuid4
 
 from shared.canonical_event import (
     IngestionRun,
-    IngestionRunStatus,
     RawPayloadTooLargeError,
     TraceabilityEvent,
     _raw_payload_max_bytes,
@@ -121,7 +118,7 @@ class CanonicalEventStore(CanonicalChainVerificationMixin):
         """
         if self._session_dialect_name() == "sqlite":
             return
-        from shared.tenant_context import set_tenant_guc  # noqa: PLC0415
+        from shared.tenant_context import set_tenant_guc  # noqa: PLC0415 -- lazy import, avoids a module-load cycle
 
         set_tenant_guc(self.session, tenant_id)
 
@@ -377,7 +374,7 @@ class CanonicalEventStore(CanonicalChainVerificationMixin):
         # persist back, keeping the usage counter and the canonical write
         # atomically in sync.
         if self.meter_usage:
-            from services.ingestion.app.stripe_billing.usage import (  # noqa: PLC0415
+            from services.ingestion.app.stripe_billing.usage import (  # noqa: PLC0415 -- lazy cross-service import, keeps the shared layer free of a service dependency at load
                 increment_usage_for_event,
             )
 
@@ -434,9 +431,14 @@ class CanonicalEventStore(CanonicalChainVerificationMixin):
         # surrounding transaction back, so either BOTH tables have
         # the event or NEITHER does. Callers that don't want legacy
         # writes at all must opt out via ``dual_write=False``.
+        # WI-12 PR B: CANONICAL_LEGACY_DUAL_WRITE=off skips the legacy write
+        # and counts it; ``on`` (default) keeps the behaviour above.
         legacy_id = None
         if self.dual_write:
-            legacy_id = migration.dual_write_legacy(self.session, event)
+            if migration.legacy_dual_write_enabled():
+                legacy_id = migration.dual_write_legacy(self.session, event)
+            else:
+                migration.record_legacy_dual_write_skipped("single")
 
         # --- Create transformation links ---
         self._create_transformation_links(event)
@@ -681,7 +683,7 @@ class CanonicalEventStore(CanonicalChainVerificationMixin):
         # Only ``inserted_events`` — never ``lost_race_events``, which the
         # winning concurrent writer already counted.
         if self.meter_usage and inserted_events:
-            from services.ingestion.app.stripe_billing.usage import (  # noqa: PLC0415
+            from services.ingestion.app.stripe_billing.usage import (  # noqa: PLC0415 -- lazy cross-service import, keeps the shared layer free of a service dependency at load
                 increment_usage_for_event,
             )
 
@@ -708,8 +710,12 @@ class CanonicalEventStore(CanonicalChainVerificationMixin):
         # canonical INSERTs are reverted, and the caller gets a loud
         # failure instead of a silent data-integrity violation.
         if self.dual_write and inserted_events:
-            for evt in inserted_events:
-                migration.dual_write_legacy(self.session, evt)
+            if migration.legacy_dual_write_enabled():
+                for evt in inserted_events:
+                    migration.dual_write_legacy(self.session, evt)
+            else:
+                # WI-12 PR B: flag off — count the skipped legacy writes.
+                migration.record_legacy_dual_write_skipped("batch", len(inserted_events))
 
         logger.info(
             "canonical_batch_persisted",

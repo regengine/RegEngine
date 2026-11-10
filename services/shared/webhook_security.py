@@ -31,8 +31,8 @@ MAX_FUTURE_SKEW_SECONDS = 60
 DEFAULT_TIMESTAMP_TOLERANCE_SECONDS = 300
 
 # Environment variable names
-WEBHOOK_SECRET_ENV = "WEBHOOK_SIGNING_SECRET"
-WEBHOOK_SECRET_PREVIOUS_ENV = "WEBHOOK_SIGNING_SECRET_PREVIOUS"
+WEBHOOK_SECRET_ENV = "WEBHOOK_SIGNING_SECRET"  # noqa: S105 -- environment variable name, not a value
+WEBHOOK_SECRET_PREVIOUS_ENV = "WEBHOOK_SIGNING_SECRET_PREVIOUS"  # noqa: S105 -- environment variable name, not a value
 
 
 class WebhookSignatureError(Exception):
@@ -166,8 +166,8 @@ def parse_signature_header(header: str) -> WebhookSignature:
 
     try:
         timestamp = int(parts["t"])
-    except ValueError:
-        raise WebhookSignatureError("Invalid timestamp format")
+    except ValueError as exc:
+        raise WebhookSignatureError("Invalid timestamp format") from exc
 
     return WebhookSignature(
         timestamp=timestamp,
