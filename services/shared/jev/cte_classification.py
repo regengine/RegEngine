@@ -297,7 +297,7 @@ def suggest_file_cte_type(
         return CteClassificationResult(
             status=f"unavailable:{exc.reason}", thresholds=thresholds, apply_enabled=apply_enabled, headers=cleaned
         )
-    except Exception:  # noqa: BLE001 - the upload must not fail because a suggestion did.
+    except Exception:  # noqa: BLE001 -- the upload must not fail because a suggestion did.
         logger.exception("jev.cte_classification.error", column_count=len(cleaned))
         return CteClassificationResult(
             status="error", thresholds=thresholds, apply_enabled=apply_enabled, headers=cleaned

@@ -39,8 +39,8 @@ updates:
       # its blocker below clears, then let CI judge the upgrade on its own.
       #   eslint 10   — eslint-config-next 16.2.12 calls the pre-10 scope-manager
       #                 API (scopeManager.addGlobals); `eslint .` crashes outright.
-      #   jsdom 30    — requires Node >=22.22.2; CI runs Node 20.
-      #   jest-dom 7  — requires Node >=22 and a new @testing-library/dom peer.
+      #   (jsdom 30 and jest-dom 7 were ignored while copy-gate ran Node 20;
+      #   every workflow now reads .nvmrc (Node 22), so CI judges those majors.)
       #   typescript 7 — typescript-eslint 8.x (via eslint-config-next) peers
       #                 typescript <6.1.0; `npm run lint` crashes in
       #                 typescript-estree ("reading 'Cjs'"). Backed out in
@@ -49,10 +49,6 @@ updates:
       #                 are ignored above; a lone bump leaves the lock off
       #                 package.json's range and `npm ci` fails (#3138, #3157).
       - dependency-name: "eslint"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "jsdom"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "@testing-library/jest-dom"
         update-types: ["version-update:semver-major"]
       - dependency-name: "typescript"
         update-types: ["version-update:semver-major"]

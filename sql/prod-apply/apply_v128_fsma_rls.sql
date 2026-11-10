@@ -1,3 +1,5 @@
+-- alembic-revision: a5e7c9b2d341
+-- rendered-from: alembic/versions/20261016_a5e7c9b2d341_v128_fsma_rls_policy_repair.py (upgrade)
 -- v128 FSMA RLS policy repair, rendered from upgrade() in
 -- alembic/versions/20261016_a5e7c9b2d341_v128_fsma_rls_policy_repair.py.
 -- DROP IF EXISTS stays within each original creation branch so existing

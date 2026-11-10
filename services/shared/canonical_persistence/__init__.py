@@ -7,8 +7,8 @@ Package layout:
     shared/canonical_persistence/legacy_dual_write.py — TEMPORARY dual-write + graph sync
 """
 
-from shared.canonical_persistence.models import CanonicalStoreResult  # noqa: F401
-from shared.canonical_persistence.verification import (  # noqa: F401
+from shared.canonical_persistence.models import CanonicalStoreResult  # noqa: F401 -- re-export for existing importers
+from shared.canonical_persistence.verification import (  # noqa: F401 -- re-export for existing importers
     CanonicalChainVerification,
 )
-from shared.canonical_persistence.writer import CanonicalEventStore  # noqa: F401
+from shared.canonical_persistence.writer import CanonicalEventStore  # noqa: F401 -- re-export for existing importers

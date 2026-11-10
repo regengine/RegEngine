@@ -90,7 +90,7 @@ class OnboardingResultResponse(BaseModel):
 )
 async def onboard(
     body: OnboardRequest,
-    principal: IngestionPrincipal = Depends(require_permission("agent_org.admin")),
+    principal: IngestionPrincipal = Depends(require_permission("agent_org.admin")),  # noqa: B008 -- FastAPI dependency factory, evaluated once at route definition
     db_session=Depends(_get_db_session),
 ) -> OnboardingResultResponse:
     if db_session is None:

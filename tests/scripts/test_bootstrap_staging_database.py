@@ -795,9 +795,9 @@ _CHAIN_ROLES = ("alice", "bob", "carol", "vendor_ops", "contractor")
 
 
 def _skip_or_fail(reason: str) -> None:
-    if os.getenv("REGENGINE_REQUIRE_DB", "").strip().lower() in {"1", "true", "yes"}:
-        pytest.fail(f"{reason} (REGENGINE_REQUIRE_DB=1)")
-    pytest.skip(reason)
+    from tests.migrations.rls_db import skip_or_fail_without_db
+
+    skip_or_fail_without_db(reason, gate="membership-revocation gate")
 
 
 @pytest.fixture(scope="module")

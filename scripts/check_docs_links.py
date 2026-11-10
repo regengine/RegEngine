@@ -59,7 +59,7 @@ ALLOWLIST_NAME = ".docs-link-allowlist"
 # scope means triaging the backlog first -- see docs/CODEBASE_MAP.md section 8.
 # ``docs/compliance`` joined the scope with #3007: the RTM is audit evidence,
 # so a dangling artifact citation there is a compliance defect, not staleness.
-DEFAULT_SCOPE = ("runbooks", "docs/CODEBASE_MAP.md", "docs/compliance")
+DEFAULT_SCOPE = ("runbooks", "docs/runbooks/legacy", "docs/CODEBASE_MAP.md", "docs/compliance")
 
 
 def _candidate_paths(text: str) -> set[str]:
