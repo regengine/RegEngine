@@ -1229,7 +1229,6 @@ jobs:
             const ALLOWED_ENGINES = new Set([
               'claude',
               'codex',
-              'cursor',
               'gemini',
               'grok',
               'muse',
