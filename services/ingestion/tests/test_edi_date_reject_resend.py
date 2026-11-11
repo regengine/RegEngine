@@ -142,7 +142,11 @@ def _future_variant() -> bytes:
 def _post(client: TestClient, raw: bytes, route: str, tenant: str = TENANT):
     return client.post(
         f"/api/v1/ingest/edi{route}",
-        data={"traceability_lot_code": VALID_TLC, "tenant_id": tenant},
+        data={
+            "traceability_lot_code": VALID_TLC,
+            "tenant_id": tenant,
+            "tlc_source_reference": "0061414100001",
+        },
         files={"file": ("asn_856.edi", raw, "application/edi-x12")},
     )
 
@@ -202,13 +206,19 @@ def test_disallowed_sender_with_bad_date_gets_403_and_no_rejection(client, store
 
 
 @pytest.mark.parametrize("route", ["", "/document"])
-def test_content_rejection_after_reservation_frees_isa13(client, store, ingested, route):
-    """A zero SN1 quantity is rejected after the ISA13 is reserved."""
+def test_non_positive_quantity_is_rejected_before_isa13_reservation(client, store, ingested, route):
+    """A zero SN1 quantity is audited and rejected before the ISA13 is reserved."""
     raw = FIXTURE.read_text(encoding="utf-8")
     assert "SN1**200*CA~" in raw
     rejected = _post(client, raw.replace("SN1**200*CA~", "SN1**0*CA~").encode(), route)
-    assert 400 <= rejected.status_code < 500 and rejected.status_code != 409, rejected.json()
-    assert store.keys == {}, "a rejected document must not burn its ISA13"
+    assert rejected.status_code == 422, rejected.json()
+    detail = rejected.json()["detail"]
+    assert detail["error"] == "edi_non_positive_quantity"
+    assert detail["needs_review"] is True
+    records = rejection_log.list_edi_rejections(TENANT)
+    assert records[0]["reason"] == "edi_non_positive_quantity"
+    assert records[0]["needs_review"] is True
+    assert store.keys == {}, "a preflight rejection must not reserve its ISA13"
     assert ingested == []
 
     resend = _post(client, FIXTURE.read_bytes(), route)
@@ -267,37 +277,45 @@ def test_all_events_rejected_frees_isa13(client, store, monkeypatch, route):
 
 
 def _zero_quantity_variant() -> bytes:
-    """Rejected only after the ISA13 step, as in the content-rejection test."""
+    """Rejected when the present quantity cannot be parsed as positive."""
     raw = FIXTURE.read_text(encoding="utf-8")
     assert "SN1**200*CA~" in raw
     return raw.replace("SN1**200*CA~", "SN1**0*CA~").encode()
 
 
 @pytest.mark.parametrize("route", ["", "/document"])
-def test_failed_open_rejection_keeps_concurrent_claim(client, store, ingested, monkeypatch, route):
-    """A request that never got the claim must not delete the retry's claim."""
+def test_failed_open_ingest_keeps_concurrent_claim(client, store, ingested, monkeypatch, route):
+    """A failed-open Redis claim must not delete a concurrent request's claim."""
 
     def _claimed_elsewhere_then_timeout(key, value, nx=False, ex=None):
         store.keys[key] = "concurrent-retry"
         raise TimeoutError("redis timed out")
 
+    async def _broken(*args, **kwargs):
+        raise RuntimeError("ingest blew up")
+
     monkeypatch.setattr(store, "set", _claimed_elsewhere_then_timeout)
-    rejected = _post(client, _zero_quantity_variant(), route)
-    assert 400 <= rejected.status_code < 500 and rejected.status_code != 409, rejected.json()
+    monkeypatch.setattr(edi_routes, "ingest_events", _broken)
+    with pytest.raises(RuntimeError, match="ingest blew up"):
+        _post(client, FIXTURE.read_bytes(), route)
     assert list(store.keys.values()) == ["concurrent-retry"]
 
 
 @pytest.mark.parametrize("route", ["", "/document"])
 def test_rejection_frees_claim_when_set_landed_but_reply_was_lost(client, store, ingested, monkeypatch, route):
-    """SET applied server-side and the client timed out: the claim is still ours."""
+    """A claim landed despite a timeout and is released after ingest fails."""
 
     def _landed_then_timeout(key, value, nx=False, ex=None):
         store.keys[key] = value
         raise TimeoutError("redis timed out")
 
+    async def _broken(*args, **kwargs):
+        raise RuntimeError("ingest blew up")
+
     monkeypatch.setattr(store, "set", _landed_then_timeout)
-    rejected = _post(client, _zero_quantity_variant(), route)
-    assert 400 <= rejected.status_code < 500 and rejected.status_code != 409, rejected.json()
+    monkeypatch.setattr(edi_routes, "ingest_events", _broken)
+    with pytest.raises(RuntimeError, match="ingest blew up"):
+        _post(client, FIXTURE.read_bytes(), route)
     assert store.keys == {}
 
 
@@ -341,14 +359,19 @@ def test_true_replay_within_a_tenant_still_gets_409(client, store, ingested, rou
 
 
 @pytest.mark.parametrize("route", ["", "/document"])
-def test_one_tenants_rejection_leaves_the_other_tenants_claim(client, store, ingested, route):
-    """Releasing a claim is scoped to the tenant that took it."""
+def test_one_tenants_failure_leaves_the_other_tenants_claim(client, store, ingested, monkeypatch, route):
+    """Releasing one tenant's failed claim leaves the other tenant's claim."""
     stored = _post(client, FIXTURE.read_bytes(), route, tenant=TENANT)
     assert stored.status_code == 201, stored.json()
 
-    rejected = _post(client, _zero_quantity_variant(), route, tenant=OTHER_TENANT)
-    assert 400 <= rejected.status_code < 500 and rejected.status_code != 409, rejected.json()
+    async def _broken(*args, **kwargs):
+        raise RuntimeError("ingest blew up")
 
+    working = edi_routes.ingest_events
+    monkeypatch.setattr(edi_routes, "ingest_events", _broken)
+    with pytest.raises(RuntimeError, match="ingest blew up"):
+        _post(client, FIXTURE.read_bytes(), route, tenant=OTHER_TENANT)
+    monkeypatch.setattr(edi_routes, "ingest_events", working)
     replay = _post(client, FIXTURE.read_bytes(), route, tenant=TENANT)
     assert replay.status_code == 409, replay.json()
 
@@ -470,7 +493,11 @@ def test_advisory_rejection_frees_isa13(client, store, ingested):
     advisory = client.post(
         "/api/v1/ingest/edi/document",
         params={"strict": "false"},
-        data={"traceability_lot_code": "A" * 2, "tenant_id": TENANT},
+        data={
+            "traceability_lot_code": "A" * 2,
+            "tenant_id": TENANT,
+            "tlc_source_reference": "0061414100001",
+        },
         files={"file": ("asn_856.edi", FIXTURE.read_bytes(), "application/edi-x12")},
     )
     assert advisory.status_code == 201, advisory.json()
@@ -512,3 +539,21 @@ def test_zero_quantity_rejection_names_the_lines_lot(client, store, ingested):
 
     record = rejection_log.list_edi_rejections(TENANT)[0]
     assert record["traceability_lot_code"] == line_lot
+
+
+@pytest.mark.parametrize("route", ["", "/document"])
+def test_stored_replay_is_a_409_even_when_its_content_would_be_refused(client, store, ingested, route):
+    """A partner resending a stored document hears "already processed", not "correct it"."""
+    first = _post(client, FIXTURE.read_bytes(), route)
+    assert first.status_code == 201, first.json()
+
+    replay = client.post(
+        f"/api/v1/ingest/edi{route}",
+        data={"traceability_lot_code": VALID_TLC, "tenant_id": TENANT},
+        files={"file": ("asn_856.edi", FIXTURE.read_bytes(), "application/edi-x12")},
+    )
+
+    assert replay.status_code == 409, replay.json()
+    assert replay.json()["detail"]["idempotent_replay"] is True
+    assert rejection_log.list_edi_rejections(TENANT) == []
+    assert len(ingested) == 1

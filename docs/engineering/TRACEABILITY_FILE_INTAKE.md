@@ -12,7 +12,7 @@ assertion and must match that principal.
 | EPCIS 2.0 upload on `/ingest` | `POST /api/v1/epcis/events`, `/events/batch`, `/events/xml` | tenant context (`require_tenant_context`) | The dashboard tab posts JSON or XML to those routes |
 | ASN and receiving advice lines | `POST /api/v1/ingest/edi` and `POST /api/v1/ingest/edi/document` | `edi.ingest` | X12 856 and 861, one CTE per item line |
 | Warehouse advices | `POST /api/v1/ingest/edi/document` | `edi.ingest` | X12 944 and 945, one CTE per item line |
-| Purchase order and invoice | `POST /api/v1/ingest/edi/document` | `edi.ingest` | X12 850 and 810, one event per ST/SE set, quantities summed |
+| Purchase order and invoice | `POST /api/v1/ingest/edi/document` | `edi.ingest` | X12 850 and 810 parse, then return 422: they have no ship date or shipping locations, so nothing is stored |
 
 `POST /api/v1/ingest/edi` accepts a single 856 transaction set. 861, 944,
 945, 850, and 810 belong on `/document`.
@@ -162,6 +162,20 @@ CCYYMMDD or YYMMDD is HTTP 400 `invalid_edi_date`. A parsed date older
 than 90 days, or more than 24 hours in the future, keeps that calendar
 date on the event and snaps the ingest timestamp to now.
 
+A stored EDI document is retained verbatim. Its `fsma.ingestion_runs` row has
+source system `edi`, its bytes are in `fsma.manifest_blobs`, and each event
+carries the run id.
+
+A logged rejection is written to `fsma.edi_rejections` before its `rejection_id`
+is returned. If that write fails, the response is HTTP 503 and no id is issued,
+so retry the document.
+
+On `POST /api/v1/ingest/edi`, a line the event model refuses, such as a lot
+code under three characters, is HTTP 422 `edi_invalid_event`. It's logged like
+other rejections, and the ISA13 is freed for the corrected resend.
+`quantity_override`, `unit_of_measure_override`, and `product_description` count
+as the line's values during FSMA validation on `/document`.
+
 ### `POST /api/v1/ingest/edi` (856 only)
 
 One ST/SE set. A second set is HTTP 422 `multiple_transaction_sets`. The
@@ -175,6 +189,16 @@ BSN date. A miss is HTTP 422 `edi_856_missing_required_kdes`, the
 rejection is logged, and nothing is persisted. The route does not fill
 quantity `1.0`, unit `units`, product `EDI 856 Shipment`, an unknown
 location, or today's date.
+
+X12 856 does not say who assigned the lot code, so the
+`tlc_source_reference` form field is required (§1.1340(a)(7)) and applies
+to every line. The route does not derive it from the ship-from party: a
+pass-through distributor ships lots it did not assign. A missing or blank
+value is HTTP 422 `edi_856_missing_required_kdes`, the rejection is
+logged, and the ISA13 is not reserved, so the corrected resend is not a
+409 replay. `/document` applies the same rule to every 856 set, including
+with `?strict=false`. The same rejection covers a set with no reference
+document: no `REF` `BM`, `SI`, `CN`, `PO`, or `PK`, and no ASN number.
 
 `product_description`, `quantity_override`, `unit_of_measure_override`,
 `ship_from_location_override`, and `ship_to_location_override` apply to
@@ -192,18 +216,19 @@ rules below apply: one transaction-set type, GE01 must match the ST/SE
 count, and any FSMA failure keeps the whole interchange out of the
 canonical stream.
 
-On this route a present quantity that is zero or not numeric is HTTP 422
-`edi_non_positive_quantity`. A present unit is HTTP 422
-`edi_unmapped_unit_of_measure` unless it is an element-355 code this
-route maps (`CA` and `CS` cases, `CT` cartons, `BX` boxes, `BG` bags,
-`LB` lbs, `KG` kg, `EA` each, `UN` units, `PL` pallets, `PC` and `PK`
-pieces), a tolerated non-X12 alias (`CAS`, `CTN`, `BOX`, `LBR`,
-`KGM`), or a value that is already an FSMA unit name (`cases`,
-`cartons`, `lbs`, and the rest of `VALID_UNITS_OF_MEASURE`). A blank
-unit is stored as `units`. A set with no SN1 or RCD
-still produces one event: the quantity element is absent, so the
-persisted quantity is `1.0`, a missing product becomes `EDI 856 Item`
-or `EDI 861 Item`, and a missing location name becomes `Unknown`.
+An 856, 861, 944 or 945 on this route needs a positive quantity, a
+recognized unit and a product on every line, plus the set's party names.
+Anything missing or bad is HTTP 422 `edi_<set>_missing_required_kdes`
+before the ISA13 is reserved, so a corrected resend is not a replay.
+
+A recognized unit is an element-355 code this route maps (`CA` and `CS`
+cases, `CT` cartons, `BX` boxes, `BG` bags, `LB` lbs, `KG` kg, `EA`
+each, `UN` units, `PL` pallets, `PC` and `PK` pieces), a tolerated
+non-X12 alias (`CAS`, `CTN`, `BOX`, `LBR`, `KGM`), or a value that is
+already an FSMA unit name (`cases`, `cartons`, `lbs`, and the rest of
+`VALID_UNITS_OF_MEASURE`). None of these are synthesized: a blank unit
+is rejected rather than stored as `units`, and a set with no SN1 or RCD
+is rejected rather than stored with quantity `1.0`.
 
 Header KDEs are copied onto every line. 856 copies the ASN number
 (BSN02), carrier (TD5), and the reference document (`REF` `BM`, `SI`,
@@ -221,6 +246,7 @@ curl -X POST "$BASE/api/v1/ingest/edi/document" \
   -H "X-RegEngine-API-Key: $REGENGINE_API_KEY" \
   -H "X-Partner-ID: $PARTNER_ID" \
   -F "file=@asn_856.edi;type=application/edi-x12" \
+  -F "tlc_source_reference=$TLC_SOURCE_GLN_OR_REFERENCE" \
   -F "traceability_lot_code=FALLBACK-TLC-WHEN-A-LINE-HAS-NO-LOT" # pragma: allowlist secret
 ```
 

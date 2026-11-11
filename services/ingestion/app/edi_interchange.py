@@ -77,6 +77,21 @@ class EDIInterchange:
                 },
             )
 
+    def is_stored(self, session: Session, tenant_id: str) -> bool:
+        """Read-only: is there a still-valid committed receipt? Takes no lock."""
+        params = self._params(tenant_id)
+        set_tenant_guc(session, params["tenant_id"])
+        stored = session.execute(
+            text("""
+                SELECT 1 FROM fsma.edi_interchanges
+                WHERE tenant_id = :tenant_id AND sender_id = :sender_id
+                  AND receiver_id = :receiver_id AND isa13 = :isa13
+                  AND expires_at > clock_timestamp()
+            """),
+            params,
+        ).scalar_one_or_none()
+        return stored is not None
+
     def record_stored(self, session: Session, tenant_id: str) -> None:
         """Write the receipt before the event transaction commits; never fail open."""
         result = session.execute(

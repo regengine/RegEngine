@@ -184,6 +184,7 @@ def _post(
         "/api/v1/ingest/edi/document",
         data={
             "traceability_lot_code": _VALID_FSMA_TLC,
+            "tlc_source_reference": "0061414100001",
             "tenant_id": TEST_TENANT_ID,
             **(extra_data or {}),
         },
@@ -370,7 +371,8 @@ def test_2978_unmapped_unit_warns_and_fails_closed_on_document_route(
     )
     response = _post(client, bad, name="bad-uom.edi")
     assert response.status_code == 422, response.text
-    assert response.json()["detail"]["error"] == "edi_unmapped_unit_of_measure"
+    assert response.json()["detail"]["error"] == "edi_856_missing_required_kdes"
+    assert "unit_of_measure" in response.json()["detail"]["missing_kdes"]
     assert "payload" not in captured_payload, "an unmapped unit must not reach the canonical stream"
 
 
@@ -459,10 +461,12 @@ def test_856_blank_sn1_quantity_is_rejected(client: TestClient, captured_payload
         b"ST*856*1~"
         b"BSN*00**" + ship_date + b"~"
         b"HL*1**S~"
-        b"N1*SF*~"
+        b"N1*SF*Farm~"
+        b"N1*ST*DC~"
+        b"LIN**SK*SKU-1~"
         b"SN1***CA~"
-        b"REF*BM*~"
-        b"SE*7*1~"
+        b"REF*BM*BOL-1~"
+        b"SE*9*1~"
         b"GE*1*1~"
         b"IEA*1*~"
     )
@@ -474,12 +478,14 @@ def test_856_blank_sn1_quantity_is_rejected(client: TestClient, captured_payload
         "/api/v1/ingest/edi/document",
         data={
             "traceability_lot_code": _VALID_FSMA_TLC,
+            "tlc_source_reference": "0061414100001",
             "tenant_id": TEST_TENANT_ID,
         },
         files={"file": ("document.edi", raw, "application/edi-x12")},
     )
     assert response.status_code == 422, response.text
-    assert response.json()["detail"]["error"] == "edi_non_positive_quantity"
+    assert response.json()["detail"]["error"] == "edi_856_missing_required_kdes"
+    assert "quantity" in response.json()["detail"]["missing_kdes"]
     assert "payload" not in captured_payload
 
 
@@ -524,6 +530,7 @@ def test_2976_legacy_856_endpoint_refuses_a_batched_interchange(client: TestClie
         "/api/v1/ingest/edi",
         data={
             "traceability_lot_code": "LOT-2026-EDI-BATCH",
+            "tlc_source_reference": "0061414100001",
             "tenant_id": TEST_TENANT_ID,
         },
         files={"file": ("batch.edi", raw, "application/edi-x12")},
@@ -565,6 +572,7 @@ def test_2976_batched_interchange_never_half_lands(client: TestClient, captured_
         data={
             # Below the shared TLC minimum for every set; pattern misses only warn.
             "traceability_lot_code": "A" * 2,
+            "tlc_source_reference": "0061414100001",
             "tenant_id": TEST_TENANT_ID,
         },
         files={"file": ("batch.edi", raw, "application/edi-x12")},

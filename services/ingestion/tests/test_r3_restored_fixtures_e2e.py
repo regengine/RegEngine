@@ -144,7 +144,10 @@ def test_edi_856_fixture_end_to_end():
     transition, gaps = gaps_by_tlc[tlc]
     assert transition == "open"
     assert {g.gap_kind for g in gaps} == {GAP_KIND_MISSING_KDE}
-    assert {"ship_date", "tlc_source_reference"} <= {g.gap_key for g in gaps}
+    # No form field in this harness, so the caller-supplied KDE is the gap.
+    gap_keys = {g.gap_key for g in gaps}
+    assert "tlc_source_reference" in gap_keys
+    assert "ship_date" not in gap_keys
 
     headers, rows = _parse_sheet(sheet)
     assert headers == FDA_COLUMNS
