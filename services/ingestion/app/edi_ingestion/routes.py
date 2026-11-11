@@ -62,7 +62,7 @@ from .dedup import (
     verify_trading_partner_allowed,
 )
 from .extractors import _extract_856_fields, _extract_fields_for_set
-from .models import EDIIngestResponse
+from .models import EDIIngestResponse, ingest_status
 from .parser import (
     _count_segments,
     _declared_transaction_set_count,
@@ -844,6 +844,7 @@ async def ingest_edi_856(
     )
 
     return EDIIngestResponse(
+        status=ingest_status(ingestion_result),
         sender_tenant_id=sender_tenant_id,
         partner_id=x_partner_id,
         traceability_lot_code=events[0].traceability_lot_code,
@@ -1586,6 +1587,7 @@ async def ingest_edi_document(
     )
 
     return EDIIngestResponse(
+        status=ingest_status(ingestion_result),
         document_type=f"X12_{transaction_set}",
         sender_tenant_id=sender_tenant_id,
         partner_id=x_partner_id,
