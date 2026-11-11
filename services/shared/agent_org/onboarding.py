@@ -288,7 +288,7 @@ async def onboard_tenant_agent_org(
     survive a commit).
     """
     if key_store is None:
-        from shared.api_key_store import get_db_key_store  # noqa: PLC0415
+        from shared.api_key_store import get_db_key_store  # noqa: PLC0415 -- lazy import, avoids a module-load cycle
 
         key_store = await get_db_key_store()
     if inbox_provider is None:

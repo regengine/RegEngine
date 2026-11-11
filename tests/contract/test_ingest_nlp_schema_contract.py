@@ -90,12 +90,13 @@ class TestIngestionToNLPContract:
 
 
 class TestProducerEmissionContract:
-    """The real producer function emits schema-valid Kafka payloads.
+    """The real producer function returns schema-valid payloads.
 
     The tests above construct the model inside the test. These tests call
     the actual emission path (``_process_and_emit`` with mocked storage,
-    parser, settings, and transport) and validate what it really sends, so
-    reverting the producer to a hand-built dict fails here.
+    parser and settings) and validate what it really returns, so reverting
+    the producer to a hand-built dict fails here. The Kafka transport was
+    retired in WI-05; the returned event is what the task queue carries.
     """
 
     @staticmethod
@@ -105,7 +106,6 @@ class TestProducerEmissionContract:
 
         from app import routes_ingest
 
-        sent = []
         from datetime import datetime, timezone
 
         monkeypatch.setattr(routes_ingest.PARSER_REGISTRY, "parse", lambda *a, **k: ("probe text", "probe-parser"))
@@ -129,13 +129,10 @@ class TestProducerEmissionContract:
         monkeypatch.setattr(
             routes_ingest,
             "get_settings",
-            lambda: SimpleNamespace(
-                raw_bucket="raw", processed_bucket="processed", kafka_topic_normalized="normalized"
-            ),
+            lambda: SimpleNamespace(raw_bucket="raw", processed_bucket="processed"),
         )
         monkeypatch.setattr(routes_ingest, "put_bytes", lambda *a, **k: "s3://raw/raw/doc-probe-1.bin")
         monkeypatch.setattr(routes_ingest, "put_json", lambda *a, **k: "s3://processed/normalized/doc-probe-1.json")
-        monkeypatch.setattr(routes_ingest, "send", lambda topic, payload, key=None: sent.append((topic, payload, key)))
         event = routes_ingest._process_and_emit(
             b"probe document bytes",
             "https://www.federalregister.gov/documents/2026/01/01/test",
@@ -143,27 +140,22 @@ class TestProducerEmissionContract:
             str(uuid.uuid4()),
             "text/plain",
         )
-        return event, sent
+        return event
 
     def test_producer_function_returns_model_instance(self, monkeypatch):
         """The emission path returns a NormalizedEvent, not a plain dict."""
         from app.models import NormalizedEvent
 
-        event, _ = self._emit(monkeypatch)
+        event = self._emit(monkeypatch)
         assert isinstance(event, NormalizedEvent), (
-            f"producer returned {type(event).__name__}; the Kafka payload builder must stay a model"
+            f"producer returned {type(event).__name__}; the payload builder must stay a model"
         )
 
     def test_producer_emission_validates_against_nlp_schema(self, monkeypatch):
         """What the producer really emits must validate against the NLP schema."""
         validator = _load_inbound_schema()
-        event, sent = self._emit(monkeypatch)
+        event = self._emit(monkeypatch)
 
         payload = event.model_dump(mode="json")
         errors = list(validator.iter_errors(payload))
         assert errors == [], f"real producer output rejected by the NLP inbound schema: {[e.message for e in errors]}"
-
-        assert sent, "producer must publish exactly one Kafka message"
-        assert sent[0][1] == payload, "the published Kafka payload must be the emitted event"
-        wire_errors = list(validator.iter_errors(sent[0][1]))
-        assert wire_errors == [], "published Kafka payload rejected by the NLP inbound schema"

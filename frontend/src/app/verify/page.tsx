@@ -25,6 +25,7 @@ import { Card, CardHeader } from '@/components/ui/card';
 import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
 import { EmptyState } from '@/components/ui/empty-state';
 import { StatusBadge } from '@/components/ui/status-badge';
+import { rawFetch } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 
 const PROOF_VERIFY_ENDPOINT = '/api/ingestion/api/v1/proof/verify';
@@ -176,7 +177,8 @@ function VerifyWidget() {
         formData.append('bundle', file);
 
         try {
-            const res = await fetch(PROOF_VERIFY_ENDPOINT, {
+            // Public verifier: multipart upload, no session headers.
+            const res = await rawFetch(PROOF_VERIFY_ENDPOINT, {
                 method: 'POST',
                 body: formData,
             });

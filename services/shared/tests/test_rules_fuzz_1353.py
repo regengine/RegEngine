@@ -13,11 +13,6 @@ All DB / external dependencies are mocked so these run fully offline.
 
 from __future__ import annotations
 
-import hashlib
-import json
-import re
-import unittest.mock as mock
-from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -38,8 +33,6 @@ from services.shared.cte_persistence.hashing import compute_event_hash
 
 # Rules engine types
 from services.shared.rules.types import (
-    EvaluationSummary,
-    RuleDefinition,
     RuleEvaluationResult,
 )
 

@@ -13,8 +13,6 @@ _logger = logging.getLogger(__name__)
 class Settings(ObjectStorageMixin, BaseServiceSettings):
     """Environment-driven configuration values."""
 
-    kafka_topic_dlq: str = "ingest.dlq"
-
     # Search / Discovery
     google_api_key: Optional[str] = None
     google_cx: Optional[str] = None
@@ -22,8 +20,6 @@ class Settings(ObjectStorageMixin, BaseServiceSettings):
 
     raw_bucket: str = Field(default="reg-engine-raw-data-dev", alias="RAW_DATA_BUCKET")
     processed_bucket: str = Field(default="reg-engine-processed-data-dev", alias="PROCESSED_DATA_BUCKET")
-    kafka_bootstrap_servers: str = Field(default="redpanda:9092", alias="KAFKA_BOOTSTRAP_SERVERS")
-    kafka_topic_normalized: str = Field(default="ingest.normalized", alias="KAFKA_TOPIC_NORMALIZED")
     auth_test_bypass_token: Optional[str] = Field(default=None, alias="AUTH_TEST_BYPASS_TOKEN")
     env: str = Field(default="development", alias="ENV")
     allowed_origins: str = Field(

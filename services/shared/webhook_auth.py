@@ -111,10 +111,10 @@ def require_webhook_secret(secret: Optional[str], *, connector_id: str = "webhoo
 def _digest(payload: bytes, secret: str, algorithm: str) -> str:
     try:
         digestmod: Callable[[bytes], Any] = getattr(hashlib, algorithm)
-    except AttributeError:
+    except AttributeError as exc:
         raise WebhookSignatureInvalidError(
             "Unsupported signature scheme '%s'. Supported schemes: %s." % (algorithm, ", ".join(_SUPPORTED_ALGORITHMS))
-        )
+        ) from exc
     return hmac.new(secret.encode("utf-8"), payload, digestmod).hexdigest()
 
 
@@ -170,8 +170,8 @@ def _parse_signature_header(header: str, *, algorithm: str = "sha256") -> tuple[
             raise WebhookSignatureInvalidError("Malformed timestamped signature header. Expected 't=<unix>,v1=<hex>'.")
         try:
             timestamp = int(timestamp_text)
-        except ValueError:
-            raise WebhookSignatureInvalidError("Malformed timestamp in signature header.")
+        except ValueError as exc:
+            raise WebhookSignatureInvalidError("Malformed timestamp in signature header.") from exc
         return "v1", digests, timestamp
 
     if "=" in text:

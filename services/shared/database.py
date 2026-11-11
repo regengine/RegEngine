@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass
 
 import structlog
-from prometheus_client import REGISTRY, CollectorRegistry, Gauge
+from prometheus_client import REGISTRY, Gauge
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker
@@ -93,9 +93,12 @@ _DEV_DATABASE_URL = "postgresql://regengine:regengine@postgres:5432/regengine"
 # seeded contextvar. Import kept under the ``shared.`` alias — the
 # canonical runtime alias — so exactly one module instance (and one
 # ContextVar pair) exists.
-import shared.tenant_context  # noqa: F401,E402  (side effect: install_rls_guc_hook)
-from shared.db_url import sync_postgres_connect_args, sync_postgres_url
-from shared.env import is_production
+import shared.tenant_context  # noqa: F401,E402 -- side effect: install_rls_guc_hook
+from shared.db_url import (  # noqa: E402 -- after the side-effect import above
+    sync_postgres_connect_args,
+    sync_postgres_url,
+)
+from shared.env import is_production  # noqa: E402 -- after the side-effect import above
 
 _is_prod = is_production()
 DATABASE_URL = os.getenv("DATABASE_URL", "")
@@ -355,7 +358,9 @@ privilege_posture AS (
                 AND has_function_privilege(current_user, 'public.set_tenant_context(text)', 'EXECUTE')
                 AND NOT has_function_privilege(current_user, 'public.set_admin_context(boolean)', 'EXECUTE')
                 AND NOT has_function_privilege(current_user, 'fsma.get_remediation_token_by_hash(text)', 'EXECUTE')
-                AND NOT has_function_privilege(current_user, 'fsma.get_remediation_token_by_session_hash(text)', 'EXECUTE')
+                AND NOT has_function_privilege(
+                    current_user, 'fsma.get_remediation_token_by_session_hash(text)', 'EXECUTE'
+                )
             WHEN 'regengine_sysadmin' THEN
                 has_table_privilege(current_user, 'fsma.task_queue', 'SELECT')
                 AND NOT has_table_privilege(current_user, 'fsma.task_queue', 'INSERT')
@@ -421,7 +426,7 @@ SELECT relation_posture.ok,
 # direct-role migrated-PostgreSQL gate.  Whitespace alone is normalized.
 _EXPECTED_RUNTIME_POLICY_MANIFEST_SHA256 = {
     "regengine": "37a00b9eeb2c2ff127c5c9bc4be6093e6c887a9e783ef891f28d419b0318b329",  # pragma: allowlist secret
-    "regengine_sysadmin": "a7bacda65dc495ccaa238d7b01a53b409eb0136efb0f97d86328afe1dc209b41",  # pragma: allowlist secret
+    "regengine_sysadmin": "a7bacda65dc495ccaa238d7b01a53b409eb0136efb0f97d86328afe1dc209b41",  # noqa: E501 -- sha256 digest literal  # pragma: allowlist secret
 }
 
 
@@ -456,7 +461,7 @@ def _probe_with_retries(target_engine, *, label: str, statement, required: bool)
                 row = conn.execute(statement).fetchone()
             probe_error = None
             break
-        except Exception as exc:  # noqa: BLE001 - startup probe must classify all DB failures
+        except Exception as exc:  # noqa: BLE001 -- startup probe must classify all DB failures
             probe_error = exc
             logger.warning(
                 "database_posture_probe_failed",

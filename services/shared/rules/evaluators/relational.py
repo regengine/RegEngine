@@ -469,7 +469,7 @@ def evaluate_mass_balance(
 
     if not use_converted:
         origin_input = 0.0
-        for qty, uom, etype in all_entries:
+        for qty, _uom, etype in all_entries:
             if etype in input_types:
                 total_input += qty
             elif etype in origin_types:

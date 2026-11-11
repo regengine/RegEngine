@@ -79,7 +79,6 @@ def _no_side_effects(monkeypatch):
     monkeypatch.setattr(routes_ingest, "get_db_manager", lambda: None)
     monkeypatch.setattr(routes_ingest, "put_bytes", lambda bucket, key, data, *a: f"s3://{bucket}/{key}")
     monkeypatch.setattr(routes_ingest, "put_json", lambda bucket, key, data, *a: f"s3://{bucket}/{key}")
-    monkeypatch.setattr(routes_ingest, "send", lambda *a, **k: None)
 
 
 # ---------------------------------------------------------------------------
@@ -128,7 +127,6 @@ class TestProcessAndEmit:
         with (
             patch.object(routes_ingest, "put_bytes", return_value="s3://raw/x"),
             patch.object(routes_ingest, "put_json", return_value="s3://proc/x"),
-            patch.object(routes_ingest, "send", return_value=None),
         ):
             event = routes_ingest._process_and_emit(
                 raw_bytes=b"hello regulation text",
@@ -144,7 +142,6 @@ class TestProcessAndEmit:
         with (
             patch.object(routes_ingest, "put_bytes", return_value="s3://raw/x"),
             patch.object(routes_ingest, "put_json", return_value="s3://proc/x"),
-            patch.object(routes_ingest, "send", return_value=None),
         ):
             event = routes_ingest._process_and_emit(
                 raw_bytes=b"hello regulation text",

@@ -9,7 +9,6 @@ fields, never an unhandled exception that turns into a 500.
 from __future__ import annotations
 
 import pytest
-
 from services.shared.external_connectors.base import ConnectorConfig
 from services.shared.external_connectors.csv_sftp import CSVSFTPConnector
 from services.shared.external_connectors.retailers import (

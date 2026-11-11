@@ -136,12 +136,17 @@ def _apply_upgrade(engine, monkeypatch) -> None:
 def pg_engine():
     """Disposable PG16 database with v140 minimal deps, or skip/fail."""
     # Prefer an explicit scratch URL; otherwise peer-auth local Homebrew PG.
-    if not os.environ.get("REGENGINE_MIGRATION_TEST_DB"):
-        os.environ["REGENGINE_MIGRATION_TEST_DB"] = "postgresql://sellers@/postgres?host=/tmp"
-    db_name = "inc2_scratch_v140_" + uuid4().hex[:12]
-    with scratch_database_engine(db_name) as engine:
-        _bootstrap_minimal_schema(engine)
-        yield engine
+    # Scoped with MonkeyPatch.context() so the fallback never leaks into the
+    # rest of the session (it used to be assigned to os.environ outright and
+    # made every later guarded_live_database_url() caller fail with
+    # "REGENGINE_MIGRATION_TEST_DB is set but not reachable").
+    with pytest.MonkeyPatch.context() as mp:
+        if not os.environ.get("REGENGINE_MIGRATION_TEST_DB"):
+            mp.setenv("REGENGINE_MIGRATION_TEST_DB", "postgresql://sellers@/postgres?host=/tmp")
+        db_name = "inc2_scratch_v140_" + uuid4().hex[:12]
+        with scratch_database_engine(db_name) as engine:
+            _bootstrap_minimal_schema(engine)
+            yield engine
 
 
 def test_upgrade_idempotent_on_stub_pg16(pg_engine, monkeypatch) -> None:

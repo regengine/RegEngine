@@ -1,0 +1,21 @@
+# RegEngine — test and development tooling (WI-06, 2026-11-04)
+#
+# Installed by CI jobs that run pytest, never by the production image.
+# Constrained by requirements.lock so a package that appears in both resolves
+# to the same version. Compile with:
+#   pip-compile --allow-unsafe --generate-hashes --output-file=requirements-dev.lock requirements-dev.in
+-c requirements.lock
+
+pytest>=9.1.1
+pytest-asyncio>=1.4.0
+pytest-cov>=7.1.0
+pytest-mock>=3.17.0
+pytest-xdist>=3.8.0
+hypothesis>=6.170.2
+# Async SQLite driver for the ADMIN_FALLBACK_SQLITE test posture; no
+# production module imports it.
+aiosqlite>=0.22.1
+# testcontainers: see the floor note in requirements.in.
+testcontainers[postgres]>=4.15.0
+testcontainers[redis]>=4.15.0
+testcontainers[neo4j]>=4.15.0

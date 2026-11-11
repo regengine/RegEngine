@@ -5,10 +5,11 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 # Add services/admin to path
-sys.path.append(os.path.abspath("services/admin"))
+sys.path.append(os.path.abspath("."))  # run from the repo root: services.admin.app.* resolves from here
+sys.path.append(os.path.abspath("services"))  # shared.*
 
 try:
-    from app.sqlalchemy_models import AuditLogModel, Base, MembershipModel, RoleModel, TenantModel, UserModel
+    from services.admin.app.sqlalchemy_models import AuditLogModel, Base, MembershipModel, RoleModel, TenantModel, UserModel
 
     print("Successfully imported models.")
 except ImportError as e:

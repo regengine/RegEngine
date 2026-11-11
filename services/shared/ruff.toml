@@ -1,0 +1,46 @@
+# Ruff configuration for services/shared/ (tech-debt WI-03, 2026-11-04).
+#
+# The repository config (pyproject.toml) selects only import sorting, and CI's
+# per-service "bug gate" runs ruff with --select E9,F63,F7,F82. services/shared
+# is the first directory to carry the wider rule set below; backend-ci's
+# lint-shared job runs `ruff check services/shared` with this file. One more
+# service directory joins each time a PR touches it substantially
+# (CONTRIBUTING.md, Code Guidelines). Every `# noqa` here carries a
+# `-- reason`; scripts/check_noqa_ratchet.py keeps unexplained markers from
+# growing.
+extend = "../../pyproject.toml"
+
+[lint]
+extend-select = [
+    "F",     # pyflakes
+    "E",     # pycodestyle errors
+    "B",     # flake8-bugbear
+    "S102",  # exec
+    "S105",  # hardcoded password string
+    "S106",  # hardcoded password argument
+    "S107",  # hardcoded password default
+    "S108",  # insecure temp file
+    "S113",  # request without timeout
+    "S301",  # pickle
+    "S324",  # weak hash
+    "S602",  # subprocess with shell=True
+    "S603",  # subprocess without shell=True (untrusted input check)
+    "S604",  # shell=True in a function call
+    "S605",  # os.system / shell with untrusted input
+    "S606",  # os.exec* without shell
+    "S607",  # process start with a partial path
+]
+
+[lint.flake8-bugbear]
+# FastAPI's dependency injection is declared in argument defaults by design.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Header", "fastapi.Body", "fastapi.Path", "fastapi.Security"]
+
+[lint.per-file-ignores]
+# The rule seed catalogue is a data table of regulatory text; wrapping its
+# strings would only obscure the citations.
+"rules/seeds.py" = ["E501"]
+# Test files keep the pyflakes rules (F) and get the style and
+# hardcoded-credential rules relaxed: fixtures use literal secrets and
+# subprocess calls by design, and sys.path bootstrapping precedes imports.
+"**/tests/**" = ["E402", "E501", "F841", "S105", "S106", "S107", "S603", "S607", "B"]
+"test_*.py" = ["E402", "E501", "F841", "S105", "S106", "S107", "S603", "S607", "B"]

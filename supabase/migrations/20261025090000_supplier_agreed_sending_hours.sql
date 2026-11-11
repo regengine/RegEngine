@@ -1,3 +1,5 @@
+-- alembic-revision: b005ddbf1dba
+-- rendered-from: alembic/versions/20261024_b005ddbf1dba_v136_supplier_agreed_sending_hours.py (upgrade)
 -- Agreed sending time per supplier facility.
 --
 -- agreed_sending_hours is how many hours after a CTE's event time the
