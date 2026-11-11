@@ -8,7 +8,6 @@ rejects on warnings, so without this the gap could never be stored.
 from __future__ import annotations
 
 import pytest
-
 from shared.rules.enforcement import should_reject
 from shared.rules.types import EvaluationSummary, RuleEvaluationResult
 

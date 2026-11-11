@@ -13,12 +13,12 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from shared.data_gap_tracking import GAP_KIND_MISSING_KDE, Gap
 from sqlalchemy.exc import ProgrammingError
 
 from services.ingestion.app import webhook_compat as wc
 from services.ingestion.app.edi_ingestion import routes as edi_routes
 from services.ingestion.app.webhook_models import IngestEvent, WebhookCTEType, WebhookPayload
-from shared.data_gap_tracking import GAP_KIND_MISSING_KDE, Gap
 
 TENANT = "11111111-1111-1111-1111-111111111111"
 TLC = "00012345678901-LOT001"

@@ -84,13 +84,13 @@ def test_856_without_tlc_source_reference_only_misses_that_kde(route: str, captu
     events = [event for payload in captured for event in payload.events]
     assert events
     for event in events:
-        assert _validate_event_kdes(event) == [
-            "Missing required KDE 'tlc_source_reference' for shipping CTE"
-        ]
+        assert _validate_event_kdes(event) == ["Missing required KDE 'tlc_source_reference' for shipping CTE"]
 
 
 @pytest.mark.parametrize("route", ["", "/document"])
-def test_both_routes_defer_only_shipping_tlc_source_reference(route: str, monkeypatch: pytest.MonkeyPatch, captured) -> None:
+def test_both_routes_defer_only_shipping_tlc_source_reference(
+    route: str, monkeypatch: pytest.MonkeyPatch, captured
+) -> None:
     seen: list[dict] = []
 
     async def _capture_kwargs(payload: WebhookPayload, **kwargs) -> IngestResponse:
