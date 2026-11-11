@@ -1,4 +1,4 @@
-"""v143: EDI rejection evidence must survive deploys and stay tenant-scoped."""
+"""v144: EDI rejection evidence must survive deploys and stay tenant-scoped."""
 
 from __future__ import annotations
 
@@ -7,12 +7,12 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 V111 = REPO_ROOT / "alembic/versions/20260803_b71d9e4c2a60_v111_runtime_role_grants.py"
-V143 = REPO_ROOT / "alembic/versions/20261105_056ffd2f8045_v143_edi_rejections.py"
-SUPABASE = REPO_ROOT / "supabase/migrations/20261105120000_v143_edi_rejections.sql"
+V143 = REPO_ROOT / "alembic/versions/20261111_056ffd2f8045_v144_edi_rejections.py"
+SUPABASE = REPO_ROOT / "supabase/migrations/20261111120000_v144_edi_rejections.sql"
 
 
 def _v111():
-    spec = importlib.util.spec_from_file_location("regengine_v111_for_v143", V111)
+    spec = importlib.util.spec_from_file_location("regengine_v111_for_v144", V111)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

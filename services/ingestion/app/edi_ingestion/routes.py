@@ -38,6 +38,7 @@ from shared.canonical_event import IngestionSource
 from shared.edi_rejection_audit import EdiRejectionAuditUnavailable
 
 from ..authz import IngestionPrincipal, require_permission
+from ..edi_interchange import EDIInterchange
 from ..format_extractors import is_edi_content
 from ..shared.tenant_resolution import resolve_principal_tenant_id, resolve_tenant_id
 from ..shared.upload_limits import MAX_EDI_FILE_SIZE_BYTES, read_upload_with_limit
@@ -125,16 +126,13 @@ def _release_isa13_unless_stored(endpoint):
     a server error, or a result with no accepted events stores nothing, and
     keeping the claim would hold up the partner's corrected resend.
 
-    A partly accepted interchange keeps its claim. Releasing it is not safe
-    yet: event idempotency keys include ``edi_line_index`` and leave out
-    quantity, so a corrected resend under the same ISA13 can store accepted
-    lines twice or drop a corrected quantity.
+    EDI ingest is all-or-nothing: a rejected batch stores no events or
+    database receipt and can be corrected. Any accepted events retain the
+    claim defensively; a changed-content resend must not modify stored lines.
 
-    Releasing on an exception or cancellation assumes nothing was committed.
-    That does not hold if ``ingest_events`` commits and then raises (session
-    cleanup) or the response cannot be built: the claim is freed for stored
-    events. The ``(tenant_id, idempotency_key)`` unique key on the event
-    tables is then what stops an identical resend from storing them twice.
+    An exception after commit can release the Redis claim. The PostgreSQL
+    interchange receipt commits with the events, so it still rejects resends
+    (including changed content) if cleanup fails or the cache is unavailable.
     """
 
     @functools.wraps(endpoint)
@@ -1139,6 +1137,7 @@ async def ingest_edi_856(
         x_regengine_api_key=x_regengine_api_key,
         source_file=_edi_source_receipt(file, raw_bytes, principal, len(events)),
         all_or_nothing=True,
+        edi_interchange=EDIInterchange.from_envelope(extracted),
     )
 
     return EDIIngestResponse(
@@ -1970,6 +1969,7 @@ async def ingest_edi_document(
         x_regengine_api_key=x_regengine_api_key,
         source_file=_edi_source_receipt(file, raw_bytes, principal, len(events)),
         all_or_nothing=True,
+        edi_interchange=EDIInterchange.from_envelope(extracted),
     )
 
     return EDIIngestResponse(

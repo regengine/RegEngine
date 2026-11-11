@@ -428,6 +428,7 @@ APPLICATION_TABLES = {
         "cte_events",
         "cte_kdes",
         "cte_kdes_backfill_log_v059",
+        "edi_interchanges",
         "edi_rejections",
         "entity_aliases",
         "entity_merge_history",
@@ -618,11 +619,12 @@ REGENGINE_TABLE_GRANTS.update(
         "fsma.compliance_evidence_snapshots": ("SELECT", "INSERT", "UPDATE"),
         "fsma.cte_events": ("SELECT", "INSERT", "DELETE"),
         "fsma.cte_kdes": ("SELECT", "INSERT"),
+        "fsma.edi_interchanges": ("SELECT", "INSERT"),
         "fsma.entity_aliases": ("SELECT",),
         "fsma.evidence_attachments": ("SELECT",),
         "fsma.exception_comments": ("SELECT", "INSERT"),
         "fsma.exception_signoffs": ("SELECT", "INSERT"),
-        # v143 -- EDI rejection evidence. Append-only: never updated or deleted.
+        # v144 -- EDI rejection evidence. Append-only: never updated or deleted.
         "fsma.edi_rejections": ("SELECT", "INSERT"),
         "fsma.fda_export_log": ("SELECT", "INSERT"),
         "fsma.fda_sla_requests": ("SELECT", "INSERT", "UPDATE"),
@@ -657,6 +659,8 @@ REGENGINE_TABLE_GRANTS.update(
 )
 
 REGENGINE_COLUMN_GRANTS = {
+    # v143: only expiry renewal may modify an EDI receipt; identity is fixed.
+    "fsma.edi_interchanges": {"UPDATE": ("stored_at", "expires_at")},
     # Successful pre-authentication may maintain only usage telemetry.  It
     # cannot change identity, tenant, scopes, status, expiry, limits, or hash.
     "public.api_keys": {"UPDATE": ("last_used_at", "total_requests")},

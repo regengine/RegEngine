@@ -134,6 +134,9 @@ def stored(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
         lambda db, tenant_id, source, receipt: (receipts.append(receipt), "00000000-0000-0000-0000-000000000777")[1],
     )
     monkeypatch.setattr(webhook_compat, "_close_ingestion_run", lambda *a, **k: None)
+    # The PostgreSQL interchange receipt has its own tests; this fake session has no SQL.
+    monkeypatch.setattr(webhook_compat.EDIInterchange, "reserve", lambda self, session, tenant_id: None)
+    monkeypatch.setattr(webhook_compat.EDIInterchange, "record_stored", lambda self, session, tenant_id: None)
     return calls
 
 

@@ -20,10 +20,11 @@ stored does the value become ``stored:<token>`` with a 7-day TTL
 (partners rarely retransmit later than that). The two states let a
 retransmission tell "still running, retry" from "already processed", and
 a claim whose worker died expires in minutes. Any other value is a key
-from before the states existed, and counts as stored. If Redis is unavailable the
-ingest proceeds but a warning is logged — fail-open is acceptable
-because the downstream CTE hash chain will also enforce
-idempotency for properly-formed events.
+from before the states existed, and counts as stored. If Redis is unavailable,
+ingest proceeds with a warning. PostgreSQL serializes attempts for the same
+envelope and commits an interchange receipt with the events, so Redis loss
+or a post-commit error cannot remove replay protection. Event idempotency
+remains the fallback for malformed envelopes without sender/ISA13.
 """
 
 from __future__ import annotations
@@ -95,8 +96,8 @@ def check_and_record_interchange(
 
     If any envelope ID is missing (malformed interchange) or Redis is
     down, returns ``(False, None)`` and the caller proceeds with
-    normal ingestion. Downstream CTE-hash idempotency catches the
-    degenerate cases.
+    normal ingestion. PostgreSQL receipts guard identified interchanges;
+    downstream event idempotency handles missing envelope identifiers.
 
     ``(False, None)`` therefore does not prove a claim was taken. The
     caller passes a ``claim_token`` unique to the request, and
@@ -152,8 +153,7 @@ def mark_interchange_stored(
 
     From here a retransmission is a true replay for the full dedup TTL.
     Best-effort: on a Redis error the pending claim expires, and a later
-    resend is stopped by the ``(tenant_id, idempotency_key)`` unique key on
-    the event tables instead of by a 409.
+    resend is stopped by the PostgreSQL interchange receipt with a 409.
     """
     if not isa13 or not sender_id:
         return
