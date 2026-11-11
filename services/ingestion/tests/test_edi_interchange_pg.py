@@ -216,6 +216,9 @@ def ingest_db(db, monkeypatch):
     monkeypatch.setattr(compat, "_generate_alerts", lambda *args: [])
     monkeypatch.setattr(compat, "_publish_graph_sync", lambda *args: None)
     monkeypatch.setattr(compat, "record_outcomes", lambda *args: None)
+    # Source-file receipts need fsma.ingestion_runs, which this database does not create.
+    monkeypatch.setattr(compat, "_open_ingestion_run", lambda *args: None)
+    monkeypatch.setattr(compat, "_close_ingestion_run", lambda *args, **kwargs: None)
     monkeypatch.setattr(CTEPersistence, "store_event", store)
     monkeypatch.setattr(CanonicalEventStore, "persist_event", canonical)
     monkeypatch.setattr(RulesEngine, "evaluate_event", lambda *args, **kwargs: SimpleNamespace(compliant=True))
@@ -296,7 +299,11 @@ def test_real_routes_reject_changed_resend_after_post_commit_error_without_redis
         key_id="test-key", tenant_id=TENANT, scopes=["*"], auth_mode="test"
     )
     raw = (Path(__file__).parent / "fixtures/edi_corpus/asn_856.edi").read_bytes()
-    data = {"tenant_id": TENANT, "traceability_lot_code": "00012345678901-LOT001"}
+    data = {
+        "tenant_id": TENANT,
+        "traceability_lot_code": "00012345678901-LOT001",
+        "tlc_source_reference": "0061414100001",
+    }
     ingest_db["cleanup"] = RuntimeError("cleanup failed")
     with TestClient(app, raise_server_exceptions=False) as client:
         first = client.post(f"/api/v1/ingest/edi{route}", data=data, files={"file": ("asn.edi", raw)})
@@ -424,7 +431,11 @@ def test_database_lock_returns_retryable_503_through_production_handlers(db, ing
     )
     raw = (Path(__file__).parent / "fixtures/edi_corpus/asn_856.edi").read_bytes()
     envelope = EDIInterchange.from_envelope(routes._extract_856_fields(routes._parse_x12_segments(raw.decode())))
-    data = {"tenant_id": TENANT, "traceability_lot_code": "00012345678901-LOT001"}
+    data = {
+        "tenant_id": TENANT,
+        "traceability_lot_code": "00012345678901-LOT001",
+        "tlc_source_reference": "0061414100001",
+    }
     with _session(db) as owner, TestClient(app) as client:
         envelope.reserve(owner, TENANT)
         response = client.post(f"/api/v1/ingest/edi{route}", data=data, files={"file": ("asn.edi", raw)})

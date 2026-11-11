@@ -1,3 +1,5 @@
+-- alembic-revision: 056ffd2f8045
+-- rendered-from: alembic/versions/20261111_056ffd2f8045_v144_edi_rejections.py (upgrade)
 -- v144: durable EDI rejections.
 --
 -- Mirrors alembic/versions/20261111_056ffd2f8045_v144_edi_rejections.py.

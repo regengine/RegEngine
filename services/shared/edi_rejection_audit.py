@@ -24,9 +24,9 @@ def persist_edi_rejection(record: dict[str, Any]) -> None:
     """Insert one rejection row, scoped to the record's tenant by RLS."""
     session = None
     try:
-        from shared.database import SessionLocal  # noqa: PLC0415
-        from shared.tenant_context import set_tenant_guc  # noqa: PLC0415
-        from sqlalchemy import text  # noqa: PLC0415
+        from shared.database import SessionLocal  # noqa: PLC0415 -- read at call time so tests can swap the session factory
+        from shared.tenant_context import set_tenant_guc  # noqa: PLC0415 -- keeps module import free of database setup
+        from sqlalchemy import text  # noqa: PLC0415 -- keeps module import free of database setup
 
         session = SessionLocal()
         set_tenant_guc(session, str(record["tenant_id"]))
@@ -61,11 +61,11 @@ def persist_edi_rejection(record: dict[str, Any]) -> None:
             },
         )
         session.commit()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:  # noqa: BLE001 -- any storage failure must become EdiRejectionAuditUnavailable
         if session is not None:
             try:
                 session.rollback()
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001 -- cleanup must not mask the original error
                 logger.debug("edi_rejection_audit_rollback_failed")
         logger.error(
             "edi_rejection_audit_failed rejection_id=%s tenant=%s error_type=%s",
@@ -78,5 +78,5 @@ def persist_edi_rejection(record: dict[str, Any]) -> None:
         if session is not None:
             try:
                 session.close()
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001 -- cleanup must not mask the original error
                 logger.debug("edi_rejection_audit_close_failed")
