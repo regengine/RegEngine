@@ -79,3 +79,84 @@ def test_v111_column_grants_are_guarded_for_fresh_upgrade() -> None:
     guarded = f"IF to_regclass('public.data_gap_events') IS NOT NULL THEN\n        EXECUTE '{grant}';"
     assert guarded in sql
     assert f"\n{grant}" not in sql
+
+
+def test_downgrade_restores_v135_gap_privileges(monkeypatch) -> None:
+    spec = importlib.util.spec_from_file_location("v142_downgrade", V142)
+    assert spec is not None and spec.loader is not None
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    statements = []
+    monkeypatch.setattr(migration.op, "execute", statements.append)
+
+    migration.downgrade()
+
+    sql = "\n".join(statements)
+    assert "GRANT SELECT, INSERT, UPDATE ON TABLE public.data_gap_events TO regengine;" in sql
+    assert "GRANT SELECT ON TABLE public.data_gap_events TO regengine_sysadmin;" in sql
+    assert "REVOKE SELECT ON TABLE public.data_gap_events" not in sql
+    assert "REVOKE SELECT (tenant_id, tlc_code, facility_id) ON TABLE public.supplier_traceability_lots FROM regengine;" in sql
+
+
+def test_upgrade_downgrade_restores_privileges_on_postgres(monkeypatch) -> None:
+    """Exercise actual DDL and effective privileges on a disposable database."""
+    from uuid import uuid4
+
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+    from sqlalchemy import text
+
+    from tests.migrations.scratch_db import scratch_database_engine
+
+    spec = importlib.util.spec_from_file_location("v142_live", V142)
+    assert spec is not None and spec.loader is not None
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+
+    with scratch_database_engine(f"v142_rollback_{uuid4().hex[:12]}") as engine:
+        with engine.begin() as conn:
+            conn.exec_driver_sql("""
+                DO $$ BEGIN
+                    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'regengine') THEN
+                        CREATE ROLE regengine;
+                    END IF;
+                    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'regengine_sysadmin') THEN
+                        CREATE ROLE regengine_sysadmin;
+                    END IF;
+                END $$;
+                CREATE TABLE public.data_gap_events (
+                    id integer, gap_key text, closed_at timestamptz,
+                    closing_record_id uuid, closing_record_hash text
+                );
+                CREATE TABLE public.supplier_traceability_lots (
+                    tenant_id uuid, tlc_code text, facility_id uuid, product_description text
+                );
+                GRANT SELECT, INSERT, UPDATE ON public.data_gap_events TO regengine;
+                GRANT SELECT ON public.data_gap_events TO regengine_sysadmin;
+            """)
+            monkeypatch.setattr(migration, "op", Operations(MigrationContext.configure(conn)))
+
+            def privileges():
+                return tuple(conn.execute(text("""
+                    SELECT
+                        has_table_privilege('regengine', 'public.data_gap_events', 'SELECT'),
+                        has_table_privilege('regengine', 'public.data_gap_events', 'INSERT'),
+                        has_table_privilege('regengine', 'public.data_gap_events', 'UPDATE'),
+                        has_column_privilege('regengine', 'public.data_gap_events', 'closed_at', 'UPDATE'),
+                        has_column_privilege('regengine', 'public.data_gap_events', 'gap_key', 'UPDATE'),
+                        has_table_privilege('regengine_sysadmin', 'public.data_gap_events', 'SELECT'),
+                        has_column_privilege('regengine', 'public.supplier_traceability_lots', 'tlc_code', 'SELECT'),
+                        has_column_privilege('regengine', 'public.supplier_traceability_lots', 'product_description', 'SELECT'),
+                        has_table_privilege('regengine', 'public.data_gap_events', 'DELETE')
+                """)).one())
+
+            before = privileges()
+            assert before == (True, True, True, True, True, True, False, False, False)
+            migration.upgrade()
+            assert privileges() == (True, True, False, True, False, True, True, False, False)
+            migration.downgrade()
+            assert privileges() == before
+            # A second cycle catches leftover column privileges on rollback.
+            migration.upgrade()
+            migration.downgrade()
+            assert privileges() == before
