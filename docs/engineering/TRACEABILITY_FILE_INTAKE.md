@@ -299,6 +299,13 @@ assigned id and the GLN stays empty.
 
 ### Interchange rules
 
+- ISA13 dedup is per tenant, sender and receiver. While the first attempt
+  is running, a retransmission gets HTTP 503 with `Retry-After`: nothing is
+  confirmed stored yet, so send it again. Once events are stored, a
+  retransmission gets HTTP 409 `duplicate_interchange`. That includes a
+  partly accepted interchange, for which rejected lines need a new ISA13.
+  A request with an `Idempotency-Key` header can get that layer's own 409
+  `idempotency_request_in_progress` first.
 - One functional group, one transaction-set type. A mix is HTTP 422
   `mixed_transaction_sets`.
 - GE01 must match the number of ST/SE sets. A mismatch ingests nothing.
