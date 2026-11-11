@@ -23,6 +23,32 @@ class _WarehouseLineRequiredKDEs(BaseModel):
     quantity: float = Field(gt=0)
 
 
+def _warehouse_line_tlc(lot: str, line: dict[str, Any]) -> str:
+    """The TLC stored for a warehouse line with a non-blank lot.
+
+    A lot that isn't production-shaped gets the line's GTIN or UPC as a prefix,
+    so one short lot on two items is two TLCs.
+    """
+    from shared.schemas import _TLC_PRODUCTION_RE, FSMAEvent
+
+    tlc = lot
+    # Pattern misses are advisory, so check explicitly to retain the
+    # warehouse GTIN/UPC rebuild for both accepted and short lots.
+    try:
+        tlc = FSMAEvent.validate_tlc_format(tlc)
+        rebuild = not _TLC_PRODUCTION_RE.fullmatch(tlc)
+    except ValueError:
+        rebuild = True
+    if rebuild:
+        for item_id, lengths in (
+            (line.get("gtin"), (8, 12, 13, 14)),
+            (line.get("upc"), (12, 13)),
+        ):
+            if isinstance(item_id, str) and item_id.isascii() and item_id.isdigit() and len(item_id) in lengths:
+                return f"{item_id.zfill(14)}-{tlc}"
+    return tlc
+
+
 def _validate_edi_as_fsma_event(
     extracted: dict[str, Any],
     transaction_set: str,
@@ -39,7 +65,7 @@ def _validate_edi_as_fsma_event(
     forced every caller to treat ``None`` as "maybe-failed, maybe-
     unavailable" and masked schema errors in the audit trail.
     """
-    from shared.schemas import _TLC_PRODUCTION_RE, FSMAEvent, FSMAEventType
+    from shared.schemas import FSMAEvent, FSMAEventType
 
     type_map = {
         "856": FSMAEventType.SHIPPING,
@@ -62,21 +88,7 @@ def _validate_edi_as_fsma_event(
         # TLC that FSMAEvent would accept, collapsing blank lots onto one id.
         if not tlc:
             _WarehouseLineRequiredKDEs(lot_number=tlc, quantity=line.quantity)
-        # Pattern misses are advisory, so check explicitly to retain the
-        # warehouse GTIN/UPC rebuild for both accepted and short lots.
-        try:
-            tlc = FSMAEvent.validate_tlc_format(tlc)
-            rebuild = not _TLC_PRODUCTION_RE.fullmatch(tlc)
-        except ValueError:
-            rebuild = True
-        if rebuild:
-            for item_id, lengths in (
-                (extracted.get("gtin"), (8, 12, 13, 14)),
-                (extracted.get("upc"), (12, 13)),
-            ):
-                if isinstance(item_id, str) and item_id.isascii() and item_id.isdigit() and len(item_id) in lengths:
-                    tlc = f"{item_id.zfill(14)}-{tlc}"
-                    break
+        tlc = _warehouse_line_tlc(tlc, extracted)
     elif transaction_set in ("856", "861"):
         # The line lot is the TLC verbatim. Do not prefix a GTIN (#1104).
         # A line with no lot keeps the caller-supplied form field.

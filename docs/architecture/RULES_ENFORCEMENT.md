@@ -30,6 +30,8 @@ Set via `RULES_ENGINE_ENFORCE` (read at call time, no restart needed — flip + 
 | `cte_only` | Reject when `summary.critical_failures` is non-empty. Warnings/info still accept. |
 | `all` | Reject on any `summary.compliant is False` (including warning-only failures). |
 
+`ingest_events` passes `deferred_kdes` for EDI shipments stored with an open data gap. Under `all`, a warning that fails only on those KDEs does not reject. The verdict stays `fail`, and any other failure on the event still rejects.
+
 Two invariants hold in every mode:
 
 1. **No-verdict never rejects.** When `summary.compliant is None` (no rules seeded for the tenant, non-FTL product, evaluator skipped), the event accepts — "we didn't evaluate" is not the same as "the event violates a rule."
