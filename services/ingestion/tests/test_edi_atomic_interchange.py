@@ -47,14 +47,17 @@ class _Savepoint:
 
 
 class _Session:
-    def __init__(self, journal: list[Any]) -> None:
-        self.journal = journal
+    def __init__(self, state: dict[str, Any]) -> None:
+        self.state = state
+        self.journal = state["journal"]
 
     def begin_nested(self) -> _Savepoint:
         return _Savepoint(self.journal)
 
     def commit(self) -> None:
-        return None
+        if self.state["fail_commit"]:
+            raise RuntimeError("synthetic outer commit failure")
+        self.state["committed"] = True
 
     def rollback(self) -> None:
         self.journal.clear()
@@ -87,7 +90,14 @@ class _Canonical:
 
 @pytest.fixture()
 def harness(monkeypatch: pytest.MonkeyPatch) -> Iterator[dict[str, Any]]:
-    state: dict[str, Any] = {"journal": [], "fail_on": None, "published": []}
+    state: dict[str, Any] = {
+        "journal": [],
+        "fail_on": None,
+        "published": [],
+        "publication_commits": [],
+        "committed": False,
+        "fail_commit": False,
+    }
     journal = state["journal"]
 
     class _Persistence:
@@ -116,17 +126,17 @@ def harness(monkeypatch: pytest.MonkeyPatch) -> Iterator[dict[str, Any]]:
             return None
 
     def _session() -> Iterator[_Session]:
-        yield _Session(journal)
+        yield _Session(state)
+
+    def _publish(event_id: str, event: IngestEvent, tenant_id: str) -> None:
+        state["publication_commits"].append(state["committed"])
+        state["published"].append(event_id)
 
     monkeypatch.setattr(webhook_compat, "_check_rate_limit", lambda tenant_id: None)
     monkeypatch.setattr(webhook_compat, "_verify_api_key_sync", lambda **kwargs: None)
     monkeypatch.setattr(webhook_compat, "_get_db_session", _session)
     monkeypatch.setattr(webhook_compat, "record_outcomes", lambda *args: None)
-    monkeypatch.setattr(
-        webhook_compat,
-        "_publish_graph_sync",
-        lambda event_id, event, tenant_id: state["published"].append(event_id),
-    )
+    monkeypatch.setattr(webhook_compat, "_publish_graph_sync", _publish)
     monkeypatch.setattr(cte_persistence, "CTEPersistence", _Persistence)
     monkeypatch.setattr(canonical_event, "normalize_webhook_event", lambda *a, **k: _Canonical())
     monkeypatch.setattr(canonical_persistence, "CanonicalEventStore", _CanonicalStore)
@@ -183,6 +193,19 @@ async def test_a_clean_batch_stores_every_event_and_syncs_after_commit(harness: 
     assert (result.accepted, result.rejected) == (2, 0)
     assert sum(1 for kind, _ in harness["journal"] if kind == "cte") == 2
     assert harness["published"] == [event.event_id for event in result.events]
+    assert harness["publication_commits"] == [True, True]
+
+
+@pytest.mark.asyncio
+async def test_failed_outer_commit_does_not_publish_the_batch(harness: dict[str, Any]) -> None:
+    harness["fail_commit"] = True
+
+    with pytest.raises(RuntimeError, match="synthetic outer commit failure"):
+        await _ingest(all_or_nothing=True)
+
+    assert harness["committed"] is False
+    assert harness["journal"] == []
+    assert harness["published"] == []
 
 
 @pytest.mark.asyncio
