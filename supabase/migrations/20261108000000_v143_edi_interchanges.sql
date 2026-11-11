@@ -1,4 +1,6 @@
--- Mirrors Alembic c4a9d2e761b0. Apply before deploying the EDI receipt writer.
+-- alembic-revision: c4a9d2e761b0
+-- rendered-from: alembic/versions/20261108_c4a9d2e761b0_v143_edi_interchanges.py (upgrade)
+-- Apply before deploying the EDI receipt writer.
 
 CREATE TABLE IF NOT EXISTS fsma.edi_interchanges (
     tenant_id uuid NOT NULL,
