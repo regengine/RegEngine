@@ -209,6 +209,39 @@ async def test_ingest_events_rejects_portal_principal_without_ingest_scope() -> 
         await wc.ingest_events(payload, principal_tenant_id=_PORTAL_TENANT, principal=principal)
 
 
+_OTHER_TENANT = "22222222-2222-2222-2222-222222222222"
+
+
+@pytest.mark.asyncio
+async def test_ingest_events_rejects_portal_principal_for_another_tenant() -> None:
+    """A portal principal for tenant A must not ingest as tenant B."""
+    from app import webhook_compat as wc
+    from app.authz import IngestionPrincipal
+    from app.webhook_models import WebhookPayload
+
+    principal = IngestionPrincipal(
+        key_id="supplier-portal", scopes=["webhooks.ingest"], tenant_id=_OTHER_TENANT, auth_mode="portal_link"
+    )
+    payload = WebhookPayload.model_construct(source="supplier_portal", events=[], tenant_id=_PORTAL_TENANT)
+    with pytest.raises(PermissionError, match="principal tenant does not match"):
+        await wc.ingest_events(payload, principal_tenant_id=_PORTAL_TENANT, principal=principal)
+
+
+@pytest.mark.asyncio
+async def test_ingest_events_rejects_portal_payload_for_another_tenant() -> None:
+    """A payload naming tenant B must not ride a portal principal for tenant A."""
+    from app import webhook_compat as wc
+    from app.authz import IngestionPrincipal
+    from app.webhook_models import WebhookPayload
+
+    principal = IngestionPrincipal(
+        key_id="supplier-portal", scopes=["webhooks.ingest"], tenant_id=_PORTAL_TENANT, auth_mode="portal_link"
+    )
+    payload = WebhookPayload.model_construct(source="supplier_portal", events=[], tenant_id=_OTHER_TENANT)
+    with pytest.raises(PermissionError, match="payload.tenant_id does not match"):
+        await wc.ingest_events(payload, principal_tenant_id=_PORTAL_TENANT, principal=principal)
+
+
 @pytest.mark.asyncio
 async def test_ingest_events_still_requires_key_for_other_keyless_callers() -> None:
     """Only named pre-authorized modes skip the key gate; nothing else does."""

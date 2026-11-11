@@ -13,6 +13,8 @@
  *   3. Middleware verifies: HMAC(headerValue, secret) === re_csrf_sig cookie
  */
 
+import { SUPPLIER_PORTAL_MUTATION_PATTERN } from './supplier-portal-paths';
+
 // ---------------------------------------------------------------------------
 // Server-side helpers (used in route handlers and middleware)
 // ---------------------------------------------------------------------------
@@ -165,13 +167,6 @@ export type CsrfExemptionRule = Readonly<{
     path: string;
     match: 'exact' | 'segment-prefix' | 'regex';
 }>;
-
-/**
- * POST /api/ingestion/api/v1/portal/{link token}/(preflight|submit).
- * Link tokens are secrets.token_urlsafe(16): 22 URL-safe characters. The
- * length floor keeps the literal segment "links" (link management) out.
- */
-const SUPPLIER_PORTAL_MUTATION_PATTERN = '^/api/ingestion/api/v1/portal/[A-Za-z0-9_-]{16,128}/(?:preflight|submit)$';
 
 /**
  * Reviewed route-and-method exemptions. A mutation is exempt only when both

@@ -16,7 +16,7 @@ import { Input, fieldControlClasses } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getServiceURL } from '@/lib/api-config';
 import { requestPublicJson as requestJson } from '@/lib/api-client';
-import { localDateInputValue } from '@/lib/local-date';
+import { latestShipDateInputValue, localDayIsAheadOfUtc } from '@/lib/local-date';
 import { publicRequestErrorMessage, requestErrorStatus } from '@/lib/public-request-error';
 import { cn } from '@/lib/utils';
 
@@ -89,7 +89,7 @@ export default function PortalSubmissionPage() {
     const [productDescription, setProductDescription] = useState('');
     const [quantity, setQuantity] = useState('');
     const [unitOfMeasure, setUnitOfMeasure] = useState('cases');
-    const [shipDate, setShipDate] = useState(() => localDateInputValue());
+    const [shipDate, setShipDate] = useState(() => latestShipDateInputValue());
     const [shipFromLocation, setShipFromLocation] = useState('');
     const [shipFromGln, setShipFromGln] = useState('');
     const [shipToLocation, setShipToLocation] = useState('');
@@ -221,7 +221,7 @@ export default function PortalSubmissionPage() {
         setResult(null);
         setTlc('');
         // A tab left open overnight must not keep yesterday as the default.
-        setShipDate(localDateInputValue());
+        setShipDate(latestShipDateInputValue());
         setProductDescription('');
         setQuantity('');
         setCarrierName('');
@@ -452,12 +452,21 @@ export default function PortalSubmissionPage() {
                                 </select>
                             </Field>
 
-                            <Field label="Ship Date" htmlFor="portal-ship-date" required>
+                            <Field
+                                label="Ship Date"
+                                htmlFor="portal-ship-date"
+                                required
+                                hint={
+                                    localDayIsAheadOfUtc()
+                                        ? "Records are dated in UTC. Today's date becomes available once the UTC day starts."
+                                        : undefined
+                                }
+                            >
                                 <Input
                                     type="date"
                                     size="lg"
                                     value={shipDate}
-                                    max={localDateInputValue()}
+                                    max={latestShipDateInputValue()}
                                     onChange={(e) => setShipDate(e.target.value)}
                                 />
                             </Field>
