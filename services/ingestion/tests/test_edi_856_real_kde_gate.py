@@ -828,3 +828,33 @@ def test_quantity_override_repairs_a_blank_line_quantity(
     assert response.status_code == 201, response.text
     assert response.json()["ingestion_result"]["accepted"] == 1
     assert stored[0]["quantity"] == 150
+
+
+def test_each_856_set_is_judged_by_its_own_segments(client: TestClient, stored: list[dict[str, Any]]) -> None:
+    """A zero quantity in the first set is reported as such, whatever the last set holds."""
+
+    def _set(control: str, sn1: str) -> list[str]:
+        body = [
+            f"ST*856*{control}",
+            "BSN*00*ASN-12345*20260310*1200",
+            "HL*1**S",
+            "N1*SF*Valley Fresh Farms*92*6141410000014",
+            "N1*ST*Metro Distribution Center*92*6141410000069",
+            "LIN**SK*ROMAINE-12CT",
+            sn1,
+            "REF*BM*BOL-9001",
+        ]
+        return [*body, f"SE*{len(body) + 1}*{control}"]
+
+    raw = (
+        "ISA*00*          *00*          *ZZ*SENDERID       *ZZ*RECEIVERID     "
+        "*260310*1200*U*00401*000000001*0*P*>~GS*SH*SENDERID*RECEIVERID*20260310*1200*1*X*004010~"
+        + "~".join([*_set("0001", "SN1**0*CA"), *_set("0002", "SN1***CA")])
+        + "~GE*2*1~IEA*1*000000001~"
+    ).encode()
+
+    response = _post(client, "/document", raw, tlc_source_reference=TLC_SOURCE)
+
+    assert response.status_code == 422, response.text
+    assert response.json()["detail"]["error"] == "edi_non_positive_quantity"
+    assert stored == []

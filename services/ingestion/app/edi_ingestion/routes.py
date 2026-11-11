@@ -1182,10 +1182,7 @@ def _nonblank_quantity_value_present(transaction_set: str, segments: list[list[s
         return False
     index = _QUANTITY_ELEMENT_INDEX_BY_SET.get(transaction_set, 2)
     return any(
-        segment
-        and segment[0].upper() == wanted
-        and len(segment) > index
-        and bool(str(segment[index]).strip())
+        segment and segment[0].upper() == wanted and len(segment) > index and bool(str(segment[index]).strip())
         for segment in segments
     )
 
@@ -1604,7 +1601,7 @@ async def ingest_edi_document(
     # #1160 + #1165: validate and reserve the shared envelope once per
     # document, before validating any transaction set or warehouse line.
     def _preflight_all_sets() -> None:
-        for slice_set, slice_extracted in zip(slice_sets, extractions):
+        for slice_set, slice_extracted, set_segments in zip(slice_sets, extractions, set_slices):
             _preflight_event_date(
                 transaction_set=slice_set,
                 extracted=slice_extracted,
@@ -1616,7 +1613,7 @@ async def ingest_edi_document(
             if slice_set == "856":
                 _preflight_856_required_kdes(
                     extracted=slice_extracted,
-                    segments=slice_segments,
+                    segments=set_segments,
                     tlc_source_reference=tlc_source,
                     sender_tenant_id=sender_tenant_id,
                     traceability_lot_code=traceability_lot_code,
