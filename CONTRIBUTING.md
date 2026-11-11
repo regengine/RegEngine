@@ -2,7 +2,7 @@
 
 > **External contributions are not accepted at this time.** RegEngine is
 > proprietary, source-visible software (see [LICENSE](LICENSE)). The
-> repository is public for transparency and audit, not as an open-source
+> source is shared for transparency and audit under licence, not as an open-source
 > project — unsolicited pull requests from outside RegEngine LLC will be
 > closed without review, because merging third-party code without a
 > contributor agreement is an IP problem for a proprietary codebase.
@@ -40,7 +40,7 @@ pytest tests/ -v
 
 # Frontend
 cd frontend
-npm install
+npm ci
 npm run dev
 ```
 
@@ -107,7 +107,7 @@ in both resolves to the production version. CI fails if any lock is stale.
 ## PR Process
 
 1. Fill out the PR template completely
-2. Ensure CI passes — the blocking check is the "CI Status Gate" summary job (backend + frontend)
+2. Ensure applicable checks pass, including the separate "Backend CI Status Gate" and "Frontend CI Status Gate" summary jobs when triggered; see the workflow files for their path filters
 3. Request review from a maintainer
 4. Address feedback promptly
 

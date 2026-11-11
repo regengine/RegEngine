@@ -1,6 +1,6 @@
 # ADR-002: Migrate FastAPI BackgroundTasks to durable fsma.task_queue
 
-**Status:** Proposed
+**Status:** Proposed (historical; source paths and line numbers reflect the April 2026 proposal and must be revalidated)
 **Date:** 2026-04-18
 **Decision Makers:** Christopher Sellers (solo technical founder)
 **Supersedes:** (none)
@@ -16,13 +16,13 @@ RegEngine's ingestion service uses `fastapi.BackgroundTasks.add_task()` at 8 cal
 
 | Route | File:line | Task |
 |---|---|---|
-| `POST /v1/ingest/{name}` | [`services/ingestion/app/routes.py:320`](services/ingestion/app/routes.py:320) | `process_regulation_ingestion` — full document parse + NLP |
-| `POST /v1/ingest/federal-register` | [`routes_sources.py:36`](services/ingestion/app/routes_sources.py:36) | `_run_adapter_ingest` |
-| `POST /v1/ingest/ecfr` | [`routes_sources.py:63`](services/ingestion/app/routes_sources.py:63) | `_run_adapter_ingest` |
-| `POST /v1/ingest/fda` | [`routes_sources.py:89`](services/ingestion/app/routes_sources.py:89) | `_run_adapter_ingest` |
-| `POST /v1/ingest/cppa` | [`routes_scraping.py:51, 56`](services/ingestion/app/routes_scraping.py:51) | `run_state_scrape_job` / `run_generic_scrape_job` |
-| `POST /v1/ingest/all-regulations` | [`routes_scraping.py:99+`](services/ingestion/app/routes_scraping.py:99) | bulk sync (called nightly by scheduler) |
-| `POST /v1/discovery/approve` | [`routes_discovery.py:106, 151`](services/ingestion/app/routes_discovery.py:106) | `discovery.scrape` |
+| `POST /v1/ingest/{name}` | [`services/ingestion/app/routes.py:320`](../../../services/ingestion/app/routes.py) | `process_regulation_ingestion` — full document parse + NLP |
+| `POST /v1/ingest/federal-register` | [`routes_sources.py:36`](../../../services/ingestion/app/routes_sources.py) | `_run_adapter_ingest` |
+| `POST /v1/ingest/ecfr` | [`routes_sources.py:63`](../../../services/ingestion/app/routes_sources.py) | `_run_adapter_ingest` |
+| `POST /v1/ingest/fda` | [`routes_sources.py:89`](../../../services/ingestion/app/routes_sources.py) | `_run_adapter_ingest` |
+| `POST /v1/ingest/cppa` | [`routes_scraping.py:51, 56`](../../../services/ingestion/app/routes_scraping.py) | `run_state_scrape_job` / `run_generic_scrape_job` |
+| `POST /v1/ingest/all-regulations` | [`routes_scraping.py:99+`](../../../services/ingestion/app/routes_scraping.py) | bulk sync (called nightly by scheduler) |
+| `POST /v1/discovery/approve` | [`routes_discovery.py:106, 151`](../../../services/ingestion/app/routes_discovery.py) | `discovery.scrape` |
 
 ### Why this is a correctness problem, not just a performance one
 
@@ -33,9 +33,9 @@ RegEngine's ingestion service uses `fastapi.BackgroundTasks.add_task()` at 8 cal
 3. Background tasks count as in-flight. **Any task that exceeds the 30s grace window is killed.**
 4. On kill, the work is **lost**: no retry, no DLQ, no audit trail, no metric.
 
-The scheduler calls `/v1/ingest/all-regulations` nightly ([`ASYNC_PROCESSES.md:15`](ASYNC_PROCESSES.md:15)). That endpoint returns `202 Accepted` as soon as the task is scheduled — so the scheduler records "nightly sync succeeded" even if the monolith was restarting mid-sync. **Silent data gaps.**
+The scheduler calls `/v1/ingest/all-regulations` nightly ([`ASYNC_PROCESSES.md:15`](../../../ASYNC_PROCESSES.md)). That endpoint returns `202 Accepted` as soon as the task is scheduled — so the scheduler records "nightly sync succeeded" even if the monolith was restarting mid-sync. **Silent data gaps.**
 
-Worse: [`routes.py:318`](services/ingestion/app/routes.py:318) writes `status='queued'` to Redis *before* firing the background task. Callers polling that status get `queued` forever when the task dies before executing. No automation will ever transition the row to `failed`.
+Worse: [`routes.py:318`](../../../services/ingestion/app/routes.py) writes `status='queued'` to Redis *before* firing the background task. Callers polling that status get `queued` forever when the task dies before executing. No automation will ever transition the row to `failed`.
 
 ### Why this hasn't exploded yet
 
@@ -198,8 +198,8 @@ Proposed as 5 PRs. Each is independently revertible; later PRs depend on earlier
 ## References
 
 - [Issue #1267 — ingestion: FastAPI BackgroundTasks used for durable ingestion work — lost on deploy](https://github.com/PetrefiedThunder/RegEngine/issues/1267)
-- [V050 migration — `fsma.task_queue` table + pg_notify trigger](alembic/versions/20260329_task_queue_v050.py)
-- [`services/scheduler/main.py:571-631` — existing janitor that purges dead task_queue rows](services/scheduler/main.py:571)
+- [V050 migration — `fsma.task_queue` table + pg_notify trigger](../../../alembic/versions/20260329_task_queue_v050.py)
+- [`services/scheduler/main.py:571-631` — existing janitor that purges dead task_queue rows](../../../services/scheduler/main.py)
 - [PostgreSQL `SELECT ... FOR UPDATE SKIP LOCKED`](https://www.postgresql.org/docs/current/sql-select.html#SQL-FOR-UPDATE-SHARE)
 - [PostgreSQL `LISTEN / NOTIFY`](https://www.postgresql.org/docs/current/sql-notify.html)
-- [ADR-template.md](docs/architecture/decisions/ADR-template.md)
+- [ADR-template.md](ADR-template.md)

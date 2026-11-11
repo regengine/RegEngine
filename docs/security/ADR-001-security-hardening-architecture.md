@@ -262,7 +262,7 @@ Add `kid` (Key ID) header to JWTs and implement a key registry supporting multip
 - [OWASP CSRF Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html)
 - [RFC 7515 — JSON Web Signature (JWS)](https://datatracker.ietf.org/doc/html/rfc7515) — `kid` header parameter
 - [OWASP SQL Injection Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html)
-- Deploy Checklist: `docs/DEPLOY_CHECKLIST_SECURITY_HARDENING.md`
+- Deploy Checklist: `docs/archive/DEPLOY_CHECKLIST_SECURITY_HARDENING.md` (historical)
 - Backend Audit: `BACKEND_AUDIT_2026-03-20.md`
 - Frontend Audit: `FRONTEND_AUDIT_2026-03-20.md`
 - FSMA SLOs: `docs/nfr/fsma_slos.yaml`

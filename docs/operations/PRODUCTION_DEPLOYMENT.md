@@ -1,119 +1,71 @@
 # RegEngine Deployment Guide
 
-> Status: verified 2026-05-06. This guide reflects the checked-in consolidated deploy path. RegEngine is still in a pre-production hardening phase.
+This guide describes the **checked-in deployment configuration**, reviewed
+against the repository on 2026-11-04. It does not establish what version or
+configuration is currently running. Confirm deployment identity and settings
+with the hosting provider before acting.
 
-## Deployment Model
+## Deployment model
 
-RegEngine deploys as one consolidated FastAPI app behind a Next.js frontend.
+The root `Dockerfile` builds a consolidated FastAPI backend, `server.main:app`;
+the Next.js frontend is built separately. `railway.toml` selects that
+Dockerfile, probes `/readiness`, and configures restart on failure. These files
+are configuration in source, not evidence of a successful live deployment.
 
-Source-of-truth files:
+The container installs `requirements.lock`, copies application and migration
+files, runs `scripts/run-migrations.sh`, then starts Gunicorn/Uvicorn. The
+migration runner takes a PostgreSQL advisory lock, refuses to stamp an existing
+unversioned application schema, runs Alembic and the runtime-role cutover, and
+fails startup if these steps fail. The command removes
+`MIGRATIONS_DATABASE_URL` before starting Gunicorn.
 
-- `railway.toml`
-- `Dockerfile`
-- `server/main.py`
-- `scripts/run-migrations.sh`
+## Configuration and release checks
 
-The repository still contains service-shaped directories such as `services/ingestion` and `services/admin`, but the checked-in production target is the consolidated backend process started from `server.main:app`.
+- Follow [DATABASE_ROLE_CUTOVER.md](DATABASE_ROLE_CUTOVER.md) for the separate
+  tenant runtime, privileged runtime, and schema-owner database credentials.
+  Deployed migration runs require `MIGRATIONS_DATABASE_URL`; the local fallback
+  to `DATABASE_URL` is for scratch environments, not deployed databases.
+- Strict deployed authentication requires Redis and a valid
+  `MFA_ENCRYPTION_KEY`; PostgreSQL and Redis are readiness dependencies in that
+  mode. Do not regenerate an existing MFA key without a recovery plan for
+  ciphertext encrypted with the old key. Neo4j is optional for readiness and
+  depends on the enabled graph paths.
+- Production router exposure requires the exact allowlist in
+  `server/router_policy.py`. Consult `.env.example` and the target environment
+  for other required settings; names and secrets must be managed per
+  environment, never committed or pasted into release records.
+- For privileged frontend proxy routes, configure the same dedicated
+  `REGENGINE_PROXY_IP_HMAC_KEY` on the frontend and backend for each
+  environment. Keep it server-side and distinct across environments. Before
+  promotion, verify client attribution and rejection of spoofed, altered, or
+  stale attestations with synthetic requests; see `frontend/src/lib/proxy-ip-attestation.ts`
+  and `services/shared/proxy_ip_attestation.py`.
+- For Stripe tenant creation and system metrics, use separately scoped
+  credentials; see [SERVICE_ACCOUNTS.md](SERVICE_ACCOUNTS.md) and
+  `services/admin/app/system_routes.py`. Keep database and generic backend
+  credentials out of the frontend environment.
+- Verify the selected commit, backend and frontend CI, migration compatibility,
+  backup and rollback plan, and the intended environment before release. A
+  successful build or merge does not establish that the new image is serving.
+- Inspect `.github/workflows/deploy.yml` for the configured CI gate and deploy
+  triggers. Workflow enablement, hosting settings, and actual release state are
+  external to the checkout. [RELEASE_BRANCH_DEPLOYS.md](../runbooks/RELEASE_BRANCH_DEPLOYS.md)
+  records a proposed release model and the manual script; verify current
+  authorization and ownership before using either.
 
-## What The Deploy Actually Does
+## Verification
 
-The backend container:
+- Check `/health` for liveness and reported build identity, then `/readiness`
+  for dependency readiness. Compare `build.commit_sha` to the intended SHA;
+  an absent SHA does not identify the running version.
+- Review startup and migration logs without exposing secrets. Exercise the
+  authenticated tenant flow and the relevant ingest, persistence and export
+  path with authorized synthetic data. Record results and deployment IDs.
+- The frontend build command is `npm --prefix frontend run build`. A local image
+  can be built with `docker build -t regengine-backend .`; a successful build
+  alone is not a deployment or production readiness check.
 
-1. installs dependencies from the root `requirements.lock`
-2. copies the service directories, `kernel`, `plugins`, and `server`
-3. runs Alembic migrations through `scripts/run-migrations.sh`
-4. starts Gunicorn with Uvicorn workers for `server.main:app`
-
-Railway currently:
-
-- builds the repo-root `Dockerfile`
-- probes `/readiness`
-- restarts on failure
-
-## Required Runtime Dependencies
-
-- PostgreSQL via `DATABASE_URL`
-- Python settings and secrets needed by the mounted routers
-
-Optional but supported in code:
-
-- Redis for rate limiting, queue/session helpers, and related runtime paths
-- Neo4j integrations for graph-oriented modules
-
-Do not assume legacy event-broker, Terraform, or multi-service AWS infrastructure are part of the active checked-in deploy contract unless a separate environment explicitly adds them.
-
-## Pre-Deployment Checklist
-
-- Root migrations are current: `alembic upgrade head`
-- `requirements.lock` matches the intended Python dependency set
-- frontend and backend CI are green
-- environment variables match the routes you intend to expose
-- any experimental router exposure is deliberate
-- tenant/auth/rules settings are verified for the target environment
-
-## Build And Run
-
-### Build the backend image
-
-```bash
-docker build -t regengine-backend .
-```
-
-### Run the backend container
-
-```bash
-docker run --rm \
-  -e DATABASE_URL="$DATABASE_URL" \
-  -e PORT=8000 \
-  -p 8000:8000 \
-  regengine-backend
-```
-
-### Run the frontend separately
-
-```bash
-cd frontend
-npm install
-npm run build
-npm run start
-```
-
-## Health Checks
-
-- Backend readiness: `/readiness`
-- Backend app wiring: `server/main.py`
-- Frontend production build: `npm --prefix frontend run build`
-
-Validate at minimum:
-
-- backend starts cleanly after migrations
-- readiness responds successfully
-- auth/session flow works in the frontend
-- primary FSMA workflows reach the consolidated backend as expected
-
-## Operational Notes
-
-- `server/main.py` runs startup validation, including ORM/database type alignment for the admin ORM path.
-- Experimental routers can be auto-disabled in production unless explicitly enabled.
-- Legacy service entrypoints still exist for local debugging, but they are not the checked-in production deploy target.
-- The strongest production spine remains:
-
-```text
-ingest -> preflight -> persist evidence -> evaluate rules -> export
-```
-
-## What Not To Claim
-
-This deployment guide should not be used to claim:
-
-- six independent production backend services
-- launch maturity beyond the verified deployment posture
-- universal non-FSMA regulatory intelligence
-- infrastructure commitments that are not backed by the current CI, config, and hosting setup
-
-## Related Docs
-
-- `README.md`
-- `ARCHITECTURE.md`
-- `docs/engineering/ROUTER_SURFACE.md`
-- `docs/runbooks/RULES_ENGINE_ENFORCE_ROLLOUT.md`
+See [OPERATIONS.md](OPERATIONS.md) for local operations,
+[DISASTER_RECOVERY.md](DISASTER_RECOVERY.md) for recovery guidance, and
+[FSMA_RAILWAY_DEPLOYMENT.md](FSMA_RAILWAY_DEPLOYMENT.md) for historical
+multi-service context.

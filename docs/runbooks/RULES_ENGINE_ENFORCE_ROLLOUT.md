@@ -31,7 +31,7 @@ Affected paths (verified end-to-end by the Phase 0 test suite):
 
 | Endpoint | File | Rejection mechanism |
 |---|---|---|
-| ``POST /api/v1/webhooks/ingest`` (batch happy path) | ``services/ingestion/app/webhook_router_v2.py`` | Pre-eval partition removes rejected events from ``store_events_batch``; rejected events land in ``IngestResponse.events`` with ``status="rejected"`` |
+| ``POST /api/v1/webhooks/ingest`` (batch happy path) | ``services/ingestion/app/webhook_router_v2/routes.py`` | Pre-eval partition removes rejected events from ``store_events_batch``; rejected events land in ``IngestResponse.events`` with ``status="rejected"`` |
 | ``POST /api/v1/webhooks/ingest`` (per-event fallback) | same | Same pre-eval gate per-event |
 | EPCIS ingestion (single + atomic batch) | ``services/ingestion/app/epcis/persistence.py`` | Pre-eval gate raises ``HTTPException(422)``; caller's ``db_session.rollback()`` unwinds in-flight state. Atomic batch rolls back the whole batch (per ``#1156``) |
 | Internal webhook compat (``shared.auth.require_api_key`` callers) | ``services/ingestion/app/webhook_compat.py`` | Rules eval moved before the per-event savepoint commits; rejected events have their savepoint rolled back |
@@ -262,7 +262,7 @@ If broadening reveals issues, rollback gate criteria from §3.4 still apply glob
 |---|---|
 | ``services/shared/rules/enforcement.py`` | The flag reader + ``should_reject(summary)`` |
 | ``services/shared/rules/engine.py`` | ``RulesEngine.evaluate_event`` (pre-eval) + ``persist_summary`` (post-commit fast path) |
-| ``services/ingestion/app/webhook_router_v2.py`` | Webhook ingestion. ``_rules_preeval_reject`` returns ``(reject, reason, summary)``. ``_persist_canonical_and_eval`` is the threaded-block helper. |
+| ``services/ingestion/app/webhook_router_v2/rules_eval.py`` | Webhook ingestion. ``_rules_preeval_reject`` returns ``(reject, reason, summary)``. ``_persist_canonical_and_eval`` is the threaded-block helper. |
 | ``services/ingestion/app/epcis/persistence.py`` | EPCIS ingestion. Pre-eval at function-scope; threaded block uses pre-computed summary via default-kwarg capture. |
 | ``services/ingestion/app/webhook_compat.py`` | Internal webhook callers. Rules eval lives in the same per-event savepoint as primary CTE write. |
 | Tests pinning the contract | ``tests/shared/test_rules_enforcement.py``, ``tests/shared/test_rules_persist_summary.py``, ``services/ingestion/tests/test_webhook_router_v2_enforcement.py``, ``services/ingestion/tests/test_webhook_router_v2_canonical_helper.py``, ``services/ingestion/tests/test_webhook_compat_enforcement.py``, ``services/ingestion/tests/test_epcis_persistence_enforcement.py`` |

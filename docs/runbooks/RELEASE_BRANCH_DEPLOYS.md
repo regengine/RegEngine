@@ -5,14 +5,24 @@ Written 2026-10-28 from `.github/workflows/deploy.yml`, `railway.toml`,
 and `docs/operations/DISASTER_RECOVERY.md` section 7. Proposal only: no
 workflow, Railway setting, or branch rule changes with this file.
 
+**Status check:** The historical assertions about workflow disablement, Railway
+source settings, and deployment state below were not reverified on 2026-11-04.
+The checked-in `.github/workflows/deploy.yml` is manual-dispatch only, with a
+confirmation input and a backend CI gate. That file alone cannot establish
+whether the workflow is enabled, whether Railway has another deployment
+source, or which commit is serving. Verify those independently before a release.
+Parts of the proposal below refer to the earlier push-triggered workflow and
+must be re-evaluated against the current file before implementation.
+
 ## 1. Status
 
 Until 2026-10-28, production deployed on every backend-relevant push to
 `main`: `.github/workflows/deploy.yml` ("Deploy to Railway") ran on `push`
 to `main` for the backend path list, and on `workflow_dispatch`, waited for
 a green **Backend CI Status Gate** on that commit, then ran `railway up --ci`
-against the production Railway service. That workflow is now disabled and
-production deploys are manual; section 11 has the current process. Vercel
+against the production Railway service. The 2026-10-28 operational record
+says that workflow was disabled and production deploys were manual; section 11
+records that process. Vercel
 deploys the frontend separately.
 
 Nothing changes until the founder approves this model and a later pull
@@ -216,14 +226,15 @@ run the audit-chain integrity check (section 6).
 ## 10. Decision needed
 
 Approve or reject this model, and pick the cadence: on demand, or at most
-two or three times per weekday. Until then, production deploys by hand as
-section 11 describes.
+two or three times per weekday. Section 11 records the manual process described
+at the time; verify the current deploy owner and authorization before acting.
 
-## 11. Manual deploys today (in effect, not part of the proposal)
+## 11. Manual deploy procedure recorded 2026-10-28 (not part of the proposal)
 
-Since 2026-10-28 the Railway production service has no GitHub source and
-`deploy.yml` is disabled, so every production deploy is a hand-run
-`railway up` from a local checkout. A hand deploy must go through
+The 2026-10-28 record says the Railway production service had no GitHub source
+and `deploy.yml` was disabled. Verify both settings and the intended release
+process before acting; neither can be inferred from this file. The recorded
+procedure says a hand deploy must go through
 `scripts/railway/deploy_prod.sh`, never a bare `railway up`.
 
 Reason: the image has no `.git` (`.dockerignore` excludes it), so the only
