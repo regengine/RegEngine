@@ -8,6 +8,7 @@ import {
 } from '@/lib/proxy-factory';
 import { applyInflowWorkbenchReadCredentials } from '@/lib/inflow-workbench-proxy';
 import { acceptsWorkspaceSession } from '@/lib/ingestion-session-routes';
+import { isPublicSupplierPortalPath } from '@/lib/supplier-portal-paths';
 
 const DEFAULT_INGESTION_URL = 'http://localhost:8002';
 
@@ -57,8 +58,7 @@ const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = createStreamProxy({
     isUnauthenticatedPath: (path: string) => {
         if (path.startsWith('api/v1/sandbox/')) return true;
         if (path.startsWith('api/v1/proof/')) return true;
-        const portalMatch = path.match(/^api\/v1\/portal\/([^/]+)(?:\/(submit|preflight))?$/);
-        return Boolean(portalMatch && portalMatch[1] !== 'links');
+        return isPublicSupplierPortalPath(path);
     },
     prepareHeaders: (headers: Headers, request: NextRequest, path: string) => {
         // Session-capable routes use the verified session. Key-only routes

@@ -164,6 +164,7 @@ drifts from the tree):
 | `server/workers/task_processor.py` | 1126 | async worker | separate queue polling, dispatch, and retry policy |
 | `services/admin/app/metrics.py` | 1118 | admin observability | separate metric definitions from collectors/endpoints |
 | `services/admin/app/session_store.py` | 1047 | admin auth | split Redis and in-memory backends from session policy |
+| `services/ingestion/app/supplier_portal.py` | 1055 | supplier portal | split link management, preflight/submit handling, and the DB helpers into separate modules |
 | `services/ingestion/app/stripe_billing/routes.py` | 1029 | billing API | split plans/checkout, webhooks, portal/invoices, and metered-usage routes into separate modules |
 | `services/ingestion/app/fda_export/queries.py` | 1020 | export queries | split range, lot and trace queries from result shaping |
 | `services/ingestion/app/fda_export_service.py` | 1019 | export service | separate query assembly from writers |

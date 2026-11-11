@@ -1023,13 +1023,10 @@ jobs:
           # the gate comment must not claim they are asserted. Hash-chain
           # audit integrity is gated by
           # tests/security/test_audit_integrity.py in the offline step above.
-          # tests/qa_sweep_20261002/test_portal_export_disclosure.py is
-          # excluded below: BE-011 is still a strict xfail (the redacted FDA
-          # CSV still embeds the portal link token via leftover KDEs), so an
-          # expected failure there exits 0 and proves nothing. Keep it out
-          # of the blocking argv until the export stops embedding portal_id;
-          # when that is fixed, delete the xfail and drop this --ignore so a
-          # regression fails the job.
+          # tests/qa_sweep_20261002/test_portal_export_disclosure.py runs
+          # here as a live assertion: BE-011 is fixed (portal events carry a
+          # one-way portal_link_ref, not the link token), so a regression
+          # that puts the token back in an export fails the job.
           pytest tests/test_router_policy.py \
             tests/test_server_import_smoke.py \
             tests/test_request_workflow_unit.py \
@@ -1054,7 +1051,6 @@ jobs:
             tests/recall_reconstruction \
             tests/qa_sweep_20261002 \
             tests/contract/test_openapi_production_surface_2861.py \
-            --ignore=tests/qa_sweep_20261002/test_portal_export_disclosure.py \
             -v --no-cov -o "testpaths=tests"
 
       - name: RLS coverage + tenant-isolation e2e (alembic head)

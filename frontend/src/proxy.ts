@@ -7,6 +7,7 @@ import {
     CSRF_SIG_COOKIE,
     CSRF_PROTECTED_METHODS,
     isCsrfExempt,
+    isSameOriginOnlyMutation,
 } from '@/lib/csrf';
 import { buildCsp } from '@/lib/csp';
 import { isAuthenticatedAppRoute } from '@/lib/app-routes';
@@ -606,8 +607,9 @@ export async function proxy(request: NextRequest) {
             !request.headers.get('referer')
         );
 
-    // Public contact has no CSRF cookie, but must still pass the origin check.
-    const sameOriginRequired = csrfProtectedRequest || (pathname === '/api/contact' && request.method === 'POST');
+    // Public contact and the supplier portal have no CSRF cookie, but must
+    // still pass the origin check.
+    const sameOriginRequired = csrfProtectedRequest || isSameOriginOnlyMutation(pathname, request.method);
     if (sameOriginRequired) {
         const sourceUrl = request.headers.get('origin') || request.headers.get('referer');
         let sourceOrigin: string | null = null;

@@ -1181,8 +1181,8 @@ export function rawFetch(
 /**
  * Minimal JSON request without session headers. Sends `Content-Type:
  * application/json` only when a body is present, parses JSON when the body is
- * JSON and keeps text otherwise, and throws `{ status, data }` on a non-2xx
- * response. Moved verbatim from the supplier portal page (WI-11).
+ * JSON and keeps text otherwise, and throws `{ status, data, requestId }` on a
+ * non-2xx response. Moved verbatim from the supplier portal page (WI-11).
  */
 export async function requestPublicJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await rawFetch(url, {
@@ -1201,7 +1201,9 @@ export async function requestPublicJson<T>(url: string, init?: RequestInit): Pro
     }
   });
   if (!response.ok) {
-    throw { status: response.status, data };
+    // The BFF proxy replaces 5xx bodies and moves the upstream request id to
+    // this header; keep it so the page can give the person something to quote.
+    throw { status: response.status, data, requestId: response.headers.get('x-request-id') };
   }
   return data as T;
 }
