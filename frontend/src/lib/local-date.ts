@@ -38,3 +38,15 @@ export function latestShipDateInputValue(now: Date = new Date()): string {
 export function localDayIsAheadOfUtc(now: Date = new Date()): boolean {
     return localDateInputValue(now) > utcDateInputValue(now);
 }
+
+/**
+ * What the ship-date input starts as.
+ *
+ * Normally today. When the supplier's day is ahead of UTC, today cannot be
+ * submitted yet, and pre-filling the latest allowed date would be their
+ * yesterday: a supplier who ships today and does not look at the field would
+ * record the wrong ship date. So the field starts empty and they must choose.
+ */
+export function defaultShipDateInputValue(now: Date = new Date()): string {
+    return localDayIsAheadOfUtc(now) ? '' : latestShipDateInputValue(now);
+}

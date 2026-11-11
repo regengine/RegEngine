@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+    defaultShipDateInputValue,
     latestShipDateInputValue,
     localDateInputValue,
     localDayIsAheadOfUtc,
@@ -43,6 +44,15 @@ describe('latestShipDateInputValue', () => {
         const sydney = at('2026-11-10T22:00:00Z', 660); // 09:00 on the 11th
         expect(latestShipDateInputValue(sydney)).toBe('2026-11-10');
         expect(localDayIsAheadOfUtc(sydney)).toBe(true);
+    });
+
+    it('starts the field empty, never on yesterday, when the local day is ahead of UTC', () => {
+        const sydney = at('2026-11-10T22:00:00Z', 660);
+        expect(defaultShipDateInputValue(sydney)).toBe('');
+        const losAngeles = at('2026-11-11T02:00:00Z', -480);
+        expect(defaultShipDateInputValue(losAngeles)).toBe('2026-11-10');
+        const berlin = at('2026-11-10T12:00:00Z', 60);
+        expect(defaultShipDateInputValue(berlin)).toBe('2026-11-10');
     });
 
     it('is the shared day when local and UTC agree', () => {

@@ -16,7 +16,7 @@ import { Input, fieldControlClasses } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getServiceURL } from '@/lib/api-config';
 import { requestPublicJson as requestJson } from '@/lib/api-client';
-import { latestShipDateInputValue, localDayIsAheadOfUtc } from '@/lib/local-date';
+import { defaultShipDateInputValue, latestShipDateInputValue, localDayIsAheadOfUtc } from '@/lib/local-date';
 import { publicRequestErrorMessage, requestErrorStatus } from '@/lib/public-request-error';
 import { cn } from '@/lib/utils';
 
@@ -89,7 +89,7 @@ export default function PortalSubmissionPage() {
     const [productDescription, setProductDescription] = useState('');
     const [quantity, setQuantity] = useState('');
     const [unitOfMeasure, setUnitOfMeasure] = useState('cases');
-    const [shipDate, setShipDate] = useState(() => latestShipDateInputValue());
+    const [shipDate, setShipDate] = useState(() => defaultShipDateInputValue());
     const [shipFromLocation, setShipFromLocation] = useState('');
     const [shipFromGln, setShipFromGln] = useState('');
     const [shipToLocation, setShipToLocation] = useState('');
@@ -221,7 +221,7 @@ export default function PortalSubmissionPage() {
         setResult(null);
         setTlc('');
         // A tab left open overnight must not keep yesterday as the default.
-        setShipDate(latestShipDateInputValue());
+        setShipDate(defaultShipDateInputValue());
         setProductDescription('');
         setQuantity('');
         setCarrierName('');
@@ -458,7 +458,7 @@ export default function PortalSubmissionPage() {
                                 required
                                 hint={
                                     localDayIsAheadOfUtc()
-                                        ? "Records are dated in UTC. Today's date becomes available once the UTC day starts."
+                                        ? "Choose the actual ship date. Records are dated in UTC, so today's date becomes available once the UTC day starts."
                                         : undefined
                                 }
                             >
