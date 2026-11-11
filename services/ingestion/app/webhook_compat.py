@@ -229,6 +229,18 @@ def _close_ingestion_run(
     )
 
 
+def _undone_result(result: EventResult) -> EventResult:
+    """Report an accepted event whose batch was rolled back as not stored."""
+    if result.status != "accepted":
+        return result
+    return EventResult(
+        traceability_lot_code=result.traceability_lot_code,
+        cte_type=result.cte_type,
+        status="rejected",
+        errors=["Not stored: another event in this batch was rejected"],
+    )
+
+
 async def ingest_events(
     payload: WebhookPayload,
     *,
@@ -236,6 +248,7 @@ async def ingest_events(
     x_regengine_api_key: Optional[str] = None,
     principal: Optional[IngestionPrincipal] = None,
     source_file: Optional[SourceFileReceipt] = None,
+    all_or_nothing: bool = False,
 ) -> IngestResponse:
     """Internal ingestion helper — not an HTTP route.
 
@@ -255,6 +268,12 @@ async def ingest_events(
     row is processed, retains the file verbatim, stamps ``ingestion_run_id``
     on every canonical event, and closes the run with counts covering every
     row of the file. The run id is returned on the response.
+
+    ``all_or_nothing`` stores every event or none. Any rejected event undoes
+    the batch in both stores, and the response reports every event as rejected.
+    The ingestion run and its retained file are kept as the record of the
+    attempt. Graph sync waits for the commit, because a publish cannot be
+    recalled. Off by default: other callers keep per-event acceptance.
     """
     if not principal_tenant_id:
         raise PermissionError("ingest_events requires principal_tenant_id from authenticated context")
@@ -306,12 +325,15 @@ async def ingest_events(
     seen_in_batch: set[str] = set()
     # Data gap time to fix: written after the ingest commit, fail-open.
     gap_outcomes: list[ValidationOutcome] = []
+    pending_graph_sync: list[tuple[str, IngestEvent]] = []
 
     try:
         if source_file is not None:
             # The receipt is written first so a run exists even if every row
             # is rejected; the same transaction carries run, blob and events.
             run_id = _open_ingestion_run(db_session, tenant_id, payload.source, source_file)
+        # Opened after the receipt, so undoing the batch keeps the receipt.
+        batch_savepoint = db_session.begin_nested() if all_or_nothing else None
         for event_index, event in enumerate(payload.events):
             dedup_key = _batch_dedup_key(event)
             if dedup_key in seen_in_batch:
@@ -517,7 +539,10 @@ async def ingest_events(
                         closing_record_hash=store_result.sha256_hash,
                     )
                 )
-                _publish_graph_sync(store_result.event_id, event, tenant_id)
+                if all_or_nothing:
+                    pending_graph_sync.append((store_result.event_id, event))
+                else:
+                    _publish_graph_sync(store_result.event_id, event, tenant_id)
 
                 # Non-blocking failures → exception queue. Separate
                 # savepoint so an exception-queue write failure doesn't
@@ -555,6 +580,17 @@ async def ingest_events(
                 )
                 rejected += 1
 
+        if batch_savepoint is not None:
+            if rejected:
+                batch_savepoint.rollback()
+                pending_graph_sync.clear()
+                gap_outcomes = [outcome for outcome in gap_outcomes if outcome.closing_record_id is None]
+                results = [_undone_result(result) for result in results]
+                accepted = 0
+                rejected = len(results)
+            else:
+                batch_savepoint.commit()
+
         if run_id is not None and source_file is not None:
             _close_ingestion_run(
                 db_session,
@@ -569,6 +605,13 @@ async def ingest_events(
             db_session.commit()
         # After the commit so closes reference durable records; never raises.
         record_outcomes(db_session, tenant_id, gap_outcomes)
+        # The events are durable now. A graph outage must not fail the request,
+        # or the caller would release a claim on stored events.
+        for event_id, event in pending_graph_sync:
+            try:
+                _publish_graph_sync(event_id, event, tenant_id)
+            except Exception as exc:  # noqa: BLE001 -- graph failure must not undo a committed interchange
+                logger.warning("compat_graph_sync_failed event_id=%s error_type=%s", event_id, type(exc).__name__)
     except Exception:
         if db_session:
             db_session.rollback()

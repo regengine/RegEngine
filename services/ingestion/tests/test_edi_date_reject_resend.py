@@ -376,7 +376,7 @@ def test_one_tenants_failure_leaves_the_other_tenants_claim(client, store, inges
     assert replay.status_code == 409, replay.json()
 
 
-def _partial_ingest(payload, *, principal_tenant_id=None, x_regengine_api_key=None, source_file=None):
+def _partial_ingest(payload, *, principal_tenant_id=None, x_regengine_api_key=None, **_):
     """One event stored, one rejected: the shape a multi-event interchange can return."""
 
     async def _result():

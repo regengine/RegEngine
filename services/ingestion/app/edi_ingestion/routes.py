@@ -1138,6 +1138,7 @@ async def ingest_edi_856(
         principal_tenant_id=sender_tenant_id,
         x_regengine_api_key=x_regengine_api_key,
         source_file=_edi_source_receipt(file, raw_bytes, principal, len(events)),
+        all_or_nothing=True,
     )
 
     return EDIIngestResponse(
@@ -1968,6 +1969,7 @@ async def ingest_edi_document(
         principal_tenant_id=sender_tenant_id,
         x_regengine_api_key=x_regengine_api_key,
         source_file=_edi_source_receipt(file, raw_bytes, principal, len(events)),
+        all_or_nothing=True,
     )
 
     return EDIIngestResponse(
