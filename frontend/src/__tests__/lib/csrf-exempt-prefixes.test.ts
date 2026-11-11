@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { CSRF_EXEMPT_RULES, isCsrfExempt } from '@/lib/csrf';
+import { CSRF_EXEMPT_RULES, isCsrfExempt, isSameOriginOnlyMutation } from '@/lib/csrf';
 
 describe('reviewed CSRF route-and-method exemptions', () => {
     it('keeps the reviewed rule inventory explicit', () => {
@@ -59,5 +59,25 @@ describe('reviewed CSRF route-and-method exemptions', () => {
         expect(isCsrfExempt('/api/contact', 'POST')).toBe(true);
         expect(isCsrfExempt('/api/contact/x', 'POST')).toBe(false);
         expect(isCsrfExempt('/api/contact', 'GET')).toBe(false);
+    });
+
+    it('exempts only supplier portal preflight and submit, by link token', () => {
+        const token = 'LePrM3DfL9W39BD4cY31fQ';
+        expect(isCsrfExempt(`/api/ingestion/api/v1/portal/${token}/preflight`, 'POST')).toBe(true);
+        expect(isCsrfExempt(`/api/ingestion/api/v1/portal/${token}/submit`, 'POST')).toBe(true);
+        expect(isSameOriginOnlyMutation(`/api/ingestion/api/v1/portal/${token}/submit`, 'POST')).toBe(true);
+
+        // Link management stays CSRF-protected.
+        expect(isCsrfExempt('/api/ingestion/api/v1/portal/links', 'POST')).toBe(false);
+        expect(isCsrfExempt(`/api/ingestion/api/v1/portal/links/${token}/revoke`, 'PATCH')).toBe(false);
+        expect(isCsrfExempt('/api/ingestion/api/v1/portal/links/submit', 'POST')).toBe(false);
+        // Other methods, extra segments, traversal and look-alike prefixes do not match.
+        expect(isCsrfExempt(`/api/ingestion/api/v1/portal/${token}/submit`, 'PUT')).toBe(false);
+        expect(isCsrfExempt(`/api/ingestion/api/v1/portal/${token}/submit/extra`, 'POST')).toBe(false);
+        expect(isCsrfExempt(`/api/ingestion/api/v1/portal/${token}`, 'POST')).toBe(false);
+        expect(isCsrfExempt(`/api/ingestion/api/v1/portal/${token}/../../ingest/csv/submit`, 'POST')).toBe(false);
+        expect(isCsrfExempt(`/api/ingestion/api/v1/portalx/${token}/submit`, 'POST')).toBe(false);
+        expect(isCsrfExempt(`/api/admin/api/v1/portal/${token}/submit`, 'POST')).toBe(false);
+        expect(isSameOriginOnlyMutation('/api/session', 'POST')).toBe(false);
     });
 });

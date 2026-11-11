@@ -56,9 +56,21 @@ describe('requestPublicJson (supplier portal helper)', () => {
         expect(init.credentials).toBeUndefined();
     });
 
-    it('sends no Content-Type without a body and throws { status, data } on errors', async () => {
+    it('sends no Content-Type without a body and throws { status, data, requestId } on errors', async () => {
         fetchMock.mockResolvedValueOnce(jsonResponse({ detail: 'nope' }, { status: 403 }));
-        await expect(requestPublicJson('/api/portal/y')).rejects.toEqual({ status: 403, data: { detail: 'nope' } });
+        await expect(requestPublicJson('/api/portal/y')).rejects.toEqual({
+            status: 403,
+            data: { detail: 'nope' },
+            requestId: null,
+        });
+        // The BFF proxy carries the upstream request id in a header on 5xx.
+        fetchMock.mockResolvedValueOnce(
+            new Response(JSON.stringify({ error: 'Upstream service unavailable' }), {
+                status: 502,
+                headers: { 'Content-Type': 'application/json', 'x-request-id': 'req-42' },
+            }),
+        );
+        await expect(requestPublicJson('/api/portal/y')).rejects.toMatchObject({ status: 502, requestId: 'req-42' });
         const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
         expect(init.headers).toEqual({});
     });

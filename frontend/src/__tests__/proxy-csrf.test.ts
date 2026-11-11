@@ -137,4 +137,44 @@ describe('proxy CSRF gate', () => {
         expect(response.status).toBe(403);
         await expect(response.json()).resolves.toEqual({ error: 'Cross-origin mutation rejected' });
     });
+
+    it('lets a same-origin supplier portal submit through without CSRF cookies', async () => {
+        for (const step of ['preflight', 'submit']) {
+            const response = await proxy(
+                await makeMutation({
+                    pathname: `/api/ingestion/api/v1/portal/LePrM3DfL9W39BD4cY31fQ/${step}`,
+                    token: null,
+                    signature: null,
+                }),
+            );
+            const body = await response.clone().text();
+            expect(response.status, step).not.toBe(403);
+            expect(body).not.toContain('CSRF');
+        }
+    });
+
+    it('rejects a cross-origin supplier portal submit', async () => {
+        const response = await proxy(
+            await makeMutation({
+                origin: 'https://attacker.example',
+                pathname: '/api/ingestion/api/v1/portal/LePrM3DfL9W39BD4cY31fQ/submit',
+                token: null,
+                signature: null,
+            }),
+        );
+        expect(response.status).toBe(403);
+        await expect(response.json()).resolves.toEqual({ error: 'Cross-origin mutation rejected' });
+    });
+
+    it('keeps portal link management behind the CSRF token', async () => {
+        const response = await proxy(
+            await makeMutation({
+                pathname: '/api/ingestion/api/v1/portal/links',
+                token: null,
+                signature: null,
+            }),
+        );
+        expect(response.status).toBe(403);
+        await expect(response.json()).resolves.toEqual({ error: 'Missing CSRF token' });
+    });
 });

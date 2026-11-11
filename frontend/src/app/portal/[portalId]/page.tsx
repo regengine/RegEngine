@@ -16,6 +16,8 @@ import { Input, fieldControlClasses } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getServiceURL } from '@/lib/api-config';
 import { requestPublicJson as requestJson } from '@/lib/api-client';
+import { localDateInputValue } from '@/lib/local-date';
+import { publicRequestErrorMessage, requestErrorStatus } from '@/lib/public-request-error';
 import { cn } from '@/lib/utils';
 
 /* ------------------------------------------------------------------ */
@@ -67,17 +69,6 @@ interface SupplierPreflightResult {
     };
 }
 
-function getRequestErrorMessage(error: unknown, fallback: string): string {
-    if (error && typeof error === 'object' && 'data' in error) {
-        const data = (error as { data?: unknown }).data;
-        if (data && typeof data === 'object' && 'detail' in data) {
-            const detail = (data as { detail?: unknown }).detail;
-            if (typeof detail === 'string' && detail.trim()) return detail;
-        }
-    }
-    return fallback;
-}
-
 /* ------------------------------------------------------------------ */
 /*  Page                                                               */
 /* ------------------------------------------------------------------ */
@@ -90,13 +81,15 @@ export default function PortalSubmissionPage() {
     const [portal, setPortal] = useState<PortalDetails | null>(null);
     const [loadingPortal, setLoadingPortal] = useState(true);
     const [portalError, setPortalError] = useState<string | null>(null);
+    // True when the link itself is gone (404), false for a failure worth retrying.
+    const [portalGone, setPortalGone] = useState(true);
 
     // Form state
     const [tlc, setTlc] = useState('');
     const [productDescription, setProductDescription] = useState('');
     const [quantity, setQuantity] = useState('');
     const [unitOfMeasure, setUnitOfMeasure] = useState('cases');
-    const [shipDate, setShipDate] = useState(new Date().toISOString().split('T')[0]);
+    const [shipDate, setShipDate] = useState(() => localDateInputValue());
     const [shipFromLocation, setShipFromLocation] = useState('');
     const [shipFromGln, setShipFromGln] = useState('');
     const [shipToLocation, setShipToLocation] = useState('');
@@ -126,7 +119,16 @@ export default function PortalSubmissionPage() {
                 setPortalError(null);
             })
             .catch((err) => {
-                const msg = getRequestErrorMessage(err, 'This portal link is not found or has expired.');
+                // Only a 404 means the link is gone. An outage, a rate limit or
+                // a dropped connection must not tell the supplier it expired.
+                const gone = requestErrorStatus(err) === 404;
+                setPortalGone(gone);
+                const msg = gone
+                    ? 'This portal link is not found or has expired.'
+                    : publicRequestErrorMessage(
+                        err,
+                        'We could not load this portal right now. Check your connection and try again.',
+                    );
                 setPortalError(msg);
             })
             .finally(() => setLoadingPortal(false));
@@ -171,7 +173,7 @@ export default function PortalSubmissionPage() {
             setPreflight(data);
             return data;
         } catch (err: unknown) {
-            setSubmitError(getRequestErrorMessage(err, 'Preflight failed. Please try again.'));
+            setSubmitError(publicRequestErrorMessage(err, 'Preflight failed. Please try again.'));
             return null;
         } finally {
             setPreflighting(false);
@@ -188,8 +190,11 @@ export default function PortalSubmissionPage() {
 
         try {
             const preflightResult = await runPreflight();
-            if (!preflightResult || preflightResult.status !== 'ready') {
-                setSubmitError(preflightResult?.message || 'Preflight must pass before submission.');
+            // null means the preflight request itself failed; runPreflight has
+            // already shown why. Do not replace that with a generic line.
+            if (!preflightResult) return;
+            if (preflightResult.status !== 'ready') {
+                setSubmitError(preflightResult.message || 'Preflight must pass before submission.');
                 return;
             }
             const data = await requestJson<SubmissionResult>(
@@ -205,7 +210,7 @@ export default function PortalSubmissionPage() {
             }
             setResult(data);
         } catch (err: unknown) {
-            setSubmitError(getRequestErrorMessage(err, 'Submission failed. Please try again.'));
+            setSubmitError(publicRequestErrorMessage(err, 'Submission failed. Please try again.'));
         } finally {
             setSubmitting(false);
         }
@@ -215,6 +220,8 @@ export default function PortalSubmissionPage() {
     const handleSubmitAnother = () => {
         setResult(null);
         setTlc('');
+        // A tab left open overnight must not keep yesterday as the default.
+        setShipDate(localDateInputValue());
         setProductDescription('');
         setQuantity('');
         setCarrierName('');
@@ -245,12 +252,19 @@ export default function PortalSubmissionPage() {
     if (portalError || !portal) {
         return (
             <Container width="prose" className="py-10 sm:py-14">
-                <PageHeader title="Portal Link Unavailable" />
+                <PageHeader title={portalGone ? 'Portal Link Unavailable' : 'Portal Temporarily Unavailable'} />
                 <Callout tone="danger" role="alert">
                     {portalError || 'This portal link is not found or has expired.'}
                 </Callout>
+                {!portalGone && (
+                    <div className="mt-4">
+                        <Button type="button" variant="secondary" onClick={() => window.location.reload()}>
+                            Try again
+                        </Button>
+                    </div>
+                )}
                 <p className="mt-4 text-small text-re-text-tertiary">
-                    Contact your buyer for a new portal link, or{' '}
+                    {portalGone ? 'Contact your buyer for a new portal link, or' : 'If this keeps happening, contact your buyer, or'}{' '}
                     <Link href="/supplier-compliance" className="text-re-brand underline underline-offset-[3px] decoration-re-border-strong hover:decoration-re-brand">
                         learn about FSMA 204 compliance
                     </Link>.
@@ -443,6 +457,7 @@ export default function PortalSubmissionPage() {
                                     type="date"
                                     size="lg"
                                     value={shipDate}
+                                    max={localDateInputValue()}
                                     onChange={(e) => setShipDate(e.target.value)}
                                 />
                             </Field>

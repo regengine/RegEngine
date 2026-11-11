@@ -230,6 +230,17 @@ def _close_ingestion_run(
     )
 
 
+# Callers that authenticate by something other than an X-RegEngine-API-Key
+# header and hand ``ingest_events`` an explicit principal for the tenant they
+# verified. They skip the key-presence gate (there is no key to present) but
+# must still carry ``webhooks.ingest`` and pass the tenant cross-checks below.
+#   session      - workspace session cookie (routes_ingest / csv upload)
+#   portal_link  - supplier portal: the link token is the credential and the
+#                  link row binds it to exactly one tenant
+# Any other mode, and any call with no principal, still needs the header.
+_PREAUTHORIZED_AUTH_MODES = frozenset({"session", "portal_link"})
+
+
 async def ingest_events(
     payload: WebhookPayload,
     *,
@@ -262,9 +273,9 @@ async def ingest_events(
 
     if principal is not None and principal.tenant_id != principal_tenant_id:
         raise PermissionError("principal tenant does not match authenticated context")
-    if principal is not None and principal.auth_mode == "session":
+    if principal is not None and principal.auth_mode in _PREAUTHORIZED_AUTH_MODES:
         if not has_permission(principal.scopes, "webhooks.ingest"):
-            raise PermissionError("session lacks webhooks.ingest")
+            raise PermissionError(f"{principal.auth_mode} principal lacks webhooks.ingest")
     else:
         _verify_api_key_sync(x_regengine_api_key=x_regengine_api_key)
 
