@@ -13,18 +13,18 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import uuid4
 
-from sqlalchemy import text
-
 from shared.identity_resolution.constants import (
-    VALID_ENTITY_TYPES,
     VALID_ALIAS_TYPES,
+    VALID_ENTITY_TYPES,
 )
 from shared.identity_resolution.normalization import _normalize_identifier
+
 # #1233: PII masking helpers for log emission. Raw alias_value /
 # canonical_name must never reach the log sinks — log retention is
 # typically longer than DB retention and sinks are accessible to a
 # wider personnel surface (SRE, observability vendors).
 from shared.pii import mask_alias_value, mask_name
+from sqlalchemy import text
 
 logger = logging.getLogger("identity-resolution")
 

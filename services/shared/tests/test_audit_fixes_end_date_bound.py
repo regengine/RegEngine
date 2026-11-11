@@ -36,9 +36,8 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, Tuple
 
 import pytest
-from sqlalchemy import create_engine, text
-
 from services.shared.cte_persistence.queries import QueryPathMixin, _end_bound_utc
+from sqlalchemy import create_engine, text
 
 TENANT_ID = "8f14e45f-ceea-467a-9f43-1b0a5eaa1d0e"
 

@@ -140,7 +140,7 @@ def client(monkeypatch: pytest.MonkeyPatch, captured_payload: dict) -> TestClien
         auth_mode="test",
     )
 
-    async def _fake_ingest_events(payload, *, principal_tenant_id=None, x_regengine_api_key=None, **_kwargs):
+    async def _fake_ingest_events(payload, *, principal_tenant_id=None, x_regengine_api_key=None, **_):
         captured_payload["payload"] = payload
         return IngestResponse(
             accepted=len(payload.events),

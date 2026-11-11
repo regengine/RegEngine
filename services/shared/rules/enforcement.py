@@ -116,7 +116,7 @@ def _record_no_verdict_accept(mode: str) -> None:
     key = (tenant, mode)
     if key not in _no_verdict_warned:
         _no_verdict_warned.add(key)
-        import logging  # noqa: PLC0415
+        import logging  # noqa: PLC0415 -- lazy import, keeps module load light
 
         logging.getLogger(__name__).warning(
             "rules_no_verdict_accepted mode=%s tenant_id=%s — event accepted without any rule "
@@ -148,7 +148,7 @@ def current_mode() -> str:
     if raw not in _VALID_MODES:
         if raw not in _reported_invalid_modes:
             _reported_invalid_modes.add(raw)
-            import logging  # noqa: PLC0415
+            import logging  # noqa: PLC0415 -- lazy import, keeps module load light
 
             logging.getLogger(__name__).error(
                 "rules_enforce_invalid_value value=%r valid=%s — failing closed to 'all'",
@@ -241,7 +241,7 @@ def handle_preeval_exception(err: BaseException, *, where: str) -> None:
     Imports HTTPException lazily so this module stays usable from
     contexts (CLI, jobs, tests) where FastAPI may not be installed.
     """
-    import logging  # noqa: PLC0415
+    import logging  # noqa: PLC0415 -- lazy import, keeps module load light
 
     logger = logging.getLogger(__name__)
     mode = current_mode()
@@ -261,7 +261,7 @@ def handle_preeval_exception(err: BaseException, *, where: str) -> None:
         str(err),
     )
     try:
-        import sentry_sdk  # noqa: PLC0415
+        import sentry_sdk  # noqa: PLC0415 -- lazy import, keeps module load light
 
         sentry_sdk.capture_exception(err)
         sentry_sdk.capture_message(
@@ -274,10 +274,10 @@ def handle_preeval_exception(err: BaseException, *, where: str) -> None:
                 "enforcement_mode": mode,
             },
         )
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 -- fail-safe path: this operation must not propagate a failure
         logger.debug("sentry_capture_failed component=preeval")
 
-    from fastapi import HTTPException  # noqa: PLC0415
+    from fastapi import HTTPException  # noqa: PLC0415 -- lazy import, keeps module load light
 
     raise HTTPException(
         status_code=500,

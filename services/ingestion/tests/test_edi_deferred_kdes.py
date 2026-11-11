@@ -181,6 +181,25 @@ def test_incomplete_then_complete_in_a_batch_closes_the_gap(harness) -> None:
     assert [outcome.closing_record_id for outcome in harness.outcomes] == ["ev-1"]
 
 
+def test_rolled_back_batch_keeps_only_the_rejected_events_gaps(harness) -> None:
+    """An undone batch must not replay gaps for events it no longer stores."""
+    complete = _shipment(tlc_source_reference="PACK-0310")
+    deferred = _shipment().model_copy(update={"timestamp": "2026-03-10T13:00:00Z"})
+    invalid = _shipment(reference_document=None).model_copy(update={"timestamp": "2026-03-10T14:00:00Z"})
+
+    response = _ingest_batch(
+        [complete, deferred, invalid],
+        deferred_kdes=edi_routes._EDI_DEFERRED_KDES,
+        all_or_nothing=True,
+    )
+
+    assert (response.accepted, response.rejected) == (0, 3)
+    assert all(result.open_gaps == [] for result in response.events)
+    assert harness.stored == []
+    assert [outcome.order for outcome in harness.outcomes] == [2]
+    assert all(outcome.closing_record_id is None for outcome in harness.outcomes)
+
+
 def test_event_is_not_accepted_when_its_gap_cannot_be_written(harness) -> None:
     harness.gap_write_error = ProgrammingError("INSERT", {}, Exception("permission denied"))
 

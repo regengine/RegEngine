@@ -83,6 +83,8 @@ class LegacyPattern:
     code: str
     regex: re.Pattern[str]
     message: str
+    # Restrict the pattern to these file suffixes; None scans every text file.
+    suffixes: tuple[str, ...] | None = None
 
 
 @dataclass(frozen=True)
@@ -240,6 +242,24 @@ BANNED_PATTERNS = (
         re.compile(r"(^|[\s`'\"])(app/(?:epcis_ingestion|fda_export_router|sandbox_router)\.py)\b"),
         "Active docs/code should not point to deleted ingestion shim files.",
     ),
+    # WI-05 (2026-11-04): the Kafka backbone was retired; its modules live under
+    # docs/archive/retired-topology/kafka/ and the client library left the lock.
+    LegacyPattern(
+        "retired-kafka-client-import",
+        re.compile(r"\b(?:from|import)\s+confluent_kafka\b"),
+        "confluent-kafka was removed from requirements.lock with the Kafka backbone (WI-05); "
+        "use shared.task_queue / server/workers/task_processor.py.",
+        suffixes=(".py",),
+    ),
+    LegacyPattern(
+        "retired-kafka-module-import",
+        re.compile(
+            r"\b(?:from|import)\s+(?:services\.)?shared\.(?:kafka_auth|kafka_compat|kafka_consumer_base|"
+            r"event_backbone|dlq|observability\.(?:dlq_producer|kafka_propagation))\b"
+        ),
+        "The shared Kafka modules moved to docs/archive/retired-topology/kafka/ (WI-05).",
+        suffixes=(".py",),
+    ),
     LegacyPattern(
         "legacy-per-service-railway-host",
         re.compile(
@@ -251,6 +271,51 @@ BANNED_PATTERNS = (
         "(the one consolidated service) or an explicit *_SERVICE_URL env var.",
     ),
 )
+
+
+# WI-02 (2026-11-04): the six ``services/<svc>/app`` packages share one import
+# name. Production code must import them as ``services.<svc>.app.<module>``
+# (or relatively from inside the package); the bare ``from app.X`` form only
+# resolves through sys.path tricks and double-imports the module under test.
+BARE_APP_IMPORT = re.compile(r"^\s*(?:from\s+app(?:\.[\w.]*)?\s+import\b|import\s+app(?:\s*$|\s*,|\s+as\b|\s*#))")
+BARE_APP_IMPORT_ROOTS = ("services/",)
+
+
+def is_bare_app_import_candidate(relative: str) -> bool:
+    """Production Python under services/: not a test file, not a tests/ tree."""
+    if not relative.startswith(BARE_APP_IMPORT_ROOTS) or not relative.endswith(".py"):
+        return False
+    parts = relative.split("/")
+    if "tests" in parts or parts[-1].startswith("test_") or parts[-1] == "conftest.py":
+        return False
+    return True
+
+
+def check_bare_app_imports(files: Iterable[Path], root: Path) -> list[Finding]:
+    findings: list[Finding] = []
+    for path in files:
+        relative = relpath(path, root)
+        if should_skip(path, root) or not is_bare_app_import_candidate(relative):
+            continue
+        try:
+            lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
+        except OSError:
+            continue
+        service = relative.split("/")[1] if relative.count("/") >= 2 else "<svc>"
+        for line_number, line in enumerate(lines, start=1):
+            if BARE_APP_IMPORT.search(line):
+                findings.append(
+                    Finding(
+                        code="bare-app-import",
+                        path=relative,
+                        line=line_number,
+                        message=(
+                            f"Bare `app` import; use `services.{service}.app.<module>` or a relative import "
+                            "(docs/plans/TECH_DEBT_REMEDIATION_PRD_2026-10-28.md, WI-02)."
+                        ),
+                    )
+                )
+    return findings
 
 
 def parse_args() -> argparse.Namespace:
@@ -346,6 +411,8 @@ def check_patterns(files: Iterable[Path], root: Path) -> list[Finding]:
 
         for line_number, line in enumerate(lines, start=1):
             for pattern in BANNED_PATTERNS:
+                if pattern.suffixes is not None and path.suffix not in pattern.suffixes:
+                    continue
                 if pattern.regex.search(line):
                     findings.append(
                         Finding(
@@ -479,6 +546,7 @@ def main() -> int:
         files = git_files(root)
         findings.extend(check_banned_files(files, root))
         findings.extend(check_patterns(files, root))
+        findings.extend(check_bare_app_imports(files, root))
         findings.extend(check_manual_agent_sweep(root))
 
     if args.knip_json:

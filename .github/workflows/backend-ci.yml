@@ -21,6 +21,10 @@ on:
       - 'frontend/src/lib/public-openapi.ts'
       - 'frontend/package-lock.json'
       - 'alembic/**'
+      # The two non-Alembic schema channels, guarded by
+      # scripts/check_schema_channels.py in alembic-revision-check.
+      - 'supabase/migrations/**'
+      - 'sql/prod-apply/**'
       - 'server/**'
       - 'services/**'
       - 'shared/**'
@@ -30,6 +34,10 @@ on:
       - 'railway.toml'
       - 'requirements.in'
       - 'requirements.lock'
+      - 'requirements-dev.in'
+      - 'requirements-dev.lock'
+      - 'requirements-experimental.in'
+      - 'requirements-experimental.lock'
       - 'scripts/**'
       - 'tests/**'
       - 'docs/security/route-security-manifest.json'
@@ -43,6 +51,10 @@ on:
       - 'frontend/src/lib/public-openapi.ts'
       - 'frontend/package-lock.json'
       - 'alembic/**'
+      # The two non-Alembic schema channels, guarded by
+      # scripts/check_schema_channels.py in alembic-revision-check.
+      - 'supabase/migrations/**'
+      - 'sql/prod-apply/**'
       - 'server/**'
       - 'services/**'
       - 'shared/**'
@@ -52,6 +64,10 @@ on:
       - 'railway.toml'
       - 'requirements.in'
       - 'requirements.lock'
+      - 'requirements-dev.in'
+      - 'requirements-dev.lock'
+      - 'requirements-experimental.in'
+      - 'requirements-experimental.lock'
       - 'scripts/**'
       - 'tests/**'
       - 'docs/security/route-security-manifest.json'
@@ -99,6 +115,51 @@ jobs:
           CUSTOM_COMPILE_COMMAND="pip-compile --allow-unsafe --generate-hashes --output-file=requirements.lock requirements.in" \
             pip-compile --allow-unsafe --generate-hashes --output-file=requirements.lock requirements.in
           git diff --exit-code -- requirements.lock
+
+      # The dev and experimental locks are constrained by requirements.lock
+      # (`-c requirements.lock` in their .in files), so they are checked after
+      # it (WI-06).
+      - name: Verify requirements-dev.lock and requirements-experimental.lock freshness
+        run: |
+          for name in dev experimental; do
+            CUSTOM_COMPILE_COMMAND="pip-compile --allow-unsafe --generate-hashes --output-file=requirements-${name}.lock requirements-${name}.in" \
+              pip-compile --allow-unsafe --generate-hashes --output-file="requirements-${name}.lock" "requirements-${name}.in"
+          done
+          git diff --exit-code -- requirements-dev.lock requirements-experimental.lock
+
+  # ── Production-lock import check ─────────────────────────
+  # The image installs requirements.lock alone (Dockerfile). This job builds
+  # a clean virtualenv from that lock and imports the monolith with the
+  # experimental routers off, so a package that only requirements-dev.lock
+  # or requirements-experimental.lock carries cannot be an import-time
+  # dependency of production (WI-06, 2026-11-04). The database URLs are
+  # placeholders: engines are created lazily and nothing connects at import.
+  image-import-check:
+    name: Production lock imports server.main
+    needs: dependency-lock
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install the production lock only
+        run: |
+          python -m venv /tmp/prod-venv
+          /tmp/prod-venv/bin/pip install --require-hashes -r requirements.lock
+      - name: Import server.main with experimental routers unset
+        env:
+          REGENGINE_ENV: test
+          ADMIN_DATABASE_URL: postgresql+psycopg://placeholder:placeholder@localhost:5432/placeholder  # pragma: allowlist secret
+          DATABASE_URL: postgresql+psycopg://placeholder:placeholder@localhost:5432/placeholder  # pragma: allowlist secret
+          MIGRATIONS_DATABASE_URL: postgresql+psycopg://placeholder:placeholder@localhost:5432/placeholder  # pragma: allowlist secret
+          PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/services
+        run: |
+          unset ENABLE_EXPERIMENTAL_ROUTERS
+          /tmp/prod-venv/bin/python -c "import server.main; print('server.main imported from requirements.lock alone')"
+          /tmp/prod-venv/bin/python -c "import importlib.util, sys; missing = [m for m in ('pytest', 'hypothesis', 'testcontainers', 'aiosqlite', 'pyzbar') if importlib.util.find_spec(m)]; sys.exit('dev/experimental package present in the production venv: %s' % missing if missing else 0)"
 
   # ── Test Matrix ──────────────────────────────────────────
   test:
@@ -178,11 +239,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
 
-      - name: Setup Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
       - name: Create additional databases
         env:
           PGPASSWORD: postgres
@@ -190,25 +246,10 @@ jobs:
           psql -h localhost -U postgres -c "CREATE DATABASE regengine_admin;"
           psql -h localhost -U postgres -c "CREATE DATABASE test_db;"
 
-      - name: Cache pip packages
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v5
+      - name: Set up Python with the requirement locks
+        uses: ./.github/actions/setup-python-locks
         with:
-          path: ~/.cache/pip
-          # Key off the root requirements.lock — the single source of truth.
-          # Per-service requirements.txt files are DEPRECATED (see #1429)
-          # and match root, so caching on root invalidates correctly.
-          key: pip-${{ hashFiles('requirements.lock') }}
-          restore-keys: |
-            pip-
-
-      - name: Install dependencies
-        run: |
-          # Install from the root requirements.lock (pip-compile output; see
-          # requirements.in for the human-edited top-level spec). --require-hashes
-          # guarantees reproducible builds and rejects CVE-shifted artifacts.
-          # Per-service stubs are DEPRECATED and will be removed with
-          # docker-compose (#1429).
-          pip install --require-hashes -r requirements.lock
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Run tests with coverage
         env:
@@ -326,10 +367,40 @@ jobs:
       - name: Run linting
         run: |
           pip install ruff==0.15.5
-          cd services/shared
-          ruff check . --select E9,F63,F7,F82 --line-length 120 \
-            --extend-exclude __pycache__,.venv,venv,build,dist \
-            --statistics
+          # services/shared carries the wider rule set in services/shared/ruff.toml
+          # (WI-03); the narrow E9,F63,F7,F82 gate stays for the other services.
+          ruff check services/shared --statistics
+
+  # ── mypy on services/shared (non-blocking report) ────────
+  # WI-03: a type report for the shared layer, uploaded as an artifact and
+  # never a merge gate (ci-status does not depend on it). Tighten per module
+  # through [tool.mypy] overrides before making it block.
+  mypy-shared:
+    name: mypy shared/ (report only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install the locks and mypy
+        run: |
+          pip install --require-hashes -r requirements.lock -r requirements-dev.lock
+          pip install mypy==1.19.1
+      - name: Run mypy over services/shared
+        run: |
+          mypy services/shared --config-file pyproject.toml --no-error-summary > mypy-shared-report.txt 2>&1 || true
+          echo "mypy findings: $(grep -c ': error:' mypy-shared-report.txt || true)"
+          tail -n 20 mypy-shared-report.txt
+      - name: Upload the report
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7
+        with:
+          name: mypy-shared-report
+          path: mypy-shared-report.txt
+          retention-days: 14
 
   # ── Lint repo roots (scripts/, cli/, server/, alembic/, …) ─
   # The per-service matrix + lint-shared only cover services/. Python
@@ -354,6 +425,15 @@ jobs:
           ruff check . --select E9,F63,F7,F82 --line-length 120 \
             --extend-exclude __pycache__,.venv,venv,build,dist,services \
             --statistics
+
+      # Every top-level entry in scripts/ has a row in scripts/README.md (WI-08).
+      - name: Guard the scripts/ registry
+        run: python scripts/check_scripts_registered.py
+
+      # Unexplained `# noqa` markers under services/ never exceed the committed
+      # baseline (WI-03). A suppression needs `-- <reason>`.
+      - name: Ratchet unexplained noqa markers
+        run: python scripts/check_noqa_ratchet.py
 
   # ── RLS fallback-UUID guard (hard gate) ──────────────────
   # Scans migrations for the fail-open RLS pattern that #1091 fixed.
@@ -424,6 +504,16 @@ jobs:
       # the allowlist must shrink monotonically — see #1864, #1872.
       - name: Guard against new orphan migrations
         run: python scripts/check_orphan_migrations.py
+
+      # ── Schema channel guard (hard gate) ──────────────────
+      # supabase/migrations/ and sql/prod-apply/ may hold rendered copies of
+      # Alembic revisions and nothing else. A file there must start with
+      # ``-- alembic-revision: <id>`` and ``-- rendered-from: ...`` headers
+      # naming an existing revision. Pre-decision files are grandfathered
+      # by name inside the script; the list only shrinks. See
+      # docs/decisions/2026-10-30-schema-change-channel.md.
+      - name: Guard the non-Alembic schema channels
+        run: python scripts/check_schema_channels.py
 
   # ── Dep version drift guard (hard gate) ─────────────────
   # Scans services/*/requirements*.txt to ensure no per-service file
@@ -505,11 +595,6 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
 
-      - name: Setup Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
       - name: Create test database
         env:
           PGPASSWORD: postgres
@@ -548,17 +633,10 @@ jobs:
           $fn$ LANGUAGE plpgsql STABLE;
           EOSQL
 
-      - name: Cache pip packages
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v5
+      - name: Set up Python with the requirement locks
+        uses: ./.github/actions/setup-python-locks
         with:
-          path: ~/.cache/pip
-          key: pip-${{ hashFiles('requirements.lock') }}
-          restore-keys: |
-            pip-
-
-      - name: Install dependencies
-        run: |
-          pip install --require-hashes -r requirements.lock
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Migrate remediation database to alembic head
         env:
@@ -795,21 +873,10 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
 
-      - name: Setup Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+      - name: Set up Python with the requirement locks
+        uses: ./.github/actions/setup-python-locks
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Cache pip packages
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v5
-        with:
-          path: ~/.cache/pip
-          key: pip-${{ hashFiles('requirements.lock') }}
-          restore-keys: |
-            pip-
-
-      - name: Install dependencies
-        run: pip install --require-hashes -r requirements.lock
 
       - name: Route-complete security manifest and disabled-router gate
         run: |
@@ -1190,21 +1257,10 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
 
-      - name: Setup Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+      - name: Set up Python with the requirement locks
+        uses: ./.github/actions/setup-python-locks
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Cache pip packages
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v5
-        with:
-          path: ~/.cache/pip
-          key: pip-${{ hashFiles('requirements.lock') }}
-          restore-keys: |
-            pip-
-
-      - name: Install dependencies
-        run: pip install --require-hashes -r requirements.lock
 
       - name: Create dedicated-owner rehearsal database
         env:
@@ -1235,7 +1291,7 @@ jobs:
         run: |
           repo_root="$(pwd)"
           export PYTHONPATH="${repo_root}:${repo_root}/services:${PYTHONPATH}"
-          pytest tests/migrations/test_seeded_mid_chain_upgrade.py \
+          pytest --require-db tests/migrations/test_seeded_mid_chain_upgrade.py \
             -v --no-cov -o "testpaths=tests"
 
   # ── Live-DB regression suite (tests/shared/*_live.py) ──
@@ -1276,21 +1332,10 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
 
-      - name: Setup Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+      - name: Set up Python with the requirement locks
+        uses: ./.github/actions/setup-python-locks
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Cache pip packages
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v5
-        with:
-          path: ~/.cache/pip
-          key: pip-${{ hashFiles('requirements.lock') }}
-          restore-keys: |
-            pip-
-
-      - name: Install dependencies
-        run: pip install --require-hashes -r requirements.lock
 
       - name: Create scratch database (dedicated migration + runtime roles)
         env:
@@ -1391,7 +1436,7 @@ jobs:
           set -o pipefail
           # The cutover lock-timeout test runs last: it drifts a grant, holds
           # a lock on public.api_keys, and restores both before it returns.
-          pytest tests/migrations/test_v111_runtime_role_grants.py \
+          pytest --require-db tests/migrations/test_v111_runtime_role_grants.py \
             tests/security/test_account_erasure_identity_isolation_pg.py \
             tests/migrations/test_runtime_role_cutover_lock_timeout.py \
             -v -rs --no-cov -o "testpaths=tests" | tee /tmp/v111-role-cutover.log
@@ -1407,7 +1452,7 @@ jobs:
           export PYTHONPATH="${PWD}:${PWD}/services:${PYTHONPATH}"
           # v126 runs its real upgrade/downgrade as this job's NOBYPASSRLS
           # schema owner over populated, FORCE-RLS tables, then rolls back.
-          pytest tests/migrations/test_rule_backfill_owner_rls.py \
+          pytest --require-db tests/migrations/test_rule_backfill_owner_rls.py \
             tests/migrations/test_v120_rule_citations.py \
             tests/migrations/test_v126_tenant_composite_run_fks.py \
             -v -rs --no-cov -o "testpaths=tests"
@@ -1423,7 +1468,7 @@ jobs:
           # Glob, not an explicit list: a future tests/shared/*_live.py is
           # included automatically instead of silently joining the gap this
           # job exists to close.
-          pytest tests/shared/test_*_live.py \
+          pytest --require-db tests/shared/test_*_live.py \
             -v -rs --no-cov -o "testpaths=tests" | tee /tmp/live-db-suite.log
           if grep -qE '[0-9]+ skipped' /tmp/live-db-suite.log; then
             echo "::error::live-DB tests skipped — this job exists so they always RUN (check the #2646 guard env contract)"
@@ -1441,7 +1486,7 @@ jobs:
         run: |
           export PYTHONPATH="${PWD}:${PWD}/services:${PYTHONPATH}"
           set -o pipefail
-          pytest tests/migrations/test_v104_no_deny_all_rls_tables.py \
+          pytest --require-db tests/migrations/test_v104_no_deny_all_rls_tables.py \
             tests/migrations/test_task_queue_tenantless_idempotency_2852.py \
             -v -rs --no-cov -o "testpaths=tests" | tee /tmp/rls-guard.log
           if grep -qE '[0-9]+ skipped' /tmp/rls-guard.log; then
@@ -1472,7 +1517,7 @@ jobs:
         run: |
           export PYTHONPATH="${PWD}:${PWD}/services:${PWD}/services/ingestion:${PYTHONPATH}"
           set -o pipefail
-          pytest tests/shared/test_postgres_evidence_workflow_pg.py \
+          pytest --require-db tests/shared/test_postgres_evidence_workflow_pg.py \
             tests/shared/test_email_ingest_restricted_role_pg.py \
             -v -rs --no-cov -o "testpaths=tests" | tee /tmp/evidence-workflow.log
           if grep -qE '[0-9]+ skipped' /tmp/evidence-workflow.log; then
@@ -1494,12 +1539,13 @@ jobs:
     # jobs that were aborted mid-flight. `!cancelled()` does not relax the
     # script below: every dependency still has to be success.
     if: always() && !cancelled()
-    needs: [dependency-lock, test, lint, lint-shared, lint-repo-roots, ingestion-full-suite, repo-root-suite, seeded-migration-rehearsal, live-db-suite, docker-build, security, rls-fallback-check, alembic-revision-check, dep-version-check, tenant-id-uuid-check]
+    needs: [dependency-lock, image-import-check, test, lint, lint-shared, lint-repo-roots, ingestion-full-suite, repo-root-suite, seeded-migration-rehearsal, live-db-suite, docker-build, security, rls-fallback-check, alembic-revision-check, dep-version-check, tenant-id-uuid-check]
     runs-on: ubuntu-latest
     steps:
       - name: Check results
         run: |
           echo "Dependency lock:   ${{ needs.dependency-lock.result }}"
+          echo "Image import:      ${{ needs.image-import-check.result }}"
           echo "Test:              ${{ needs.test.result }}"
           echo "Lint:              ${{ needs.lint.result }}"
           echo "Lint shared/:      ${{ needs.lint-shared.result }}"
@@ -1519,6 +1565,7 @@ jobs:
           # gate had been enforcing. Promoting lint to a hard gate so
           # the next occurrence trips on PR open rather than in prod.
           if [[ "${{ needs.dependency-lock.result }}" != "success" \
+             || "${{ needs.image-import-check.result }}" != "success" \
              || "${{ needs.test.result }}" != "success" \
              || "${{ needs.lint.result }}" != "success" \
              || "${{ needs.lint-shared.result }}" != "success" \

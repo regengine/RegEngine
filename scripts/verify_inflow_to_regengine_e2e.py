@@ -31,7 +31,6 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 SERVICE_ROOTS = (
     REPO_ROOT,
     REPO_ROOT / "services",
-    REPO_ROOT / "services" / "ingestion",
 )
 
 REQUIRED_TABLES = (
@@ -224,13 +223,13 @@ def _check_database(tenant_id: str) -> None:
 
 
 def _build_app(tenant_id: str) -> TestClient:
-    from app.authz import IngestionPrincipal, get_ingestion_principal
-    from app.compliance_score import router as compliance_router
-    from app.fda_export.router import router as fda_export_router
-    from app.inflow_workbench import router as workbench_router
-    from app.sandbox.router import router as sandbox_router
-    from app.subscription_gate import require_active_subscription
-    from app.webhook_router_v2 import router as webhook_router
+    from services.ingestion.app.authz import IngestionPrincipal, get_ingestion_principal
+    from services.ingestion.app.compliance_score import router as compliance_router
+    from services.ingestion.app.fda_export.router import router as fda_export_router
+    from services.ingestion.app.inflow_workbench import router as workbench_router
+    from services.ingestion.app.sandbox.router import router as sandbox_router
+    from services.ingestion.app.subscription_gate import require_active_subscription
+    from services.ingestion.app.webhook_router_v2 import router as webhook_router
 
     app = FastAPI()
     app.include_router(sandbox_router)
@@ -286,8 +285,8 @@ def _post_json(
 
 
 def _events_from_csv() -> list[dict[str, Any]]:
-    from app.inflow_workbench import COMPLETE_ROMAINE_CSV
-    from app.sandbox.csv_parser import _parse_csv_to_events
+    from services.ingestion.app.inflow_workbench import COMPLETE_ROMAINE_CSV
+    from services.ingestion.app.sandbox.csv_parser import _parse_csv_to_events
 
     events = _parse_csv_to_events(COMPLETE_ROMAINE_CSV)
     for event in events:
@@ -487,7 +486,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     _check_database(tenant_id)
     _ensure_tenant_row(tenant_id)
 
-    from app.inflow_workbench import COMPLETE_ROMAINE_CSV
+    from services.ingestion.app.inflow_workbench import COMPLETE_ROMAINE_CSV
 
     client = _build_app(tenant_id)
     headers = _auth_headers(args, tenant_id)

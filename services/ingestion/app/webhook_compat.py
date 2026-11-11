@@ -64,10 +64,7 @@ def _batch_dedup_key(event: IngestEvent) -> str:
         and isinstance(line_index, int)
         and line_index > 0
     ):
-        return (
-            f"{key}|{event.kdes.get('edi_isa13') or ''}"
-            f"|{event.kdes.get('edi_control_number') or ''}|{line_index}"
-        )
+        return f"{key}|{event.kdes.get('edi_isa13') or ''}|{event.kdes.get('edi_control_number') or ''}|{line_index}"
     return key
 
 
@@ -232,6 +229,18 @@ def _close_ingestion_run(
     )
 
 
+def _undone_result(result: EventResult) -> EventResult:
+    """Report an accepted event whose batch was rolled back as not stored."""
+    if result.status != "accepted":
+        return result
+    return EventResult(
+        traceability_lot_code=result.traceability_lot_code,
+        cte_type=result.cte_type,
+        status="rejected",
+        errors=["Not stored: another event in this batch was rejected"],
+    )
+
+
 async def ingest_events(
     payload: WebhookPayload,
     *,
@@ -240,6 +249,7 @@ async def ingest_events(
     principal: Optional[IngestionPrincipal] = None,
     source_file: Optional[SourceFileReceipt] = None,
     deferred_kdes: Optional[Mapping[WebhookCTEType, frozenset[str]]] = None,
+    all_or_nothing: bool = False,
 ) -> IngestResponse:
     """Internal ingestion helper — not an HTTP route.
 
@@ -265,6 +275,12 @@ async def ingest_events(
     ``open_gaps`` on its result, instead of being rejected. Only server-side
     callers set this. Never derive it from the payload, which the sender
     controls: that would let a caller switch off the KDE gate.
+
+    ``all_or_nothing`` stores every event or none. Any rejected event undoes
+    the batch in both stores, and the response reports every event as rejected.
+    The ingestion run and its retained file are kept as the record of the
+    attempt. Graph sync waits for the commit, because a publish cannot be
+    recalled. Off by default: other callers keep per-event acceptance.
     """
     if not principal_tenant_id:
         raise PermissionError("ingest_events requires principal_tenant_id from authenticated context")
@@ -317,12 +333,16 @@ async def ingest_events(
     # Data gap time to fix: written after the ingest commit, fail-open.
     gap_outcomes: list[ValidationOutcome] = []
     closes_queued: set[tuple[str, str]] = set()
+    pending_graph_sync: list[tuple[str, IngestEvent]] = []
+    stored_orders: set[int] = set()
 
     try:
         if source_file is not None:
             # The receipt is written first so a run exists even if every row
             # is rejected; the same transaction carries run, blob and events.
             run_id = _open_ingestion_run(db_session, tenant_id, payload.source, source_file)
+        # Opened after the receipt, so undoing the batch keeps the receipt.
+        batch_savepoint = db_session.begin_nested() if all_or_nothing else None
         for event_index, event in enumerate(payload.events):
             dedup_key = _batch_dedup_key(event)
             if dedup_key in seen_in_batch:
@@ -398,24 +418,35 @@ async def ingest_events(
 
                     canonical = normalize_webhook_event(event, tenant_id, ingestion_run_id=run_id)
                     canonical_store = CanonicalEventStore(db_session, dual_write=False)
-                    canonical_store.persist_event(canonical)
-                    from shared.rules_engine import RulesEngine
+                    persist_result = canonical_store.persist_event(canonical)
+                    canonical_exists = getattr(persist_result, "idempotent", False) is True
+                    # A stored event replayed under the same keys stored
+                    # nothing new. Re-running rules would add evidence and
+                    # exception cases, and the stored copy would count as a
+                    # sibling of itself in lot-level rules. The keys leave out
+                    # quantity and unit, so a resend changing only those is
+                    # skipped here too, as it is dropped by both stores.
+                    if not (canonical_exists and store_result.idempotent is True):
+                        from shared.rules_engine import RulesEngine
 
-                    engine = RulesEngine(db_session)
-                    event_data = {
-                        "event_id": str(canonical.event_id),
-                        "event_type": canonical.event_type.value,
-                        "traceability_lot_code": canonical.traceability_lot_code,
-                        "product_reference": canonical.product_reference,
-                        "quantity": canonical.quantity,
-                        "unit_of_measure": canonical.unit_of_measure,
-                        "from_facility_reference": canonical.from_facility_reference,
-                        "to_facility_reference": canonical.to_facility_reference,
-                        "from_entity_reference": canonical.from_entity_reference,
-                        "to_entity_reference": canonical.to_entity_reference,
-                        "kdes": canonical.kdes,
-                    }
-                    summary = engine.evaluate_event(event_data, persist=True, tenant_id=tenant_id)
+                        engine = RulesEngine(db_session)
+                        event_data = {
+                            # Never the existing canonical row's id: these
+                            # values can differ from what that row stores, and
+                            # evaluation writes its verdict onto the event id.
+                            "event_id": str(canonical.event_id),
+                            "event_type": canonical.event_type.value,
+                            "traceability_lot_code": canonical.traceability_lot_code,
+                            "product_reference": canonical.product_reference,
+                            "quantity": canonical.quantity,
+                            "unit_of_measure": canonical.unit_of_measure,
+                            "from_facility_reference": canonical.from_facility_reference,
+                            "to_facility_reference": canonical.to_facility_reference,
+                            "from_entity_reference": canonical.from_entity_reference,
+                            "to_entity_reference": canonical.to_entity_reference,
+                            "kdes": canonical.kdes,
+                        }
+                        summary = engine.evaluate_event(event_data, persist=True, tenant_id=tenant_id)
                     canon_sp.commit()
                 except (ImportError, ValueError, TypeError, RuntimeError) as canon_err:
                     canon_sp.rollback()
@@ -531,6 +562,7 @@ async def ingest_events(
                     )
                 )
                 accepted += 1
+                stored_orders.add(event_index)
                 # A record with deferred KDEs is stored but incomplete, so it
                 # must not close the lot's existing gaps. Its gaps are already
                 # written; requeue them only to follow a close queued earlier
@@ -556,7 +588,10 @@ async def ingest_events(
                             gaps=open_gaps,
                         )
                     )
-                _publish_graph_sync(store_result.event_id, event, tenant_id)
+                if all_or_nothing:
+                    pending_graph_sync.append((store_result.event_id, event))
+                else:
+                    _publish_graph_sync(store_result.event_id, event, tenant_id)
 
                 # Non-blocking failures → exception queue. Separate
                 # savepoint so an exception-queue write failure doesn't
@@ -594,6 +629,19 @@ async def ingest_events(
                 )
                 rejected += 1
 
+        if batch_savepoint is not None:
+            if rejected:
+                batch_savepoint.rollback()
+                pending_graph_sync.clear()
+                # Keep only the rejected events' gaps: the stored events are
+                # undone, so neither their closes nor their gaps still apply.
+                gap_outcomes = [outcome for outcome in gap_outcomes if outcome.order not in stored_orders]
+                results = [_undone_result(result) for result in results]
+                accepted = 0
+                rejected = len(results)
+            else:
+                batch_savepoint.commit()
+
         if run_id is not None and source_file is not None:
             _close_ingestion_run(
                 db_session,
@@ -608,6 +656,13 @@ async def ingest_events(
             db_session.commit()
         # After the commit so closes reference durable records; never raises.
         record_outcomes(db_session, tenant_id, gap_outcomes)
+        # The events are durable now. A graph outage must not fail the request,
+        # or the caller would release a claim on stored events.
+        for event_id, event in pending_graph_sync:
+            try:
+                _publish_graph_sync(event_id, event, tenant_id)
+            except Exception as exc:  # noqa: BLE001 -- graph failure must not undo a committed interchange
+                logger.warning("compat_graph_sync_failed event_id=%s error_type=%s", event_id, type(exc).__name__)
     except Exception:
         if db_session:
             db_session.rollback()

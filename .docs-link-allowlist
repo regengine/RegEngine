@@ -21,10 +21,10 @@ ASYNC_PROCESSES.md::server/workers/lot_tracing.py
 FOUNDER_KNOWLEDGE.md::shared/webhook_dlq.py
 
 # --- Retired k8s/6-service topology ---
-# Every file in runbooks/ opens with a "LEGACY:" banner stating it describes the
+# Every file in docs/runbooks/legacy/ opens with a "LEGACY:" banner stating it describes the
 # retired k8s topology. These paths were real in that topology. The correct fix
 # is to rewrite or retire the runbooks, not to repoint individual lines; until
 # then, flagging them on every CI run would train reviewers to ignore the gate.
-runbooks/neo4j-disaster-recovery.md::infrastructure/neo4j/cluster.yaml
-runbooks/rollback-procedure.md::migrations/revert_audit_log_schema.sql
-runbooks/rollback-procedure.md::migrations/revert_rls_sysadmin_audit.sql
+docs/runbooks/legacy/neo4j-disaster-recovery.md::infrastructure/neo4j/cluster.yaml
+docs/runbooks/legacy/rollback-procedure.md::migrations/revert_audit_log_schema.sql
+docs/runbooks/legacy/rollback-procedure.md::migrations/revert_rls_sysadmin_audit.sql

@@ -30,6 +30,70 @@ import pytest
 _REPO_ROOT = Path(__file__).resolve().parent
 _SERVICES_DIR = _REPO_ROOT / "services"
 
+# ---------------------------------------------------------------------------
+# ``--require-db`` (tech-debt WI-10, 2026-11-04)
+# ---------------------------------------------------------------------------
+#
+# 170 skip sites exist under tests/ and services/; the common reason is that
+# no migrated Postgres is reachable, and a bare ``pytest`` passes while
+# exercising none of the RLS, migration or persistence paths. ``--require-db``
+# makes that loud: it exports the existing ``REGENGINE_REQUIRE_DB=1`` contract
+# (``tests/migrations/rls_db.py``) so the module-level gates fail instead of
+# skipping, and the report hook below turns any *remaining* skip whose reason
+# names a database condition into a failure, whichever helper raised it.
+# Skips for other reasons (an optional package, a service that is not
+# running, a platform) are untouched.
+_DB_UNAVAILABLE_RE = re.compile(
+    r"(?i)(postgres|database|database_url|migrat|alembic|testcontainer|fsma\.|scratch db|"
+    r"schema not|table is not|rows seeded|role not present|local PostgreSQL)",
+)
+# Reasons that name a migration but are about the checkout, not a database.
+_DB_UNAVAILABLE_EXCLUDE_RE = re.compile(r"(?i)in this checkout|only applies to the")
+
+
+def pytest_addoption(parser):  # type: ignore[no-untyped-def]
+    parser.addoption(
+        "--require-db",
+        action="store_true",
+        default=False,
+        help=(
+            "Fail, instead of skip, every test whose skip reason is a missing or unmigrated "
+            "database (sets REGENGINE_REQUIRE_DB=1 for the module-level gates). Used by the "
+            "live-db-suite and seeded-migration-rehearsal CI jobs; see CONTRIBUTING.md → "
+            "Running database tests locally."
+        ),
+    )
+
+
+def pytest_configure(config):  # type: ignore[no-untyped-def]
+    if config.getoption("--require-db", default=False):
+        os.environ["REGENGINE_REQUIRE_DB"] = "1"
+
+
+def _skip_reason(report) -> str:  # type: ignore[no-untyped-def]
+    longrepr = getattr(report, "longrepr", None)
+    if isinstance(longrepr, tuple) and len(longrepr) == 3:
+        return str(longrepr[2])
+    return str(longrepr or "")
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item, call):  # type: ignore[no-untyped-def]
+    outcome = yield
+    report = outcome.get_result()
+    if not report.skipped or getattr(report, "wasxfail", None):
+        return
+    if not item.config.getoption("--require-db", default=False):
+        return
+    reason = _skip_reason(report)
+    if not _DB_UNAVAILABLE_RE.search(reason) or _DB_UNAVAILABLE_EXCLUDE_RE.search(reason):
+        return
+    report.outcome = "failed"
+    report.longrepr = (
+        f"{item.nodeid}: skipped for a database reason while --require-db was set:\n  {reason}\n"
+        "A database must be designated for this run (see CONTRIBUTING.md → Running database tests locally)."
+    )
+
 # Known services that expose their own top-level ``app/`` package.
 _APP_BEARING_SERVICES = ("admin", "compliance", "graph", "ingestion", "nlp", "scheduler")
 

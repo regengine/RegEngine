@@ -243,6 +243,7 @@ class TestVerifyV2Exports:
             [
                 _Result(row=_audit_row(export_hash=original_hash)),
                 _Result(rows=rows),
+                _Result(),  # open-gap lookup
             ]
         )
         _install(monkeypatch, session)
@@ -273,6 +274,7 @@ class TestVerifyV2Exports:
                     )
                 ),
                 _Result(rows=rows),
+                _Result(),  # open-gap lookup
             ]
         )
         _install(monkeypatch, session)

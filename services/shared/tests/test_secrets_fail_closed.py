@@ -31,6 +31,7 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SERVICES_DIR = REPO_ROOT / "services"
 SERVER_MAIN = REPO_ROOT / "server" / "main.py"
+STARTUP_CHECKS = REPO_ROOT / "server" / "startup_checks.py"
 
 VALIDATE_SCRIPT = (
     "import sys; "
@@ -168,9 +169,13 @@ class TestStartupWiring:
     """
 
     def test_server_main_calls_auth_validation(self):
-        source = SERVER_MAIN.read_text(encoding="utf-8")
-        assert "from shared.auth import validate_auth_config" in source
-        assert re.search(r"^validate_auth_config\(\)", source, re.MULTILINE)
+        # WI-14: the import-time gates live in server/startup_checks.py;
+        # server/main.py runs them at import through run_import_time_checks().
+        checks = STARTUP_CHECKS.read_text(encoding="utf-8")
+        assert "from shared.auth import validate_auth_config" in checks
+        assert re.search(r"^    validate_auth_config\(\)", checks, re.MULTILINE)
+        main = SERVER_MAIN.read_text(encoding="utf-8")
+        assert re.search(r"^startup_checks\.run_import_time_checks\(\)", main, re.MULTILINE)
 
     def test_retired_master_key_is_not_a_runtime_requirement(self):
         from shared.secrets_manager import INSECURE_DEFAULTS

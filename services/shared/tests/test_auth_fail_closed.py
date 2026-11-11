@@ -5,8 +5,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-import pytest
-
 SERVICES_DIR = Path(__file__).resolve().parents[2]
 VALIDATE_SCRIPT = (
     "import os, sys; "

@@ -53,7 +53,14 @@ from .constants import (
     _REQUIRED_SEGMENTS_BY_SET,
     _SUPPORTED_TRANSACTION_SETS,
 )
-from .dedup import check_and_record_interchange, release_interchange, verify_trading_partner_allowed
+from .dedup import (
+    _IN_PROGRESS_RETRY_AFTER_SECONDS,
+    check_and_record_interchange,
+    interchange_in_progress,
+    mark_interchange_stored,
+    release_interchange,
+    verify_trading_partner_allowed,
+)
 from .extractors import _extract_856_fields, _extract_fields_for_set
 from .models import EDIIngestResponse
 from .parser import (
@@ -166,18 +173,23 @@ def _reject_shared_tlc_source_for_distinct_lots(
 # ISA13 claims taken by ``_enforce_envelope_integrity`` during the current
 # request, as ``release_interchange`` arguments. ``_release_isa13_unless_stored``
 # installs the list.
-_reserved_interchanges: contextvars.ContextVar[list[tuple[Any, Any, Any, str]] | None] = contextvars.ContextVar(
+_reserved_interchanges: contextvars.ContextVar[list[tuple[str, Any, Any, Any, str]] | None] = contextvars.ContextVar(
     "edi_reserved_interchanges", default=None
 )
 
 
 def _release_isa13_unless_stored(endpoint):
-    """Free the request's ISA13 claim when the document was not stored.
+    """Settle the request's ISA13 claim once the outcome is known.
 
-    The claim is taken before content validation and ingest. A later
-    rejection, a server error, or a result with no accepted events stores
-    nothing, and keeping the claim would turn the partner's corrected
-    resend into a 409 "already processed" for the full dedup TTL.
+    The claim is taken before content validation and ingest. It becomes a
+    stored marker when at least one event was accepted. A later rejection,
+    a server error, or a result with no accepted events stores nothing, and
+    keeping the claim would hold up the partner's corrected resend.
+
+    A partly accepted interchange keeps its claim. Releasing it is not safe
+    yet: event idempotency keys include ``edi_line_index`` and leave out
+    quantity, so a corrected resend under the same ISA13 can store accepted
+    lines twice or drop a corrected quantity.
 
     Releasing on an exception or cancellation assumes nothing was committed.
     That does not hold if ``ingest_events`` commits and then raises (session
@@ -188,7 +200,7 @@ def _release_isa13_unless_stored(endpoint):
 
     @functools.wraps(endpoint)
     async def wrapper(*args, **kwargs):
-        reserved: list[tuple[Any, Any, Any, str]] = []
+        reserved: list[tuple[str, Any, Any, Any, str]] = []
         token = _reserved_interchanges.set(reserved)
         try:
             response = await endpoint(*args, **kwargs)
@@ -199,9 +211,10 @@ def _release_isa13_unless_stored(endpoint):
         finally:
             _reserved_interchanges.reset(token)
         ingestion_result = getattr(response, "ingestion_result", None)
-        if ingestion_result is None or not ingestion_result.accepted:
-            for claim in reserved:
-                release_interchange(*claim)
+        stored = ingestion_result is not None and ingestion_result.accepted > 0
+        settle = mark_interchange_stored if stored else release_interchange
+        for claim in reserved:
+            settle(*claim)
         return response
 
     return wrapper
@@ -486,8 +499,8 @@ def _enforce_envelope_integrity(
 
     - Reject on ISA/GS sender/receiver mismatch (X12 tenant-smuggling).
     - Reject on GS sender not in tenant's allowed trading-partner list.
-    - Check ISA13 against the interchange dedup cache and return 409
-      idempotent-replay on retransmission.
+    - Check ISA13 against the interchange dedup cache. A retransmission gets
+      409 idempotent-replay once stored, or 503 with Retry-After while pending.
     """
     # #1160: envelope mismatch between ISA and GS — caller tried to
     # smuggle a different trading-partner identity.
@@ -538,12 +551,36 @@ def _enforce_envelope_integrity(
 
     # #1165: retransmission dedup on ISA13.
     claim_token = uuid.uuid4().hex
-    is_duplicate, _prev = check_and_record_interchange(
+    is_duplicate, previous = check_and_record_interchange(
+        tenant_id=sender_tenant_id,
         sender_id=extracted.get("sender_id"),
         receiver_id=extracted.get("receiver_id"),
         isa13=extracted.get("isa13"),
         claim_token=claim_token,
     )
+    if is_duplicate and interchange_in_progress(previous):
+        logger.info(
+            "edi_retransmission_in_flight tenant=%s sender=%s isa13=%s set=%s",
+            sender_tenant_id,
+            extracted.get("sender_id"),
+            extracted.get("isa13"),
+            transaction_set,
+        )
+        # Not a 409: the first attempt can still fail, and a partner that
+        # hears "duplicate" has no reason to send the document again.
+        raise HTTPException(
+            status_code=503,
+            # The error handler reduces a 5xx to its message, and only if the
+            # detail is marked safe for clients.
+            detail={
+                "message": (
+                    f"Interchange {extracted.get('isa13')} is still being processed and nothing is "
+                    "confirmed stored yet. Send it again after the Retry-After delay."
+                ),
+                "client_safe": True,
+            },
+            headers={"Retry-After": str(_IN_PROGRESS_RETRY_AFTER_SECONDS)},
+        )
     if is_duplicate:
         logger.info(
             "edi_retransmission_detected tenant=%s sender=%s isa13=%s set=%s",
@@ -567,7 +604,15 @@ def _enforce_envelope_integrity(
 
     reserved = _reserved_interchanges.get()
     if reserved is not None:
-        reserved.append((extracted.get("sender_id"), extracted.get("receiver_id"), extracted.get("isa13"), claim_token))
+        reserved.append(
+            (
+                sender_tenant_id,
+                extracted.get("sender_id"),
+                extracted.get("receiver_id"),
+                extracted.get("isa13"),
+                claim_token,
+            )
+        )
 
 
 def _enforce_interchange_structure(
@@ -883,6 +928,7 @@ async def ingest_edi_856(
         principal_tenant_id=sender_tenant_id,
         x_regengine_api_key=x_regengine_api_key,
         deferred_kdes=_EDI_DEFERRED_KDES,
+        all_or_nothing=True,
     )
 
     return EDIIngestResponse(
@@ -1593,19 +1639,47 @@ async def ingest_edi_document(
                 },
             )
 
-    events = [
-        _build_ingest_event_for_set(
-            transaction_set=slice_set,
-            extracted=slice_extracted,
-            traceability_lot_code=slice_extracted.get("traceability_lot_code", traceability_lot_code),
-            product_description_override=product_description,
-            quantity_override=quantity_override,
-            unit_override=unit_of_measure_override,
-            location_override=location_override,
-            segments=slice_segments,
-        )
-        for slice_set, slice_extracted, slice_segments in event_inputs
-    ]
+    events = []
+    for slice_set, slice_extracted, slice_segments in event_inputs:
+        line_tlc = slice_extracted.get("traceability_lot_code", traceability_lot_code)
+        try:
+            events.append(
+                _build_ingest_event_for_set(
+                    transaction_set=slice_set,
+                    extracted=slice_extracted,
+                    traceability_lot_code=line_tlc,
+                    product_description_override=product_description,
+                    quantity_override=quantity_override,
+                    unit_override=unit_of_measure_override,
+                    location_override=location_override,
+                    segments=slice_segments,
+                )
+            )
+        except HTTPException as exc:
+            if not isinstance(exc.detail, dict) or exc.detail.get("error") != "edi_non_positive_quantity":
+                raise
+            detail = dict(exc.detail)
+            record = _record_edi_rejection(
+                tenant_id=sender_tenant_id,
+                transaction_set=slice_set,
+                traceability_lot_code=line_tlc,
+                errors=[
+                    {
+                        "loc": ["quantity"],
+                        "type": detail["error"],
+                        "msg": detail.get("message"),
+                        "input": None,
+                    }
+                ],
+                extracted=slice_extracted,
+                partner_id=x_partner_id,
+                source=source,
+                reason=detail["error"],
+                needs_review=True,
+            )
+            detail["needs_review"] = True
+            detail["rejection_id"] = record["rejection_id"]
+            raise HTTPException(status_code=exc.status_code, detail=detail) from exc
 
     payload = WebhookPayload(
         source=f"{source}_{transaction_set}" if source == "edi_inbound" else source,
@@ -1617,6 +1691,7 @@ async def ingest_edi_document(
         principal_tenant_id=sender_tenant_id,
         x_regengine_api_key=x_regengine_api_key,
         deferred_kdes=_EDI_DEFERRED_KDES,
+        all_or_nothing=True,
     )
 
     return EDIIngestResponse(

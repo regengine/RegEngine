@@ -34,7 +34,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from app import csv_templates as route
+from services.ingestion.app import csv_templates as route
 from shared.jev import JevUnavailable, band_for_confidence, cte_classification as cte, header_mapping as hm
 from shared.jev.routing import ConfidenceThresholds
 

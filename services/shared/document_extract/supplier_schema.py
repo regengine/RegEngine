@@ -101,7 +101,10 @@ SUPPLIER_DOCUMENT_SCHEMA: dict[str, Any] = {
         },
         "events": {
             "type": "array",
-            "description": "Critical tracking events (CTEs): one per shipment, receipt, harvest, cooling, packing or transformation record.",
+            "description": (
+                "Critical tracking events (CTEs): one per shipment, receipt, harvest, cooling, packing or "
+                "transformation record."
+            ),
             "items": {
                 "type": "object",
                 "properties": {
