@@ -142,7 +142,7 @@ describe('proxy CSRF gate', () => {
         for (const step of ['preflight', 'submit']) {
             const response = await proxy(
                 await makeMutation({
-                    pathname: `/api/ingestion/api/v1/portal/LePrM3DfL9W39BD4cY31fQ/${step}`,
+                    pathname: `/api/ingestion/api/v1/portal/test-portal-link-token/${step}`,
                     token: null,
                     signature: null,
                 }),
@@ -157,7 +157,7 @@ describe('proxy CSRF gate', () => {
         const response = await proxy(
             await makeMutation({
                 origin: 'https://attacker.example',
-                pathname: '/api/ingestion/api/v1/portal/LePrM3DfL9W39BD4cY31fQ/submit',
+                pathname: '/api/ingestion/api/v1/portal/test-portal-link-token/submit',
                 token: null,
                 signature: null,
             }),

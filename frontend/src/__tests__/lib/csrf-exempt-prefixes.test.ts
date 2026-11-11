@@ -62,7 +62,7 @@ describe('reviewed CSRF route-and-method exemptions', () => {
     });
 
     it('exempts only supplier portal preflight and submit, by link token', () => {
-        const token = 'LePrM3DfL9W39BD4cY31fQ';
+        const token = 'test-portal-link-token';
         expect(isCsrfExempt(`/api/ingestion/api/v1/portal/${token}/preflight`, 'POST')).toBe(true);
         expect(isCsrfExempt(`/api/ingestion/api/v1/portal/${token}/submit`, 'POST')).toBe(true);
         expect(isSameOriginOnlyMutation(`/api/ingestion/api/v1/portal/${token}/submit`, 'POST')).toBe(true);
