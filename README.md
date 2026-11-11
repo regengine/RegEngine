@@ -403,7 +403,7 @@ These are current repo facts, not speculation:
 - [docs/PRODUCT_DESCRIPTION.md](docs/PRODUCT_DESCRIPTION.md) — canonical positioning and capability availability.
 - [docs/engineering/JEV_HEADER_MAPPING.md](docs/engineering/JEV_HEADER_MAPPING.md) — optional CSV suggestions, review policy, privacy defaults, and evaluation tools.
 - [docs/engineering/DOCUMENT_EXTRACT.md](docs/engineering/DOCUMENT_EXTRACT.md) — optional document data extraction (LlamaIndex Extract v2.5 on supplier PDFs): request flow, failure modes, data handling, configuration, command line.
-- [docs/engineering/TRACEABILITY_FILE_INTAKE.md](docs/engineering/TRACEABILITY_FILE_INTAKE.md) — Excel `.xlsx` on the CSV ingest route, the dashboard EPCIS 2.0 upload, and X12 944/945 warehouse advices: routes, field mapping, and rejection rules.
+- [docs/engineering/TRACEABILITY_FILE_INTAKE.md](docs/engineering/TRACEABILITY_FILE_INTAKE.md) — partner CSV row outcomes, Excel `.xlsx` on the CSV ingest route, the dashboard EPCIS 2.0 upload, X12 line mapping, EDI event time, and ISA13 resend.
 - [frontend/README.md](frontend/README.md) — current UI surfaces and consolidated-backend development setup.
 
 - [2026-09-04 GitHub issue review and rollout](docs/audits/GITHUB_ISSUE_REVIEW_2026_09_04.md) — fixes, validation, and outstanding provisioning.
