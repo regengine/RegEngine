@@ -539,3 +539,21 @@ def test_zero_quantity_rejection_names_the_lines_lot(client, store, ingested):
 
     record = rejection_log.list_edi_rejections(TENANT)[0]
     assert record["traceability_lot_code"] == line_lot
+
+
+@pytest.mark.parametrize("route", ["", "/document"])
+def test_stored_replay_is_a_409_even_when_its_content_would_be_refused(client, store, ingested, route):
+    """A partner resending a stored document hears "already processed", not "correct it"."""
+    first = _post(client, FIXTURE.read_bytes(), route)
+    assert first.status_code == 201, first.json()
+
+    replay = client.post(
+        f"/api/v1/ingest/edi{route}",
+        data={"traceability_lot_code": VALID_TLC, "tenant_id": TENANT},
+        files={"file": ("asn_856.edi", FIXTURE.read_bytes(), "application/edi-x12")},
+    )
+
+    assert replay.status_code == 409, replay.json()
+    assert replay.json()["detail"]["idempotent_replay"] is True
+    assert rejection_log.list_edi_rejections(TENANT) == []
+    assert len(ingested) == 1

@@ -61,6 +61,7 @@ from .dedup import (
     _IN_PROGRESS_RETRY_AFTER_SECONDS,
     check_and_record_interchange,
     interchange_in_progress,
+    interchange_stored,
     mark_interchange_stored,
     release_interchange,
     verify_trading_partner_allowed,
@@ -683,6 +684,49 @@ _resolve_tenant_id = resolve_tenant_id
 _resolve_principal_tenant_id = resolve_principal_tenant_id
 
 
+def _duplicate_interchange_detail(extracted: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "error": "duplicate_interchange",
+        "message": (
+            "Interchange control number (ISA13) already processed. "
+            "This is an idempotent replay — no events were ingested."
+        ),
+        "isa13": extracted.get("isa13"),
+        "idempotent_replay": True,
+    }
+
+
+def _interchange_already_stored(extracted: dict[str, Any], tenant_id: str) -> bool:
+    """Read-only replay check, from the cache and then the database receipt.
+
+    Fails open: an unreachable store answers False, and the claim step and the
+    receipt check inside ingest stay authoritative.
+    """
+    if interchange_stored(
+        tenant_id=tenant_id,
+        sender_id=extracted.get("sender_id"),
+        receiver_id=extracted.get("receiver_id"),
+        isa13=extracted.get("isa13"),
+    ):
+        return True
+    envelope = EDIInterchange.from_envelope(extracted)
+    if envelope is None:
+        return False
+    session = None
+    try:
+        from shared.database import SessionLocal  # noqa: PLC0415 -- read at call time so tests can swap the session factory
+
+        session = SessionLocal()
+        return envelope.is_stored(session, tenant_id)
+    except Exception as exc:  # noqa: BLE001 -- a failed peek must not block ingest; the receipt check in ingest decides
+        logger.warning("edi_receipt_peek_failed tenant=%s error_type=%s", tenant_id, type(exc).__name__)
+        return False
+    finally:
+        if session is not None:
+            session.rollback()
+            session.close()
+
+
 def _enforce_envelope_integrity(
     extracted: dict[str, Any],
     sender_tenant_id: str,
@@ -745,6 +789,18 @@ def _enforce_envelope_integrity(
             },
         )
 
+    # A stored interchange is a replay whatever its content. Answer that before
+    # the content checks, or a partner is told to correct a document that landed.
+    if _interchange_already_stored(extracted, sender_tenant_id):
+        logger.info(
+            "edi_retransmission_detected tenant=%s sender=%s isa13=%s set=%s stage=before_content_checks",
+            sender_tenant_id,
+            extracted.get("sender_id"),
+            extracted.get("isa13"),
+            transaction_set,
+        )
+        raise HTTPException(status_code=409, detail=_duplicate_interchange_detail(extracted))
+
     if before_reserve is not None:
         before_reserve()
 
@@ -788,18 +844,7 @@ def _enforce_envelope_integrity(
             extracted.get("isa13"),
             transaction_set,
         )
-        raise HTTPException(
-            status_code=409,
-            detail={
-                "error": "duplicate_interchange",
-                "message": (
-                    "Interchange control number (ISA13) already processed. "
-                    "This is an idempotent replay — no events were ingested."
-                ),
-                "isa13": extracted.get("isa13"),
-                "idempotent_replay": True,
-            },
-        )
+        raise HTTPException(status_code=409, detail=_duplicate_interchange_detail(extracted))
 
     reserved = _reserved_interchanges.get()
     if reserved is not None:

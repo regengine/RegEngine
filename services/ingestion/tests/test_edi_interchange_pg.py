@@ -447,3 +447,32 @@ def test_database_lock_returns_retryable_503_through_production_handlers(db, ing
         retry = client.post(f"/api/v1/ingest/edi{route}", data=data, files={"file": ("asn.edi", raw)})
         assert retry.status_code == 201, retry.text
         assert _counts(db) == (1, 2)
+
+
+@pytest.mark.parametrize("route", ["", "/document"])
+def test_stored_receipt_answers_a_replay_before_content_checks(db, ingest_db, monkeypatch, route):
+    """With no cache, the database receipt still turns a refused-looking resend into a 409."""
+    monkeypatch.setattr(dedup, "_redis_client", lambda: None)
+    monkeypatch.delenv("EDI_REQUIRE_PARTNER_ID", raising=False)
+    monkeypatch.delenv("EDI_PARTNER_ALLOWLIST", raising=False)
+    monkeypatch.setattr(routes, "ingest_events", compat.ingest_events)
+    monkeypatch.setattr("shared.database.SessionLocal", lambda: _session(db))
+    app = FastAPI()
+    app.include_router(router)
+    app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
+        key_id="test-key", tenant_id=TENANT, scopes=["*"], auth_mode="test"
+    )
+    raw = (Path(__file__).parent / "fixtures/edi_corpus/asn_856.edi").read_bytes()
+    data = {
+        "tenant_id": TENANT,
+        "traceability_lot_code": "00012345678901-LOT001",
+        "tlc_source_reference": "0061414100001",
+    }
+    with TestClient(app) as client:
+        first = client.post(f"/api/v1/ingest/edi{route}", data=data, files={"file": ("asn.edi", raw)})
+        assert first.status_code == 201, first.text
+        del data["tlc_source_reference"]
+        replay = client.post(f"/api/v1/ingest/edi{route}", data=data, files={"file": ("asn.edi", raw)})
+        assert replay.status_code == 409, replay.text
+        assert replay.json()["detail"]["idempotent_replay"] is True
+        assert _counts(db) == (1, 2)
