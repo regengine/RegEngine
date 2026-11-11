@@ -35,7 +35,6 @@ from .privileged_auth import (
     require_sysadmin_high_assurance,
     require_tenant_provisioner_key,
 )
-from .review_consumer import get_consumer_health
 from .sqlalchemy_models import TenantModel
 from .tenant_slug_helpers import _ensure_unique_tenant_slug
 
@@ -259,12 +258,17 @@ async def readiness():
 
 @router.get("/health/consumer", dependencies=[Depends(require_metrics_key)])
 def consumer_health():
-    """Health check endpoint for the Kafka review consumer."""
-    from fastapi.responses import JSONResponse
+    """Compatibility probe for the retired Kafka review consumer (WI-05).
 
-    health_info = get_consumer_health()
-    status_code = 200 if health_info.get("healthy") else 503
-    return JSONResponse(content=health_info, status_code=status_code)
+    Review items reach ``HallucinationTracker`` through the PostgreSQL task
+    queue now, so there is no consumer thread to report on. The path stays
+    so existing monitors keep a 200 instead of a 404.
+    """
+    return {
+        "healthy": True,
+        "status": "retired",
+        "detail": "review consumer retired; review items flow through fsma.task_queue",
+    }
 
 
 @router.get("/metrics", dependencies=[Depends(require_metrics_key)])

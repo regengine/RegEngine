@@ -1,3 +1,5 @@
+-- alembic-revision: b3c8e1f4a627
+-- rendered-from: alembic/versions/20260709_b3c8e1f4a627_v092_client_role_lockdown.py (upgrade)
 DO $$
 DECLARE
     tbl record;

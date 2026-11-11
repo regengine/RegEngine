@@ -142,7 +142,10 @@ def evaluate_field_format(
         rule_title=rule.title,
         severity=rule.severity,
         result="fail",
-        why_failed=f"{field_path.split('.')[-1]} value '{str(value)[:50]}' does not match required format ({rule.citation_reference or 'FSMA 204'})",
+        why_failed=(
+            f"{field_path.split('.')[-1]} value '{str(value)[:50]}' does not match required format "
+            f"({rule.citation_reference or 'FSMA 204'})"
+        ),
         evidence_fields_inspected=evidence,
         citation_reference=rule.citation_reference,
         remediation_suggestion=rule.remediation_suggestion,

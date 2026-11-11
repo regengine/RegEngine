@@ -180,7 +180,6 @@ def test_handle_preeval_exception_cte_only_raises_500(monkeypatch):
     surfaces a 5xx and ops can triage."""
     monkeypatch.setenv("RULES_ENGINE_ENFORCE", "cte_only")
     from fastapi import HTTPException
-
     from services.shared.rules.enforcement import handle_preeval_exception
 
     with pytest.raises(HTTPException) as exc:
@@ -193,7 +192,6 @@ def test_handle_preeval_exception_cte_only_raises_500(monkeypatch):
 def test_handle_preeval_exception_all_mode_raises_500(monkeypatch):
     monkeypatch.setenv("RULES_ENGINE_ENFORCE", "all")
     from fastapi import HTTPException
-
     from services.shared.rules.enforcement import handle_preeval_exception
 
     with pytest.raises(HTTPException) as exc:
@@ -223,7 +221,6 @@ def test_handle_preeval_exception_emits_sentry_under_enforcement(monkeypatch):
     monkeypatch.setitem(sys.modules, "sentry_sdk", fake_sentry)
 
     from fastapi import HTTPException
-
     from services.shared.rules.enforcement import handle_preeval_exception
 
     err = RuntimeError("rules engine bug")

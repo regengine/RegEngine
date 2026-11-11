@@ -7,11 +7,6 @@ from shared.base_config import BaseServiceSettings
 class Settings(BaseServiceSettings):
     """Environment-driven configuration values."""
 
-    kafka_bootstrap: str = Field(default="redpanda:9092", alias="KAFKA_BOOTSTRAP_SERVERS")
-    topic_in: str = Field(default="nlp.extracted", alias="KAFKA_TOPIC_NLP")
-    topic_dlq: str = Field(default="fsma.events.dlq", alias="KAFKA_TOPIC_DLQ")
-    schema_registry_url: str = Field(default="http://schema-registry:8081", alias="SCHEMA_REGISTRY_URL")
-    consumer_group_id: str = Field(default="fsma-graph-service", alias="KAFKA_CONSUMER_GROUP_ID")
     neo4j_uri: str = Field(default="bolt+s://neo4j:7687", alias="NEO4J_URI")
     neo4j_user: str = Field(default="neo4j", alias="NEO4J_USER")
     # Keep imports/startup non-fatal when Neo4j is intentionally disabled; the

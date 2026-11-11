@@ -17,6 +17,23 @@ export default [
         ],
     },
     {
+        // WI-11 (2026-11-04): product code goes through src/lib/api-client.ts.
+        // Route handlers under src/app/api legitimately fetch the backend and
+        // tests stub fetch, so both are excluded.
+        files: ['src/app/**/*.{ts,tsx}', 'src/components/**/*.{ts,tsx}', 'src/hooks/**/*.{ts,tsx}'],
+        ignores: ['src/app/api/**', '**/*.test.{ts,tsx}', '**/__tests__/**'],
+        rules: {
+            'no-restricted-syntax': [
+                'error',
+                {
+                    selector: "CallExpression[callee.type='Identifier'][callee.name='fetch']",
+                    message:
+                        'Bare fetch() is not allowed here. Use apiClient from src/lib/api-client.ts for service calls, or rawFetch from the same file when the request must carry no session headers.',
+                },
+            ],
+        },
+    },
+    {
         rules: {
             'react/no-unescaped-entities': 'off',
             'react/display-name': 'off',

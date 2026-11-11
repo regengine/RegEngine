@@ -1,3 +1,5 @@
+-- alembic-revision: 41f96588d87c
+-- rendered-from: alembic/versions/20261024_41f96588d87c_v135_data_gap_time_to_fix.py (upgrade)
 -- Data gap time to fix.
 --
 -- One row per data gap on a traceability lot: a required KDE missing from a

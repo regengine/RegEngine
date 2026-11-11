@@ -19,10 +19,7 @@ after each KDE read.  These tests verify:
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 # ---------------------------------------------------------------------------
 # Minimal fake session factory

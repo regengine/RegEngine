@@ -1,0 +1,45 @@
+name: Set up Python with the requirement locks
+description: >-
+  One definition of the backend test environment (tech-debt WI-04, 2026-11-04):
+  Python at the given version, a pip cache keyed on requirements.lock and
+  requirements-dev.lock, then a hash-verified install of the production lock
+  and, by default, the dev lock. Used by every job that runs pytest in
+  backend-ci.yml, test-suite-check.yml, security.yml and qa-health.yml; a
+  change to how the locks are installed happens here once.
+inputs:
+  python-version:
+    description: Python version for actions/setup-python
+    required: false
+    default: "3.11"
+  dev:
+    description: Also install requirements-dev.lock (pytest, hypothesis, testcontainers, aiosqlite)
+    required: false
+    default: "true"
+runs:
+  using: composite
+  steps:
+    - name: Setup Python
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+      with:
+        python-version: ${{ inputs.python-version }}
+    - name: Cache pip packages
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v5
+      with:
+        path: ~/.cache/pip
+        key: pip-${{ hashFiles('requirements.lock', 'requirements-dev.lock') }}
+        restore-keys: |
+          pip-
+    - name: Install the requirement locks
+      shell: bash
+      env:
+        # Passed through env rather than interpolated into the script so the
+        # input can never be expanded as shell (semgrep run-shell-injection).
+        INSTALL_DEV_LOCK: ${{ inputs.dev }}
+      run: |
+        # --require-hashes keeps the install reproducible and rejects a
+        # CVE-shifted artifact; the locks are pip-compile output (CONTRIBUTING.md).
+        if [ "$INSTALL_DEV_LOCK" = "true" ]; then
+          pip install --require-hashes -r requirements.lock -r requirements-dev.lock
+        else
+          pip install --require-hashes -r requirements.lock
+        fi

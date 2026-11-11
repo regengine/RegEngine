@@ -51,7 +51,7 @@ from typing import Any
 import structlog
 
 ROOT = Path(__file__).resolve().parents[1]
-for _path in (ROOT / "services" / "ingestion", ROOT / "services"):
+for _path in (ROOT / "services", ROOT):  # repo root for services.*, services/ for shared.*
     _path_str = str(_path)
     if _path_str not in sys.path:
         sys.path.insert(0, _path_str)
@@ -84,7 +84,7 @@ def _configure_cli_logging() -> None:
 if __name__ == "__main__":  # before the imports below can log anything
     _configure_cli_logging()
 
-from app import csv_templates as route  # noqa: E402
+from services.ingestion.app import csv_templates as route  # noqa: E402
 from shared.agent_artifacts import HUMAN_REVIEW_CONFIDENCE_THRESHOLD  # noqa: E402
 from shared.jev import JevDecider, JevSettings  # noqa: E402
 from shared.jev.cte_classification import CTE_NAMES, MIXED_OR_UNCLEAR, suggest_file_cte_type  # noqa: E402

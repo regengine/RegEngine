@@ -17,9 +17,7 @@ Usage:
 from __future__ import annotations
 
 import hashlib
-import math
-from dataclasses import dataclass, field
-from typing import List, Optional
+from dataclasses import dataclass
 
 
 def _hash_pair(left: str, right: str) -> str:

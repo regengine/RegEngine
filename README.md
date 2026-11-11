@@ -181,7 +181,9 @@ Backend setup:
 ```bash
 python3 -m venv venv
 source venv/bin/activate
-pip install --require-hashes -r requirements.lock
+# requirements.lock is the production set; requirements-dev.lock adds pytest,
+# hypothesis, testcontainers and aiosqlite for running the suites locally.
+pip install --require-hashes -r requirements.lock -r requirements-dev.lock
 
 export POSTGRES_PASSWORD=regengine
 docker compose -f docker-compose.dev.yml up -d
@@ -385,7 +387,7 @@ These are current repo facts, not speculation:
 - CTE persistence is mid-retirement of a dual-write scheme (WS-1, #1335). `CanonicalEventStore` defaults to writing both the canonical hash-chain store (`fsma.traceability_events`) and the legacy store (`fsma.cte_events`); several newer ingest routes intentionally write canonical-only. Chain verification reads the canonical store **by default** since #3039 (code default flipped 2026-09-02; `CHAIN_VERIFY_READ_CANONICAL=0` is the emergency rollback — the canonical verifier recomputes event digests from row content, which the legacy verifier cannot). The FDA v1 recall export retains a legacy code default, with canonical reads controlled by `FDA_EXPORT_V1_READ_CANONICAL`. The [cutover runbook](docs/persistence/dual-write-cutover.md) records earlier production rollout observations; verify the current deployed flag separately before asserting live read behavior. CI enforces dual-write parity and legacy-vs-canonical golden equivalence in [tests/invariants/](tests/invariants/); plan, read-path inventory, and never-do list live in the same doc.
 - Rule failures are not universally blocking unless the relevant enforcement mode is enabled and the route supports it.
 - Some architecture documentation is older than the current Dockerfile/server wiring; verify against code before using docs as operational truth.
-- Neo4j and Redpanda/Kafka-compatible code paths exist, but the default local dev compose file ([docker-compose.dev.yml](docker-compose.dev.yml)) starts only PostgreSQL and Redis — no Neo4j, no Kafka/Redpanda broker.
+- Neo4j code paths exist, but the default local dev compose file ([docker-compose.dev.yml](docker-compose.dev.yml)) starts only PostgreSQL and Redis — no Neo4j. There is no message broker: background work runs on the PostgreSQL task queue (the Kafka path was archived in WI-05, 2026-11-04).
 - [services/ingestion/app/webhook_compat.py](services/ingestion/app/webhook_compat.py) still exposes an internal non-HTTP `ingest_events()` helper that requires a tenant-bearing payload because it has no request context. HTTP and router callers should derive that payload tenant from authenticated tenant context.
 - Supplier remediation notification delivery is recipient-gated. [services/ingestion/app/remediation/delivery.py](services/ingestion/app/remediation/delivery.py) drains the notification outbox and sends correction-link emails via Resend from the scheduler leader (v101 added delivery-status columns). Only rows enqueued with a recipient are delivered; rows without a recipient remain previews, and legacy pre-v101 `pending` rows are never drained — draining them would revoke links buyers already shared out of band. At send time the drainer re-validates the referenced token and follows the buyer reissue path, so a delivered email never carries a revoked or superseded link.
 - Per-label metered billing ([DESIGN_metering-billing.md](DESIGN_metering-billing.md); code under [services/ingestion/app/stripe_billing/usage.py](services/ingestion/app/stripe_billing/usage.py), [usage_reporting.py](services/ingestion/app/stripe_billing/usage_reporting.py), and the `/usage*` routes in [routes.py](services/ingestion/app/stripe_billing/routes.py)) counts every accepted `TraceabilityEvent` toward a tenant's usage unconditionally (`CanonicalEventStore.persist_event`/`persist_events_batch`, on by default), but reporting that usage to Stripe is not automatic:

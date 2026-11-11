@@ -97,3 +97,45 @@ def test_gap_state_is_read_as_of_a_moment_for_one_tenant(conn) -> None:
     gaps = fetch_gaps_open_at(conn, tenant_id, ["LOT-1"], as_of)
 
     assert gaps == {("LOT-1", "shipping"): ("missing_kde: closed_since", "missing_kde: open_then")}
+
+
+def test_writer_persists_idempotent_gaps_and_receipt_for_only_its_tenant(conn):
+    """Run the real writer SQL and read back durable state in a scratch DB.
+
+    Outer test transaction is rolled back. PR 3816's deployment grant
+    inventory is separately pinned by test_v142_data_gap_runtime_grants.py.
+    """
+    from shared.data_gap_tracking import Gap, ValidationOutcome, record_outcomes
+    from sqlalchemy.orm import Session
+
+    tenant, other = str(uuid.uuid4()), str(uuid.uuid4())
+    lot = "SYNTH-GAP-PERSIST-001"
+    gap = Gap("missing_kde", "reference_document")
+    session = Session(bind=conn, join_transaction_mode="create_savepoint")
+    try:
+        failed = ValidationOutcome(order=0, lot_code=lot, cte_type="shipping", gaps=(gap,))
+        record_outcomes(session, tenant, [failed, failed])
+        record_outcomes(session, other, [failed])
+        rows = conn.execute(
+            text("SELECT tenant_id::text, closed_at FROM public.data_gap_events WHERE lot_code=:lot"),
+            {"lot": lot},
+        ).fetchall()
+        assert sorted(rows) == sorted([(tenant, None), (other, None)])
+        receipt_id = str(uuid.uuid4())
+        fixed = ValidationOutcome(
+            order=1, lot_code=lot, cte_type="shipping", closing_record_id=receipt_id, closing_record_hash=RECEIPT
+        )
+        record_outcomes(session, tenant, [fixed])
+        rows = conn.execute(
+            text(
+                "SELECT tenant_id::text, closed_at, closing_record_id::text, closing_record_hash "
+                "FROM public.data_gap_events WHERE lot_code=:lot"
+            ),
+            {"lot": lot},
+        ).fetchall()
+        by_tenant = {row[0]: row[1:] for row in rows}
+        assert by_tenant[tenant][0] is not None
+        assert by_tenant[tenant][1:] == (receipt_id, RECEIPT)
+        assert by_tenant[other] == (None, None, None)
+    finally:
+        session.close()

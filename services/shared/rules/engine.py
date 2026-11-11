@@ -958,6 +958,6 @@ class RulesEngine:
                 # rows that still fail are marked AND dead-lettered (#2709).
                 self._salvage_rows(
                     tenant_id,
-                    [(event_id, row_params) for (event_id, _r), row_params in zip(chunk, value_dicts)],
+                    [(event_id, row_params) for (event_id, _r), row_params in zip(chunk, value_dicts, strict=False)],
                     insert_stmt,
                 )

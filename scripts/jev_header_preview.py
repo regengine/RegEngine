@@ -63,7 +63,7 @@ from urllib.parse import urlsplit
 import structlog
 
 ROOT = Path(__file__).resolve().parents[1]
-for _path in (ROOT / "services" / "ingestion", ROOT / "services"):
+for _path in (ROOT / "services", ROOT):  # repo root for services.*, services/ for shared.*
     _path_str = str(_path)
     if _path_str not in sys.path:
         sys.path.insert(0, _path_str)
@@ -109,8 +109,8 @@ def _configure_cli_logging() -> None:
 if __name__ == "__main__":  # before the imports below can log anything
     _configure_cli_logging()
 
-from app import csv_templates as route  # noqa: E402
-from app.shared.upload_limits import MAX_CSV_FILE_SIZE_BYTES  # noqa: E402
+from services.ingestion.app import csv_templates as route  # noqa: E402
+from services.ingestion.app.shared.upload_limits import MAX_CSV_FILE_SIZE_BYTES  # noqa: E402
 from shared.jev import JevDecider, JevSettings  # noqa: E402
 from shared.jev.cte_classification import CteClassificationResult  # noqa: E402
 from shared.jev.header_mapping import MALFORMED_HEADER, HeaderMappingResult, unrecognized_headers  # noqa: E402
