@@ -14,6 +14,7 @@ from datetime import datetime
 from typing import Any, Iterable, Mapping, Optional, Sequence
 
 from ..edi_ingestion.utils import _normalize_unit, _resolve_unit_code
+from ..gap_reasons import missing_field_reason
 from ..webhook_models import REQUIRED_KDES_BY_CTE, VALID_UNITS_OF_MEASURE, WebhookCTEType
 
 # Segments the 856 extractor / envelope path already understands. Anything
@@ -85,6 +86,7 @@ class ShippingReadinessResult:
     buyer: dict[str, Any]
     missing_repo_kdes: list[str] = field(default_factory=list)
     missing_buyer_fields: list[str] = field(default_factory=list)
+    gap_reasons: list[str] = field(default_factory=list)
     failures: list[dict[str, str]] = field(default_factory=list)
     flags: list[FlagRecord] = field(default_factory=list)
     label: str = "SYNTHETIC"
@@ -343,6 +345,8 @@ def score_shipping_readiness(
         buyer=dict(buyer),
         missing_repo_kdes=missing_repo,
         missing_buyer_fields=missing_buyer,
+        gap_reasons=[missing_field_reason("shipping", key) for key in missing_repo]
+        + [missing_field_reason("shipping", key, retailer=True) for key in missing_buyer],
         failures=failures,
         flags=flag_list,
         source=source,
@@ -508,8 +512,7 @@ def dry_run_shipping_csv(
         # Attach header unknown-column flags to row 2 only so they appear on a result
         row_flags = list(header_flags) if idx == 2 else []
         row_flags.extend(
-            FlagRecord(reason=f.reason, field=f.field, detail=f.detail, row_number=f.row_number or idx)
-            for f in flags
+            FlagRecord(reason=f.reason, field=f.field, detail=f.detail, row_number=f.row_number or idx) for f in flags
         )
         for f in row_flags:
             if f.reason == "unrecognized_column" and f.row_number == 1 and idx != 2:

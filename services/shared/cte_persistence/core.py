@@ -49,28 +49,41 @@ from __future__ import annotations
 # model classes, hashing functions, ``logger``) is still defined or
 # imported below, and the sibling modules resolve them late through
 # this module so monkeypatching ``core.X`` keeps working.
-import hashlib  # noqa: F401  — kept for backward compat (was a module global)
+import hashlib  # noqa: F401 -- kept for backward compat (was a module global)
 import json
 import logging
-import warnings  # noqa: F401  — kept for backward compat (was a module global)
+import warnings  # noqa: F401 -- kept for backward compat (was a module global)
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Tuple  # noqa: F401
+from typing import (  # noqa: F401 -- kept for backward compatibility (was a module global)
+    Any,
+    Dict,
+    List,
+    Optional,
+    Tuple,
+)
 
-from sqlalchemy import text  # noqa: F401  — kept for backward compat
-from sqlalchemy.exc import (  # noqa: F401  — kept for backward compat
+from sqlalchemy import text  # noqa: F401 -- kept for backward compat
+from sqlalchemy.exc import (  # noqa: F401 -- kept for backward compat
     DatabaseError,
     OperationalError,
     ProgrammingError,
 )
 from sqlalchemy.orm import Session
 
-from .hashing import (
+# The tests patch these names on this module (`shared.cte_persistence.core.X`);
+# the mixins resolve them here at call time, so the module-level binding is the seam.
+from .hashing import (  # noqa: F401 -- module-level seam patched by the persistence tests
     compute_canonical_event_hash as compute_canonical_event_hash,
     compute_chain_hash,
     compute_event_hash,
     compute_idempotency_key,
 )
-from .models import ChainVerification, DuplicateEventError, MerkleVerification, StoreResult
+from .models import (  # noqa: F401 -- module-level seam patched by the persistence tests
+    ChainVerification,
+    DuplicateEventError,
+    MerkleVerification,
+    StoreResult,
+)
 
 # ---------------------------------------------------------------------------
 # Validation Status Constants (fix #1324)
@@ -380,11 +393,11 @@ def _assert_not_exists(sha256_hash: str, tenant_id: str, session: Any) -> None:
 # Imported AFTER the helpers above so the sibling modules can resolve
 # ``core`` attributes during their (lazy, call-time) lookups. These
 # mixins contain code moved verbatim out of this file.
-from .batch import BatchWritePathMixin  # noqa: E402
-from .exports import ExportLogMixin  # noqa: E402
-from .queries import QueryPathMixin  # noqa: E402
-from .verification import ChainVerificationMixin  # noqa: E402
-from .writes import WritePathMixin  # noqa: E402
+from .batch import BatchWritePathMixin  # noqa: E402 -- loads after the base class (cycle)
+from .exports import ExportLogMixin  # noqa: E402 -- loads after the base class (cycle)
+from .queries import QueryPathMixin  # noqa: E402 -- loads after the base class (cycle)
+from .verification import ChainVerificationMixin  # noqa: E402 -- loads after the base class (cycle)
+from .writes import WritePathMixin  # noqa: E402 -- loads after the base class (cycle)
 
 
 class CTEPersistence(
@@ -440,6 +453,6 @@ class CTEPersistence(
         bad input rather than silently setting a non-UUID GUC that would
         break every ``get_tenant_context()::UUID`` comparison in RLS.
         """
-        from shared.tenant_context import set_tenant_guc  # noqa: PLC0415
+        from shared.tenant_context import set_tenant_guc  # noqa: PLC0415 -- lazy import, avoids a module-load cycle
 
         set_tenant_guc(self.session, tenant_id)

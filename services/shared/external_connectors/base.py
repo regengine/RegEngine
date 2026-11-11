@@ -37,7 +37,7 @@ class AuthType(str, Enum):
 
     API_KEY = "api_key"
     OAUTH2 = "oauth2"
-    WEBHOOK_SECRET = "webhook_secret"
+    WEBHOOK_SECRET = "webhook_secret"  # noqa: S105 -- credential field key, not a value
     BASIC = "basic"
     NONE = "none"
 

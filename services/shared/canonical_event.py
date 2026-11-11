@@ -34,7 +34,6 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, field_validator
 from shared.epcis_lot_identity import (
     lossless_enabled,
-    lot_token_only,
     normalize_epcis_lot,
     parse_class_uri,
 )
@@ -442,11 +441,11 @@ class TraceabilityEvent(BaseModel):
             # know) must fail rather than silently floor.
             try:
                 return int(stripped)
-            except ValueError:
+            except ValueError as exc:
                 raise ValueError(
                     f"schema_version string not recognised: {v!r}. "
                     f"Known legacy strings: {sorted(_LEGACY_SCHEMA_VERSION_STRINGS)}"
-                )
+                ) from exc
         raise TypeError(f"schema_version must be int or legacy str, got {type(v).__name__}")
 
     @field_validator("event_timestamp", mode="before")
@@ -589,7 +588,7 @@ class TraceabilityEvent(BaseModel):
         - Positive-only: a keyword miss adds nothing. Absence of a hint
           stays "cannot classify"; it must not become "not FTL".
         """
-        from shared.rules.ftl import (  # noqa: PLC0415 — avoid import cycle at module load
+        from shared.rules.ftl import (  # noqa: PLC0415 -- avoid import cycle at module load
             event_has_ftl_hint,
             infer_ftl_category_from_text,
         )

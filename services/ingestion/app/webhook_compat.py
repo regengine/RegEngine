@@ -62,10 +62,7 @@ def _batch_dedup_key(event: IngestEvent) -> str:
         and isinstance(line_index, int)
         and line_index > 0
     ):
-        return (
-            f"{key}|{event.kdes.get('edi_isa13') or ''}"
-            f"|{event.kdes.get('edi_control_number') or ''}|{line_index}"
-        )
+        return f"{key}|{event.kdes.get('edi_isa13') or ''}|{event.kdes.get('edi_control_number') or ''}|{line_index}"
     return key
 
 
@@ -388,24 +385,35 @@ async def ingest_events(
 
                     canonical = normalize_webhook_event(event, tenant_id, ingestion_run_id=run_id)
                     canonical_store = CanonicalEventStore(db_session, dual_write=False)
-                    canonical_store.persist_event(canonical)
-                    from shared.rules_engine import RulesEngine
+                    persist_result = canonical_store.persist_event(canonical)
+                    canonical_exists = getattr(persist_result, "idempotent", False) is True
+                    # A stored event replayed under the same keys stored
+                    # nothing new. Re-running rules would add evidence and
+                    # exception cases, and the stored copy would count as a
+                    # sibling of itself in lot-level rules. The keys leave out
+                    # quantity and unit, so a resend changing only those is
+                    # skipped here too, as it is dropped by both stores.
+                    if not (canonical_exists and store_result.idempotent is True):
+                        from shared.rules_engine import RulesEngine
 
-                    engine = RulesEngine(db_session)
-                    event_data = {
-                        "event_id": str(canonical.event_id),
-                        "event_type": canonical.event_type.value,
-                        "traceability_lot_code": canonical.traceability_lot_code,
-                        "product_reference": canonical.product_reference,
-                        "quantity": canonical.quantity,
-                        "unit_of_measure": canonical.unit_of_measure,
-                        "from_facility_reference": canonical.from_facility_reference,
-                        "to_facility_reference": canonical.to_facility_reference,
-                        "from_entity_reference": canonical.from_entity_reference,
-                        "to_entity_reference": canonical.to_entity_reference,
-                        "kdes": canonical.kdes,
-                    }
-                    summary = engine.evaluate_event(event_data, persist=True, tenant_id=tenant_id)
+                        engine = RulesEngine(db_session)
+                        event_data = {
+                            # Never the existing canonical row's id: these
+                            # values can differ from what that row stores, and
+                            # evaluation writes its verdict onto the event id.
+                            "event_id": str(canonical.event_id),
+                            "event_type": canonical.event_type.value,
+                            "traceability_lot_code": canonical.traceability_lot_code,
+                            "product_reference": canonical.product_reference,
+                            "quantity": canonical.quantity,
+                            "unit_of_measure": canonical.unit_of_measure,
+                            "from_facility_reference": canonical.from_facility_reference,
+                            "to_facility_reference": canonical.to_facility_reference,
+                            "from_entity_reference": canonical.from_entity_reference,
+                            "to_entity_reference": canonical.to_entity_reference,
+                            "kdes": canonical.kdes,
+                        }
+                        summary = engine.evaluate_event(event_data, persist=True, tenant_id=tenant_id)
                     canon_sp.commit()
                 except (ImportError, ValueError, TypeError, RuntimeError) as canon_err:
                     canon_sp.rollback()

@@ -56,7 +56,14 @@ from .constants import (
     _REQUIRED_SEGMENTS_BY_SET,
     _SUPPORTED_TRANSACTION_SETS,
 )
-from .dedup import check_and_record_interchange, release_interchange, verify_trading_partner_allowed
+from .dedup import (
+    _IN_PROGRESS_RETRY_AFTER_SECONDS,
+    check_and_record_interchange,
+    interchange_in_progress,
+    mark_interchange_stored,
+    release_interchange,
+    verify_trading_partner_allowed,
+)
 from .extractors import _extract_856_fields, _extract_fields_for_set
 from .models import EDIIngestResponse
 from .parser import (
@@ -111,12 +118,17 @@ _reserved_interchanges: contextvars.ContextVar[list[tuple[str, Any, Any, Any, st
 
 
 def _release_isa13_unless_stored(endpoint):
-    """Free the request's ISA13 claim when the document was not stored.
+    """Settle the request's ISA13 claim once the outcome is known.
 
-    The claim is taken before content validation and ingest. A later
-    rejection, a server error, or a result with no accepted events stores
-    nothing, and keeping the claim would turn the partner's corrected
-    resend into a 409 "already processed" for the full dedup TTL.
+    The claim is taken before content validation and ingest. It becomes a
+    stored marker when at least one event was accepted. A later rejection,
+    a server error, or a result with no accepted events stores nothing, and
+    keeping the claim would hold up the partner's corrected resend.
+
+    A partly accepted interchange keeps its claim. Releasing it is not safe
+    yet: event idempotency keys include ``edi_line_index`` and leave out
+    quantity, so a corrected resend under the same ISA13 can store accepted
+    lines twice or drop a corrected quantity.
 
     Releasing on an exception or cancellation assumes nothing was committed.
     That does not hold if ``ingest_events`` commits and then raises (session
@@ -138,9 +150,10 @@ def _release_isa13_unless_stored(endpoint):
         finally:
             _reserved_interchanges.reset(token)
         ingestion_result = getattr(response, "ingestion_result", None)
-        if ingestion_result is None or not ingestion_result.accepted:
-            for claim in reserved:
-                release_interchange(*claim)
+        stored = ingestion_result is not None and ingestion_result.accepted > 0
+        settle = mark_interchange_stored if stored else release_interchange
+        for claim in reserved:
+            settle(*claim)
         return response
 
     return wrapper
@@ -411,6 +424,7 @@ def _reject_invalid_event(
 def _preflight_856_required_kdes(
     *,
     extracted: dict[str, Any],
+    segments: list[list[str]] | None,
     tlc_source_reference: str | None,
     sender_tenant_id: str,
     traceability_lot_code: str,
@@ -447,6 +461,47 @@ def _preflight_856_required_kdes(
             }
         )
     if errors:
+        quantity_errors = [error for error in errors if error["loc"][0] == "quantity"]
+        if (
+            quantity_errors
+            and len(quantity_errors) == len(errors)
+            and segments is not None
+            and _nonblank_quantity_value_present("856", segments)
+        ):
+            line_items = extracted.get("line_items") or []
+            line_lot = next(
+                (line.get("lot_number") for line in line_items if _has_text(line.get("lot_number"))),
+                None,
+            )
+            detail = {
+                "error": "edi_non_positive_quantity",
+                "message": (
+                    "EDI 856 carries a line-item quantity that is zero or non-numeric; "
+                    "refusing to synthesize quantity=1.0."
+                ),
+                "transaction_set": "856",
+                "needs_review": True,
+            }
+            record = _record_edi_rejection(
+                tenant_id=sender_tenant_id,
+                transaction_set="856",
+                traceability_lot_code=line_lot or traceability_lot_code,
+                errors=[
+                    {
+                        "loc": ["quantity"],
+                        "type": detail["error"],
+                        "msg": detail["message"],
+                        "input": None,
+                    }
+                ],
+                extracted=extracted,
+                partner_id=partner_id,
+                source=source,
+                reason=detail["error"],
+                needs_review=True,
+            )
+            detail["rejection_id"] = record["rejection_id"]
+            raise HTTPException(status_code=422, detail=detail)
         _reject_missing_required_kdes(
             errors=errors,
             sender_tenant_id=sender_tenant_id,
@@ -645,8 +700,8 @@ def _enforce_envelope_integrity(
 
     - Reject on ISA/GS sender/receiver mismatch (X12 tenant-smuggling).
     - Reject on GS sender not in tenant's allowed trading-partner list.
-    - Check ISA13 against the interchange dedup cache and return 409
-      idempotent-replay on retransmission.
+    - Check ISA13 against the interchange dedup cache. A retransmission gets
+      409 idempotent-replay once stored, or 503 with Retry-After while pending.
     """
     # #1160: envelope mismatch between ISA and GS — caller tried to
     # smuggle a different trading-partner identity.
@@ -697,13 +752,36 @@ def _enforce_envelope_integrity(
 
     # #1165: retransmission dedup on ISA13.
     claim_token = uuid.uuid4().hex
-    is_duplicate, _prev = check_and_record_interchange(
+    is_duplicate, previous = check_and_record_interchange(
         tenant_id=sender_tenant_id,
         sender_id=extracted.get("sender_id"),
         receiver_id=extracted.get("receiver_id"),
         isa13=extracted.get("isa13"),
         claim_token=claim_token,
     )
+    if is_duplicate and interchange_in_progress(previous):
+        logger.info(
+            "edi_retransmission_in_flight tenant=%s sender=%s isa13=%s set=%s",
+            sender_tenant_id,
+            extracted.get("sender_id"),
+            extracted.get("isa13"),
+            transaction_set,
+        )
+        # Not a 409: the first attempt can still fail, and a partner that
+        # hears "duplicate" has no reason to send the document again.
+        raise HTTPException(
+            status_code=503,
+            # The error handler reduces a 5xx to its message, and only if the
+            # detail is marked safe for clients.
+            detail={
+                "message": (
+                    f"Interchange {extracted.get('isa13')} is still being processed and nothing is "
+                    "confirmed stored yet. Send it again after the Retry-After delay."
+                ),
+                "client_safe": True,
+            },
+            headers={"Retry-After": str(_IN_PROGRESS_RETRY_AFTER_SECONDS)},
+        )
     if is_duplicate:
         logger.info(
             "edi_retransmission_detected tenant=%s sender=%s isa13=%s set=%s",
@@ -931,6 +1009,7 @@ async def ingest_edi_856(
         )
         _preflight_856_required_kdes(
             extracted=extracted,
+            segments=segments,
             tlc_source_reference=tlc_source,
             sender_tenant_id=sender_tenant_id,
             traceability_lot_code=traceability_lot_code,
@@ -1094,6 +1173,21 @@ def _quantity_element_present(transaction_set: str, segments: list[list[str]]) -
         return False
     index = _QUANTITY_ELEMENT_INDEX_BY_SET.get(transaction_set, 2)
     return any(segment and segment[0].upper() == wanted and len(segment) > index for segment in segments)
+
+
+def _nonblank_quantity_value_present(transaction_set: str, segments: list[list[str]]) -> bool:
+    """True when a supplied quantity element is non-blank but invalid."""
+    wanted = _QUANTITY_SEGMENT_BY_SET.get(transaction_set)
+    if not wanted:
+        return False
+    index = _QUANTITY_ELEMENT_INDEX_BY_SET.get(transaction_set, 2)
+    return any(
+        segment
+        and segment[0].upper() == wanted
+        and len(segment) > index
+        and bool(str(segment[index]).strip())
+        for segment in segments
+    )
 
 
 def _build_ingest_event_for_set(
@@ -1522,6 +1616,7 @@ async def ingest_edi_document(
             if slice_set == "856":
                 _preflight_856_required_kdes(
                     extracted=slice_extracted,
+                    segments=slice_segments,
                     tlc_source_reference=tlc_source,
                     sender_tenant_id=sender_tenant_id,
                     traceability_lot_code=traceability_lot_code,
@@ -1827,6 +1922,31 @@ async def ingest_edi_document(
                     segments=slice_segments,
                 )
             )
+        except HTTPException as exc:
+            if not isinstance(exc.detail, dict) or exc.detail.get("error") != "edi_non_positive_quantity":
+                raise
+            detail = dict(exc.detail)
+            record = _record_edi_rejection(
+                tenant_id=sender_tenant_id,
+                transaction_set=slice_set,
+                traceability_lot_code=event_tlc,
+                errors=[
+                    {
+                        "loc": ["quantity"],
+                        "type": detail["error"],
+                        "msg": detail.get("message"),
+                        "input": None,
+                    }
+                ],
+                extracted=slice_extracted,
+                partner_id=x_partner_id,
+                source=source,
+                reason=detail["error"],
+                needs_review=True,
+            )
+            detail["needs_review"] = True
+            detail["rejection_id"] = record["rejection_id"]
+            raise HTTPException(status_code=exc.status_code, detail=detail) from exc
         except ValidationError as exc:
             _reject_invalid_event(
                 exc,

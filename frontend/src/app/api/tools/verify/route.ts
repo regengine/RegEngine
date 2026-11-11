@@ -1,3 +1,6 @@
+// Stays hand-rolled (WI-11, 2026-11-04): it mints the re_tool_access cookie
+// from the backend's expires_in_seconds, local logic a proxy-factory handler
+// does not have.
 /**
  * Proxy for tool email verification - forwards to backend and sets
  * the re_tool_access HTTP-only cookie on successful code confirmation.

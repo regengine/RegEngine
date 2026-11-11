@@ -460,7 +460,10 @@ def test_a_header_row_that_swallows_rows_is_never_sent(harness):
     resp = _post(b'Lot,"Qty\nTLC-1,5,Farm\n')
 
     assert resp.status_code == 400
-    assert resp.json()["detail"] == "CSV contained no data rows"
+    detail = resp.json()["detail"]
+    assert detail["message"] == "No valid rows found"
+    assert "quoted field is not closed" in detail["errors"][0]
+    assert detail["cte_type_suggestion"]["status"] == "malformed_header"
     assert "bodies" not in seen
 
 

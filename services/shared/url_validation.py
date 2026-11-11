@@ -5,7 +5,6 @@ from __future__ import annotations
 import re
 import socket
 from ipaddress import ip_address, ip_network
-from typing import Optional
 from urllib.parse import urlparse
 
 import structlog

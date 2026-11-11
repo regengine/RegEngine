@@ -5,6 +5,7 @@ import { RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
 import { Card } from '@/components/ui/card';
+import { rawFetch } from '@/lib/api-client';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StatusBadge, type ComplianceState } from '@/components/ui/status-badge';
 
@@ -29,32 +30,41 @@ type FetchState =
 
 const REFRESH_INTERVAL_MS = 30_000;
 
+async function fetchHealthState(): Promise<FetchState> {
+  try {
+    const res = await rawFetch('/api/health', { cache: 'no-store' });
+    const data = (await res.json()) as HealthPayload;
+    return { kind: 'ok', data, fetchedAt: new Date() };
+  } catch (err) {
+    return {
+      kind: 'error',
+      message: err instanceof Error ? err.message : 'Failed to fetch /api/health',
+      fetchedAt: new Date(),
+    };
+  }
+}
+
 export function StatusBoard() {
   const [state, setState] = useState<FetchState>({ kind: 'loading' });
 
-  async function load() {
-    try {
-      const res = await fetch('/api/health', { cache: 'no-store' });
-      const data = (await res.json()) as HealthPayload;
-      setState({ kind: 'ok', data, fetchedAt: new Date() });
-    } catch (err) {
-      setState({
-        kind: 'error',
-        message: err instanceof Error ? err.message : 'Failed to fetch /api/health',
-        fetchedAt: new Date(),
-      });
-    }
-  }
-
-  // Mount-time fetch plus a refresh interval. Writing the response into state
-  // is the whole purpose of the effect; there is no render-time equivalent for
-  // a network result.
+  // Mount-time fetch plus a refresh interval. The network result lands in
+  // state from the promise callback, never synchronously in the effect body
+  // (WI-16 removed the hook-rule suppression that used to sit here); the
+  // cancelled flag drops a response that arrives after unmount.
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void load();
-    const id = setInterval(load, REFRESH_INTERVAL_MS);
-    return () => clearInterval(id);
+    let cancelled = false;
+    const apply = (next: FetchState) => {
+      if (!cancelled) setState(next);
+    };
+    void fetchHealthState().then(apply);
+    const id = setInterval(() => void fetchHealthState().then(apply), REFRESH_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
   }, []);
+
+  const load = () => void fetchHealthState().then(setState);
 
   return (
     <Card padding="spacious">
