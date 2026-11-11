@@ -36,6 +36,7 @@ from shared.permissions import has_permission
 from shared.tenant_context import TenantContext, resolve_tenant_context
 
 from .authz import IngestionPrincipal, get_ingestion_principal
+from .edi_interchange import EDIInterchange
 from .webhook_models import EventResult, IngestEvent, IngestResponse, WebhookPayload
 from .webhook_router_v2 import (
     _check_rate_limit,
@@ -249,6 +250,7 @@ async def ingest_events(
     principal: Optional[IngestionPrincipal] = None,
     source_file: Optional[SourceFileReceipt] = None,
     all_or_nothing: bool = False,
+    edi_interchange: Optional[EDIInterchange] = None,
 ) -> IngestResponse:
     """Internal ingestion helper — not an HTTP route.
 
@@ -274,6 +276,9 @@ async def ingest_events(
     The ingestion run and its retained file are kept as the record of the
     attempt. Graph sync waits for the commit, because a publish cannot be
     recalled. Off by default: other callers keep per-event acceptance.
+
+    ``edi_interchange`` serializes EDI retries in PostgreSQL. Its replay
+    receipt commits with the events, surviving Redis loss and response errors.
     """
     if not principal_tenant_id:
         raise PermissionError("ingest_events requires principal_tenant_id from authenticated context")
@@ -328,6 +333,8 @@ async def ingest_events(
     pending_graph_sync: list[tuple[str, IngestEvent]] = []
 
     try:
+        if edi_interchange is not None:
+            edi_interchange.reserve(db_session, tenant_id)
         if source_file is not None:
             # The receipt is written first so a run exists even if every row
             # is rejected; the same transaction carries run, blob and events.
@@ -601,6 +608,8 @@ async def ingest_events(
                 results=results,
                 receipt=source_file,
             )
+        if edi_interchange is not None and accepted > 0:
+            edi_interchange.record_stored(db_session, tenant_id)
         if db_session:
             db_session.commit()
         # After the commit so closes reference durable records; never raises.
@@ -612,7 +621,7 @@ async def ingest_events(
                 _publish_graph_sync(event_id, event, tenant_id)
             except Exception as exc:  # noqa: BLE001 -- graph failure must not undo a committed interchange
                 logger.warning("compat_graph_sync_failed event_id=%s error_type=%s", event_id, type(exc).__name__)
-    except Exception:
+    except BaseException:
         if db_session:
             db_session.rollback()
         raise
