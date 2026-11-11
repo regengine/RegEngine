@@ -299,6 +299,24 @@ assigned id and the GLN stays empty.
 
 ### Interchange rules
 
+- Identified EDI interchanges also reserve a PostgreSQL transaction lock and
+  commit a tenant-scoped receipt in `fsma.edi_interchanges` with their events.
+  A receipt lasts seven days. Redis loss, claim expiry, failed response cleanup,
+  or a lost commit acknowledgement cannot admit another payload under that
+  envelope during this window. Concurrent database attempts receive 503 with
+  `Retry-After: 30`; a committed receipt returns 409, including for changed content.
+  A transaction with no accepted events leaves no receipt, so correction is retryable.
+  Database/receipt failures roll back event writes; they never fail open.
+- Deploy Alembic v143 (`c4a9d2e761b0`) before the application. The runtime grant
+  inventory preserves SELECT/INSERT and timestamp-only UPDATE across deploys;
+  forced RLS scopes receipts to the authenticated tenant. Receipt rows are reused
+  when an expired envelope is seen again. Distinct envelope rows are retained;
+  a bounded retention job is separate from this change.
+  Existing Redis markers remain honored. Pre-deploy interchanges cannot be
+  backfilled reliably from event hashes; they retain only their existing cache
+  and event-idempotency protection. Malformed envelopes lacking sender/ISA13
+  retain the existing event-idempotency fallback. This does not redefine event
+  correction or identity when a sender issues a new ISA13.
 - ISA13 dedup is per tenant, sender and receiver. While the first attempt
   is running, a retransmission gets HTTP 503 with `Retry-After`: nothing is
   confirmed stored yet, so send it again. Once events are stored, a
