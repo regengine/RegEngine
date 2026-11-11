@@ -24,7 +24,9 @@ def persist_edi_rejection(record: dict[str, Any]) -> None:
     """Insert one rejection row, scoped to the record's tenant by RLS."""
     session = None
     try:
-        from shared.database import SessionLocal  # noqa: PLC0415 -- read at call time so tests can swap the session factory
+        from shared.database import (
+            SessionLocal,  # noqa: PLC0415 -- read at call time so tests can swap the session factory
+        )
         from shared.tenant_context import set_tenant_guc  # noqa: PLC0415 -- keeps module import free of database setup
         from sqlalchemy import text  # noqa: PLC0415 -- keeps module import free of database setup
 
