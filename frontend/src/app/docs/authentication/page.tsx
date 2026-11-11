@@ -89,7 +89,7 @@ export default function AuthenticationDocsPage() {
                                 <div className="flex flex-col gap-1 border-b border-re-border-subtle py-3 sm:flex-row sm:gap-4">
                                     <dt className="w-24 shrink-0 font-medium text-re-text-muted">Create</dt>
                                     <dd className="m-0 min-w-0 text-re-text-secondary">
-                                        RegEngine issues live keys on request. Each key belongs to one workspace and carries the scopes
+                                        RegEngine issues production keys on request. Each key belongs to one workspace and carries the scopes
                                         listed below.
                                     </dd>
                                 </div>
