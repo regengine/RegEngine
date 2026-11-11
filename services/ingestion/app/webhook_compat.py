@@ -617,7 +617,7 @@ async def ingest_events(
         for event_id, event in pending_graph_sync:
             try:
                 _publish_graph_sync(event_id, event, tenant_id)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001 -- graph failure must not undo a committed interchange
                 logger.warning("compat_graph_sync_failed event_id=%s error_type=%s", event_id, type(exc).__name__)
     except BaseException:
         if db_session:
