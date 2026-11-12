@@ -7,6 +7,7 @@ import { JSONLD } from "@/components/seo/json-ld";
 import { EmailGate } from "@/components/tools/EmailGate";
 import { RelatedTools } from "@/components/tools/RelatedTools";
 import { Skeleton } from "@/components/ui/skeleton";
+import { RelatedLinks } from "@/components/seo/related-links";
 
 export const metadata: Metadata = {
     title: "FSMA 204 KDE Field Checklist | RegEngine",
@@ -70,6 +71,14 @@ export default function KDECheckerPage() {
                 { href: "/tools/tlc-validator", title: "TLC Format Check", description: "Check a traceability lot code for format and uniqueness assumptions. FDA does not set one TLC format." },
                 { href: "/tools/ftl-checker", title: "FTL Checker", description: "Check if your food products are on the FDA Food Traceability List." },
             ]} />
+            <RelatedLinks
+              width="tool"
+              heading="Related"
+              links={[
+                { href: "/fsma-204/harvesting", label: "Harvesting KDEs under 21 CFR 1.1325" },
+                { href: "/tools", label: "Free FSMA 204 tools" }
+              ]}
+            />
         </>
     );
 }

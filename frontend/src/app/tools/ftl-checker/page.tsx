@@ -6,6 +6,7 @@ import { JSONLD } from "@/components/seo/json-ld";
 import { RelatedTools } from "@/components/tools/RelatedTools";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { RelatedLinks } from "@/components/seo/related-links";
 
 export const metadata: Metadata = {
     title: "FTL List Checker for FSMA 204 | RegEngine",
@@ -76,6 +77,14 @@ export default function FTLCheckerPage() {
                 { href: "/tools/cte-mapper", title: "CTE Mapper", description: "Map the 7 Critical Tracking Event (CTE) types your supply chain often records under FSMA 204." },
                 { href: "/tools/kde-checker", title: "KDE Field Checklist", description: "Check whether Key Data Element (KDE) fields are present for each FTL product and CTE type." },
             ]} />
+            <RelatedLinks
+              width="tool"
+              heading="Related"
+              links={[
+                { href: "/fsma-204", label: "Full FSMA 204 guide" },
+                { href: "/tools", label: "Free FSMA 204 tools hub" }
+              ]}
+            />
         </>
     );
 }

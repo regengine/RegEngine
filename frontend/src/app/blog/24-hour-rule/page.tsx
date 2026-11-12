@@ -8,6 +8,7 @@ import { Callout } from "@/components/ui/callout";
 import { Card } from "@/components/ui/card";
 import { JSONLD } from '@/components/seo/json-ld';
 import { blogPostingJsonLd } from '@/lib/blog-jsonld';
+import { RelatedLinks } from "@/components/seo/related-links";
 
 export const metadata: Metadata = {
   title: "The FSMA 204 24-Hour Rule Explained | RegEngine Blog",
@@ -210,7 +211,15 @@ export default function TwentyFourHourRulePage() {
             </div>
           </Card>
         </div>
-      </Container>
+      
+      <RelatedLinks
+        width="prose"
+        links={[
+            { href: "/tools/records-request-checklist", label: "Records Request Checklist" },
+            { href: "/tools", label: "Free FSMA 204 tools" }
+        ]}
+      />
+</Container>
     </div>
   );
 }
