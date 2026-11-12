@@ -25,7 +25,7 @@ const SAFE_PROPERTY_KEYS = new Set([
   'tool_id', 'lead_captured', 'categories_selected', 'covered_count',
   'risk_level', 'status', 'total_events', 'non_compliant_events',
   'compliant_events', 'tool', 'outcome', 'error_code', 'placement', 'form', 'step',
-  'grade', 'webinar',
+  'grade', 'webinar', 'surface', 'scenario', 'cte', 'gap',
 ]);
 const EMAIL_SHAPE = /^[^\s@]{1,64}@[^\s@]{1,253}\.[^\s@]{2,63}$/;
 const SAFE_LABEL = /^[a-z0-9][a-z0-9_-]{0,79}$/i;
