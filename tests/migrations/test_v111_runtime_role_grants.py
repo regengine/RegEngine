@@ -1670,11 +1670,20 @@ def test_function_grants_are_explicit_and_set_admin_is_sysadmin_only(owner_engin
             ("fsma", "get_inbound_email_audit_by_message_id"),
             ("fsma", "claim_inbound_email_audit"),
             ("fsma", "finalize_inbound_email_audit"),
+            # v142: the guarded mutation triggers call the two read-only
+            # helpers as the invoking role, and the retention purge arms
+            # itself through the SECURITY DEFINER arm function.
+            ("fsma", "break_glass_authorized"),
+            ("fsma", "retention_purge_permits"),
+            ("fsma", "arm_retention_purge"),
         },
         "regengine_sysadmin": {
             ("public", "get_tenant_context"),
             ("public", "set_tenant_context"),
             ("public", "set_admin_context"),
+            ("fsma", "break_glass_authorized"),
+            ("fsma", "retention_purge_permits"),
+            ("fsma", "arm_retention_purge"),
         },
     }
     # role_routine_grants is keyed by name, which cannot tell the granted
