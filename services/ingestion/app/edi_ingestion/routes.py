@@ -160,8 +160,11 @@ def _decode_edi_bytes(raw_bytes: bytes) -> str:
 
     The spec-honoring fix:
 
-      1. Try ``utf-8`` strict. Modern partners send UTF-8 and
-         non-ASCII names (ñ, é, ü) round-trip exactly.
+      1. Try ``utf-8-sig`` strict. Modern partners send UTF-8 and
+         non-ASCII names (ñ, é, ü) round-trip exactly. A leading UTF-8
+         BOM (Excel, Notepad, many AS2 wrappers) is stripped; it is
+         not payload. Plain ``utf-8`` would keep U+FEFF as the first
+         character and shift the ISA delimiter indexes.
       2. On ``UnicodeDecodeError`` fall back to ``latin-1`` strict
          (ISO-8859-1). X12.5/X12.6 explicitly name ISO-8859-1 as the
          Basic/Extended character set, so a partner sending latin-1
@@ -178,7 +181,7 @@ def _decode_edi_bytes(raw_bytes: bytes) -> str:
     can spot encoding drift from a partner and update their config.
     """
     try:
-        return raw_bytes.decode("utf-8")
+        return raw_bytes.decode("utf-8-sig")
     except UnicodeDecodeError as utf8_err:
         # Spec fallback: X12 Basic/Extended character set is ISO-8859-1.
         # latin-1 is total — every byte maps — so this is strict-safe.

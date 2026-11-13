@@ -112,8 +112,36 @@ def _peek_transaction_set(compact: str, element_sep: str, segment_term: str) -> 
         return "unknown"
 
 
+# ISA01 lives at index 3 of a 106-character ISA header. Partners rarely
+# send anything else, but ``*:|^`` are the separators X12 tooling emits.
+_X12_ELEMENT_SEPARATORS = "*:|^"
+
+
+def _compact_x12_payload(content: str) -> str:
+    """Strip transmission wrappers so ISA delimiters sit at spec offsets.
+
+    Element separator is ISA[1] (index 3) and the segment terminator is
+    the 106th character of ISA. A UTF-8 BOM, VAN preamble, or leading
+    whitespace shifts those indexes onto payload bytes, so a valid 856 is
+    parsed as garbage and refused as an unsupported transaction set.
+
+    Newlines are already insignificant. Remaining leading BOM/whitespace
+    is stripped. A short non-ISA prefix (Excel/AS2 BOM decoded as latin-1,
+    or a VAN wrapper) is skipped up to the first ``ISA`` followed by a
+    typical element separator.
+    """
+    compact = content.replace("\n", "").replace("\r", "").lstrip("\ufeff \t")
+    if compact.startswith("ISA"):
+        return compact
+    for sep in _X12_ELEMENT_SEPARATORS:
+        idx = compact.find("ISA" + sep)
+        if idx != -1:
+            return compact[idx:]
+    return compact
+
+
 def _parse_x12_segments(content: str) -> list[list[str]]:
-    compact = content.replace("\n", "").replace("\r", "")
+    compact = _compact_x12_payload(content)
     element_sep = compact[3] if len(compact) > 3 and compact[3].strip() else "*"
     segment_term = compact[105] if len(compact) > 105 and compact[105].strip() else "~"
     raw_segments = compact.split(segment_term)

@@ -14,8 +14,9 @@ History of this bug:
      bug with a visible marker.
 
   3. Current fix (this file):
-        a. Try ``utf-8`` strict. Modern partners get an exact round-
-           trip for all non-ASCII names.
+        a. Try ``utf-8-sig`` strict. Modern partners get an exact round-
+           trip for all non-ASCII names. A leading UTF-8 BOM is stripped
+           so ISA delimiter offsets stay at their spec positions.
         b. On UnicodeDecodeError, fall back to ``latin-1`` strict —
            the X12.5/X12.6 Basic/Extended character set. latin-1 is
            total so strict decoding never fails, and every byte is
@@ -47,6 +48,7 @@ import pytest
 service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
+from app.edi_ingestion.parser import _detect_transaction_set, _parse_x12_segments
 from app.edi_ingestion.routes import _decode_edi_bytes
 
 # ---------------------------------------------------------------------------
@@ -62,6 +64,29 @@ class TestValidUtf8_Issue1170:
         assert "\ufffd" not in decoded, (
             "errors='replace' regression: valid ASCII should never produce a replacement character"
         )
+
+    def test_utf8_bom_is_stripped_not_kept_as_payload(self, caplog):
+        """Excel, Notepad, and many AS2 wrappers prefix UTF-8 with a BOM.
+
+        ``utf-8`` strict would keep U+FEFF as the first character and
+        shift ISA delimiter indexes. ``utf-8-sig`` strips the mark.
+        That is not data loss: the BOM is not an X12 character.
+        """
+        body = "ISA*00*          *00*          ~"
+        with caplog.at_level(logging.WARNING, logger="edi-ingestion"):
+            decoded = _decode_edi_bytes(body.encode("utf-8-sig"))
+        assert not decoded.startswith("\ufeff")
+        assert decoded == body
+        assert decoded.startswith("ISA")
+        fallback_warnings = [r for r in caplog.records if "edi_decode_fallback_latin1" in r.getMessage()]
+        assert fallback_warnings == []
+
+    def test_bom_fixture_decode_then_parse_finds_856(self):
+        """Windows/AS2 trigger: EF BB BF + a real 856 must still sniff ST01."""
+        raw = Path(__file__).parent / "fixtures/edi_corpus/asn_856.edi"
+        decoded = _decode_edi_bytes(b"\xef\xbb\xbf" + raw.read_bytes())
+        assert not decoded.startswith("\ufeff")
+        assert _detect_transaction_set(_parse_x12_segments(decoded)) == "856"
 
     def test_utf8_multibyte_preserved_exactly(self):
         """Proper UTF-8 multi-byte sequences must survive intact.
