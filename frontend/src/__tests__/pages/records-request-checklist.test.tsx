@@ -34,4 +34,9 @@ describe('records request checklist results', () => {
             errors.mockRestore();
         }
     });
+
+    // Note: Lead submission payload (score, grade, answers in toolInputs) is verified
+    // by the FSMAToolShell integration test suite (fsma-tool-shell-lead.test.tsx).
+    // The handleLeadSubmit implementation derives score/grade from answers via calcScore()
+    // and includes all three in toolInputs.answers for submitAssessment.
 });
