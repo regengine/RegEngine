@@ -430,15 +430,29 @@ def test_two_row_chain_reports_canonical_content_rewritten_with_its_hash(db_sess
     ),
 )
 def test_shared_row_reports_canonical_content_rewritten_with_its_hash(db_session, monkeypatch) -> None:
-    """A chain row shared by both stores must still bind the canonical content."""
+    """A chain row shared by both stores must still bind the canonical content.
+
+    Only the two final assertions are the expected failure. The setup reports
+    problems with ``pytest.fail``, which the marker does not accept, so a
+    broken ingest or a chain that is invalid before the rewrite fails this test.
+    """
     from shared.canonical_persistence import CanonicalEventStore
 
     session, tenant_id = db_session
+    store = CanonicalEventStore(session, dual_write=False)
     response = _ingest_through_compat(session, tenant_id, monkeypatch, ["TLC-COMPAT-REWRITTEN"])
-    assert response.accepted == 1, [e.errors for e in response.events]
+    if response.accepted != 1:
+        pytest.fail(f"ingest did not store the event: {[e.errors for e in response.events]}")
+    event_id = response.events[0].event_id
+    rows = [tuple(row) for row in _ledger_rows(session, tenant_id)]
+    if rows != [(event_id, True, True, True)]:
+        pytest.fail(f"expected one chain row shared by both stores, got {rows!r}")
+    before = store.verify_chain_canonical(tenant_id)
+    if not before.valid:
+        pytest.fail(f"chain is invalid before the rewrite: {before.errors}")
 
-    _rewrite_canonical_content_and_hash(session, tenant_id, response.events[0].event_id)
+    _rewrite_canonical_content_and_hash(session, tenant_id, event_id)
 
-    result = CanonicalEventStore(session, dual_write=False).verify_chain_canonical(tenant_id)
+    result = store.verify_chain_canonical(tenant_id)
     assert result.valid is False
     assert result.tamper_rows, result.errors
