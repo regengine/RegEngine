@@ -22,8 +22,10 @@ memory dict and monkeypatch ``_get_client``. No live Redis needed.
 
 from __future__ import annotations
 
+import asyncio
+import hashlib
 import json
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional, Sequence
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -955,6 +957,387 @@ class TestOperationBinding:
         first = client.post("/echo", headers=headers)
         retry = client.post("/echo", headers=headers)
         assert first.content == retry.content == b"\xff\x00\xfe"
+
+
+# ---------------------------------------------------------------------------
+# Multipart uploads: the boundary is not part of the request
+# ---------------------------------------------------------------------------
+#
+# curl, requests and httpx draw a new random boundary for every send. It sits
+# in the Content-Type header and in every delimiter line of the body, so a
+# keyed retry of one upload never has the bytes of the first attempt.
+
+# A form part: field name, bytes, filename, part content type.
+_FormPart = tuple[str, bytes, Optional[str], Optional[str]]
+
+# Synthetic. Like a real EDI or CSV export, the file has CRLF line ends, a
+# line that looks like the delimiter of some other boundary, and binary bytes.
+_FILE_BYTES = b"ISA*00*SYNTHETIC~\r\nGS*SH~\r\n--not-the-boundary\r\nST*856*0001~\r\n\xff\x00"
+_FILE_PART: _FormPart = ("file", _FILE_BYTES, "asn.edi", "application/edi-x12")
+_FIELD_PART: _FormPart = ("tlc_source_reference", b"REF-0001", None, None)
+_UPLOAD: tuple[_FormPart, ...] = (_FILE_PART, _FIELD_PART)
+_UPLOAD_URL = "http://testserver/echo"
+
+
+def _form_body(boundary: str, parts: Sequence[_FormPart] = _UPLOAD) -> bytes:
+    """Encode ``parts`` the way an HTTP client encodes a form upload."""
+    body = bytearray()
+    for name, content, filename, content_type in parts:
+        disposition = f'form-data; name="{name}"'
+        if filename is not None:
+            disposition += f'; filename="{filename}"'
+        body += f"--{boundary}\r\nContent-Disposition: {disposition}\r\n".encode()
+        if content_type is not None:
+            body += f"Content-Type: {content_type}\r\n".encode()
+        body += b"\r\n" + content + b"\r\n"
+    body += f"--{boundary}--\r\n".encode()
+    return bytes(body)
+
+
+def _keyed(content_type: str, body: bytes) -> Dict[str, Any]:
+    """``client.post`` arguments for one keyed request from tenant ``tenant``."""
+    return {
+        "headers": {"Idempotency-Key": "upload", **_tenant_headers("tenant"), "Content-Type": content_type},
+        "content": body,
+    }
+
+
+def _form_request(boundary: str, parts: Sequence[_FormPart] = _UPLOAD) -> Dict[str, Any]:
+    """``client.post`` arguments that upload ``parts`` under ``boundary``."""
+    return _keyed(f"multipart/form-data; boundary={boundary}", _form_body(boundary, parts))
+
+
+def _exact_bytes_fingerprint(content_type: str, body: bytes, url: str = _UPLOAD_URL) -> str:
+    """The fingerprint of a ``_keyed`` request as every release before this computed it.
+
+    Cache entries already in Redis carry it. It stays the fingerprint of every
+    request that is not a form upload the parser reads to its end.
+    """
+    bound = ["POST", url, content_type, "", "", _INTERNAL_SECRET, "", ""]
+    return hashlib.sha256(json.dumps(bound).encode() + body).hexdigest()
+
+
+def _stored_fingerprint(fake: _FakeAsyncRedis) -> str:
+    return json.loads(fake.store[b"idempotency:tenant:upload"])["fingerprint"]
+
+
+def _recording_app(calls: list[bytes]) -> FastAPI:
+    """An app whose route records the raw body it was handed."""
+
+    async def handler(request):
+        calls.append(await request.body())
+        return {"stored": len(calls)}
+
+    return _build_app(handler)
+
+
+# Bodies the form parser does not read through to a closing delimiter, or that
+# no route reads as a form. Each takes a boundary and returns the Content-Type
+# header and the body.
+def _closing_delimiter_missing(boundary: str) -> tuple[str, bytes]:
+    body = _form_body(boundary)
+    return f"multipart/form-data; boundary={boundary}", body[: body.rindex(b"--" + boundary.encode())]
+
+
+def _boundary_parameter_missing(boundary: str) -> tuple[str, bytes]:
+    return "multipart/form-data", _form_body(boundary)
+
+
+def _boundary_parameter_empty(boundary: str) -> tuple[str, bytes]:
+    return "multipart/form-data; boundary=", _form_body(boundary)
+
+
+def _boundary_absent_from_body(boundary: str) -> tuple[str, bytes]:
+    return f"multipart/form-data; boundary={boundary}", _form_body(f"other-{boundary}")
+
+
+def _body_without_delimiters(boundary: str) -> tuple[str, bytes]:
+    return f"multipart/form-data; boundary={boundary}", b"plain bytes, no delimiter anywhere"
+
+
+def _part_header_invalid(boundary: str) -> tuple[str, bytes]:
+    body = f"--{boundary}\r\nContent Disposition form-data\r\n\r\nvalue\r\n--{boundary}--\r\n"
+    return f"multipart/form-data; boundary={boundary}", body.encode()
+
+
+def _boundary_longer_than_the_parser_accepts(boundary: str) -> tuple[str, bytes]:
+    # python-multipart refuses a boundary over 256 characters with a ValueError
+    # subclass. The middleware reads a ValueError as "body over 10 MB".
+    long_boundary = boundary * 20
+    return f"multipart/form-data; boundary={long_boundary}", _form_body(long_boundary)
+
+
+def _one_part_over_the_limit(boundary: str) -> tuple[str, bytes]:
+    parts = [(f"field{index}", b"v", None, None) for index in range(2001)]
+    return f"multipart/form-data; boundary={boundary}", _form_body(boundary, parts)
+
+
+def _file_stuffed_with_look_alike_delimiters(boundary: str) -> tuple[str, bytes]:
+    # One part, but its bytes hold 2001 lines that start like a delimiter.
+    stuffing = f"\r\n--{boundary}!".encode() * 2001
+    return f"multipart/form-data; boundary={boundary}", _form_body(boundary, [("file", stuffing, "s.csv", "text/csv")])
+
+
+def _multipart_but_not_form_data(boundary: str) -> tuple[str, bytes]:
+    return f"multipart/mixed; boundary={boundary}", _form_body(boundary)
+
+
+class TestMultipartUploadBinding:
+    """A retried upload is the same request although its boundary is new."""
+
+    @pytest.mark.asyncio
+    async def test_retry_under_a_new_boundary_is_in_progress_then_replayed(self, monkeypatch):
+        _patched_middleware(monkeypatch, _FakeAsyncRedis())
+        started, release = asyncio.Event(), asyncio.Event()
+        seen = []
+
+        async def handler(request):
+            raw = await request.body()
+            form = await request.form()
+            upload = form["file"]
+            seen.append((raw, upload.filename, upload.content_type, await upload.read(), form["tlc_source_reference"]))
+            started.set()
+            await release.wait()
+            return {"stored": len(seen)}
+
+        first_send = _form_request("boundary-of-the-first-send")
+        async with AsyncClient(transport=ASGITransport(app=_build_app(handler)), base_url="http://test") as client:
+            first = asyncio.create_task(client.post("/echo", **first_send))
+            await asyncio.wait_for(started.wait(), timeout=3)
+            try:
+                during = await asyncio.wait_for(
+                    client.post("/echo", **_form_request("boundary-of-a-retry-while-running")), timeout=3
+                )
+                assert during.status_code == 409
+                assert during.json() == {"error": "idempotency_request_in_progress"}
+                other_file = [("file", b"another file", "asn.edi", "application/edi-x12"), _FIELD_PART]
+                changed = await asyncio.wait_for(
+                    client.post("/echo", **_form_request("boundary-of-a-changed-upload", other_file)), timeout=3
+                )
+                assert changed.status_code == 409
+                assert changed.json() == {"error": "idempotency_key_conflict"}
+            finally:
+                release.set()
+                original = await first
+            after = await client.post("/echo", **_form_request("boundary-of-a-retry-afterwards"))
+            assert original.status_code == after.status_code == 200
+            assert after.json() == original.json() == {"stored": 1}
+        # The route ran once, on the bytes of the first send, and read the form from them.
+        assert seen == [(first_send["content"], "asn.edi", "application/edi-x12", _FILE_BYTES, "REF-0001")]
+
+    def test_upload_encoded_twice_by_a_real_client_replays(self, monkeypatch):
+        """No hand-built body here: httpx draws the boundary of each send itself."""
+        _patched_middleware(monkeypatch, _FakeAsyncRedis())
+        calls: list[bytes] = []
+        client = TestClient(_recording_app(calls))
+        sends = [
+            client.build_request(
+                "POST",
+                "/echo",
+                headers={"Idempotency-Key": "upload", **_tenant_headers("tenant")},
+                files={"file": ("asn.edi", _FILE_BYTES, "application/edi-x12")},
+                data={"tlc_source_reference": "REF-0001"},
+            )
+            for _ in range(2)
+        ]
+        assert sends[0].headers["content-type"] != sends[1].headers["content-type"]
+        first, retry = client.send(sends[0]), client.send(sends[1])
+        assert first.status_code == retry.status_code == 200
+        assert retry.json() == first.json() == {"stored": 1}
+        assert len(calls) == 1
+
+    @pytest.mark.parametrize(
+        "parts",
+        [
+            pytest.param([("file", b"", "empty.csv", "text/csv")], id="empty-file"),
+            pytest.param([("file", b"last byte is a carriage return\r", "cr.csv", "text/csv")], id="file-ends-with-cr"),
+            pytest.param([("note", b"", None, None)], id="empty-field"),
+            pytest.param([], id="no-parts"),
+            pytest.param([(f"field{index}", b"v", None, None) for index in range(2000)], id="at-the-part-limit"),
+        ],
+    )
+    def test_other_form_shapes_replay_under_a_new_boundary(self, monkeypatch, parts):
+        _patched_middleware(monkeypatch, _FakeAsyncRedis())
+        calls: list[bytes] = []
+        client = TestClient(_recording_app(calls))
+        first = client.post("/echo", **_form_request("first-boundary", parts))
+        retry = client.post("/echo", **_form_request("second-boundary", parts))
+        assert first.status_code == retry.status_code == 200
+        assert retry.json() == first.json() == {"stored": 1}
+        assert len(calls) == 1
+
+    def test_bytes_outside_the_parts_are_not_part_of_the_request(self, monkeypatch):
+        """Line ends before the first delimiter and bytes after the last never reach a route."""
+        _patched_middleware(monkeypatch, _FakeAsyncRedis())
+        calls: list[bytes] = []
+        client = TestClient(_recording_app(calls))
+        first = client.post("/echo", **_form_request("first-boundary"))
+        padded = b"\r\n" + _form_body("second-boundary") + b"ignored trailer"
+        retry = client.post("/echo", **_keyed('multipart/form-data; boundary="second-boundary"', padded))
+        assert first.status_code == retry.status_code == 200
+        assert retry.json() == first.json() == {"stored": 1}
+        assert len(calls) == 1
+
+    @pytest.mark.parametrize(
+        ("original", "changed"),
+        [
+            pytest.param(
+                _UPLOAD, [("file", b"another file", "asn.edi", "application/edi-x12"), _FIELD_PART], id="file-bytes"
+            ),
+            pytest.param(_UPLOAD, [_FILE_PART, ("tlc_source_reference", b"REF-0002", None, None)], id="field-value"),
+            pytest.param(
+                _UPLOAD, [("file", _FILE_BYTES, "renamed.edi", "application/edi-x12"), _FIELD_PART], id="filename"
+            ),
+            pytest.param(
+                _UPLOAD, [("file", _FILE_BYTES, "asn.edi", "text/plain"), _FIELD_PART], id="part-content-type"
+            ),
+            pytest.param(
+                _UPLOAD, [("file", _FILE_BYTES, "asn.edi", None), _FIELD_PART], id="part-content-type-dropped"
+            ),
+            pytest.param(
+                _UPLOAD, [("document", _FILE_BYTES, "asn.edi", "application/edi-x12"), _FIELD_PART], id="field-name"
+            ),
+            pytest.param(_UPLOAD, [_FIELD_PART, _FILE_PART], id="part-order"),
+            pytest.param(_UPLOAD, [_FILE_PART], id="part-removed"),
+            pytest.param(_UPLOAD, [_FILE_PART, _FIELD_PART, ("note", b"", None, None)], id="part-added"),
+            pytest.param([("a", b"bc", None, None)], [("ab", b"c", None, None)], id="name-and-value-split-elsewhere"),
+            pytest.param(
+                [("file", b"note first-boundary", "n.txt", "text/plain")],
+                [("file", b"note second-boundary", "n.txt", "text/plain")],
+                id="file-names-its-own-boundary",
+            ),
+            pytest.param(
+                [("a", b"1", None, None), ("b", b"2", None, None)],
+                [("a", b'1\r\n--first-boundary\r\nContent-Disposition: form-data; name="b"\r\n\r\n2', None, None)],
+                id="two-parts-quoted-inside-one",
+            ),
+        ],
+    )
+    def test_a_changed_form_still_conflicts(self, monkeypatch, original, changed):
+        _patched_middleware(monkeypatch, _FakeAsyncRedis())
+        calls: list[bytes] = []
+        client = TestClient(_recording_app(calls))
+        first = client.post("/echo", **_form_request("first-boundary", original))
+        assert first.status_code == 200
+        conflict = client.post("/echo", **_form_request("second-boundary", changed))
+        assert conflict.status_code == 409
+        assert conflict.json() == {"error": "idempotency_key_conflict"}
+        # The new boundary alone is not what conflicted.
+        retry = client.post("/echo", **_form_request("second-boundary", original))
+        assert retry.status_code == 200
+        assert retry.json() == first.json() == {"stored": 1}
+        assert len(calls) == 1
+
+    @pytest.mark.parametrize(
+        ("path", "extra_headers", "content_type_parameter"),
+        [
+            pytest.param("/echo?mode=other", {}, "", id="url"),
+            pytest.param("/echo", {"X-RegEngine-API-Key": "different-credential"}, "", id="credential"),
+            pytest.param("/echo", {}, "; charset=latin-1", id="content-type-parameter"),
+        ],
+    )
+    def test_the_same_form_in_a_different_request_still_conflicts(
+        self, monkeypatch, path, extra_headers, content_type_parameter
+    ):
+        _patched_middleware(monkeypatch, _FakeAsyncRedis())
+        monkeypatch.setattr("shared.idempotency._lookup_api_key_context", lambda raw: ("tenant", "auth-snapshot"))
+        calls: list[bytes] = []
+        client = TestClient(_recording_app(calls))
+        assert client.post("/echo", **_form_request("first-boundary")).status_code == 200
+        replay = _form_request("second-boundary")
+        replay["headers"] = {**replay["headers"], **extra_headers}
+        replay["headers"]["Content-Type"] += content_type_parameter
+        conflict = client.post(path, **replay)
+        assert conflict.status_code == 409
+        assert conflict.json() == {"error": "idempotency_key_conflict"}
+        assert len(calls) == 1
+
+    @pytest.mark.parametrize(("slice_bytes", "repeats"), [(1, 2), (7, 2), (1000, 15), (64 * 1024, 150)])
+    def test_parts_read_the_same_however_the_body_is_sliced(self, monkeypatch, slice_bytes, repeats):
+        """The body is fed to the parser in slices. Where they fall must not matter."""
+        _patched_middleware(monkeypatch, _FakeAsyncRedis())
+        calls: list[bytes] = []
+        client = TestClient(_recording_app(calls))
+        # Bare carriage returns and near misses of both delimiters on most
+        # lines, and now and then a line that only looks like a delimiter.
+        near_misses = b"row\r\n--first-boundar\r\n--a-second-boundary-of-another-lengt\r-\r" * 50
+        tricky = (near_misses + b"\r\n--first-boundary!\r\n--a-second-boundary-of-another-length!") * repeats
+        parts = [("file", tricky, "rows.csv", "text/csv"), _FIELD_PART]
+        first = client.post("/echo", **_form_request("first-boundary", parts))
+        monkeypatch.setattr("shared.idempotency._MULTIPART_SLICE_BYTES", slice_bytes)
+        retry = client.post("/echo", **_form_request("a-second-boundary-of-another-length", parts))
+        assert first.status_code == retry.status_code == 200
+        assert retry.json() == first.json() == {"stored": 1}
+        assert len(calls) == 1
+
+    @pytest.mark.parametrize(
+        "malformed",
+        [
+            _closing_delimiter_missing,
+            _boundary_parameter_missing,
+            _boundary_parameter_empty,
+            _boundary_absent_from_body,
+            _body_without_delimiters,
+            _part_header_invalid,
+            _boundary_longer_than_the_parser_accepts,
+            _one_part_over_the_limit,
+            _file_stuffed_with_look_alike_delimiters,
+            _multipart_but_not_form_data,
+        ],
+        ids=lambda case: case.__name__.strip("_"),
+    )
+    def test_body_the_form_parser_does_not_finish_keeps_the_exact_byte_binding(
+        self, monkeypatch, malformed: Callable[[str], tuple[str, bytes]]
+    ):
+        fake = _FakeAsyncRedis()
+        _patched_middleware(monkeypatch, fake)
+        calls: list[bytes] = []
+        client = TestClient(_recording_app(calls))
+        content_type, body = malformed("first-boundary")
+        # Neither refused by the middleware nor altered on the way to the route.
+        first = client.post("/echo", **_keyed(content_type, body))
+        assert first.status_code == 200
+        assert calls == [body]
+        assert _stored_fingerprint(fake) == _exact_bytes_fingerprint(content_type, body)
+        # The same bytes again are the same request.
+        retry = client.post("/echo", **_keyed(content_type, body))
+        assert retry.status_code == 200
+        assert retry.json() == first.json() == {"stored": 1}
+        # Any other bytes, a new boundary included, are a conflict as before.
+        conflict = client.post("/echo", **_keyed(*malformed("second-boundary")))
+        assert conflict.status_code == 409
+        assert conflict.json() == {"error": "idempotency_key_conflict"}
+        assert calls == [body]
+
+    def test_upload_over_the_body_cap_is_refused_before_it_is_parsed(self, monkeypatch):
+        fake = _FakeAsyncRedis()
+        _patched_middleware(monkeypatch, fake)
+        calls: list[bytes] = []
+        client = TestClient(_recording_app(calls))
+        too_large = [("file", b"x" * (10 * 1024 * 1024), "rows.csv", "text/csv")]
+        response = client.post("/echo", **_form_request("first-boundary", too_large))
+        assert response.status_code == 413
+        assert response.json() == {"error": "payload_too_large"}
+        assert fake.store == {}
+        assert calls == []
+
+    @pytest.mark.parametrize(
+        ("content_type", "body"),
+        [
+            pytest.param("application/json", b'{"events": [1, 2]}', id="json"),
+            pytest.param("application/x-www-form-urlencoded", b"a=1&b=2", id="urlencoded-form"),
+            pytest.param("application/octet-stream", b"\xff\x00--first-boundary\r\n", id="binary"),
+            pytest.param("", b"no content type", id="no-content-type"),
+        ],
+    )
+    def test_every_other_body_keeps_its_fingerprint(self, monkeypatch, content_type, body):
+        """Entries cached by earlier releases must still match after a deploy."""
+        fake = _FakeAsyncRedis()
+        _patched_middleware(monkeypatch, fake)
+        calls: list[bytes] = []
+        client = TestClient(_recording_app(calls))
+        assert client.post("/echo", **_keyed(content_type, body)).status_code == 200
+        assert _stored_fingerprint(fake) == _exact_bytes_fingerprint(content_type, body)
 
 
 @pytest.fixture
