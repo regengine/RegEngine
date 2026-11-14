@@ -180,16 +180,30 @@ def test_true_orphan_still_flips_valid(db_session) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _ingest_through_compat(session, tenant_id: str, monkeypatch, lots: list[str], *, all_or_nothing: bool = False):
+def _shipped_yesterday() -> datetime:
+    return datetime.now(timezone.utc).replace(microsecond=0) - timedelta(days=1)
+
+
+def _ingest_through_compat(
+    session,
+    tenant_id: str,
+    monkeypatch,
+    lots: list[str],
+    *,
+    shipped: datetime | None = None,
+    all_or_nothing: bool = False,
+):
     """Run the real ``ingest_events`` loop and both real writers on the test's transaction.
 
     Only what needs a network or a second connection is stubbed: the API-key
     lookup, the Redis rate limit, the graph publish and the data-gap writer.
+    The event time is part of both stores' duplicate keys, so a test that
+    sends the same events twice passes one ``shipped`` to both calls.
     """
     from services.ingestion.app import webhook_compat
     from services.ingestion.app.webhook_models import IngestEvent, WebhookCTEType, WebhookPayload
 
-    shipped = datetime.now(timezone.utc).replace(microsecond=0) - timedelta(days=1)
+    shipped = shipped or _shipped_yesterday()
     payload = WebhookPayload(
         source="edi_inbound_945",
         tenant_id=tenant_id,
@@ -265,7 +279,8 @@ def test_compat_ingest_writes_one_ledger_row_shared_by_both_stores(db_session, m
 
     session, tenant_id = db_session
     lots = [f"TLC-COMPAT-{i:03d}" for i in range(3)]
-    response = _ingest_through_compat(session, tenant_id, monkeypatch, lots)
+    shipped = _shipped_yesterday()
+    response = _ingest_through_compat(session, tenant_id, monkeypatch, lots, shipped=shipped)
     assert (response.accepted, response.rejected) == (3, 0), [e.errors for e in response.events]
 
     rows = _ledger_rows(session, tenant_id)
@@ -288,7 +303,7 @@ def test_compat_ingest_writes_one_ledger_row_shared_by_both_stores(db_session, m
     assert merkle.valid is True, merkle.errors
 
     # An exact resend stores nothing and must not disturb the chain.
-    replay = _ingest_through_compat(session, tenant_id, monkeypatch, lots)
+    replay = _ingest_through_compat(session, tenant_id, monkeypatch, lots, shipped=shipped)
     assert [e.event_id for e in replay.events] == [e.event_id for e in response.events]
     assert _ledger_rows(session, tenant_id) == rows
 
@@ -335,3 +350,95 @@ def test_compat_batch_that_is_undone_leaves_no_ledger_row(db_session, monkeypatc
         {"t": tenant_id},
     ).one()
     assert tuple(stored) == (0, 0)
+
+
+# ---------------------------------------------------------------------------
+# Canonical content rewritten together with its stored hash
+# ---------------------------------------------------------------------------
+
+
+def _rewrite_canonical_content_and_hash(session, tenant_id: str, event_id: str) -> None:
+    """Change one canonical row's quantity and store the hash of the new content.
+
+    What a writer with table access and the break-glass setting could do while
+    leaving ``fsma.hash_chain`` alone. The row then agrees with itself.
+    """
+    from shared.canonical_persistence.verification import _kdes_object, _recompute_event_sha256
+    from sqlalchemy import text
+
+    key = {"t": tenant_id, "e": event_id}
+    session.execute(text("SET LOCAL fsma.allow_mutation = 'true'"))
+    session.execute(
+        text("UPDATE fsma.traceability_events SET quantity = quantity + 1 WHERE tenant_id = :t AND event_id = :e"),
+        key,
+    )
+    row = session.execute(
+        text("""
+            SELECT event_type, traceability_lot_code, product_reference, quantity,
+                   unit_of_measure, from_facility_reference, to_facility_reference,
+                   event_timestamp, kdes, normalized_payload->>'event_timestamp'
+            FROM fsma.traceability_events
+            WHERE tenant_id = :t AND event_id = :e
+        """),
+        key,
+    ).one()
+    rewritten_hash = _recompute_event_sha256(
+        event_id=event_id,
+        event_type=row[0],
+        traceability_lot_code=row[1],
+        product_reference=row[2],
+        quantity=row[3],
+        unit_of_measure=row[4],
+        from_facility_reference=row[5],
+        to_facility_reference=row[6],
+        event_timestamp=row[7],
+        kdes=_kdes_object(row[8]),
+        timestamp_hint=row[9],
+    )
+    session.execute(
+        text("UPDATE fsma.traceability_events SET sha256_hash = :h WHERE tenant_id = :t AND event_id = :e"),
+        {"h": rewritten_hash, **key},
+    )
+    session.execute(text("SET LOCAL fsma.allow_mutation = 'false'"))
+
+
+def test_two_row_chain_reports_canonical_content_rewritten_with_its_hash(db_session) -> None:
+    """In the older layout the canonical row has its own chain row, which still holds the first hash."""
+    from shared.canonical_persistence import CanonicalEventStore
+    from sqlalchemy import text
+
+    session, tenant_id = db_session
+    _ingest_one_dual_write(session, tenant_id, 0)
+    canonical_id = session.execute(
+        text("SELECT event_id::text FROM fsma.traceability_events WHERE tenant_id = :t"), {"t": tenant_id}
+    ).scalar_one()
+
+    _rewrite_canonical_content_and_hash(session, tenant_id, canonical_id)
+
+    result = CanonicalEventStore(session, dual_write=False).verify_chain_canonical(tenant_id)
+    assert result.valid is False
+    assert result.tamper_rows, result.errors
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason=(
+        "verify_chain_canonical skips the chain-row digest comparison for a row present in both "
+        "stores, so a shared row does not bind canonical content. The webhook route's rows have "
+        "the same gap. Remove this marker with the verifier fix (raised in review of PR 3851)."
+    ),
+)
+def test_shared_row_reports_canonical_content_rewritten_with_its_hash(db_session, monkeypatch) -> None:
+    """A chain row shared by both stores must still bind the canonical content."""
+    from shared.canonical_persistence import CanonicalEventStore
+
+    session, tenant_id = db_session
+    response = _ingest_through_compat(session, tenant_id, monkeypatch, ["TLC-COMPAT-REWRITTEN"])
+    assert response.accepted == 1, [e.errors for e in response.events]
+
+    _rewrite_canonical_content_and_hash(session, tenant_id, response.events[0].event_id)
+
+    result = CanonicalEventStore(session, dual_write=False).verify_chain_canonical(tenant_id)
+    assert result.valid is False
+    assert result.tamper_rows, result.errors
