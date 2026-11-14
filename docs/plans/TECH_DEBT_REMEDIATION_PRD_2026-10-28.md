@@ -60,7 +60,7 @@ Read, in this order, before touching code:
 | Mechanic | What to know |
 |---|---|
 | Branch prefix | The `Engine Review Pass` CI gate derives the author engine from the branch prefix. Use `<engine>/<topic>`, where engine is one of `claude`, `codex`, `gemini`, `grok`, `muse`, `kimi`, `pi`, `deepseek`, `hermes`, `antigravity`. Example: `codex/wi-02-app-namespace`. `CONTRIBUTING.md` lists `fix/`, `feat/`, `chore/`, `docs/`; the gate rejects those, so use the engine form. |
-| Cross-engine review | A PR merges only after a *different* engine posts a comment containing, alone on one line, `REVIEW: PASS <engine> <full 40-char head SHA>`. The author engine's own PASS is ignored. After every push the SHA changes and the marker must be re-posted. Do not post a marker under an engine name that is not yours. |
+| Cross-engine review | A PR merges only after a *different* engine posts a pull request review whose body contains, alone on one line, `REVIEW: PASS <engine> <full 40-char head SHA>`. Post it with `gh api repos/regengine/RegEngine/pulls/<n>/reviews -f event=COMMENT -f body='REVIEW: PASS <engine> <sha>'`, or `gh pr review <n> --comment --body-file <file>` for a longer body. A marker in a comment is not read, and that includes `REVIEW: BLOCKED` and `REVIEW: FAIL`. The author engine's own PASS is ignored. After every push the SHA changes and the marker must be re-posted. Do not post a marker under an engine name that is not yours. |
 | PR template | `.github/pull_request_template.md`. Fill every section. |
 | Draft PRs | CodeRabbit skips drafts. Open PRs as ready for review unless the work is incomplete. |
 | `*AUDIT*.md` is gitignored | `.gitignore` line 153. `docs/audits/*.md` is re-allowed. Put audit-type reports there. |
