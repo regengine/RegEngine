@@ -208,7 +208,7 @@ class EDILineRegistry:
             SELECT r.identity_key, r.content_digest, e.id, e.sha256_hash, e.chain_hash
             FROM fsma.edi_line_identities r
             JOIN fsma.cte_events e ON e.id = r.event_id AND e.tenant_id = r.tenant_id
-            WHERE r.tenant_id = :tid AND r.identity_key IN :keys
+            WHERE r.tenant_id = :tid AND e.tenant_id = :tid AND r.identity_key IN :keys
             """
         ).bindparams(bindparam("keys", expanding=True))
         stored: dict[str, StoredLine] = {}
@@ -237,6 +237,8 @@ class EDILineRegistry:
                     WHERE NOT EXISTS (
                         SELECT 1 FROM fsma.cte_events e
                         WHERE e.id = edi_line_identities.event_id
+                          AND e.tenant_id = :tenant_id
+                          AND edi_line_identities.tenant_id = :tenant_id
                           AND e.tenant_id = edi_line_identities.tenant_id
                     )
                 """
