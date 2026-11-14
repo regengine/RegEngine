@@ -116,14 +116,16 @@ jobs:
             pip-compile --allow-unsafe --generate-hashes --output-file=requirements.lock requirements.in
           git diff --exit-code -- requirements.lock
 
-      # The dev and experimental locks are constrained by requirements.lock
-      # (`-c requirements.lock` in their .in files), so they are checked after
-      # it (WI-06).
+      # The dev and experimental locks are constrained by requirements.lock, so
+      # they are checked after it (WI-06). The constraint is the
+      # --constraint flag below, not a `-c` line in the .in files: Dependabot
+      # fetches a constraint file only when its name ends in .txt or .in, and
+      # its whole pip run aborts when it cannot open one.
       - name: Verify requirements-dev.lock and requirements-experimental.lock freshness
         run: |
           for name in dev experimental; do
-            CUSTOM_COMPILE_COMMAND="pip-compile --allow-unsafe --generate-hashes --output-file=requirements-${name}.lock requirements-${name}.in" \
-              pip-compile --allow-unsafe --generate-hashes --output-file="requirements-${name}.lock" "requirements-${name}.in"
+            CUSTOM_COMPILE_COMMAND="pip-compile --allow-unsafe --constraint=requirements.lock --generate-hashes --output-file=requirements-${name}.lock requirements-${name}.in" \
+              pip-compile --allow-unsafe --constraint=requirements.lock --generate-hashes --output-file="requirements-${name}.lock" "requirements-${name}.in"
           done
           git diff --exit-code -- requirements-dev.lock requirements-experimental.lock
 
@@ -973,12 +975,17 @@ jobs:
           # test_security_workflow_boundaries pins that PR secret workflows
           # call the wrapper and that the wrapper terminates options before
           # filenames — both must block merge, not only test-suite-check.
+          # test_requirements_layout must block merge because the lock
+          # freshness gate cannot see a `-c requirements.lock` line re-added
+          # to a .in file (the lock comes out identical), and that line fails
+          # the weekly Dependabot pip run. It reads files only.
           pytest tests/scripts/test_bootstrap_staging_database.py \
             tests/scripts/test_v126_operator_guidance.py \
             tests/scripts/test_check_supply_chain.py \
             tests/scripts/test_prod_default_guards.py \
             tests/scripts/test_check_secrets_baseline.py \
             tests/scripts/test_security_workflow_boundaries.py \
+            tests/scripts/test_requirements_layout.py \
             -v --no-cov -o "testpaths=tests"
 
       - name: Setup Node.js (published-spec contract needs the TS export)

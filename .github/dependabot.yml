@@ -80,6 +80,12 @@ updates:
   # pushes it, and re-dispatches backend-ci + security. Wait for those runs to
   # go green before merging. The rename to requirements.txt remains the
   # longer-term alternative.
+  #
+  # A root .in file must not carry a `-c`/`-r` line naming a file that does not
+  # end in .txt or .in (e.g. `-c requirements.lock`): Dependabot never fetches
+  # it and the whole run fails with dependency_file_not_evaluatable, as the
+  # 2026-11-09 runs did after #3699. The dev and experimental locks take that
+  # constraint from the pip-compile command line instead.
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
@@ -108,6 +114,15 @@ updates:
           - "stripe"
           - "httpx"
           - "opentelemetry-*"
+    ignore:
+      # botocore (via boto3) requires python-dateutil<3.0.0, so python-dateutil
+      # 3.x and 4.x cannot resolve with requirements.in. Dependabot does not
+      # treat that as "no update possible": it records
+      # dependency_file_not_resolvable for python-dateutil and the weekly run
+      # ends in failure even though its other PRs open (run 41412372986 on
+      # 2026-11-02). Remove this entry when botocore lifts the cap.
+      - dependency-name: "python-dateutil"
+        versions: [">=3"]
 
   # Services directories no longer have their own requirements files;
   # all Python dependencies are managed at the repository root.
