@@ -1445,6 +1445,7 @@ def test_multipart_changed_contents_still_conflict(monkeypatch, change):
         (b"broken", "multipart/form-data"),
         (b"--boundary-A\r\n", "multipart/form-data; boundary=boundary-A"),
         (b"--boundary-A\r\ninvalid header\r\n\r\nx\r\n--boundary-A--\r\n", "multipart/form-data; boundary=boundary-A"),
+        (b"tiny", "multipart/form-data; boundary=" + "x" * 257),
     ],
 )
 def test_malformed_multipart_never_reserves_or_replays(monkeypatch, body, content_type):
@@ -1601,3 +1602,27 @@ def test_multipart_field_size_limit_does_not_limit_files(monkeypatch, file_part)
         response = client.post("/echo", headers=_multipart_headers("boundary-A"), content=body)
     assert response.status_code == (200 if file_part else 400)
     assert bool(fake.store) == file_part
+
+
+def test_non_multipart_content_type_cannot_impersonate_multipart_fingerprint(monkeypatch):
+    from shared.idempotency import _multipart_fingerprint
+
+    _patched_middleware(monkeypatch, _FakeAsyncRedis())
+    headers = _multipart_headers("boundary-A")
+    body = _multipart_upload("boundary-A")
+    calls = []
+
+    async def handler(request):
+        calls.append(1)
+        return {"stored": True}
+
+    with TestClient(_build_app(handler)) as client:
+        assert client.post("/echo", headers=headers, content=body).status_code == 200
+        response = client.post(
+            "/echo",
+            headers={**headers, "Content-Type": "multipart-v1"},
+            content=_multipart_fingerprint(headers["Content-Type"], body),
+        )
+    assert response.status_code == 409
+    assert response.json() == {"error": "idempotency_key_conflict"}
+    assert calls == [1]

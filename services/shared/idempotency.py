@@ -53,7 +53,7 @@ import redis.asyncio as redis
 import structlog
 from fastapi import Request, Response
 from python_multipart import MultipartParser
-from python_multipart.exceptions import MultipartParseError
+from python_multipart.exceptions import FormParserError
 from python_multipart.multipart import parse_options_header
 from shared.internal_caller import internal_tenant_id
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -151,23 +151,23 @@ def _multipart_fingerprint(content_type: str, body: bytes) -> bytes:
         nonlocal complete
         complete = True
 
-    parser = MultipartParser(
-        boundary,
-        {
-            "on_part_begin": part_begin,
-            "on_header_field": header_field,
-            "on_header_value": header_value,
-            "on_header_end": header_end,
-            "on_headers_finished": headers_finished,
-            "on_part_data": part_data,
-            "on_part_end": part_end,
-            "on_end": end,
-        },
-    )
     try:
+        parser = MultipartParser(
+            boundary,
+            {
+                "on_part_begin": part_begin,
+                "on_header_field": header_field,
+                "on_header_value": header_value,
+                "on_header_end": header_end,
+                "on_headers_finished": headers_finished,
+                "on_part_data": part_data,
+                "on_part_end": part_end,
+                "on_end": end,
+            },
+        )
         parser.write(body)
         parser.finalize()
-    except MultipartParseError as exc:
+    except FormParserError as exc:
         raise _InvalidMultipart("Invalid multipart body") from exc
     if not complete:
         raise _InvalidMultipart("Incomplete multipart body")
@@ -396,7 +396,8 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
         parts = [
             request.method.upper(),
             str(request.url),
-            "multipart-v1" if multipart else content_type,
+            # A tagged JSON value cannot collide with any raw header string.
+            ["multipart-v1"] if multipart else content_type,
             request.headers.get("authorization", ""),
             request.headers.get("x-regengine-api-key", ""),
             request.headers.get("x-regengine-internal-secret", ""),
