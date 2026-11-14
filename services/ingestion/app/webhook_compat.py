@@ -382,6 +382,24 @@ async def ingest_events(
             # never poisons the DB transaction for subsequent events.
             savepoint = db_session.begin_nested()
             try:
+                # One fsma.hash_chain row serves both stored copies of the
+                # event, as on the webhook route. The legacy write hashes this
+                # canonical projection into that row, and the canonical write
+                # below takes the legacy id and appends no row of its own. A
+                # second row under a separate id is an orphan to the chain
+                # verifier that joins on fsma.cte_events.
+                canonical = None
+                canonical_error: Optional[Exception] = None
+                try:
+                    from shared.canonical_event import normalize_webhook_event
+
+                    canonical = normalize_webhook_event(event, tenant_id, ingestion_run_id=run_id)
+                except (ImportError, ValueError, TypeError, RuntimeError) as canon_err:
+                    # Raised below, after the legacy write, where it was raised
+                    # before: an event the legacy store refuses is still
+                    # rejected on its own.
+                    canonical_error = canon_err
+
                 store_result = persistence.store_event(
                     tenant_id=tenant_id,
                     event_type=event.cte_type.value,
@@ -395,9 +413,10 @@ async def ingest_events(
                     location_name=event.location_name,
                     kdes=event.kdes,
                     alerts=alerts,
+                    canonical_event=canonical,
                 )
 
-                # Canonical normalization + rule evaluation (best-effort).
+                # Canonical write + rule evaluation (best-effort).
                 # Runs BEFORE the primary savepoint commits so a rule
                 # rejection (under RULES_ENGINE_ENFORCE=cte_only|all) can
                 # roll back the primary CTE write along with it.
@@ -407,11 +426,17 @@ async def ingest_events(
                 summary = None
                 canon_sp = db_session.begin_nested()
                 try:
-                    from shared.canonical_event import normalize_webhook_event
                     from shared.canonical_persistence import CanonicalEventStore
 
-                    canonical = normalize_webhook_event(event, tenant_id, ingestion_run_id=run_id)
-                    canonical_store = CanonicalEventStore(db_session, dual_write=False)
+                    if canonical_error is not None:
+                        raise canonical_error
+                    canonical.event_id = uuid.UUID(str(store_result.event_id))
+                    canonical.prepare_for_persistence()
+                    # skip_chain_write reuses the legacy write's chain row. It
+                    # raises if that row's hash is not this content's, which
+                    # leaves a legacy record from before the shared row
+                    # without a canonical copy rather than mislinked.
+                    canonical_store = CanonicalEventStore(db_session, dual_write=False, skip_chain_write=True)
                     persist_result = canonical_store.persist_event(canonical)
                     canonical_exists = getattr(persist_result, "idempotent", False) is True
                     # A stored event replayed under the same keys stored
@@ -425,9 +450,10 @@ async def ingest_events(
 
                         engine = RulesEngine(db_session)
                         event_data = {
-                            # Never the existing canonical row's id: these
-                            # values can differ from what that row stores, and
-                            # evaluation writes its verdict onto the event id.
+                            # The id of the record just stored, never the
+                            # existing canonical row's: these values can differ
+                            # from what that row stores, and evaluation writes
+                            # its verdict onto the event id.
                             "event_id": str(canonical.event_id),
                             "event_type": canonical.event_type.value,
                             "traceability_lot_code": canonical.traceability_lot_code,

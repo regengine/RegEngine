@@ -220,11 +220,12 @@ class CanonicalChainVerificationMixin:
                 LEFT JOIN te
                     ON te.event_id = hc.cte_event_id
                    AND te.tenant_id = hc.tenant_id
-                -- Existence-only probe of the legacy store: during the WS-1
-                -- dual-write window the ingest path appends TWO chain rows
-                -- per event (one per store — see webhook_compat.ingest_events:
-                -- legacy CTEPersistence.store_event + canonical-only
-                -- CanonicalEventStore). A row is a TRUE orphan only when BOTH
+                -- Existence-only probe of the legacy store: chains written
+                -- before webhook_compat.ingest_events shared one row per
+                -- event hold TWO chain rows per event (one per store: legacy
+                -- CTEPersistence.store_event + canonical-only
+                -- CanonicalEventStore). The chain is append-only, so those
+                -- rows stay. A row is a TRUE orphan only when BOTH
                 -- stores miss it — the rule chain_verification_job's
                 -- _combine_results already documents and applies. No legacy
                 -- business data is read (WS-1 never-do list); WS-1d removes
@@ -292,9 +293,9 @@ class CanonicalChainVerificationMixin:
                     tamper_rows.append(int(seq))
 
             # Orphan: chain row references an event_id with no canonical row.
-            # During the dual-write window a chain row legitimately lives in
-            # only ONE store (the ingest path appends a legacy-id row and a
-            # canonical-id row per event). Per the documented combine rule
+            # A chain row can legitimately live in only ONE store: the compat
+            # ingest path used to append a legacy-id row and a canonical-id
+            # row per event, and those rows remain. Per the documented combine rule
             # (chain_verification_job._combine_results), a row is a TRUE
             # orphan only when BOTH stores miss it. Legacy-store rows are
             # counted, skipped for canonical content recompute (a
