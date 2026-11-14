@@ -6,7 +6,11 @@ Gracefully degrades if Redis is unavailable unless IDEMPOTENCY_FAIL_MODE=closed.
 The default degrade mode can dispatch duplicates on an ambiguous Redis failure;
 use closed mode where cache-level duplicate suppression is required.
 
-Keys bind exact request bytes, URL, content type, and credential to the tenant.
+Keys bind request contents, URL, content type, and credential to the tenant.
+Multipart fingerprints ignore the boundary but preserve ordered parts and headers.
+Other body formats remain byte-exact. Existing multipart cache entries fail
+closed with 409 until their 24-hour TTL expires; do not retry with a new key
+without reconciling the original outcome during a rolling deployment.
 Conflicting and legacy unbound cache entries return 409. An active or uncertain
 reservation also returns 409 and remains for the 24-hour retry window after a
 crash or failed publish. Such outcomes need reconciliation before retrying with
@@ -48,6 +52,9 @@ from uuid import UUID, uuid4
 import redis.asyncio as redis
 import structlog
 from fastapi import Request, Response
+from python_multipart import MultipartParser
+from python_multipart.exceptions import MultipartParseError
+from python_multipart.multipart import parse_options_header
 from shared.internal_caller import internal_tenant_id
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -64,6 +71,86 @@ logger = structlog.get_logger("idempotency")
 IDEMPOTENCY_KEY_PREFIX = "idempotency:"
 IDEMPOTENCY_TTL_SECONDS = 86400  # 24 hours
 _ANONYMOUS_TENANT = "_anonymous_"  # placeholder when no tenant resolvable
+
+
+class _InvalidMultipart(ValueError):
+    """Malformed multipart cannot reserve or replay an operation."""
+
+
+def _multipart_fingerprint(content_type: str, body: bytes) -> bytes:
+    """Hash ordered raw part headers and bytes, excluding only MIME framing.
+
+    Use the same multipart parser as Starlette; never replace boundary strings
+    globally, since those strings can also occur inside the uploaded file.
+    Lengths and JSON framing keep duplicate/empty parts unambiguous.
+    """
+    media_type, options = parse_options_header(content_type)
+    boundary = options.pop(b"boundary", None)
+    if not boundary:
+        raise _InvalidMultipart("Missing multipart boundary")
+    parts = []
+    headers = []
+    field, value = bytearray(), bytearray()
+    part_hash = hashlib.sha256()
+    size = 0
+    complete = False
+
+    def part_begin():
+        nonlocal part_hash, size
+        headers.clear()
+        part_hash = hashlib.sha256()
+        size = 0
+
+    def header_field(data, start, end):
+        field.extend(data[start:end])
+
+    def header_value(data, start, end):
+        value.extend(data[start:end])
+
+    def header_end():
+        headers.append([field.hex(), value.hex()])
+        field.clear()
+        value.clear()
+
+    def part_data(data, start, end):
+        nonlocal size
+        part_hash.update(data[start:end])
+        size += end - start
+
+    def part_end():
+        parts.append([list(headers), size, part_hash.hexdigest()])
+
+    def end():
+        nonlocal complete
+        complete = True
+
+    parser = MultipartParser(
+        boundary,
+        {
+            "on_part_begin": part_begin,
+            "on_header_field": header_field,
+            "on_header_value": header_value,
+            "on_header_end": header_end,
+            "on_part_data": part_data,
+            "on_part_end": part_end,
+            "on_end": end,
+        },
+    )
+    try:
+        parser.write(body)
+        parser.finalize()
+    except MultipartParseError as exc:
+        raise _InvalidMultipart("Invalid multipart body") from exc
+    if not complete:
+        raise _InvalidMultipart("Incomplete multipart body")
+    return json.dumps(
+        [
+            "multipart-v1",
+            media_type.hex(),
+            sorted((k.hex(), v.hex()) for k, v in options.items()),
+            parts,
+        ]
+    ).encode()
 
 
 def _tenant_value_to_str(value: Any) -> Optional[str]:
@@ -274,11 +361,14 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
 
     async def _request_fingerprint(self, request: Request) -> str:
         # Bind the exact operation and credential, not just the tenant. Never
-        # persist raw credentials or body. JSON whitespace changes conflict too.
+        # persist raw credentials or body. JSON whitespace changes conflict too;
+        # multipart transport boundaries alone do not.
+        content_type = request.headers.get("content-type", "")
+        multipart = content_type.split(";", 1)[0].strip().lower() == "multipart/form-data"
         parts = [
             request.method.upper(),
             str(request.url),
-            request.headers.get("content-type", ""),
+            "multipart-v1" if multipart else content_type,
             request.headers.get("authorization", ""),
             request.headers.get("x-regengine-api-key", ""),
             request.headers.get("x-regengine-internal-secret", ""),
@@ -305,7 +395,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
             body.extend(chunk)
         # Starlette's _CachedRequest replays _body to call_next after consumption.
         request._body = bytes(body)
-        digest.update(body)
+        digest.update(_multipart_fingerprint(content_type, request._body) if multipart else body)
         return digest.hexdigest()
 
     @staticmethod
@@ -355,6 +445,8 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
 
         try:
             fingerprint = await asyncio.wait_for(self._request_fingerprint(request), timeout=120)
+        except _InvalidMultipart:
+            return self._error(400, "invalid_multipart_body")
         except ValueError:
             return self._error(413, "payload_too_large")
         except asyncio.TimeoutError:
