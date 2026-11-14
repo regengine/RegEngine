@@ -224,13 +224,9 @@ def _ingest_through_compat(session, tenant_id: str, monkeypatch, lots: list[str]
     monkeypatch.setattr(webhook_compat, "_publish_graph_sync", lambda *args: None)
     # The fixture rolls the transaction back; a real commit would leave rows behind.
     monkeypatch.setattr(session, "commit", session.flush)
+    # No API key is passed: the key lookup is stubbed above.
     return asyncio.run(
-        webhook_compat.ingest_events(
-            payload,
-            principal_tenant_id=tenant_id,
-            x_regengine_api_key="live-test",
-            all_or_nothing=all_or_nothing,
-        )
+        webhook_compat.ingest_events(payload, principal_tenant_id=tenant_id, all_or_nothing=all_or_nothing)
     )
 
 
