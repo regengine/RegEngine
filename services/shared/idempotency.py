@@ -94,12 +94,17 @@ def _multipart_fingerprint(content_type: str, body: bytes) -> bytes:
     part_hash = hashlib.sha256()
     size = 0
     complete = False
+    disposition = b""
+    file_part = False
+    files = fields = 0
 
     def part_begin():
-        nonlocal part_hash, size
+        nonlocal part_hash, size, disposition, file_part
         headers.clear()
         part_hash = hashlib.sha256()
         size = 0
+        disposition = b""
+        file_part = False
 
     def header_field(data, start, end):
         field.extend(data[start:end])
@@ -108,14 +113,36 @@ def _multipart_fingerprint(content_type: str, body: bytes) -> bytes:
         value.extend(data[start:end])
 
     def header_end():
+        nonlocal disposition
+        if field.lower() == b"content-disposition":
+            disposition = bytes(value)
         headers.append([field.hex(), value.hex()])
         field.clear()
         value.clear()
 
+    def headers_finished():
+        nonlocal files, fields, file_part
+        # Match Starlette's default form limits before accumulating parts.
+        # Count by parsed filename presence (including filename=""), not
+        # by field name or content type. Duplicate disposition headers use
+        # the last value, as in Starlette's MultiPartParser.
+        _, options = parse_options_header(disposition)
+        if b"name" not in options:
+            raise _InvalidMultipart("Missing multipart field name")
+        file_part = b"filename" in options
+        if file_part:
+            files += 1
+        else:
+            fields += 1
+        if files > 1000 or fields > 1000:
+            raise _InvalidMultipart("Too many multipart files or fields")
+
     def part_data(data, start, end):
         nonlocal size
-        part_hash.update(data[start:end])
         size += end - start
+        if not file_part and size > 1024 * 1024:
+            raise _InvalidMultipart("Multipart field exceeds 1 MiB")
+        part_hash.update(data[start:end])
 
     def part_end():
         parts.append([list(headers), size, part_hash.hexdigest()])
@@ -131,6 +158,7 @@ def _multipart_fingerprint(content_type: str, body: bytes) -> bytes:
             "on_header_field": header_field,
             "on_header_value": header_value,
             "on_header_end": header_end,
+            "on_headers_finished": headers_finished,
             "on_part_data": part_data,
             "on_part_end": part_end,
             "on_end": end,

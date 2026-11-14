@@ -1530,3 +1530,74 @@ def test_multipart_legacy_fingerprint_fails_closed(monkeypatch):
     assert retry.json() == {"error": "idempotency_key_conflict"}
     assert calls == []
     assert not fake.setex_calls
+
+
+@pytest.mark.parametrize("file_part", [False, True])
+def test_multipart_part_count_limit_rejects_before_reservation(monkeypatch, file_part):
+    """Stop at part 1001, even when many more empty parts fit under 10 MiB."""
+    import shared.idempotency as module
+
+    fake = _FakeAsyncRedis()
+    _patched_middleware(monkeypatch, fake)
+    parser_type = module.MultipartParser
+    completed_parts = []
+
+    def counting_parser(boundary, callbacks):
+        original = callbacks["on_part_end"]
+
+        def part_end():
+            completed_parts.append(1)
+            original()
+
+        return parser_type(boundary, {**callbacks, "on_part_end": part_end})
+
+    monkeypatch.setattr(module, "MultipartParser", counting_parser)
+    filename = '; filename="empty.edi"' if file_part else ""
+    part = f'--boundary-A\r\nContent-Disposition: form-data; name="item"{filename}\r\n\r\n\r\n'.encode()
+    body = part * 10_000 + b"--boundary-A--\r\n"
+    assert len(body) < 10 * 1024 * 1024
+    calls = []
+
+    async def handler(request):
+        calls.append(1)
+        return {"accepted": True}
+
+    with TestClient(_build_app(handler)) as client:
+        response = client.post("/echo", headers=_multipart_headers("boundary-A"), content=body)
+    assert response.status_code == 400
+    assert response.json() == {"error": "invalid_multipart_body"}
+    assert len(completed_parts) == 1000
+    assert not calls
+    assert not fake.store
+
+
+def test_multipart_file_and_field_limits_are_independent(monkeypatch):
+    """Permit 1000 fields plus 1000 files, as Starlette does by default."""
+    _patched_middleware(monkeypatch, _FakeAsyncRedis())
+    field = b'--boundary-A\r\nContent-Disposition: form-data; name="item"\r\n\r\n\r\n'
+    file = b'--boundary-A\r\nContent-Disposition: form-data; name="file"; filename=""\r\n\r\n\r\n'
+    body = (field + file) * 1000 + b"--boundary-A--\r\n"
+    with TestClient(_build_app()) as client:
+        response = client.post("/echo", headers=_multipart_headers("boundary-A"), content=body)
+    assert response.status_code == 200
+
+
+@pytest.mark.parametrize("file_part", [False, True])
+def test_multipart_field_size_limit_does_not_limit_files(monkeypatch, file_part):
+    """Starlette's 1 MiB part limit applies to text fields, not file data."""
+    fake = _FakeAsyncRedis()
+    _patched_middleware(monkeypatch, fake)
+    filename = '; filename="receipt.edi"' if file_part else ""
+    body = (
+        f'--boundary-A\r\nContent-Disposition: form-data; name="item"{filename}\r\n\r\n'.encode()
+        + b"x" * (1024 * 1024 + 1)
+        + b"\r\n--boundary-A--\r\n"
+    )
+
+    async def handler(request):
+        return {"bytes": len(await request.body())}
+
+    with TestClient(_build_app(handler)) as client:
+        response = client.post("/echo", headers=_multipart_headers("boundary-A"), content=body)
+    assert response.status_code == (200 if file_part else 400)
+    assert bool(fake.store) == file_part
