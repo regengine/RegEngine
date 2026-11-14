@@ -315,8 +315,9 @@ assigned id and the GLN stays empty.
   Existing Redis markers remain honored. Pre-deploy interchanges cannot be
   backfilled reliably from event hashes; they retain only their existing cache
   and event-idempotency protection. Malformed envelopes lacking sender/ISA13
-  retain the existing event-idempotency fallback. This does not redefine event
-  correction or identity when a sender issues a new ISA13.
+  retain the existing event-idempotency fallback. A receipt covers one
+  envelope; a line sent again under a new ISA13 is handled by its line
+  identity, below.
 - ISA13 dedup is per tenant, sender and receiver. While the first attempt
   is running, a retransmission gets HTTP 503 with `Retry-After`: nothing is
   confirmed stored yet, so send it again. Once events are stored, a
@@ -344,13 +345,58 @@ assigned id and the GLN stays empty.
   `extracted.events`, one summary per line (`line_index`, lot, quantity,
   GTIN, UPC). `document_type` is `X12_944` or `X12_945`.
 
+### Line identity
+
+Each stored EDI line is registered in `fsma.edi_line_identities` under an
+identity that does not depend on the envelope or on the line's position
+(`docs/architecture/decisions/ADR-007-edi-line-identity.md`). The event
+idempotency keys do depend on both, so they cannot recognise a line that
+arrives under a new ISA13 or after another line was removed.
+
+The identity is the trading partner (sender and receiver), the transaction
+set, the document number, the CTE type, the event date, the lot, the product
+(GTIN, else UPC, else the product text) and an occurrence number among lines
+that match on all of those. The document number is BSN02 for 856, BRA01 for
+861, W1703 for 944 (else W1705, then W1704), W0604 for 945 (else W0602),
+BEG03 for 850 and BIG02 for 810. Everything else on the event, except the
+envelope and position fields, is its content.
+
+| A line arrives and its identity is | Result |
+| --- | --- |
+| Not registered | Stored and registered with the event. |
+| Registered with the same content | Nothing is written. The response reports the line as accepted with the stored `event_id`. |
+| Registered with different content | HTTP 409 `edi_line_content_conflict`. Nothing from the interchange is stored and the ISA13 stays free. |
+
+- The 409 lists each conflicting line with its lot and `stored_event_id`,
+  sets `needs_review`, and returns a `rejection_id` from the EDI rejection
+  log. It never returns the stored values. A resend does not change a stored
+  record; superseding events are a later change.
+- A line missing from a resend is not a retraction. Its stored event stays.
+- Two lines with the same lot and product both persist, told apart by
+  occurrence. If one of two such lines with different quantities is removed,
+  the survivor is compared with the first stored line and refused.
+- A line with no sender or no document number has no identity and relies on
+  the event idempotency keys alone, as before.
+- Lines stored before Alembic v144 are not registered and behave as before.
+- Deploy Alembic v144 (`62355c37e367`) before the application. The table holds
+  hashes and an event id, no business data, under forced RLS. The runtime role
+  has SELECT and INSERT, and may update a row only when its event no longer
+  exists. Registry failures roll back the event writes; they never fail open.
+- Changing how an EDI field is extracted changes the content of lines parsed
+  afterwards. A line stored before such a change and sent again is then
+  refused as a conflict. `test_edi_line_identity.py` pins one 856 line and
+  one 945 line as the route builds them, so such a change to those two sets
+  is visible in review. 861, 944, 850 and 810 are not pinned.
+
 ## Tests
 
 ```bash
 python3 -m pytest services/ingestion/tests/test_csv_xlsx_upload.py -q --no-cov
 python3 -m pytest services/ingestion/tests/test_edi_warehouse_944_945.py \
   services/ingestion/tests/test_edi_golden.py \
-  services/ingestion/tests/test_edi_wire_format_2974_2976_2978.py -q --no-cov
+  services/ingestion/tests/test_edi_wire_format_2974_2976_2978.py \
+  services/ingestion/tests/test_edi_line_identity.py \
+  services/ingestion/tests/test_edi_line_resend.py -q --no-cov
 cd frontend && npm run test:run -- src/__tests__/lib/epcis-upload.test.ts \
   src/__tests__/pages/ingest-epcis.test.tsx
 ```
