@@ -48,7 +48,7 @@ fields the events already carry:
 | Transaction set | `edi_transaction_set` |
 | Document number | 856 BSN02, 861 BRA01, 944 W1703 (else W1705, W1704), 945 W0604 (else W0602), 850 BEG03, 810 BIG02 |
 | Event | CTE type and event date (not time of day) |
-| Lot | Traceability lot code |
+| Lot | Traceability lot code, exactly as the event stores it |
 | Product | GTIN, else UPC, else the product text, case and spacing folded |
 | Occurrence | 1, 2, 3 among lines of the interchange that match on all of the above |
 
@@ -92,7 +92,8 @@ and replaced on the next store.
 A line whose identity is stored with different content returns HTTP 409
 `edi_line_content_conflict` before anything is written. The response names
 each stored event, sets `needs_review` and carries a `rejection_id`. It never
-returns stored values, because the caller may hold a write-only key. Nothing
+returns stored values, because the caller may hold a write-only key. The
+rejection record holds each refused line as it was submitted. Nothing
 from the interchange is stored and the ISA13 stays free. The correction is
 neither dropped nor applied.
 

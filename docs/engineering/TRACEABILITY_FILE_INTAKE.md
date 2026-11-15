@@ -354,9 +354,10 @@ idempotency keys do depend on both, so they cannot recognise a line that
 arrives under a new ISA13 or after another line was removed.
 
 The identity is the trading partner (sender and receiver), the transaction
-set, the document number, the CTE type, the event date, the lot, the product
-(GTIN, else UPC, else the product text) and an occurrence number among lines
-that match on all of those. The document number is BSN02 for 856, BRA01 for
+set, the document number, the CTE type, the event date, the lot code exactly
+as stored, the product (GTIN, else UPC, else the product text) and an
+occurrence number among lines that match on all of those. The document
+number is BSN02 for 856, BRA01 for
 861, W1703 for 944 (else W1705, then W1704), W0604 for 945 (else W0602),
 BEG03 for 850 and BIG02 for 810. Everything else on the event is its content,
 except the envelope and position fields and four KDEs that only restate the
@@ -372,8 +373,9 @@ whichever of the two EDI endpoints receives it.
 
 - The 409 lists each conflicting line with its lot and `stored_event_id`,
   sets `needs_review`, and returns a `rejection_id` from the EDI rejection
-  log. It never returns the stored values. A resend does not change a stored
-  record; superseding events are a later change.
+  log. It never returns the stored values. The rejection record holds each
+  refused line as submitted. A resend does not change a stored record;
+  superseding events are a later change.
 - A line missing from a resend is not a retraction. Its stored event stays.
 - Two lines with the same lot and product both persist, told apart by
   occurrence. If one of two such lines with different quantities is removed,

@@ -127,7 +127,9 @@ def _identity_fields(event: IngestEvent) -> Optional[list[str]]:
         number,
         event.cte_type.value,
         _event_date(event.timestamp),
-        _text(event.traceability_lot_code),
+        # As stored, never normalized: both stores keep lot codes that differ
+        # only in whitespace apart, so the identity must too.
+        event.traceability_lot_code,
         _folded(kdes.get("gtin") or kdes.get("upc") or event.product_description),
     ]
 

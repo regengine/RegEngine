@@ -421,9 +421,12 @@ async def _store_edi_events(
     """Store an interchange whole, naming each line by its stable identity.
 
     A line already stored with other content is refused by ``ingest_events``
-    with 409. The refusal is written to the EDI rejection log here, so the
-    correction is on record for review and is neither applied nor dropped.
-    The exception also frees the ISA13 claim: nothing was stored.
+    with 409. The refusal is written to the EDI rejection log here with what
+    each refused line said, so the correction is on record for review and is
+    neither applied nor dropped. ``extracted`` is only the first transaction
+    set, so the line itself is recorded: it may sit in a later set. The 409
+    body is unchanged. The exception also frees the ISA13 claim: nothing was
+    stored.
     """
     try:
         return await ingest_events(
@@ -439,6 +442,11 @@ async def _store_edi_events(
             raise
         detail = dict(exc.detail)
         conflicts = detail.get("conflicts") or []
+        # Keyed as ``ingest_events`` numbers a conflict's line.
+        incoming = {
+            event.kdes.get("edi_line_index") or index + 1: event.model_dump(mode="json")
+            for index, event in enumerate(payload.events)
+        }
         record = _record_edi_rejection(
             tenant_id=sender_tenant_id,
             transaction_set=transaction_set,
@@ -451,7 +459,7 @@ async def _store_edi_events(
                         f"Lot {conflict['traceability_lot_code']} is already stored as event "
                         f"{conflict['stored_event_id']} with different content."
                     ),
-                    "input": None,
+                    "input": incoming.get(conflict["line"]),
                 }
                 for conflict in conflicts
             ],

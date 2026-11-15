@@ -277,6 +277,18 @@ def test_another_date_lot_event_product_or_partner_is_another_line(changes) -> N
     assert _line(_event(**changes)).identity_key != _line(_event()).identity_key
 
 
+def test_the_lot_code_is_identity_exactly_as_stored() -> None:
+    """Both stores keep lot codes that differ only in whitespace apart.
+
+    If the identity folded them, the second would be reported as already
+    stored and never written.
+    """
+    padded = _event(traceability_lot_code=f" {GTIN}-LOT-A ")
+    assert padded.traceability_lot_code == f" {GTIN}-LOT-A "
+    assert _line(padded).identity_key != _line(_event()).identity_key
+    assert _line(padded).content_digest == _line(_event()).content_digest
+
+
 def test_product_text_is_compared_without_case_or_spacing() -> None:
     def named(text: str):
         return _line(_event(product_description=text, kdes={"gtin": None}))

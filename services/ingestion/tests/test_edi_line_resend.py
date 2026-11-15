@@ -57,7 +57,7 @@ from fastapi import FastAPI  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from shared.cte_persistence import core as cte_core  # noqa: E402
 from shared.cte_persistence.models import StoreResult  # noqa: E402
-from tests.edi_documents import GTIN, TENANT, shipping_advice  # noqa: E402
+from tests.edi_documents import GTIN, TENANT, shipping_advice, two_shipping_advices  # noqa: E402
 
 LINES = [("40", "LOT-A"), ("25", "LOT-B"), ("80", "LOT-C")]
 NEW_ENVELOPE = {"isa13": "000000202", "gs06": "2", "st02": "0002"}
@@ -298,12 +298,42 @@ def test_case_b_a_corrected_quantity_is_refused_not_dropped(post, stores: _Store
     # The stored value stands and nothing else was written.
     assert stores.snapshot() == before
     assert (f"{GTIN}-LOT-B", 25.0) in stores.quantities()
-    # The correction is on record for review.
+    # The correction is on record for review, with the value it proposed.
     record = rejection_log._edi_rejection_store[TENANT][detail["rejection_id"]]
     assert record["reason"] == "edi_line_content_conflict"
     assert record["needs_review"] is True
+    (error,) = record["errors"]
+    assert error["loc"] == ["line", 2]
+    assert error["input"]["traceability_lot_code"] == f"{GTIN}-LOT-B"
+    assert error["input"]["quantity"] == 30.0
     # The response names the stored event and carries none of its values.
     assert set(detail) == {"error", "message", "needs_review", "conflicts", "rejection_id"}
+
+
+def test_a_conflict_in_a_later_transaction_set_records_that_line(post, stores: _Stores) -> None:
+    """The rejection's ``extracted`` snapshot is the first set only.
+
+    A refused line in the second set is recorded itself, with its own set's
+    control number, shipment and proposed quantity.
+    """
+    first = post(two_shipping_advices([("40", "LOT-A")], [("25", "LOT-B")]))
+    assert first.status_code == 201, first.text
+    assert first.json()["ingestion_result"]["accepted"] == 2
+
+    corrected = post(two_shipping_advices([("40", "LOT-A")], [("30", "LOT-B")], isa13="000000202", gs06="2"))
+
+    assert corrected.status_code == 409, corrected.text
+    detail = corrected.json()["detail"]
+    assert [conflict["line"] for conflict in detail["conflicts"]] == [2]
+    record = rejection_log._edi_rejection_store[TENANT][detail["rejection_id"]]
+    assert record["extracted"]["shipment_id"] == "SHIP-9001"
+    (error,) = record["errors"]
+    proposed = error["input"]
+    assert (proposed["traceability_lot_code"], proposed["quantity"]) == (f"{GTIN}-LOT-B", 30.0)
+    assert proposed["kdes"]["shipment_id"] == "SHIP-9002"
+    assert proposed["kdes"]["edi_control_number"] == "0002"
+    assert proposed["kdes"]["edi_isa13"] == "000000202"
+    assert (f"{GTIN}-LOT-B", 25.0) in stores.quantities()
 
 
 @ENVELOPES
