@@ -56,6 +56,13 @@ _ENVELOPE_KDES = frozenset(
     }
 )
 
+# KDEs that only restate the event date or the ship-from party, both of which
+# are compared already. The two 856 routes name them differently (``ship_date``
+# and ``immediate_previous_source`` on one, ``event_date`` on the other), so
+# counting them would refuse a line resent through the other route.
+_DERIVED_KDES = frozenset({"event_date", "ship_date", "receive_date", "immediate_previous_source"})
+_NOT_CONTENT_KDES = _ENVELOPE_KDES | _DERIVED_KDES
+
 
 @dataclass(frozen=True)
 class EDILine:
@@ -134,7 +141,7 @@ def _content_digest(event: IngestEvent) -> str:
             "timestamp": event.timestamp,
             "location_gln": event.location_gln,
             "location_name": event.location_name,
-            "kdes": {key: value for key, value in (event.kdes or {}).items() if key not in _ENVELOPE_KDES},
+            "kdes": {key: value for key, value in (event.kdes or {}).items() if key not in _NOT_CONTENT_KDES},
         }
     )
 

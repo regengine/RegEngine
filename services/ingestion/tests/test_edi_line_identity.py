@@ -53,11 +53,11 @@ def events_of(monkeypatch: pytest.MonkeyPatch):
         key_id="test-key", scopes=["*"], auth_mode="test"
     )
 
-    def _events(raw: bytes) -> list[IngestEvent]:
+    def _events(raw: bytes, route: str = "/document") -> list[IngestEvent]:
         captured.clear()
         with TestClient(app) as client:
             response = client.post(
-                "/api/v1/ingest/edi/document",
+                f"/api/v1/ingest/edi{route}",
                 data={
                     "traceability_lot_code": f"{GTIN}-LOT001",
                     "tenant_id": TENANT,
@@ -209,6 +209,44 @@ def test_envelope_and_position_are_neither_identity_nor_content(kdes) -> None:
 
 
 @pytest.mark.parametrize(
+    "kdes",
+    [
+        {"event_date": "2026-03-10"},
+        {"ship_date": "2026-03-10"},
+        {"receive_date": "2026-03-10"},
+        {"immediate_previous_source": "Cold Storage West"},
+    ],
+)
+def test_kdes_that_restate_the_date_or_the_ship_from_party_are_not_content(kdes) -> None:
+    """They repeat the timestamp or the ship-from fields, which are compared."""
+    assert _line(_event(kdes=kdes)) == _line(_event())
+
+
+@pytest.mark.parametrize(
+    "lines",
+    [
+        [("ROMAINE-12CT", "200", "LOT-A")],
+        [("ROMAINE-12CT", "200", "LOT-A"), ("SPINACH-10OZ", "80", "LOT-B"), ("ROMAINE-12CT", "200", "LOT-A")],
+    ],
+)
+def test_both_856_routes_describe_a_line_the_same_way(events_of, lines) -> None:
+    """One file, either endpoint: the same identity and the same content.
+
+    The two routes build their events separately and name some KDEs
+    differently. If they stop agreeing here, a line stored through one route
+    and sent again through the other is stored twice (identity differs) or
+    refused with ``edi_line_content_conflict`` (content differs). Align the
+    two builders, or leave a KDE out of the comparison on purpose.
+    """
+    raw = ship_notice(lines)
+    dedicated = identify_lines(events_of(raw, route=""))
+    document = identify_lines(events_of(raw))
+
+    assert len(dedicated) == len(lines)
+    assert dedicated == document
+
+
+@pytest.mark.parametrize(
     "changes",
     [
         {"quantity": 41.0},
@@ -275,9 +313,9 @@ def test_lines_built_by_the_route_are_pinned(events_of) -> None:
     sets (861, 944, 850, 810) are not pinned.
     """
     advice_identity = "9963d3511d2a9c4df950b4475ab64f5c24ac435fd7b055007fb855751a2cfbde"  # pragma: allowlist secret
-    advice_content = "e8fe6bc7594d56cb9f65796ec114faa28929796d7cb8fa6dbfab6f5b8672b95a"  # pragma: allowlist secret
+    advice_content = "3cff161b9be9e58239caf4f0f55d10035bc9f29d7a7de28b425b17cacfc6ce59"  # pragma: allowlist secret
     notice_identity = "e14a424fcb7da5bc082708b89017dd014d0f995f645fca7ad34db4d24fcbbc1d"  # pragma: allowlist secret
-    notice_content = "81b3661d4df36c4daba8777ba2fe138b2e381dd87c3ce30a1742a4895b94bd0e"  # pragma: allowlist secret
+    notice_content = "fce057b833d0b7ab506819ea4fad74d291cf24e596acd84038f4fef6803a1ae2"  # pragma: allowlist secret
     advice = identify_lines(events_of(shipping_advice([("40", "LOT-A")])))[0]
     notice = identify_lines(events_of(ship_notice([("ROMAINE-12CT", "200", "LOT-A")])))[0]
     assert (advice.identity_key, advice.content_digest) == (advice_identity, advice_content)

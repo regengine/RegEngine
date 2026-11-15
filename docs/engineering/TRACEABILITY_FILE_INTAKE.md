@@ -358,8 +358,11 @@ set, the document number, the CTE type, the event date, the lot, the product
 (GTIN, else UPC, else the product text) and an occurrence number among lines
 that match on all of those. The document number is BSN02 for 856, BRA01 for
 861, W1703 for 944 (else W1705, then W1704), W0604 for 945 (else W0602),
-BEG03 for 850 and BIG02 for 810. Everything else on the event, except the
-envelope and position fields, is its content.
+BEG03 for 850 and BIG02 for 810. Everything else on the event is its content,
+except the envelope and position fields and four KDEs that only restate the
+date or the ship-from party (`event_date`, `ship_date`, `receive_date`,
+`immediate_previous_source`). An 856 is the same line with the same content
+whichever of the two EDI endpoints receives it.
 
 | A line arrives and its identity is | Result |
 | --- | --- |

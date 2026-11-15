@@ -56,6 +56,12 @@ Position and the envelope numbers are not identity. Everything else is
 **content**: quantity, unit, time of day, locations and every other KDE. The
 envelope and position KDEs and the `X-Partner-ID` header are neither.
 
+Four KDEs are also left out of content because they only restate what is
+compared already: `event_date`, `ship_date` and `receive_date` repeat the
+timestamp, and `immediate_previous_source` repeats the ship-from party. The two
+856 routes name them differently, so counting them would refuse a line that was
+stored through one route and sent again through the other.
+
 A line with no sender or no document number has no identity and keeps the
 behaviour it had before.
 
@@ -136,6 +142,9 @@ receipt answers 409. Corrections arrive under a new ISA13.
   other four sets are not pinned.
 - Refusals are all-or-nothing: one conflicting line holds back the other lines
   of that interchange.
+- `POST /api/v1/ingest/edi` and `POST /api/v1/ingest/edi/document` build 856
+  events separately. They must give a line the same identity and content, and
+  `test_both_856_routes_describe_a_line_the_same_way` holds them to it.
 - v144 must be deployed before the application, as v143 was.
 - The registry points at `fsma.cte_events`, the id the API returns. It moves
   to the canonical table with that table's cutover (#1335).
