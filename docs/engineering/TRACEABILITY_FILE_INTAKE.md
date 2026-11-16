@@ -157,10 +157,11 @@ N104 is stored as the location id whether or not N103 is `UL`. The event
 check digit. The 856 event location is the ship-from GLN. The 861 event
 location is the receiving-location GLN.
 
-A missing date uses the ingest time. A date that is present and is not
-CCYYMMDD or YYMMDD is HTTP 400 `invalid_edi_date`. A parsed date older
-than 90 days, or more than 24 hours in the future, keeps that calendar
-date on the event and snaps the ingest timestamp to now.
+The event timestamp is the source date in UTC. BSN04 supplies the time
+of day when that element is present. A missing, unparseable, or
+more-than-24-hours-future date is HTTP 400 before the ISA13 claim. A
+past date, including one older than 90 days, is kept. See
+[Event time](#event-time).
 
 ### `POST /api/v1/ingest/edi` (856 only)
 
@@ -168,13 +169,17 @@ One ST/SE set. A second set is HTTP 422 `multiple_transaction_sets`. The
 error text still says `/document` emits one CTE per ST/SE pair. For 856
 and 861, `/document` emits one CTE per item line.
 
-Required segments are ISA, GS, ST, BSN, HL, SE, GE, and IEA. Each line
+Required segments are ISA, GS, ST, BSN, HL, SE, GE, and IEA. A missing
+segment is HTTP 422 and names it. An empty BSN date is HTTP 400
+`missing_edi_date` before the ISA13 claim. The 422
+`edi_856_missing_required_kdes` response covers ship-from, ship-to,
+quantity, unit, and product. Each line
 must carry a positive quantity, a recognized unit, and a product id or
-description. The set must carry a ship-from name, a ship-to name, and a
-BSN date. A miss is HTTP 422 `edi_856_missing_required_kdes`, the
+description. The set must carry a ship-from name and a ship-to name. A
+miss on those fields is HTTP 422 `edi_856_missing_required_kdes`, the
 rejection is logged, and nothing is persisted. The route does not fill
-quantity `1.0`, unit `units`, product `EDI 856 Shipment`, an unknown
-location, or today's date.
+quantity `1.0`, unit `units`, product `EDI 856 Shipment`, or an unknown
+location.
 
 `product_description`, `quantity_override`, `unit_of_measure_override`,
 `ship_from_location_override`, and `ship_to_location_override` apply to
@@ -206,8 +211,11 @@ persisted quantity is `1.0`, a missing product becomes `EDI 856 Item`
 or `EDI 861 Item`, and a missing location name becomes `Unknown`.
 
 Header KDEs are copied onto every line. 856 copies the ASN number
-(BSN02), carrier (TD5), and the reference document (`REF` `BM`, `SI`,
-`CN`, `PO`, or `PK`, else the ASN number). 861 copies the advice number,
+(BSN02), the carrier, and the reference document (`REF` `BM`, `SI`,
+`CN`, `PO`, or `PK`, else the ASN number). The carrier is TD503, the
+carrier identification code. TD505 routing text is used only when TD503
+is empty. TD502 is the identification-code qualifier and is not stored
+as the carrier. 861 copies the advice number,
 the PO when `REF*PO` is present, the condition code (RCD05), and the
 reference document (`PO`, `BM`, or `SI`, else the advice number).
 
@@ -287,15 +295,55 @@ assigned id and the GLN stays empty.
   if none of those appear, the depositor (N1*DE) is the ship-from.
 - 945 ship-from is N1*SF when present, otherwise the warehouse (N1*WH).
 - The event date prefers the header date (W1702 or W0603). A G62 date is
-  used only when that header date is empty. A missing date uses the ingest
-  time. A date that is present and is not CCYYMMDD or YYMMDD is HTTP 400
-  `invalid_edi_date`. A parsed date older than 90 days, or more than 24
-  hours in the future, keeps that calendar date and snaps the ingest
-  timestamp to now.
+  used only when that header date is empty. 944 and 945 do not read a
+  time element. Normalization and rejection match the other sets. See
+  [Event time](#event-time).
 - 944 reference document number is the warehouse receipt number, else the
   shipment id. 945 uses the shipment id, else the depositor order number.
   N9 fills a blank reference (`BM`, `SI`, `PO`, `PK`, `CN`, in that order).
   An N9 `LT` reference is kept only on the line whose lot matches it.
+
+### Event time
+
+`_ship_timestamp_and_date` in
+`services/ingestion/app/edi_ingestion/utils.py` is the clock for 856,
+861, 850, 810, 944, and 945. The stored timestamp is the source event
+time.
+
+| Input | Result |
+| --- | --- |
+| `CCYYMMDD` or `YYMMDD` | That calendar date at UTC midnight, plus `HHMM` when the set has a time element (856 BSN04) |
+| `YYMMDD` | `YY` below `EDI_CENTURY_PIVOT` (default 50) is 20YY. `YY` equal to the pivot or above is 19YY |
+| Any past date, including older than 90 days | Kept |
+| Missing or blank | HTTP 400 `missing_edi_date` |
+| Not 6 or 8 digits, or not a real calendar day | HTTP 400 `invalid_edi_date` |
+| Time element present but not a valid `HHMM` | HTTP 400 `invalid_edi_time` |
+| More than 24 hours ahead of now | HTTP 400 `edi_date_in_future` |
+
+The date fields are BSN03 for 856, the PO date for 850, the invoice date
+for 810, BRA02 for 861, W1702 for 944, and W0603 for 945.
+The rejection is written to the EDI rejection log with `needs_review`
+true, and the body includes `rejection_id`. Nothing is persisted.
+
+`_enforce_envelope_integrity` in
+`services/ingestion/app/edi_ingestion/routes.py` runs in this order, on
+both `POST /api/v1/ingest/edi` and `/document`:
+
+1. ISA and GS sender both present and unequal, or the same for receiver:
+   HTTP 422 `edi_envelope_mismatch`. A blank GS id is not a mismatch.
+   Comparison is after stripping the fixed-width padding.
+2. GS sender absent from `EDI_PARTNER_ALLOWLIST_{TENANT}`: HTTP 403
+   `trading_partner_not_allowed`. The tenant id is uppercased and hyphens
+   become underscores. An unset variable allows every GS sender. This
+   list is separate from `EDI_PARTNER_ALLOWLIST`, which checks the
+   `X-Partner-ID` header, and from `EDI_REQUIRE_PARTNER_ID`.
+3. Event-date preflight. On `/document` every transaction set in the
+   interchange is checked.
+4. ISA13 claim. Replay responses are in
+   [Interchange rules](#interchange-rules).
+
+A date rejection happens before the claim, so the corrected file can
+reuse the same ISA13.
 
 ### Interchange rules
 
@@ -350,7 +398,11 @@ assigned id and the GLN stays empty.
 python3 -m pytest services/ingestion/tests/test_csv_xlsx_upload.py -q --no-cov
 python3 -m pytest services/ingestion/tests/test_edi_warehouse_944_945.py \
   services/ingestion/tests/test_edi_golden.py \
-  services/ingestion/tests/test_edi_wire_format_2974_2976_2978.py -q --no-cov
+  services/ingestion/tests/test_edi_wire_format_2974_2976_2978.py \
+  services/ingestion/tests/test_edi_preserve_event_time.py \
+  services/ingestion/tests/test_edi_date_reject_resend.py \
+  services/ingestion/tests/test_edi_856_carrier_td5.py \
+  services/ingestion/tests/test_edi_envelope_integrity.py -q --no-cov
 cd frontend && npm run test:run -- src/__tests__/lib/epcis-upload.test.ts \
   src/__tests__/pages/ingest-epcis.test.tsx
 ```
