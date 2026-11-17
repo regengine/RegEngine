@@ -24,8 +24,8 @@ export const ROI_CALCULATOR_CONFIG: ToolConfig = {
                 type: 'select',
                 options: [
                     { label: 'Less than 1,000', value: 500 },
-                    { label: '1,000 - 5,000', value: 3000 },
-                    { label: '5,000 - 20,000', value: 12500 },
+                    { label: '1,000 to 5,000', value: 3000 },
+                    { label: '5,000 to 20,000', value: 12500 },
                     { label: 'Over 20,000', value: 50000 }
                 ]
             },
@@ -34,9 +34,9 @@ export const ROI_CALCULATOR_CONFIG: ToolConfig = {
                 text: 'How many hours per week does your team spend on manual data entry or document retrieval?',
                 type: 'select',
                 options: [
-                    { label: '0 - 10 hours', value: 5 },
-                    { label: '10 - 40 hours', value: 25 },
-                    { label: '40 - 100 hours', value: 70 },
+                    { label: '0 to 10 hours', value: 5 },
+                    { label: '10 to 40 hours', value: 25 },
+                    { label: '40 to 100 hours', value: 70 },
                     { label: 'Over 100 hours', value: 150 }
                 ]
             },
@@ -46,8 +46,8 @@ export const ROI_CALCULATOR_CONFIG: ToolConfig = {
                 type: 'select',
                 options: [
                     { label: 'Under $10M', value: 5000000 },
-                    { label: '$10M - $100M', value: 50000000 },
-                    { label: '$100M - $1B', value: 500000000 },
+                    { label: '$10M to $100M', value: 50000000 },
+                    { label: '$100M to $1B', value: 500000000 },
                     { label: 'Over $1B', value: 2000000000 }
                 ]
             }

@@ -104,7 +104,7 @@ export default function WebhooksDocsPage() {
 
                 {/* Payload Preview */}
                 <section>
-                    <h2 className="mb-4 text-heading text-re-text-primary">Sample Payload (Planned)</h2>
+                    <h2 className="mb-4 text-heading text-re-text-primary">Payload format (Planned)</h2>
 
                     <Card variant="inset" className="overflow-hidden">
                         <div className="border-b border-re-border-subtle px-4 py-2">

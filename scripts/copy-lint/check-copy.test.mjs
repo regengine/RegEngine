@@ -34,6 +34,55 @@ test('a double-quoted planned capability is rejected', () => {
   assert.throws(() => parseCapabilities(invalid), /Unparseable planned capability registry/);
 });
 
+test('an empty off registry means nothing is disabled', () => {
+  const emptyOff = registrySource({ ...capabilities, off: [] });
+  assert.deepEqual(parseCapabilities(emptyOff).off, []);
+});
+
+test('an omitted off registry is treated as empty', () => {
+  const withoutOff = registrySource({
+    live: capabilities.live,
+    preview: capabilities.preview,
+    planned: capabilities.planned,
+  });
+  assert.equal(/\boff\s*:/.test(withoutOff), false);
+  const parsed = parseCapabilities(withoutOff);
+  assert.deepEqual(parsed.off, []);
+  assert.deepEqual(parsed.live, capabilities.live);
+  assert.deepEqual(parsed.preview, capabilities.preview);
+  assert.deepEqual(parsed.planned, capabilities.planned);
+});
+
+test('an empty live registry is rejected', () => {
+  const invalid = registrySource({ ...capabilities, live: [] });
+  assert.throws(() => parseCapabilities(invalid), /Empty live capability registry/);
+});
+
+test('a missing live registry is rejected', () => {
+  const withoutLive = registrySource({
+    preview: capabilities.preview,
+    planned: capabilities.planned,
+    off: capabilities.off,
+  });
+  assert.equal(/\blive\s*:/.test(withoutLive), false);
+  assert.throws(() => parseCapabilities(withoutLive), /Missing live capability registry/);
+});
+
+test('an empty preview registry is rejected', () => {
+  const invalid = registrySource({ ...capabilities, preview: [] });
+  assert.throws(() => parseCapabilities(invalid), /Empty preview capability registry/);
+});
+
+test('a missing preview registry is rejected', () => {
+  const withoutPreview = registrySource({
+    live: capabilities.live,
+    planned: capabilities.planned,
+    off: capabilities.off,
+  });
+  assert.equal(/\bpreview\s*:/.test(withoutPreview), false);
+  assert.throws(() => parseCapabilities(withoutPreview), /Missing preview capability registry/);
+});
+
 test('VD dash and preview rules remain, with stricter empty values', () => {
   assert.deepEqual(rules(`<p>${liveName} — ${liveName}</p>`), ['em-dash']);
   assert.deepEqual(rules(`<p>${liveName} – ${liveName}</p>`), ['en-dash']);
@@ -148,4 +197,11 @@ test('gateCompare accepts equal counts', () => {
 
 test('gateCompare accepts a drop with a matching baseline update', () => {
   assert.deepEqual(gateCompare(oneFinding, noFindings, noFindings), { ok: true, errors: [] });
+});
+
+test('live-claim skips a negated GA Preview disclaimer but still flags real live claims', () => {
+  const trustLine = "detail: 'Capability is usable for evaluation in supported workspaces, but is not GA. GS1 EPCIS 2.0 export and ingest stay Preview until separately promoted.',";
+  assert.equal(rules(trustLine, 'frontend/src/app/trust/page.tsx').includes('live-claim'), false);
+  assert.equal(rules(`<p>${capabilities.preview[1]} is GA</p>`).includes('live-claim'), true);
+  assert.equal(rules(`<p>${capabilities.preview[1]} is not GA but is Live</p>`).includes('live-claim'), true);
 });
