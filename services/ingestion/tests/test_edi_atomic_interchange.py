@@ -231,3 +231,72 @@ async def test_graph_outage_after_commit_does_not_fail_a_stored_batch(
 
     assert (result.accepted, result.rejected) == (2, 0)
     assert sum(1 for kind, _ in harness["journal"] if kind == "cte") == 2
+
+
+def _purchase_order(*, control: str, po_number: str) -> IngestEvent:
+    """Two 850s in one interchange share the upload TLC, seller, and PO date."""
+    return IngestEvent(
+        cte_type=WebhookCTEType.SHIPPING,
+        traceability_lot_code="UPLOAD-TLC",
+        product_description="Romaine Hearts",
+        quantity=200,
+        unit_of_measure="cases",
+        location_name="Valley Fresh Farms",
+        timestamp=datetime(2026, 3, 10, 12, tzinfo=timezone.utc).isoformat(),
+        kdes={
+            "edi_transaction_set": "850",
+            "edi_isa13": "000000850",
+            "edi_control_number": control,
+            "po_number": po_number,
+            "seller_name": "Valley Fresh Farms",
+            "event_date": "2026-03-10",
+            "ship_date": "2026-03-10",
+            "ship_from_location": "Valley Fresh Farms",
+            "ship_to_location": "Metro Distribution Center",
+            "reference_document": "PO-" + po_number,
+            "tlc_source_reference": "0061414100001",
+        },
+    )
+
+
+@pytest.mark.asyncio
+async def test_two_850s_in_one_interchange_are_not_undone_as_duplicates(
+    harness: dict[str, Any],
+) -> None:
+    payload = WebhookPayload(
+        source="edi_inbound_850",
+        events=[
+            _purchase_order(control="0001", po_number="PO-A"),
+            _purchase_order(control="0002", po_number="PO-B"),
+        ],
+        tenant_id=TENANT,
+    )
+
+    result = await webhook_compat.ingest_events(
+        payload, principal_tenant_id=TENANT, all_or_nothing=True
+    )
+
+    assert (result.accepted, result.rejected) == (2, 0)
+    assert [event.status for event in result.events] == ["accepted", "accepted"]
+    assert sum(1 for kind, _ in harness["journal"] if kind == "cte") == 2
+
+
+@pytest.mark.asyncio
+async def test_identical_850s_in_one_batch_still_collapse(harness: dict[str, Any]) -> None:
+    payload = WebhookPayload(
+        source="edi_inbound_850",
+        events=[
+            _purchase_order(control="0001", po_number="PO-A"),
+            _purchase_order(control="0001", po_number="PO-A"),
+        ],
+        tenant_id=TENANT,
+    )
+
+    result = await webhook_compat.ingest_events(
+        payload, principal_tenant_id=TENANT, all_or_nothing=True
+    )
+
+    assert (result.accepted, result.rejected) == (0, 2)
+    assert harness["journal"] == []
+    assert result.events[1].errors == ["Duplicate event in batch"]
+    assert result.events[0].errors == ["Not stored: another event in this batch was rejected"]

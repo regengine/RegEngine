@@ -58,12 +58,24 @@ def _batch_dedup_key(event: IngestEvent) -> str:
     # interchange position distinguishes 856 SN1, 861 RCD, and 944/945
     # warehouse lines without changing the batch key for any other event.
     line_index = event.kdes.get("edi_line_index")
+    transaction_set = event.kdes.get("edi_transaction_set")
     if (
-        event.kdes.get("edi_transaction_set") in ("856", "861", "944", "945")
+        transaction_set in ("856", "861", "944", "945")
         and isinstance(line_index, int)
         and line_index > 0
     ):
         return f"{key}|{event.kdes.get('edi_isa13') or ''}|{event.kdes.get('edi_control_number') or ''}|{line_index}"
+    # 850 and 810 are one event per ST/SE. A batched interchange posts one
+    # TLC for the file, and two POs/invoices from the same seller on the same
+    # day share timestamp and location. Without the envelope and ST control
+    # number, all-or-nothing EDI ingest treats the second as a duplicate and
+    # rolls the whole interchange back.
+    if transaction_set in ("850", "810"):
+        return (
+            f"{key}|{event.kdes.get('edi_isa13') or ''}"
+            f"|{event.kdes.get('edi_control_number') or ''}"
+            f"|{event.kdes.get('po_number') or event.kdes.get('invoice_number') or ''}"
+        )
     return key
 
 
