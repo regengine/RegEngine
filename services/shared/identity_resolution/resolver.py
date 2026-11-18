@@ -11,15 +11,15 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List, Optional, Tuple
 
-from sqlalchemy import text
-
 from shared.identity_resolution.constants import (
-    AMBIGUOUS_THRESHOLD_LOW,
     AMBIGUOUS_THRESHOLD_HIGH,
+    AMBIGUOUS_THRESHOLD_LOW,
 )
+
 # #1233: PII masking helpers for log emission. Raw alias_value /
 # canonical_name must never reach the log sinks.
 from shared.pii import mask_alias_value
+from sqlalchemy import text
 
 logger = logging.getLogger("identity-resolution")
 

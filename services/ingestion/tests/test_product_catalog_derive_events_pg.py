@@ -98,6 +98,7 @@ def seeded_tenant():
         yield engine, tenant_id
     finally:
         with engine.begin() as conn:
+            conn.execute(text("SET LOCAL fsma.allow_mutation = 'true'"))  # v141 append-only
             conn.execute(
                 text("DELETE FROM fsma.traceability_events WHERE tenant_id = :tid"),
                 {"tid": tenant_id},

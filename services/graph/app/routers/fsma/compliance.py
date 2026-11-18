@@ -246,7 +246,7 @@ async def export_fda_request_sheet(
 
 
 # ============================================================================
-# GS1 EPCIS 2.0 EXPORT (Walmart/Kroger Automation)
+# GS1 EPCIS 2.0 EXPORT (Preview)
 # ============================================================================
 
 
@@ -264,8 +264,9 @@ async def export_epcis(
     """
     Export traceability data in GS1 EPCIS 2.0 format.
 
-    This enables automated data exchange with major retailers (Walmart, Kroger)
-    who mandate GS1 standards for supply chain visibility.
+    This endpoint is in Preview; validate exports with your trading partner
+    before relying on them for compliance. This endpoint states no dates or
+    deadlines, including retailer program dates or enforcement deadlines.
 
     Formats:
     - json-ld: EPCIS 2.0 JSON-LD (recommended)
@@ -273,6 +274,7 @@ async def export_epcis(
 
     Event Types Mapped:
     - CREATION → epcis:ObjectEvent (bizStep: commissioning)
+    - HARVESTING → epcis:ObjectEvent (bizStep: creating_class_instance)
     - RECEIVING → epcis:ObjectEvent (bizStep: receiving)
     - SHIPPING → epcis:ObjectEvent (bizStep: shipping)
     - TRANSFORMATION → epcis:TransformationEvent
@@ -345,13 +347,13 @@ async def export_epcis(
                 return f"https://id.gs1.org/414/{value}"
             return epc_id(value, "sgln")
 
-        # Phase A: harvesting maps to CBV collecting (kept intentionally).
+        # GS1 US R2.0 Harvest KDE Mapping: creating a new class instance.
         BIZ_STEP_MAP = {
             "CREATION": "commissioning",
             "RECEIVING": "receiving",
             "SHIPPING": "shipping",
             "TRANSFORMATION": "commissioning",
-            "HARVESTING": "collecting",
+            "HARVESTING": "creating_class_instance",
             "COOLING": "storing",
             "INITIAL_PACKING": "packing",
             "FIRST_LAND_BASED_RECEIVING": "receiving",
@@ -398,14 +400,22 @@ async def export_epcis(
                 valid_transformation_id = isinstance(transformation_id, str) and transformation_id.startswith(
                     ("urn:", "https://")
                 )
+                if not valid_transformation_id and transformation_id:
+                    try:
+                        transformation_id = f"urn:uuid:{uuid.UUID(str(transformation_id))}"
+                        valid_transformation_id = True
+                    except ValueError:
+                        _skip("invalid_transformation_id")
+                        continue
                 has_output = bool(epc_urn or out_class)
                 has_input = bool(input_epc or input_class)
+                input_side_present = bool(event.get("input_tlc") or event.get("input_gtin"))
+                if input_side_present and not has_input:
+                    _skip("transformation_input_unencodable")
+                    continue
                 if not (has_input and has_output) and not (valid_transformation_id and (has_input or has_output)):
                     _skip("transformation_incomplete")
                     continue
-                if not valid_transformation_id and transformation_id:
-                    transformation_id = f"urn:uuid:{transformation_id}" if not str(transformation_id).startswith("urn:") else transformation_id
-                    valid_transformation_id = True
                 epcis_event = {"type": "TransformationEvent", **common, "bizStep": BIZ_STEP_MAP[event_type]}
                 if input_epc:
                     epcis_event["inputEPCList"] = [input_epc]
@@ -465,12 +475,34 @@ async def export_epcis(
 
         # Build full EPCIS document
         epcis_document = {
-            "@context": ["https://ref.gs1.org/standards/epcis/2.0.0/epcis-context.jsonld"],
+            "@context": [
+                "https://ref.gs1.org/standards/epcis/2.0.0/epcis-context.jsonld",
+                {
+                    "regengine": "https://regengine.co/ns/",
+                    "skippedEventsByReason": {
+                        "@id": "regengine:skippedEventsByReason", "@type": "@json",
+                    },
+                    **{
+                        key: f"regengine:{key}"
+                        for key in (
+                            "eventsCount",
+                            "skippedEventsCount",
+                            "preview",
+                            "previewNotice",
+                        )
+                    },
+                },
+            ],
             "type": "EPCISDocument",
             "schemaVersion": "2.0",
             "creationDate": datetime.now(timezone.utc).isoformat(),
             "epcisBody": {"eventList": epcis_events},
             "regengine:exportMetadata": {
+                "preview": True,
+                "previewNotice": (
+                    "EPCIS export is in Preview. "
+                    "Validate with your trading partner before relying on it for compliance."
+                ),
                 "eventsCount": len(epcis_events),
                 "skippedEventsCount": skipped_total,
                 "skippedEventsByReason": skipped_by_reason,
@@ -493,6 +525,7 @@ async def export_epcis(
                     "Content-Disposition": f"attachment; filename={filename}",
                     "X-RegEngine-Events-Count": str(len(epcis_events)),
                     "X-RegEngine-Skipped-Events-Count": skip_header,
+                    "X-RegEngine-Preview": "true",
                 },
             )
         else:
@@ -508,6 +541,7 @@ async def export_epcis(
                     "Content-Disposition": f"attachment; filename={filename}",
                     "X-RegEngine-Events-Count": str(len(epcis_events)),
                     "X-RegEngine-Skipped-Events-Count": skip_header,
+                    "X-RegEngine-Preview": "true",
                 },
             )
 
@@ -569,7 +603,7 @@ def _epcis_to_xml(epcis_doc: dict) -> str:
                 continue
             add(node, f"{{{key[: separator + 1]}}}{key[separator + 1 :]}", value)
 
-    _CBV_BIZSTEPS = {"shipping", "receiving", "commissioning", "collecting", "storing", "packing"}
+    _CBV_BIZSTEPS = {"shipping", "receiving", "commissioning", "collecting", "creating_class_instance", "storing", "packing"}
     _CBV_DISPOSITIONS = {"in_transit", "in_progress"}
 
     def cbv_value(field, value):
@@ -630,6 +664,14 @@ def _epcis_to_xml(epcis_doc: dict) -> str:
             add_epcs(node, event, "outputEPCList")
             add_quantities(node, event, "outputQuantityList")
             add_common_tail(node, event, include_action=False)
+
+    if metadata := epcis_doc.get("regengine:exportMetadata"):
+        namespace = "{https://regengine.co/ns/}"
+        metadata_node = sub_element(root, f"{namespace}exportMetadata")
+        for key in ("preview", "previewNotice"):
+            if key in metadata:
+                value = metadata[key]
+                add(metadata_node, f"{namespace}{key}", str(value).lower() if isinstance(value, bool) else value)
 
     return ET.tostring(root, encoding="utf-8", xml_declaration=True).decode("utf-8")
 
