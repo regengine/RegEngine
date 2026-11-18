@@ -80,6 +80,7 @@ export function ContactRequestForm({
         return;
       }
       trackContactFormSubmit('success');
+      if (source === 'contact') ph.requestAccess();
       if (source === 'signup') {
         identifyUser(form.email);
         ph.signup({ source: 'signup' });

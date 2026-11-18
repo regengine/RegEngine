@@ -42,6 +42,7 @@ beforeEach(() => {
   jsdom.reconfigure({ url: 'https://regengine.co/tools/ftl-checker' });
   document.cookie = 're_cookie_consent=; max-age=0; path=/';
   window.localStorage.removeItem('re_internal');
+  window.sessionStorage.clear();
   window.history.replaceState({}, '', '/tools/ftl-checker');
   navigation.pathname = '/tools/ftl-checker';
   navigation.search = '';
@@ -367,10 +368,27 @@ describe('PostHog client initialization', () => {
     });
     expect(JSON.stringify(result)).not.toContain('lead@example.com');
 
+    // First touch holds for the tab: a later URL with other UTMs does not replace it.
     window.history.replaceState({}, '', '/pricing?utm_source=lead%40example.com&utm_campaign=5551234567');
-    const invalid = beforeSend(base);
+    const later = beforeSend(base);
+    expect(later?.properties).toMatchObject({
+      utm_source: 'linkedin.com', utm_medium: 'social', utm_campaign: 'fsma_launch',
+    });
+  });
+
+  it('drops unsafe landing UTMs instead of recording them as first touch', async () => {
+    document.cookie = 're_cookie_consent=accepted; path=/';
+    window.history.replaceState({}, '', '/pricing?utm_source=lead%40example.com&utm_campaign=5551234567');
+    const { CSPostHogProvider } = await providerModule();
+    render(<CSPostHogProvider>content</CSPostHogProvider>);
+    const { before_send: beforeSend } = await initializedOptions();
+    const invalid = beforeSend({
+      event: '$pageview',
+      properties: { token: 'phc_test', distinct_id: 'anonymous-123', $pathname: '/pricing' },
+    });
     expect(invalid?.properties).not.toHaveProperty('utm_source');
     expect(invalid?.properties).not.toHaveProperty('utm_campaign');
+    expect(window.sessionStorage.getItem('re_first_touch_utm')).toBeNull();
   });
 
   it.each(['localhost', '127.0.0.1', 'dev.local', 'branch.vercel.app'])(
@@ -639,5 +657,102 @@ describe('PostHog identity', () => {
       event: '$identify',
       properties: { token: 'phc_test', distinct_id: 'lead@example.com' },
     })).toBeNull();
+  });
+});
+
+describe('AN1 signup events', () => {
+  const LANDING = '/contact?utm_source=linkedin.com&utm_medium=social&utm_campaign=fsma_launch'
+    + `&utm_content=${'c'.repeat(200)}&utm_term=lead%40example.com&email=lead%40example.com`;
+  const FIRST_TOUCH = {
+    utm_source: 'linkedin.com', utm_medium: 'social', utm_campaign: 'fsma_launch',
+    utm_content: 'c'.repeat(128),
+  };
+
+  function sdkEnvelope(event: string, properties: Record<string, unknown>) {
+    return {
+      event,
+      properties: {
+        ...properties,
+        token: 'phc_test', distinct_id: 'anonymous-123',
+        $host: 'regengine.co', $referring_domain: 'linkedin.com', $session_id: 'abc-def',
+        $current_url: 'https://regengine.co/contact?email=lead@example.com',
+        $referrer: 'https://linkedin.com/?email=lead@example.com',
+        utm_source: 'newsletter',
+      },
+    };
+  }
+
+  it('request_access and cta_clicked carry only product, page, cta_id and first-touch UTMs', async () => {
+    window.history.replaceState({}, '', LANDING);
+    navigation.pathname = '/contact';
+    const { ph, CSPostHogProvider } = await providerModule();
+    render(<CSPostHogProvider>content</CSPostHogProvider>);
+    // Pre-consent (cookieless): first touch stays in memory, nothing in storage.
+    window.history.replaceState({}, '', '/contact?utm_source=other&utm_campaign=later');
+
+    ph.requestAccess();
+    ph.ctaClick({ cta_id: 'home_page' });
+    const { before_send: beforeSend } = await initializedOptions();
+    await waitFor(() => expect(sdk.client.capture).toHaveBeenCalledTimes(2));
+    expect(sdk.client.capture).toHaveBeenNthCalledWith(1, 'request_access', {
+      product: 'RegEngine', page: '/contact',
+    });
+    expect(sdk.client.capture).toHaveBeenNthCalledWith(2, 'cta_clicked', {
+      product: 'RegEngine', page: '/contact', cta_id: 'home_page',
+    });
+    expect(window.sessionStorage.length).toBe(0);
+
+    for (const [event, args] of sdk.client.capture.mock.calls as [string, Record<string, unknown>][]) {
+      const result = beforeSend(sdkEnvelope(event, { ...args, email: 'lead@example.com', name: 'Jane' }));
+      expect(result?.properties).toEqual({
+        token: 'phc_test', distinct_id: 'anonymous-123', $process_person_profile: false,
+        ...args,
+        ...FIRST_TOUCH,
+      });
+      expect(JSON.stringify(result)).not.toContain('lead@example.com');
+      expect(JSON.stringify(result)).not.toContain('?');
+    }
+  });
+
+  it('attaches first-touch UTMs to $pageview and persists them for the tab only after Accept', async () => {
+    document.cookie = 're_cookie_consent=accepted; path=/';
+    window.history.replaceState({}, '', LANDING);
+    navigation.pathname = '/contact';
+    const { CSPostHogProvider } = await providerModule();
+    render(<CSPostHogProvider>content</CSPostHogProvider>);
+    const { before_send: beforeSend } = await initializedOptions();
+    expect(JSON.parse(window.sessionStorage.getItem('re_first_touch_utm') ?? '{}')).toEqual(FIRST_TOUCH);
+
+    window.history.replaceState({}, '', '/pricing?utm_source=other');
+    const result = beforeSend({
+      event: '$pageview',
+      properties: { token: 'phc_test', distinct_id: 'anonymous-123', $pathname: '/pricing' },
+    });
+    expect(result?.properties).toMatchObject({ ...FIRST_TOUCH, $pathname: '/pricing' });
+    expect(result?.properties).not.toHaveProperty('utm_term');
+  });
+
+  it('drops a page that is not a known public path and a non-RegEngine product', async () => {
+    const { captureEvent, CSPostHogProvider } = await providerModule();
+    render(<CSPostHogProvider>content</CSPostHogProvider>);
+    captureEvent('cta_clicked', {
+      product: 'Other', page: '/contact?email=lead@example.com', cta_id: 'home_page',
+    });
+    await waitFor(() => expect(sdk.client.capture).toHaveBeenCalledWith('cta_clicked', {
+      cta_id: 'home_page',
+    }));
+  });
+
+  it('forgets first touch when the visitor declines', async () => {
+    document.cookie = 're_cookie_consent=accepted; path=/';
+    window.history.replaceState({}, '', LANDING);
+    const { CSPostHogProvider } = await providerModule();
+    render(<CSPostHogProvider>content</CSPostHogProvider>);
+    await initializedOptions();
+    expect(window.sessionStorage.getItem('re_first_touch_utm')).not.toBeNull();
+    document.cookie = 're_cookie_consent=declined; path=/';
+    await waitFor(() => expect(window.sessionStorage.getItem('re_first_touch_utm')).toBeNull(), {
+      timeout: 2500,
+    });
   });
 });
