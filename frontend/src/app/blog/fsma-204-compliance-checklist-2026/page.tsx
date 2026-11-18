@@ -263,7 +263,7 @@ export default function FSMA204ComplianceChecklist() {
                   name: 'Readiness Assessment',
                   desc: 'Get a free assessment of your FSMA 204 readiness. Find your gaps and next steps',
                   phase: 'Any Phase',
-                  link: '/retailer-readiness',
+                  link: '/buyer-programs',
                 },
                 {
                   name: 'Records Request Checklist',
@@ -341,7 +341,7 @@ export default function FSMA204ComplianceChecklist() {
             </p>
             <div className="mt-6 flex flex-col gap-3 sm:flex-row">
               <Button asChild size="lg">
-                <Link href="/retailer-readiness">
+                <Link href="/buyer-programs">
                   Get Your Readiness Score
                   <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
                 </Link>

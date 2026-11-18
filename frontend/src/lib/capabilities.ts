@@ -1,6 +1,6 @@
 // Copy status registry. Keep these labels aligned with product availability.
 export const capabilities = {
-  live: ['CSV upload', 'JSON events API'],
+  live: ['CSV upload'],
   preview: ['EPCIS intake', 'EPCIS export'],
   planned: [],
   off: ['EDI', 'SFTP'],

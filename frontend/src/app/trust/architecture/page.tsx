@@ -69,7 +69,7 @@ const DATA_FLOW_STEPS = [
     {
         step: '1',
         title: 'Ingest',
-        description: 'CTE events arrive via CSV upload or the JSON events API. Both paths run validation synchronously and persist before coverage checks. EPCIS 2.0 is in Preview.',
+        description: 'CTE events arrive via CSV upload. CSV uploads run validation synchronously and persist before coverage checks. The JSON events API is available by request with an issued API key. EPCIS 2.0 is in Preview.',
     },
     {
         step: '2',
@@ -120,7 +120,7 @@ const SYSTEM_FLOW = [
     {
         Icon: Globe,
         title: 'Source systems',
-        detail: 'ERP, WMS, and supplier data sent as CSV uploads or JSON events API calls',
+        detail: 'ERP, WMS, and supplier data sent as CSV uploads. The JSON events API is available by request with an issued API key.',
         boundary: 'Customer-owned data quality',
     },
     {

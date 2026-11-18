@@ -42,7 +42,7 @@ interface ComparisonRow {
 
 const COMPARISON_DATA: ComparisonRow[] = [
     {
-        feature: 'CSV upload + JSON events API',
+        feature: 'CSV upload. JSON events API available by request with an issued API key',
         regengine: true,
         trustwell: false,
         safetychain: false,
@@ -132,7 +132,7 @@ const DIFFERENTIATORS = [
         icon: Code2,
         title: 'API-First Architecture',
         description:
-            'CSV upload and the JSON events API. Integrate RegEngine with your existing ERP, WMS, or custom systems through those two live paths. No rip-and-replace required.',
+            'CSV upload is live. The JSON events API is available by request with an issued API key. Integrate RegEngine with your existing ERP, WMS, or custom systems. No rip-and-replace required.',
         detail: 'Technical teams can be live in hours. Sales ops teams use our CSV templates. Everyone gets FSMA 204 compliance their way.',
     },
     {

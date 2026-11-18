@@ -25,7 +25,7 @@ const FEATURES = [
   { feature: "Public API + OpenAPI docs", regengine: "check", competitor: "partial", note: "Full REST API with interactive docs; verify FoodLogiQ's current API surface" },
   { feature: "FSMA 204 rule engine (KDE + relational)", regengine: "check", competitor: "partial", note: "36 FSMA 204 validation rules (33 stateless + 3 cross-event); rule enforcement is configurable per workflow" },
   { feature: "Per-event compliance scoring", regengine: "check", competitor: "partial", note: "Advisory readiness signal computed per event vs batch reporting" },
-  { feature: "CSV upload and JSON events API", regengine: "check", competitor: "partial", note: "Both; verify FoodLogiQ's current ingestion surface" },
+  { feature: "CSV upload. JSON events API available by request with an issued API key", regengine: "check", competitor: "partial", note: "Both; verify FoodLogiQ's current ingestion surface" },
   { feature: "Supplier portal with compliance scoring", regengine: "check", competitor: "check", note: "Both offer supplier management" },
   { feature: "Recall drills", regengine: "check", competitor: "check", note: "FoodLogiQ's original strength" },
   { feature: "Published pricing on website", regengine: "check", competitor: "x", note: "List price is $999/mo per facility (founding design partner from $499/mo per facility) vs custom enterprise quotes" },

@@ -101,7 +101,7 @@ export default function ExportJobsPage() {
                 />
                 <Callout tone="warning" icon={Link2Off} title="Scheduled export jobs aren't available on this workspace yet.">
                     <p>Recurring archive scheduling is still in development. This workspace cannot create an export job here today.</p>
-                    <p className="mt-2">To prepare traceability records now, use <Link href="/onboarding/bulk-upload" className="underline">CSV upload</Link> or the <Link href="/docs/quickstart" className="underline">JSON events API</Link>.</p>
+                    <p className="mt-2">To prepare traceability records now, use <Link href="/onboarding/bulk-upload" className="underline">CSV upload</Link>. The <Link href="/docs/quickstart" className="underline">JSON events API</Link> is available by request with an issued API key.</p>
                 </Callout>
             </PageContainer>
         );
@@ -251,7 +251,7 @@ export default function ExportJobsPage() {
                             <EmptyState
                                 icon={Archive}
                                 title={NO_DATA_YET}
-                                description="Export jobs package accepted traceability records into FDA sortable spreadsheets as your primary compliance export, with EPCIS (Preview) available for partner exchange. Start by sending records: upload a CSV or post to the JSON events API."
+                                description="Export jobs package accepted traceability records into FDA sortable spreadsheets as your primary compliance export, with EPCIS (Preview) available for partner exchange. Start by sending records with a CSV upload. The JSON events API is available by request with an issued API key."
                                 action={
                                     <Button asChild size="sm">
                                         <Link href="/onboarding/bulk-upload">Upload a CSV</Link>

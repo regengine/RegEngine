@@ -46,7 +46,7 @@ const API_SERVICES: { name: string; baseUrl: string; icon: React.ComponentType<{
         name: 'JSON Events API',
         baseUrl: '/api/v1/webhooks',
         icon: FileText,
-        description: 'Primary FSMA event ingestion endpoint for CTE batches',
+        description: 'Available by request with an issued API key. Primary FSMA event ingestion endpoint for CTE batches',
         endpoints: [
             {
                 method: 'POST',
@@ -492,8 +492,9 @@ export function ApiReferenceClient() {
                                     <p className="mt-2 text-small text-re-text-tertiary">
                                         Available on contracted workspaces. These endpoints are served from your
                                         workspace&apos;s provisioned endpoint URL (supplied during onboarding), not the
-                                        public regengine.co base URL. JSON Events API, Records, and FDA
-                                        Trace &amp; Export above are the publicly reachable surface.
+                                        public regengine.co base URL. The JSON events API is available by
+                                        request with an issued API key. Records and FDA Trace &amp; Export
+                                        above are the publicly reachable surface.
                                     </p>
                                 )}
                             </div>

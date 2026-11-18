@@ -33,7 +33,7 @@ export default function SignupRequestClient() {
       title="Create your RegEngine workspace"
       description={
         <>
-          Workspaces are set up by the RegEngine team, usually within one business day. Already invited?{' '}
+          C.Lee reviews each request and replies by email. Already invited?{' '}
           <Link
             href="/login"
             className="font-medium text-re-text-primary underline-offset-[3px] hover:underline"

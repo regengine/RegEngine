@@ -80,7 +80,14 @@ export default function FoodTraceabilitySoftwarePage() {
               </p>
               <ul className="list-disc space-y-2 pl-5 text-ui text-re-text-secondary marker:text-re-text-tertiary">
                 <li>Ask: Which CTEs does your business execute?</li>
-                <li>Request a demo focused on those specific CTEs</li>
+                <li>
+                  <a
+                    href="mailto:christopher@regengine.co?subject=Questions%20about%20specific%20CTEs"
+                    className="font-medium text-re-brand underline decoration-re-border-strong underline-offset-[3px] hover:decoration-re-brand"
+                  >
+                    Email christopher@regengine.co about those specific CTEs
+                  </a>
+                </li>
                 <li>Verify the platform captures all required Key Data Elements for each</li>
               </ul>
             </Card>
@@ -358,7 +365,7 @@ export default function FoodTraceabilitySoftwarePage() {
               </p>
               <div className="mt-6 flex flex-col gap-3 sm:flex-row">
                 <Button asChild size="lg">
-                  <Link href="/retailer-readiness">
+                  <Link href="/buyer-programs">
                     See How RegEngine Compares
                     <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
                   </Link>

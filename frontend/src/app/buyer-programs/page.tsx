@@ -123,7 +123,7 @@ export default function BuyerProgramsPage() {
                 <li>• Advisory coverage/completeness checklist</li>
                 <li>• Append-only commit</li>
                 <li>• FDA-oriented sortable spreadsheet</li>
-                <li>• CSV upload, JSON events API, EPCIS export (Preview)</li>
+                <li>• CSV upload, JSON events API (available by request with an issued API key), EPCIS export (Preview)</li>
                 <li>• Hash manifest re-checkable at /verify</li>
               </ul>
             </Card>

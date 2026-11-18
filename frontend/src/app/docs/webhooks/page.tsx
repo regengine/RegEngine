@@ -3,10 +3,10 @@ import Link from 'next/link';
 
 export const metadata: Metadata = {
   title: 'Outbound Webhooks (Planned) | RegEngine',
-  description: 'Planned: customer-managed notifications from RegEngine to your systems. Not available yet. FDA recall/enforcement alerts can be enabled by RegEngine on request. To send events into RegEngine, use POST /api/v1/webhooks/ingest.',
+  description: 'Planned: customer-managed notifications from RegEngine to your systems. Not available yet. FDA recall/enforcement alerts can be enabled by RegEngine on request. The JSON events API is available by request with an issued API key (POST /api/v1/webhooks/ingest).',
   openGraph: {
     title: 'Outbound Webhooks (Planned)',
-    description: 'Planned: customer-managed notifications from RegEngine to your systems. Not available yet. FDA recall/enforcement alerts can be enabled by RegEngine on request. To send events into RegEngine, use POST /api/v1/webhooks/ingest.',
+    description: 'Planned: customer-managed notifications from RegEngine to your systems. Not available yet. FDA recall/enforcement alerts can be enabled by RegEngine on request. The JSON events API is available by request with an issued API key (POST /api/v1/webhooks/ingest).',
     url: 'https://regengine.co/docs/webhooks',
     type: 'website',
   },
@@ -59,7 +59,7 @@ export default function WebhooksDocsPage() {
             <div className="space-y-8">
                 <Callout tone="info" title="Sending events to RegEngine?">
                     <p className="text-ui text-re-text-secondary">
-                        That is the JSON events API, and it is available now:{' '}
+                        That is the JSON events API, available by request with an issued API key:{' '}
                         <code className="rounded-sm bg-re-surface-inset px-1.5 py-0.5 font-mono text-[0.8125rem] text-re-text-primary">
                             POST /api/v1/webhooks/ingest
                         </code>

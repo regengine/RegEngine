@@ -360,7 +360,7 @@ export default function FSMA204BusinessGuidePage() {
               </Link>
             </Button>
             <Button asChild variant="secondary" size="lg">
-              <Link href="/retailer-readiness">Retailer Readiness Assessment</Link>
+              <Link href="/buyer-programs">Retailer Readiness Assessment</Link>
             </Button>
           </div>
 

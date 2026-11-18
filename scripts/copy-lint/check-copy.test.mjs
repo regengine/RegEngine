@@ -55,7 +55,12 @@ test('capability claims and forbidden names use the registry', () => {
 });
 
 test('live claim covers off and planned registry features', () => {
-  const planned = { ...capabilities, live: capabilities.live.slice(1), planned: [capabilities.live[0]] };
+  const remainingLive = capabilities.live.slice(1);
+  const planned = {
+    ...capabilities,
+    live: remainingLive.length ? remainingLive : ['Placeholder live path'],
+    planned: [capabilities.live[0]],
+  };
   const parsed = parseCapabilities(registrySource(planned));
   for (const feature of [parsed.off[0], parsed.planned[0]]) {
     const hits = check({ text: `${feature} Live`, kind: 'jsx' }, '', cfg, parsed);
