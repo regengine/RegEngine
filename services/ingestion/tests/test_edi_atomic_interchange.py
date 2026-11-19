@@ -87,6 +87,10 @@ class _Canonical:
     to_entity_reference = None
     kdes: dict[str, Any] = {}
 
+    def prepare_for_persistence(self) -> "_Canonical":
+        # ingest_events gives the canonical row the legacy id, then rehashes it.
+        return self
+
 
 @pytest.fixture()
 def harness(monkeypatch: pytest.MonkeyPatch) -> Iterator[dict[str, Any]]:

@@ -32,10 +32,10 @@ production call sites of the legacy-native writer** `CTEPersistence.store_event(
 | 4 | `services/ingestion/app/webhook_router_v2/routes.py:316` (`store_event`) | webhook v2 single |
 
 This is already documented in the cutover table
-(`docs/persistence/dual-write-cutover.md:38`: *"the real ingest route
-(`webhook_compat.ingest_events` = legacy `store_event` **+** canonical-only
-store) appends TWO chain rows per event"*) and in the canonical verifier
-(`services/shared/canonical_persistence/verification.py:166-177`).
+(`docs/persistence/dual-write-cutover.md:38`: `webhook_compat.ingest_events`
+writes its legacy row through `store_event`; until it shared one chain row per
+event it also appended a second, canonical-only chain row) and in the canonical
+verifier (`services/shared/canonical_persistence/verification.py:166-177`).
 
 **Consequence:** applying section 3's read-only trigger without first retiring
 these four call sites turns every CSV upload, EDI 856 ingest, Sensitech parse,

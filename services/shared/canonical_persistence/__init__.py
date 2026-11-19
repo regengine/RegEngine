@@ -7,7 +7,10 @@ Package layout:
     shared/canonical_persistence/legacy_dual_write.py — TEMPORARY dual-write + graph sync
 """
 
-from shared.canonical_persistence.models import CanonicalStoreResult  # noqa: F401 -- re-export for existing importers
+from shared.canonical_persistence.models import (  # noqa: F401 -- re-export for existing importers
+    CanonicalStoreResult,
+    LedgerHashMismatchError,
+)
 from shared.canonical_persistence.verification import (  # noqa: F401 -- re-export for existing importers
     CanonicalChainVerification,
 )

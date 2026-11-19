@@ -19,7 +19,7 @@ from shared.canonical_event import (
     _raw_payload_max_bytes,
 )
 from shared.canonical_persistence import legacy_dual_write as migration
-from shared.canonical_persistence.models import CanonicalStoreResult
+from shared.canonical_persistence.models import CanonicalStoreResult, LedgerHashMismatchError
 from shared.canonical_persistence.verification import CanonicalChainVerificationMixin
 from shared.cte_persistence import compute_chain_hash
 from sqlalchemy import bindparam, text
@@ -337,7 +337,7 @@ class CanonicalEventStore(CanonicalChainVerificationMixin):
             ).fetchone()
             if linked:
                 if linked[0] != event.sha256_hash:
-                    raise ValueError("Canonical content does not match the existing ledger event hash")
+                    raise LedgerHashMismatchError("Canonical content does not match the existing ledger event hash")
                 chain_hash, next_sequence = linked[1], linked[2]
         event.chain_hash = chain_hash
 

@@ -5,6 +5,16 @@ Canonical persistence result models.
 from shared.cte_persistence import StoreResult
 
 
+class LedgerHashMismatchError(ValueError):
+    """The chain row for this event id was hashed from other content.
+
+    Raised by ``CanonicalEventStore.persist_event(skip_chain_write=True)``,
+    which shares the legacy write's chain row and will not attach a canonical
+    row to a chain row that does not attest it. A ``ValueError`` so callers
+    that already catch a failed canonical write keep working.
+    """
+
+
 class CanonicalStoreResult:
     """Result of persisting a canonical event."""
 

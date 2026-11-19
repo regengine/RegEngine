@@ -480,3 +480,35 @@ class TestCompleteIngestionRunTenantScope_Issue1263:
             "#1263: tenant_id must be required (no default) so callers cannot "
             "accidentally omit it and fall back to an id-only WHERE"
         )
+
+
+# ---------------------------------------------------------------------------
+# Shared ledger row: a chain row hashed from other content is refused
+# ---------------------------------------------------------------------------
+
+
+class TestSharedLedgerRowRefusal:
+    def test_ledger_row_holding_another_hash_is_refused_with_its_own_error(self):
+        """Callers must be able to tell this refusal from any other failed write.
+
+        ``webhook_compat.ingest_events`` treats it as a replay when the legacy
+        store already holds the record.
+        """
+        from shared.canonical_persistence import LedgerHashMismatchError
+
+        session = FakeSession()
+        # No canonical copy under this content's key.
+        session.add_rule(r"SELECT event_id, sha256_hash, chain_hash", _FakeResult(rows=[]))
+        # The chain row for this event id was hashed from other content.
+        session.add_rule(
+            r"SELECT event_hash, chain_hash, sequence_num",
+            _FakeResult(rows=[("hash-of-other-content", "chain-hash", 1)]),
+        )
+        session.add_rule(r"FROM fsma\.hash_chain", _FakeResult(rows=[("chain-hash", 1)]))
+
+        store = CanonicalEventStore(session=session, dual_write=False, skip_chain_write=True)
+        with pytest.raises(LedgerHashMismatchError) as refusal:
+            store.persist_event(_make_event())
+
+        assert isinstance(refusal.value, ValueError), "existing callers catch ValueError"
+        assert not any("INSERT INTO fsma.traceability_events" in sql for sql, _ in session.calls)
