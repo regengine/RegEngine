@@ -81,15 +81,15 @@ python-multipart>=0.0.32
 defusedxml>=0.7.1
 webauthn>=3.0.1
 
-# Observability — all 4 otel packages must share the same version
+# Observability — keep the stable and instrumentation release sets aligned
 prometheus-client>=0.26.0
 prometheus-fastapi-instrumentator>=8.1.0
-opentelemetry-api==1.45.1
-opentelemetry-sdk==1.45.1
-opentelemetry-exporter-otlp==1.45.1
-opentelemetry-instrumentation-fastapi==0.66b1
-opentelemetry-instrumentation-sqlalchemy==0.66b1
-opentelemetry-instrumentation-httpx==0.66b1
+opentelemetry-api==1.45.2
+opentelemetry-sdk==1.45.2
+opentelemetry-exporter-otlp==1.45.2
+opentelemetry-instrumentation-fastapi==0.66b2
+opentelemetry-instrumentation-sqlalchemy==0.66b2
+opentelemetry-instrumentation-httpx==0.66b2
 sentry-sdk>=2.72.0
 
 # Networking
@@ -109,7 +109,7 @@ tenacity>=9.2.1
 slowapi>=0.1.10
 feedparser>=6.0.14
 email-validator>=2.3.0
-dnspython>=2.9.0
+dnspython>=2.9.2
 # Pinned to >=2.7.0 for CVE-2026-44431 (cross-origin header leak via low-level
 # ProxyManager API) and CVE-2026-44432 (Brotli decompression bomb via partial
 # reads / drain_conn). Transitive of botocore/docker/requests/sentry-sdk/
@@ -157,6 +157,8 @@ apscheduler>=3.11.3
 
 # Document Parsing
 beautifulsoup4>=4.15.0
+# Minimum release fixing CVE-2026-126190/126191/126192/126193.
+soupsieve==4.0
 lxml>=6.1.3
 pdfminer.six>=20260107
 pdfplumber>=0.11.10
