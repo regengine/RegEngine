@@ -638,8 +638,9 @@ async def accept_invite(
         # The identity flush also persists the pending membership. A concurrent
         # accept can win that insert before we reach the commit guard below.
         # Roll back the failed flush before finally disarms on this session.
-        logger.warning("accept_invite_conflict", email=mask_email(invite.email))
         db.rollback()
+        # Failed flushes expire ORM attributes; logging must not reload them.
+        logger.warning("accept_invite_conflict")
         raise generic_400 from exc
     finally:
         disarm_global_admin_context(db)
