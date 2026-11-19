@@ -336,7 +336,7 @@ export default function BulkUploadPage() {
               <span className="text-sm font-semibold text-[var(--re-text-primary)]">Free preview mode</span>
             </div>
             <p className="text-xs text-[var(--re-text-muted)] leading-relaxed">
-              Upload a CSV to preview and validate your data against FSMA 204 traceability expectations. No account required. Sign in to save your records and make them ready for an FDA request.
+              Upload a CSV to preview your data against FSMA 204 traceability expectations. Download the template with no account required. Sign in to validate and save your records.
             </p>
           </div>
         )}
@@ -391,7 +391,7 @@ export default function BulkUploadPage() {
                     Preview
                   </span>
                 </div>
-                <p className="text-[11px] sm:text-xs text-[var(--re-text-muted)]">Preview. Same columns as the CSV template.</p>
+                <p className="text-[11px] sm:text-xs text-[var(--re-text-muted)]">Preview. Multi-sheet workbook. Upload the CSV for now.</p>
                 {!isAuthenticated && (
                   <p className="mt-1 text-[11px] text-[var(--re-text-disabled)]">Sign in to download</p>
                 )}
