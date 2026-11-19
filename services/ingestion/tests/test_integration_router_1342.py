@@ -35,6 +35,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
+from shared.rate_limit import limiter
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 # Make services/ingestion importable.
 service_dir = Path(__file__).parent.parent
@@ -99,6 +102,10 @@ class _FakeConnector:
 def app_with_auth_bypass():
     """Build a FastAPI app with auth context stubbed for router contract tests."""
     app = FastAPI()
+    # slowapi needs the limiter on app.state + a 429 handler once
+    # mutation routes carry @limiter.limit (findings 2 hardening).
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
     app.include_router(integration_router.router)
 
     # Dependency-override bypasses the auth gate so other contracts
@@ -132,6 +139,19 @@ def _clean_registry(monkeypatch):
     monkeypatch.setattr(registry_mod, "_CONNECTOR_CLASSES", {})
     monkeypatch.setattr(registry_mod, "_CONNECTOR_ALIASES", {})
     monkeypatch.setattr(registry_mod, "_ACTIVE_CONNECTORS", {})
+    try:
+        limiter.reset()
+    except Exception:  # pragma: no cover - defensive
+        pass
+    integration_router._reset_webhook_nonces_for_tests()
+    integration_router._profile_store.clear()
+    yield
+    try:
+        limiter.reset()
+    except Exception:  # pragma: no cover - defensive
+        pass
+    integration_router._reset_webhook_nonces_for_tests()
+    integration_router._profile_store.clear()
 
 
 # ---------------------------------------------------------------------------
@@ -697,7 +717,14 @@ class TestInboundWebhook:
             json={"event": "ping"},
         )
         assert resp.status_code == 401
-        assert "invalid signature" in resp.json()["detail"]
+        # Finding 3: uniform rejection body — never echo the connector's
+        # ValueError text (secret-state oracle).
+        detail = resp.json()["detail"]
+        assert detail == {
+            "error": "webhook_rejected",
+            "message": "Webhook verification failed",
+        }
+        assert "invalid signature" not in str(detail)
 
     def test_webhook_payload_passed_as_raw_bytes(self, client, monkeypatch):
         """The connector receives the raw request body (not JSON-decoded)
@@ -826,6 +853,8 @@ class TestAuthGate:
     @pytest.fixture
     def app_with_real_auth(self):
         app = FastAPI()
+        app.state.limiter = limiter
+        app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
         app.include_router(integration_router.router)
         return app
 

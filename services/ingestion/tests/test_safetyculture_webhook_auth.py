@@ -240,6 +240,11 @@ def client():
     return TestClient(app)
 
 
+# The router answers every verification failure with one uniform 401 body,
+# so a caller cannot tell a missing secret from a missing signature.
+_UNIFORM_REJECTION = {"error": "webhook_rejected", "message": "Webhook verification failed"}
+
+
 def _post(client: TestClient, body: bytes, headers: Dict[str, str] | None = None):
     return client.post(
         f"/api/v1/integrations/webhook/{TENANT}/{CONNECTOR_ID}",
@@ -252,7 +257,7 @@ def test_router_missing_signature_returns_401(client, monkeypatch):
     monkeypatch.setattr(registry_mod, "get_tenant_connectors", lambda _tid: {CONNECTOR_ID: _connector()})
     resp = _post(client, json.dumps(PAYLOAD).encode())
     assert resp.status_code == 401
-    assert "signature" in resp.json()["detail"].lower()
+    assert resp.json()["detail"] == _UNIFORM_REJECTION
 
 
 def test_router_bad_signature_returns_401(client, monkeypatch):
@@ -268,7 +273,7 @@ def test_router_missing_secret_returns_401(client, monkeypatch):
     body = json.dumps(PAYLOAD).encode()
     resp = _post(client, body, {"X-Sc-Signature": _sign(body)})
     assert resp.status_code == 401
-    assert "not configured" in resp.json()["detail"].lower()
+    assert resp.json()["detail"] == _UNIFORM_REJECTION
 
 
 def test_router_valid_signature_returns_count_only(client, monkeypatch):
@@ -295,7 +300,7 @@ def test_router_nested_shape_missing_signature_returns_401(client, monkeypatch):
     monkeypatch.setattr(registry_mod, "get_tenant_connectors", lambda _tid: {CONNECTOR_ID: _connector()})
     resp = _post(client, json.dumps(NESTED_PAYLOAD).encode())
     assert resp.status_code == 401
-    assert "signature" in resp.json()["detail"].lower()
+    assert resp.json()["detail"] == _UNIFORM_REJECTION
 
 
 def test_reconfigure_rotates_webhook_secret(client, monkeypatch):
