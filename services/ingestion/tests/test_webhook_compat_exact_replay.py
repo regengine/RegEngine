@@ -41,8 +41,18 @@ KDES = {
 }
 
 
-def _ingest(*, cte_idempotent: bool, canonical_idempotent: bool, canonical_error: Exception | None = None):
-    """Run the real ingest loop for one event with storage and rules stubbed."""
+def _ingest(
+    *,
+    cte_idempotent: bool,
+    canonical_idempotent: bool,
+    canonical_error: Exception | None = None,
+    published: list | None = None,
+    all_or_nothing: bool = False,
+):
+    """Run the real ingest loop for one event with storage and rules stubbed.
+
+    ``published`` collects the event ids handed to the graph publisher.
+    """
     payload = WebhookPayload(
         source="edi_inbound_945",
         tenant_id=TENANT,
@@ -87,15 +97,20 @@ def _ingest(*, cte_idempotent: bool, canonical_idempotent: bool, canonical_error
     def _session():
         yield MagicMock()
 
+    def _publish(event_id, event, tenant_id):
+        if published is not None:
+            published.append(event_id)
+
     async def _run():
-        return await webhook_compat.ingest_events(payload, principal_tenant_id=TENANT, x_regengine_api_key="key")
+        # No API key is passed: the key lookup is stubbed below.
+        return await webhook_compat.ingest_events(payload, principal_tenant_id=TENANT, all_or_nothing=all_or_nothing)
 
     with (
         patch.object(webhook_compat, "_get_db_session", _session),
         patch.object(webhook_compat, "_verify_api_key_sync", lambda **kwargs: None),
         patch.object(webhook_compat, "_check_rate_limit", lambda tenant: None),
         patch.object(webhook_compat, "record_outcomes", lambda *args: None),
-        patch.object(webhook_compat, "_publish_graph_sync", lambda *args: None),
+        patch.object(webhook_compat, "_publish_graph_sync", _publish),
         patch.object(CTEPersistence, "__init__", lambda self, session: None),
         patch.object(CTEPersistence, "store_event", lambda self, **kwargs: store_result),
         patch.object(CanonicalEventStore, "persist_event", _persist),
@@ -187,3 +202,32 @@ def test_other_canonical_failures_on_a_resend_still_fail_under_enforcement(monke
     with pytest.raises(HTTPException) as failure:
         _ingest(cte_idempotent=True, canonical_idempotent=False, canonical_error=ValueError("write failed"))
     assert failure.value.status_code == 500
+
+
+@pytest.mark.parametrize("all_or_nothing", [False, True])
+def test_refused_replay_publishes_nothing_to_the_graph(all_or_nothing):
+    """Nothing was stored, and the resent content can differ from the stored record.
+
+    The stored record was published when it was stored. Publishing the resend
+    under the same id could put content in the graph that neither store holds.
+    """
+    published: list = []
+    response, _, _ = _ingest(
+        cte_idempotent=True,
+        canonical_idempotent=False,
+        canonical_error=_ledger_row_refusal(),
+        published=published,
+        all_or_nothing=all_or_nothing,
+    )
+    assert response.accepted == 1
+    assert published == []
+
+
+@pytest.mark.parametrize("all_or_nothing", [False, True])
+def test_new_record_is_published_to_the_graph(all_or_nothing):
+    published: list = []
+    response, _, _ = _ingest(
+        cte_idempotent=False, canonical_idempotent=False, published=published, all_or_nothing=all_or_nothing
+    )
+    assert response.accepted == 1
+    assert published == [STORED_CTE_ID]

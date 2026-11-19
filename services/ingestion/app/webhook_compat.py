@@ -441,6 +441,7 @@ async def ingest_events(
                 # primary write still commits, preserving the prior
                 # best-effort behavior for tenants without seeded rules.
                 summary = None
+                refused_replay = False
                 canon_sp = db_session.begin_nested()
                 try:
                     from shared.canonical_persistence import CanonicalEventStore
@@ -495,6 +496,7 @@ async def ingest_events(
                         # evaluation, and the stored record is reported as
                         # before. The record keeps the canonical copy it had,
                         # which may be none, and a resend cannot add one.
+                        refused_replay = True
                         logger.warning("compat_replay_chain_row_refused event_id=%s", store_result.event_id)
                     else:
                         # Finding A — under enforcement modes (cte_only/all)
@@ -596,7 +598,12 @@ async def ingest_events(
                         closing_record_hash=store_result.sha256_hash,
                     )
                 )
-                if all_or_nothing:
+                # A refused replay stored nothing, and what was resent can
+                # differ from the stored record, which was published when it
+                # was stored. Nothing is published for it.
+                if refused_replay:
+                    pass
+                elif all_or_nothing:
                     pending_graph_sync.append((store_result.event_id, event))
                 else:
                     _publish_graph_sync(store_result.event_id, event, tenant_id)
