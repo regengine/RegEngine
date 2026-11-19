@@ -14,6 +14,7 @@ const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
 const runGate = new AsyncFunction('github', 'context', 'core', script);
 
 const HEAD = 'abcdef01'.repeat(5);
+const LATER = '2026-11-18T13:00:00Z';
 const NO_PASS = 'Engine Review Pass failed: No passing review from a non-author engine for current head SHA. A marker counts only in a pull request review, not in a comment.';
 const INVALID_AUTHOR = 'Invalid author engine. Please use an engine branch prefix such as gemini/ or claude/.';
 
@@ -85,6 +86,14 @@ const engines = [
   'claude', 'codex', 'cursor', 'gemini', 'grok', 'muse', 'kimi', 'pi',
   'deepseek', 'hermes', 'antigravity', 'visual-designer', 'product-designer',
 ];
+
+test('ALLOWED_ENGINES is exactly the 13 supported engines (no additions or removals)', () => {
+  const declaration = script.match(/\bconst ALLOWED_ENGINES = (new Set\(\[[\s\S]*?\]\));/);
+  assert.ok(declaration, 'The inline script must declare ALLOWED_ENGINES');
+  const actualEngines = new Function(`return ${declaration[1]};`)();
+  assert.deepEqual(actualEngines, new Set(engines));
+});
+
 for (const engine of engines) {
   test(`${engine}/ accepts a current-head PASS from another allowed engine`, async () => {
     const reviewer = engine === 'deepseek' ? 'codex' : 'deepseek';
@@ -107,6 +116,12 @@ test('branch and reviewer engines are case-insensitive', async () => {
   expectVerdict(await evaluate({ branch: 'CuRsOr/fix', reviews: [review('CURSOR')] }), NO_PASS);
 });
 
+test('SHA hex remains case-insensitive for a current-head PASS', async () => {
+  expectVerdict(await evaluate({
+    reviews: [review('deepseek', { body: `REVIEW: PASS deepseek ${HEAD.toUpperCase()}` })],
+  }));
+});
+
 test('cursor is also an allowed non-author reviewer', async () => {
   expectVerdict(await evaluate({ branch: 'codex/fix', reviews: [review('cursor')] }));
 });
@@ -124,6 +139,122 @@ for (const sha of ['0'.repeat(40), HEAD.slice(0, 39), `${HEAD}0`, `g${HEAD.slice
     expectVerdict(await evaluate({ reviews: [review('deepseek', { body: `REVIEW: PASS deepseek ${sha}` })] }), NO_PASS);
   });
 }
+
+test('cursor/ rejects a 7-character current-head SHA prefix (no prefix matching)', async () => {
+  expectVerdict(await evaluate({
+    reviews: [review('deepseek', { body: `REVIEW: PASS deepseek ${HEAD.slice(0, 7)}` })],
+  }), NO_PASS);
+});
+
+for (const action of ['FAIL', 'BLOCKED']) {
+  const blocked = 'Engine Review Pass blocked: Blocked by deepseek';
+
+  test(`a current-head ${action} from a non-author engine blocks without a PASS`, async () => {
+    expectVerdict(await evaluate({
+      reviews: [review('deepseek', { body: `REVIEW: ${action} deepseek ${HEAD}` })],
+    }), blocked);
+  });
+
+  test(`a current-head ${action} still blocks with another non-author engine's PASS`, async () => {
+    expectVerdict(await evaluate({
+      reviews: [
+        review('deepseek', { body: `REVIEW: ${action} deepseek ${HEAD}` }),
+        review('kimi', { id: 2, submitted_at: LATER }),
+      ],
+    }), blocked);
+  });
+
+  test(`a later PASS from the same engine replaces its earlier ${action}`, async () => {
+    expectVerdict(await evaluate({
+      reviews: [
+        review('deepseek', { id: 2, submitted_at: LATER }),
+        review('deepseek', { body: `REVIEW: ${action} deepseek ${HEAD}` }),
+      ],
+    }));
+  });
+}
+
+for (const association of ['OWNER', 'MEMBER', 'COLLABORATOR']) {
+  test(`latest CHANGES_REQUESTED from ${association} blocks even with a PASS in its body`, async () => {
+    expectVerdict(await evaluate({
+      reviews: [review('deepseek', { state: 'CHANGES_REQUESTED', author_association: association })],
+    }), 'Engine Review Pass blocked: Changes requested by trusted-reviewer');
+  });
+}
+
+test('empty-body CHANGES_REQUESTED blocks a separate PASS (decisions use raw reviews)', async () => {
+  expectVerdict(await evaluate({
+    reviews: [
+      review('deepseek', { state: 'CHANGES_REQUESTED', body: '' }),
+      review('kimi', { id: 2, user: { login: 'another-reviewer' }, submitted_at: LATER }),
+    ],
+  }), 'Engine Review Pass blocked: Changes requested by trusted-reviewer');
+});
+
+for (const association of ['CONTRIBUTOR', 'NONE', '']) {
+  test(`CHANGES_REQUESTED from untrusted association ${JSON.stringify(association)} does not block a PASS`, async () => {
+    expectVerdict(await evaluate({
+      reviews: [
+        review('deepseek', { state: 'CHANGES_REQUESTED', body: '', author_association: association }),
+        review('kimi', { id: 2, user: { login: 'another-reviewer' }, submitted_at: LATER }),
+      ],
+    }));
+  });
+}
+
+test('a later APPROVED from the same user clears CHANGES_REQUESTED', async () => {
+  expectVerdict(await evaluate({
+    reviews: [
+      review('deepseek', { id: 2, state: 'APPROVED', submitted_at: LATER }),
+      review('deepseek', { state: 'CHANGES_REQUESTED', body: '' }),
+    ],
+  }));
+});
+
+test('a later COMMENTED PASS from the same user does not clear CHANGES_REQUESTED', async () => {
+  expectVerdict(await evaluate({
+    reviews: [
+      review('deepseek', { id: 2, state: 'COMMENTED', submitted_at: LATER }),
+      review('deepseek', { state: 'CHANGES_REQUESTED', body: '' }),
+    ],
+  }), 'Engine Review Pass blocked: Changes requested by trusted-reviewer');
+});
+
+for (const [placement, body] of [
+  ['leading text', `Please see REVIEW: PASS deepseek ${HEAD}`],
+  ['trailing text', `REVIEW: PASS deepseek ${HEAD} for details`],
+  ['leading and trailing text', `Please see REVIEW: PASS deepseek ${HEAD} for details`],
+]) {
+  test(`a mid-line PASS with ${placement} does not count (marker must occupy its own line)`, async () => {
+    expectVerdict(await evaluate({ reviews: [review('deepseek', { body })] }), NO_PASS);
+  });
+}
+
+test('an own-line PASS surrounded by prose counts after CRLF normalization', async () => {
+  expectVerdict(await evaluate({
+    reviews: [review('deepseek', { body: `Review complete.\r\nREVIEW: PASS deepseek ${HEAD}\r\nDetails follow.` })],
+  }));
+});
+
+// REVIEW: and PASS/BLOCKED/FAIL deliberately require uppercase; engine names
+// and SHA hex remain case-insensitive. Do not add an i flag to the marker regex.
+for (const keyword of ['review: pass', 'REVIEW: pass', 'Review: PASS']) {
+  test(`case-sensitive marker keyword rejects ${JSON.stringify(keyword)}`, async () => {
+    expectVerdict(await evaluate({
+      reviews: [review('deepseek', { body: `${keyword} deepseek ${HEAD}` })],
+    }), NO_PASS);
+  });
+}
+
+test('a COMMENTED review accepts a valid non-author current-head PASS', async () => {
+  expectVerdict(await evaluate({ reviews: [review('deepseek', { state: 'COMMENTED' })] }));
+});
+
+test('a COMMENTED review without a marker does not supply a PASS', async () => {
+  expectVerdict(await evaluate({
+    reviews: [review('deepseek', { state: 'COMMENTED', body: 'Reviewed the changes.' })],
+  }), NO_PASS);
+});
 
 for (const association of ['CONTRIBUTOR', 'NONE', '']) {
   test(`cursor/ rejects a PASS from untrusted association ${JSON.stringify(association)}`, async () => {
