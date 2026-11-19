@@ -69,7 +69,7 @@ relative weight, not a contract.
 
 ## 4. Router gating — what is actually reachable in production
 
-`server/routers_mount.py` makes 81 `include_owned_router` calls (the router
+`server/routers_mount.py` makes 82 `include_owned_router` calls (the router
 registration split out of `server/main.py` in WI-14, moved earlier from bare
 `include_router` to `server/router_policy.py`'s owned form; `server/main.py`
 itself mounts only the scheduler-status router), but
@@ -79,8 +79,8 @@ is rendered from the frozenset and checked by `scripts/check_docs_counts.py`):
 
 ```
 agent_org  audit  discovery  exchange  export  graph  label_vision
-nlp  qr_decoder  recall_simulations  sandbox  scraping  sensitech  sop
-sources
+nlp  qr_decoder  recall_simulations  sandbox_share  scraping
+sensitech  sop  sources
 ```
 
 This is the single most common source of confusion in this codebase: **a route
