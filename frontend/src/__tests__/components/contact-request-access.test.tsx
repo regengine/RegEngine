@@ -45,4 +45,24 @@ describe('ContactRequestForm request_access event', () => {
         await waitFor(() => expect(ph.signup).toHaveBeenCalledTimes(1));
         expect(ph.requestAccess).not.toHaveBeenCalled();
     });
+
+    it('does not fire when the request throws', async () => {
+        vi.mocked(fetchWithCsrf).mockRejectedValue(new TypeError('network down'));
+        await submit();
+        await screen.findByRole('alert');
+        expect(ph.requestAccess).not.toHaveBeenCalled();
+    });
+
+    it('does not fire for a honeypot hit even though the API answers 200', async () => {
+        vi.mocked(fetchWithCsrf).mockResolvedValue(new Response('{"ok":true}', { status: 200 }));
+        const { container } = render(<ContactRequestForm />);
+        fireEvent.change(container.querySelector('input[name="website"]')!, { target: { value: 'spam.example' } });
+        fireEvent.change(screen.getByPlaceholderText('Name'), { target: { value: 'Jane Doe' } });
+        fireEvent.change(screen.getByPlaceholderText('Email'), { target: { value: 'jane@example.com' } });
+        fireEvent.change(screen.getByPlaceholderText('How can we help?'), { target: { value: 'Hello' } });
+        fireEvent.click(screen.getByRole('button', { name: /send message/i }));
+        await waitFor(() => expect(fetchWithCsrf).toHaveBeenCalledTimes(1));
+        await screen.findByText('Message sent');
+        expect(ph.requestAccess).not.toHaveBeenCalled();
+    });
 });

@@ -755,4 +755,19 @@ describe('AN1 signup events', () => {
       timeout: 2500,
     });
   });
+
+  it('keeps first touch across a reload in the same tab after Accept', async () => {
+    document.cookie = 're_cookie_consent=accepted; path=/';
+    window.sessionStorage.setItem('re_first_touch_utm', JSON.stringify(FIRST_TOUCH));
+    window.history.replaceState({}, '', '/pricing?utm_source=other&utm_campaign=later');
+    navigation.pathname = '/pricing';
+    const { CSPostHogProvider } = await providerModule();
+    render(<CSPostHogProvider>content</CSPostHogProvider>);
+    const { before_send: beforeSend } = await initializedOptions();
+    const result = beforeSend({
+      event: '$pageview',
+      properties: { token: 'phc_test', distinct_id: 'anonymous-123', $pathname: '/pricing' },
+    });
+    expect(result?.properties).toMatchObject(FIRST_TOUCH);
+  });
 });
