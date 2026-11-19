@@ -420,7 +420,7 @@ async def test_accept_invite_provisions_real_identity_under_postgres_rls(postgre
     """Run the real helper and migrated policies as NOSUPERUSER/NOBYPASSRLS."""
     from app.auth_crypto import AuthCryptoService
     from app.database import arm_global_admin_context, disarm_global_admin_context
-    from app.invite_routes import AcceptInviteRequest, accept_invite
+    from app.invite_routes import AcceptInviteRequest, _resolve_invite_tenant, accept_invite
     from app.sqlalchemy_models import (
         InviteModel,
         MembershipModel,
@@ -439,6 +439,7 @@ async def test_accept_invite_provisions_real_identity_under_postgres_rls(postgre
     suffix = uuid.uuid4().hex
     email = f"invitee-{suffix}@example.test"
     token = f"synthetic-invite-{suffix}"
+    token_hash = hashlib.sha256(token.encode()).hexdigest()
     existing_user_id = uuid.uuid4() if existing_user else None
     # Match SessionLocal's flush/expiration settings. Savepoints keep both the
     # seed and the route's commit inside the fixture's rollback-only transaction.
@@ -447,6 +448,9 @@ async def test_accept_invite_provisions_real_identity_under_postgres_rls(postgre
     )
     with Session(**session_options) as seed:
         seed.add(TenantModel(id=tenant_id, name="Invite RLS tenant", slug=f"invite-rls-{suffix}"))
+        # v094 pairs existing tenants with passwordless organizations. Seed
+        # that parent before the real helper creates its FK-bound membership.
+        seed.add(OrganizationModel(id=tenant_id, name="Invite RLS tenant", enforced_auth_policy="standard"))
         seed.add(RoleModel(id=role_id, tenant_id=tenant_id, name="Viewer"))
         seed.add(UserModel(id=inviter_id, email=f"inviter-{suffix}@example.test", is_sysadmin=False))
         if existing_user:
@@ -458,8 +462,10 @@ async def test_accept_invite_provisions_real_identity_under_postgres_rls(postgre
                 tenant_id=tenant_id,
                 email=email.upper(),
                 role_id=role_id,
-                token_hash=hashlib.sha256(token.encode()).hexdigest(),
+                token_hash=token_hash,
                 expires_at=datetime.now(timezone.utc) + timedelta(days=1),
+                revoked_at=None,
+                accepted_at=None,
                 created_by=inviter_id,
             )
         )
@@ -483,6 +489,7 @@ async def test_accept_invite_provisions_real_identity_under_postgres_rls(postgre
     connection.execute(
         text(
             "SELECT set_config('app.tenant_id', '', true), "
+            "set_config('regengine.invite_token_hash', '', true), "
             "set_config('regengine.user_id', '', true), "
             "set_config('regengine.is_sysadmin', 'false', true)"
         )
@@ -492,6 +499,12 @@ async def test_accept_invite_provisions_real_identity_under_postgres_rls(postgre
     with Session(**session_options) as db:
         # Even the seeded inviter/existing invitee must be invisible pre-auth.
         assert db.execute(select(UserModel.id)).all() == []
+        # Exercise the production lookup under FORCE RLS with no tenant bound.
+        # v113 arms the token policy only inside the helper, then restores both
+        # GUCs; the handler below must independently resolve and bind its tenant.
+        assert _resolve_invite_tenant(db, token_hash) == tenant_id
+        assert db.execute(text("SELECT current_setting('app.tenant_id', true)")).scalar_one() == ""
+        assert db.execute(text("SELECT current_setting('regengine.invite_token_hash', true)")).scalar_one() == ""
         with (
             patch("app.auth.identity_helpers.AuthCryptoService", return_value=crypto),
             patch("app.invite_routes.AuditLogger.log_event", return_value=uuid.uuid4()),
