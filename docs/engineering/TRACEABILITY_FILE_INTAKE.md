@@ -162,6 +162,19 @@ CCYYMMDD or YYMMDD is HTTP 400 `invalid_edi_date`. A parsed date older
 than 90 days, or more than 24 hours in the future, keeps that calendar
 date on the event and snaps the ingest timestamp to now.
 
+### EDI response `status`
+
+Both EDI routes return HTTP 201 once a document reaches `ingest_events`,
+even if no event was stored. Read `status`, not the HTTP code:
+
+| `status` | Stored | Where the errors are |
+| --- | --- | --- |
+| `accepted` | Every event | None |
+| `partial` | Some events | `ingestion_result.events[]`, `status` and `errors` per event |
+| `rejected` | Nothing | `ingestion_result.events[]`, or `rejection` for `?strict=false` |
+
+`ingestion_result` and `rejection` are never both set.
+
 ### `POST /api/v1/ingest/edi` (856 only)
 
 One ST/SE set. A second set is HTTP 422 `multiple_transaction_sets`. The
