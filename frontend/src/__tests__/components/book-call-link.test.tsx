@@ -3,9 +3,13 @@ import { describe, expect, it, vi } from 'vitest';
 import { BookCallLink } from '@/components/conversion/BookCallLink';
 import { Button } from '@/components/ui/button';
 import { trackBookCallClick } from '@/lib/conversion-events';
+import { ph } from '@/lib/posthog-provider';
 
 vi.mock('@/lib/conversion-events', () => ({
     trackBookCallClick: vi.fn(),
+}));
+vi.mock('@/lib/posthog-provider', () => ({
+    ph: { ctaClick: vi.fn() },
 }));
 
 describe('BookCallLink', () => {
@@ -23,5 +27,7 @@ describe('BookCallLink', () => {
         fireEvent.click(link);
         expect(trackBookCallClick).toHaveBeenCalledTimes(1);
         expect(trackBookCallClick).toHaveBeenCalledWith('home_page', undefined);
+        expect(ph.ctaClick).toHaveBeenCalledTimes(1);
+        expect(ph.ctaClick).toHaveBeenCalledWith({ cta_id: 'home_page' });
     });
 });
