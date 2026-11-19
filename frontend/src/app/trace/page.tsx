@@ -244,7 +244,7 @@ export default function TracePage() {
   const summaryStats = traceResult
     ? [
       { label: 'Facilities', value: traceResult.facilities.length },
-      { label: 'CTE Events', value: traceResult.events.length },
+      { label: 'Events', value: traceResult.events.length },
       { label: 'Total Records', value: traceResult.total_count },
     ]
     : [];
@@ -252,8 +252,8 @@ export default function TracePage() {
   return (
     <PageContainer>
       <PageHeader
-        title="Traceability Query"
-        description="Trace products through the supply chain by Traceability Lot Code (TLC)"
+        title="Trace a lot"
+        description="Enter a lot code to see every step it went through: received, made, shipped."
       />
 
       <div className="space-y-6">
@@ -267,7 +267,7 @@ export default function TracePage() {
                 <label htmlFor="trace-tlc" className="sr-only">Trace Lot</label>
                 <Input
                   id="trace-tlc"
-                  placeholder="Enter TLC (e.g., TLC-2026-SAL-0001)"
+                  placeholder="Enter a lot code from your records"
                   value={tlcInput}
                   onChange={(e) => setTlcInput(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleTrace()}
@@ -348,7 +348,12 @@ export default function TracePage() {
         {!isLoading && !traceResult && !error && (
           <EmptyState
             icon={Search}
-            title="Enter a Traceability Lot Code (TLC) to view its CTE event chain"
+            title="Enter a lot code above to see its history. No records yet? Upload a CSV first."
+            action={
+              <Link href="/onboarding/bulk-upload" className="text-re-brand underline underline-offset-[3px]">
+                Upload a CSV
+              </Link>
+            }
           />
         )}
 
