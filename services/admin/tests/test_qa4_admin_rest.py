@@ -638,6 +638,18 @@ class TestBulkUploadTemplates:
             assert expected in header_line
         assert set(CSV_HEADERS) >= {"record_type", "facility_name", "tlc_code", "cte_type"}
 
+    def test_signed_out_frontend_template_matches_server_csv(self):
+        from app.bulk_upload.templates import generate_template
+
+        payload, _, _ = generate_template("csv")
+        repo_root = Path(__file__).resolve().parents[3]
+        source = (repo_root / "frontend/src/lib/supplier-csv.ts").read_text()
+        marker = "export const SUPPLIER_BULK_UPLOAD_TEMPLATE_CSV = `"
+        start = source.index(marker) + len(marker)
+        end = source.index("`;", start)
+        frontend_csv = source[start:end]
+        assert frontend_csv.replace("\r\n", "\n") == payload.decode().replace("\r\n", "\n")
+
     def test_unknown_format_rejected(self):
         from app.bulk_upload.templates import generate_template
 

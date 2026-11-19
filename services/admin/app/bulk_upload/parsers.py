@@ -309,16 +309,36 @@ def _row_has_event_signal(row: dict[str, Any]) -> bool:
     return False
 
 
+# Both location names alias to facility_name. The first populated value stays
+# the event facility. The other name is kept so a row that names ship-from and
+# ship-to does not discard one of them.
+_LOCATION_NAME_PRESERVE = {
+    "destination_facility_name": "ship_to_location",
+    "origin_facility_name": "ship_from_location",
+}
+
+
+def _cell_present(value: Any) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return bool(value.strip())
+    return True
+
+
 def _normalize_row(row: dict[str, Any]) -> dict[str, Any]:
     normalized: dict[str, Any] = {}
     for key, value in row.items():
         if key is None:
             continue
-        canonical = _normalize_key(str(key))
-        canonical = COLUMN_ALIASES.get(canonical, canonical)
+        raw = _normalize_key(str(key))
+        canonical = COLUMN_ALIASES.get(raw, raw)
         # First writer wins — don't overwrite a populated canonical key
         # with a later alias that may be empty.
         if canonical in normalized and normalized[canonical]:
+            preserve_as = _LOCATION_NAME_PRESERVE.get(raw)
+            if preserve_as and _cell_present(value) and not _cell_present(normalized.get(preserve_as)):
+                normalized[preserve_as] = value
             continue
         normalized[canonical] = value
     return normalized
@@ -384,6 +404,13 @@ def _extract_event_row(row: dict[str, Any]) -> dict[str, Any]:
         if isinstance(value, str) and not value.strip():
             continue
         kde_data[key] = value
+
+    # Flat templates name the product in product_name. Lot creation and the
+    # canonical bridge read product_description.
+    if not _cell_present(kde_data.get("product_description")):
+        product_name = kde_data.get("product_name")
+        if isinstance(product_name, str) and product_name.strip():
+            kde_data["product_description"] = product_name.strip()
 
     return {
         "facility_name": str(row.get("facility_name") or row.get("name") or "").strip(),
