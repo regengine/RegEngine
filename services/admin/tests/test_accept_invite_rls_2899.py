@@ -132,6 +132,61 @@ class _FailClosedRlsSession:
         self.committed = True
 
 
+class _ExpiringInvite(SimpleNamespace):
+    """Rollback expires ORM fields; reading one would issue an unsafe reload."""
+
+    def __getattribute__(self, name):
+        state = super().__getattribute__("__dict__")
+        if state.get("_expired", False) and name in state and not name.startswith("_"):
+            raise AssertionError(f"invite.{name} was reloaded after rollback")
+        return super().__getattribute__(name)
+
+
+class _ConflictRlsSession(_FailClosedRlsSession):
+    """A failed flush/commit blocks even disarm SQL until explicit rollback."""
+
+    def __init__(self, *args, conflict_at, **kwargs):
+        from sqlalchemy.exc import IntegrityError
+
+        super().__init__(*args, **kwargs)
+        self.conflict_at = conflict_at
+        statement = "INSERT users" if conflict_at == "user_flush" else "INSERT memberships"
+        self.conflict = IntegrityError(statement, {}, Exception("duplicate unique key"))
+        self.is_active = True
+        self.events = []
+
+    def execute(self, statement, params=None):
+        from sqlalchemy.exc import PendingRollbackError
+
+        if not self.is_active:
+            raise PendingRollbackError("The failed transaction must be rolled back before executing SQL")
+        result = super().execute(statement, params)
+        if "set_config('regengine.is_sysadmin', 'false'" in str(statement):
+            self.events.append("disarm")
+        return result
+
+    def _fail(self):
+        self.is_active = False
+        self.events.append("conflict")
+        raise self.conflict
+
+    def flush(self):
+        if self.conflict_at == "user_flush":
+            self._fail()
+        super().flush()
+
+    def commit(self):
+        self._fail()
+
+    def rollback(self):
+        self.events.append("rollback")
+        self.is_active = True
+        self.sysadmin_armed = False
+        self.tenant_bound = None
+        self.added.clear()
+        self._invite._expired = True
+
+
 def _make_invite(tenant_id, token_hash, email="invitee@example.com"):
     return SimpleNamespace(
         id=uuid.uuid4(),
@@ -313,6 +368,51 @@ async def test_new_invitee_user_insert_requires_global_admin_context():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("conflict_at", ["user_flush", "commit"])
+async def test_accept_invite_conflict_rolls_back_without_reloading_invite(conflict_at):
+    """Postgres disarm must not mask a uniqueness race with PendingRollbackError."""
+    from app.invite_routes import AcceptInviteRequest, accept_invite
+    from fastapi import HTTPException
+
+    tenant_id = uuid.uuid4()
+    invite = _ExpiringInvite(**vars(_make_invite(tenant_id, hashlib.sha256(b"raw-token").hexdigest())))
+    db = _ConflictRlsSession(
+        invite=invite,
+        user=None if conflict_at == "user_flush" else _make_user(),
+        lookup_tenant=tenant_id,
+        conflict_at=conflict_at,
+    )
+    with (
+        patch("app.invite_routes.ensure_passwordless_identity") as identity,
+        patch("app.invite_routes.AuditLogger.log_event", return_value=uuid.uuid4()) as audit,
+        patch("app.invite_routes.supplier_graph_sync") as graph,
+        patch("app.invite_routes.logger") as logger,
+        pytest.raises(HTTPException) as exc,
+    ):
+        await accept_invite.__wrapped__(
+            payload=AcceptInviteRequest(token="raw-token", name="Invitee"), request=_starlette_request(), db=db
+        )
+
+    assert exc.value.status_code == 400
+    assert exc.value.detail == "Invite is not usable"
+    assert exc.value.__cause__ is db.conflict
+    assert db.is_active
+    assert not db.sysadmin_armed
+    assert not db.committed
+    assert not db.added
+    graph.record_invite_accepted.assert_not_called()
+    logger.warning.assert_called_once_with("accept_invite_conflict")
+    if conflict_at == "user_flush":
+        assert db.events == ["conflict", "rollback", "disarm"]
+        identity.assert_not_called()
+        audit.assert_not_called()
+    else:
+        assert db.events == ["disarm", "disarm", "conflict", "rollback"]
+        identity.assert_called_once()
+        audit.assert_called_once()
+
+
+@pytest.mark.asyncio
 async def test_identity_failure_disarms_global_context_without_commit():
     tenant_id = uuid.uuid4()
     db = _FailClosedRlsSession(
@@ -415,12 +515,19 @@ def postgres_invite_connection():
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-@pytest.mark.parametrize("existing_user", [False, True], ids=["new-user", "existing-user"])
-async def test_accept_invite_provisions_real_identity_under_postgres_rls(postgres_invite_connection, existing_user):
+@pytest.mark.parametrize(
+    ("existing_user", "user_insert_conflict"),
+    [(False, False), (True, False), (True, True)],
+    ids=["new-user", "existing-user", "user-insert-conflict"],
+)
+async def test_accept_invite_provisions_real_identity_under_postgres_rls(
+    postgres_invite_connection, existing_user, user_insert_conflict
+):
     """Run the real helper and migrated policies as NOSUPERUSER/NOBYPASSRLS."""
     from app.auth_crypto import AuthCryptoService
     from app.database import arm_global_admin_context, disarm_global_admin_context
     from app.invite_routes import AcceptInviteRequest, _resolve_invite_tenant, accept_invite
+    from app.models import TenantContext
     from app.sqlalchemy_models import (
         InviteModel,
         MembershipModel,
@@ -431,7 +538,9 @@ async def test_accept_invite_provisions_real_identity_under_postgres_rls(postgre
         UserEmailModel,
         UserModel,
     )
+    from fastapi import HTTPException
     from sqlalchemy import select, text
+    from sqlalchemy.exc import IntegrityError
     from sqlalchemy.orm import Session
 
     connection = postgres_invite_connection
@@ -507,9 +616,53 @@ async def test_accept_invite_provisions_real_identity_under_postgres_rls(postgre
         assert db.execute(text("SELECT current_setting('regengine.invite_token_hash', true)")).scalar_one() == ""
         with (
             patch("app.auth.identity_helpers.AuthCryptoService", return_value=crypto),
-            patch("app.invite_routes.AuditLogger.log_event", return_value=uuid.uuid4()),
-            patch("app.invite_routes.supplier_graph_sync"),
+            patch("app.invite_routes.AuditLogger.log_event", return_value=uuid.uuid4()) as audit,
+            patch("app.invite_routes.supplier_graph_sync") as graph,
         ):
+            if user_insert_conflict:
+                execute, rollback = db.execute, db.rollback
+                stale_lookups = []
+
+                def stale_user_lookup(statement, *args, **kwargs):
+                    # Model the initial lookup occurring before a concurrent
+                    # accept inserted the already-seeded winner. The INSERT,
+                    # unique violation, inactive session and disarm stay real.
+                    if "FROM users" in str(statement) and "lower(users.email)" in str(statement):
+                        stale_lookups.append(statement)
+                        return _Result(None)
+                    return execute(statement, *args, **kwargs)
+
+                def rollback_failed_flush():
+                    assert not db.is_active
+                    rollback()
+
+                with (
+                    patch.object(db, "execute", side_effect=stale_user_lookup),
+                    patch.object(db, "rollback", side_effect=rollback_failed_flush) as rollback_spy,
+                    pytest.raises(HTTPException) as exc,
+                ):
+                    await accept_invite.__wrapped__(
+                        payload=AcceptInviteRequest(token=token, name="Invitee"), request=_starlette_request(), db=db
+                    )
+
+                assert exc.value.status_code == 400
+                assert exc.value.detail == "Invite is not usable"
+                assert isinstance(exc.value.__cause__, IntegrityError)
+                assert exc.value.__cause__.orig.sqlstate == "23505"
+                assert exc.value.__cause__.orig.diag.table_name == "users"
+                assert "email" in exc.value.__cause__.orig.diag.constraint_name
+                assert len(stale_lookups) == 1
+                rollback_spy.assert_called_once_with()
+                assert db.is_active
+                assert db.execute(text("SELECT current_setting('regengine.is_sysadmin')")).scalar_one() == "false"
+                assert db.execute(select(UserModel.id)).all() == []
+                TenantContext.set_tenant_context(db, tenant_id)
+                assert db.get(InviteModel, invite_id).accepted_at is None
+                assert db.get(MembershipModel, (existing_user_id, tenant_id)) is None
+                audit.assert_not_called()
+                graph.record_invite_accepted.assert_not_called()
+                return
+
             # Deliberately bypass _call: ensure_passwordless_identity stays real.
             result = await accept_invite.__wrapped__(
                 payload=AcceptInviteRequest(token=token, name="Invitee"), request=_starlette_request(), db=db

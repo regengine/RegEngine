@@ -587,6 +587,13 @@ async def accept_invite(
             )
             db.add(user)
             db.flush()  # get ID
+    except IntegrityError as exc:
+        # A concurrent accept can win the new user's unique-email insert.
+        # Restore the failed session before finally disarms with SQL.
+        db.rollback()
+        # Failed flushes expire ORM attributes; logging must not reload them.
+        logger.warning("accept_invite_conflict")
+        raise generic_400 from exc
     finally:
         disarm_global_admin_context(db)
 
@@ -687,7 +694,8 @@ async def accept_invite(
         # membership row). Keep the uniform 400 so the outcome is
         # indistinguishable from any other unusable-invite case.
         db.rollback()
-        logger.warning("accept_invite_conflict", email=mask_email(invite.email), error=str(exc))
+        # Failed commits expire ORM attributes; logging must not reload them.
+        logger.warning("accept_invite_conflict")
         raise generic_400 from exc
 
     supplier_graph_sync.record_invite_accepted(
