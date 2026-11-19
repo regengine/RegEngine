@@ -7,10 +7,16 @@ it seeds the tenant row, creates the key through the production
 and marks the tenant's subscription as ``trialing`` in Redis so the
 subscription gate on paid ingest routes passes.
 
+Both database writes use ``ADMIN_DATABASE_URL`` and must log in as
+``regengine_sysadmin``, the control-plane role, with its RLS branch armed
+for the transaction. The admin key-management API writes the same way.
+The runtime ``DATABASE_URL`` role cannot create tenants or keys, and a
+superuser or owner login is refused.
+
 Prerequisites (see README "Local Development"):
     docker compose -f docker-compose.dev.yml up -d      # Postgres + Redis
-    export DATABASE_URL=postgresql://regengine:${POSTGRES_PASSWORD}@localhost:5432/regengine
-    bash scripts/run-migrations.sh
+    ./scripts/run-migrations.sh                         # as regengine_migrator
+    export ADMIN_DATABASE_URL=postgresql://regengine_sysadmin:${POSTGRES_PASSWORD}@localhost:5432/regengine
 
 Usage:
     ./venv/bin/python scripts/create_test_api_key.py
@@ -24,7 +30,7 @@ its hash lands in the ``api_keys`` table. Remember: in development the backend v
 keys only when ``ENABLE_DB_API_KEYS=true`` (shared.auth.get_key_store falls
 back to the in-memory store otherwise).
 
-Refuses to run when REGENGINE_ENV=production or when DATABASE_URL or
+Refuses to run when REGENGINE_ENV=production or when ADMIN_DATABASE_URL or
 REDIS_URL points at a non-localhost host, unless --allow-production is
 passed. Test keys do not belong in production. There, an authenticated
 high-assurance sysadmin (WebAuthn or SSO session) creates keys through
@@ -41,6 +47,7 @@ import shlex
 import stat
 import sys
 import uuid
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -340,9 +347,9 @@ def _guard_against_production(args: argparse.Namespace, database_url: str) -> No
     if env == "production":
         problems.append("REGENGINE_ENV=production")
     if "supabase.co" in database_url or "supabase.com" in database_url:
-        problems.append("DATABASE_URL points at a Supabase host")
+        problems.append("ADMIN_DATABASE_URL points at a Supabase host")
     if not _is_local_url(database_url):
-        problems.append("DATABASE_URL is not a localhost URL")
+        problems.append("ADMIN_DATABASE_URL is not a localhost URL")
     redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
     if not _is_local_url(redis_url):
         problems.append("REDIS_URL is not a localhost URL")
@@ -356,48 +363,72 @@ def _guard_against_production(args: argparse.Namespace, database_url: str) -> No
         )
 
 
-def _async_url(database_url: str) -> str:
-    """Normalize a Postgres URL to the asyncpg dialect (same rules as the store)."""
-    if database_url.startswith("postgresql://"):
-        return database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
-    if database_url.startswith("postgres://"):
-        return database_url.replace("postgres://", "postgresql+asyncpg://", 1)
-    return database_url
+ADMIN_ROLE = "regengine_sysadmin"
+
+_ADMIN_URL_HELP = (
+    "Set ADMIN_DATABASE_URL to the regengine_sysadmin login (README 'Local "
+    "Development'). Only that role may create tenants and API keys. The "
+    "runtime DATABASE_URL role cannot, and a superuser or owner login is refused."
+)
 
 
-async def _seed_tenant(database_url: str, tenant_id: str, tenant_name: str) -> bool:
-    """Ensure the tenants row exists. Returns True if a row was inserted."""
-    from shared.tenant_context import set_tenant_guc
+def _arm_sysadmin(conn) -> None:
+    """Arm the control-plane RLS branch for this transaction.
+
+    Since v111 ``tenants`` and ``api_keys`` admit a write only from
+    ``regengine_sysadmin`` with ``regengine.is_sysadmin`` set. The login is
+    checked first, in the same transaction, as ``DatabaseAPIKeyStore`` does
+    before it arms the branch for the key.
+    """
     from sqlalchemy import text
-    from sqlalchemy.ext.asyncio import create_async_engine
 
-    engine = create_async_engine(
-        _async_url(database_url),
-        connect_args={"statement_cache_size": 0, "prepared_statement_cache_size": 0},
-    )
+    role, is_superuser, bypasses_rls = conn.execute(
+        text("SELECT current_user, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user")
+    ).one()
+    if role != ADMIN_ROLE or is_superuser or bypasses_rls:
+        raise SystemExit(f"ADMIN_DATABASE_URL logs in as {role!r}. {_ADMIN_URL_HELP}")
+    conn.execute(text("SELECT set_config('regengine.is_sysadmin', 'true', true)"))
+
+
+@contextmanager
+def _sysadmin_transaction(admin_url: str):
+    """Yield a connection inside one armed ``regengine_sysadmin`` transaction."""
+    from shared.db_url import sync_postgres_connect_args, sync_postgres_url
+    from sqlalchemy import create_engine
+
+    sync_url = sync_postgres_url(admin_url)
+    engine = create_engine(sync_url, connect_args=sync_postgres_connect_args(sync_url))
     try:
-        async with engine.begin() as conn:
-            # tenants has forced RLS; set the tenant GUC so the write passes
-            # the policy for non-superuser roles too.
-            await set_tenant_guc(conn, tenant_id)
-            result = await conn.execute(
-                text(
-                    """
-                    INSERT INTO tenants (id, name, slug, status, settings, created_at)
-                    VALUES (:id, :name, :slug, 'active', '{}', :now)
-                    ON CONFLICT DO NOTHING
-                    """
-                ),
-                {
-                    "id": tenant_id,
-                    "name": tenant_name,
-                    "slug": f"local-test-{tenant_id[:8]}",
-                    "now": datetime.now(timezone.utc),
-                },
-            )
-            return bool(result.rowcount)
+        with engine.begin() as conn:
+            _arm_sysadmin(conn)
+            yield conn
     finally:
-        await engine.dispose()
+        engine.dispose()
+
+
+def _seed_tenant(conn, tenant_id: str, tenant_name: str) -> bool:
+    """Ensure the tenants row exists. Returns True if a row was inserted.
+
+    ``conn`` comes from ``_sysadmin_transaction``.
+    """
+    from sqlalchemy import text
+
+    result = conn.execute(
+        text(
+            """
+            INSERT INTO tenants (id, name, slug, status, settings, created_at)
+            VALUES (:id, :name, :slug, 'active', '{}', :now)
+            ON CONFLICT DO NOTHING
+            """
+        ),
+        {
+            "id": tenant_id,
+            "name": tenant_name,
+            "slug": f"local-test-{tenant_id[:8]}",
+            "now": datetime.now(timezone.utc),
+        },
+    )
+    return bool(result.rowcount)
 
 
 def _seed_subscription_status(tenant_id: str, allow_production: bool = False) -> str:
@@ -430,11 +461,11 @@ def _seed_subscription_status(tenant_id: str, allow_production: bool = False) ->
 async def _main() -> None:
     args = _parse_args()
 
-    database_url = os.getenv("DATABASE_URL", "")
-    if not database_url:
-        sys.exit("DATABASE_URL must be set (see README 'Local Development').")
+    admin_url = os.getenv("ADMIN_DATABASE_URL", "").strip()
+    if not admin_url:
+        sys.exit(f"ADMIN_DATABASE_URL is not set. {_ADMIN_URL_HELP}")
 
-    _guard_against_production(args, database_url)
+    _guard_against_production(args, admin_url)
 
     try:
         uuid.UUID(args.tenant_id)
@@ -445,8 +476,13 @@ async def _main() -> None:
     jurisdictions = [j.strip() for j in args.jurisdictions.split(",") if j.strip()]
     expires_at = datetime.now(timezone.utc) + timedelta(days=args.expires_days) if args.expires_days > 0 else None
 
-    if not args.no_seed_tenant:
-        inserted = await _seed_tenant(database_url, args.tenant_id, args.tenant_name)
+    # Opened even with --no-seed-tenant: it checks the login, so a wrong one
+    # stops here with guidance instead of inside the key store.
+    inserted = None
+    with _sysadmin_transaction(admin_url) as conn:
+        if not args.no_seed_tenant:
+            inserted = _seed_tenant(conn, args.tenant_id, args.tenant_name)
+    if inserted is not None:
         print(f"Tenant {args.tenant_id}: {'created' if inserted else 'already exists'}")
 
     from shared.api_key_store import DatabaseAPIKeyStore
@@ -458,7 +494,7 @@ async def _main() -> None:
         args.key_file, allow_replace=args.replace_key_file
     )
 
-    store = DatabaseAPIKeyStore(database_url=database_url)
+    store = DatabaseAPIKeyStore(database_url=admin_url, arm_sysadmin_rls=True)
     try:
         key = await store.create_key(
             name=args.name,

@@ -237,7 +237,9 @@ REGENGINE_E2E_ROLE_BOOTSTRAP_URL="postgresql://regengine_owner:${POSTGRES_PASSWO
 ```
 
 Mint a local test API key against this stack (seeds the test tenant and its
-`trialing` billing status too, so subscription-gated routes work):
+`trialing` billing status too, so subscription-gated routes work). It writes
+through `ADMIN_DATABASE_URL` as `regengine_sysadmin`, the only role that may
+create tenants and API keys, and refuses any other login:
 
 ```bash
 ./venv/bin/python scripts/create_test_api_key.py
