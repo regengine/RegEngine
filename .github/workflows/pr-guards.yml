@@ -1162,18 +1162,20 @@ jobs:
             }
 
   # All engines post through one shared GitHub account, so this is an audit trail and not a cryptographic gate.
+  # A REVIEW: marker counts only in a pull request review. A comment is not read:
+  # a comment run has no job under this name on the PR head, so nothing there
+  # could show a blocking verdict that failed to post.
   engine-review-pass:
     name: "Engine Review Pass"
-    if: (github.event_name == 'pull_request' && github.event.action != 'ready_for_review') || github.event_name == 'pull_request_review' || github.event_name == 'issue_comment'
+    if: (github.event_name == 'pull_request' && github.event.action != 'ready_for_review') || github.event_name == 'pull_request_review'
     # Review bursts must not cancel in-progress runs.
     concurrency:
-      group: ${{ github.workflow }}-engine-review-pass-${{ github.event.pull_request.number || github.event.issue.number }}
+      group: ${{ github.workflow }}-engine-review-pass-${{ github.event.pull_request.number }}
       cancel-in-progress: false
     permissions:
       actions: write
       statuses: write
       pull-requests: read
-      issues: read
       contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -1186,47 +1188,17 @@ jobs:
             const owner = context.repo.owner;
             const repo = context.repo.repo;
 
-            // issue_comment events run in the default-branch context, so a failed job
-            // there is attributed to main even though it evaluated a PR head. The PR
-            // verdict is carried by the commit status posted on the PR head SHA; only
-            // fail the job itself for events that run in the pull request's context.
-            const failRun = (msg) => {
-              if (context.eventName === 'pull_request' || context.eventName === 'pull_request_review') {
-                core.setFailed(msg);
-              } else {
-                core.warning(`${msg} (PR verdict is the Engine Review Pass commit status; not failing ${context.eventName} run on default branch)`);
-              }
-            };
-            let pr = context.payload.pull_request;
-
+            // Every event this job runs for carries the pull request, and its job
+            // lands on the PR head. A failed job therefore blocks the PR by itself.
+            const pr = context.payload.pull_request;
             if (!pr) {
-              if (!context.payload.issue?.pull_request) {
-                core.info('Issue comment is not on a pull request. Skipping.');
-                return;
-              }
-              try {
-                const prResponse = await github.rest.pulls.get({
-                  owner,
-                  repo,
-                  pull_number: context.payload.issue.number,
-                });
-                pr = prResponse.data;
-              } catch (err) {
-                // Without the head SHA there is nowhere to post a status, so an earlier
-                // success stands. Fail even though this run belongs to main.
-                core.setFailed(`Could not load pull request #${context.payload.issue.number}: ${err.message}`);
-                return;
-              }
-            }
-
-            if (!pr) {
-              failRun('Could not determine pull request from event payload.');
+              core.setFailed('Could not determine pull request from event payload.');
               return;
             }
 
             const headSha = pr.head?.sha;
             if (!headSha) {
-              failRun('Could not determine head SHA from pull request.');
+              core.setFailed('Could not determine head SHA from pull request.');
               return;
             }
 
@@ -1253,7 +1225,7 @@ jobs:
                 core.info(`Commit status already posted. Skipping duplicate (${state}: ${description})`);
                 return;
               }
-              statusPosted = state !== 'pending';
+              statusPosted = true;
               try {
                 await github.rest.repos.createCommitStatus({
                   owner,
@@ -1266,12 +1238,8 @@ jobs:
                 });
                 core.info(`Created commit status '${state}' on ${headSha}: ${description}`);
               } catch (err) {
+                // The job's own result on the PR head still carries a failing verdict.
                 core.warning(`Failed to create commit status on ${headSha}: ${err.message}`);
-                // A comment run has no check run on the PR head to carry the verdict, so
-                // make the lost write visible even though the run belongs to main.
-                if (context.eventName === 'issue_comment') {
-                  core.setFailed(`Could not post Engine Review Pass on ${headSha}: ${err.message}`);
-                }
               }
             }
 
@@ -1328,14 +1296,6 @@ jobs:
             }
 
             try {
-              // A comment run has no job under the required name on the PR head, so an
-              // earlier success would outlive a run that dies or cannot post its verdict.
-              // Replacing it first leaves the PR blocked instead. This runs for every
-              // comment, because a queued run with a marker can be replaced by one without.
-              if (context.eventName === 'issue_comment') {
-                await setCommitStatus('pending', 'Evaluating reviews');
-              }
-
               const headRef = pr.head?.ref || '';
               const slashIndex = headRef.indexOf('/');
               const rawPrefix = slashIndex > 0 ? headRef.slice(0, slashIndex).trim() : '';
@@ -1344,7 +1304,7 @@ jobs:
               if (!ALLOWED_ENGINES.has(authorEngine)) {
                 const msg = 'Invalid author engine. Please use an engine branch prefix such as gemini/ or claude/.';
                 await setCommitStatus('failure', msg);
-                failRun(msg);
+                core.setFailed(msg);
                 return;
               }
 
@@ -1363,30 +1323,7 @@ jobs:
 
               core.info(`Total reviews retrieved: ${reviews.length}`);
 
-              core.info(`Fetching comments for pull request #${prNumber}...`);
-
-              const comments = await github.paginate(github.rest.issues.listComments, {
-                owner,
-                repo,
-                issue_number: prNumber,
-                per_page: 100,
-              });
-
-              core.info(`Total issue comments retrieved: ${comments.length}`);
-
-              const normalizedComments = comments.map((c) => ({
-                id: c.id,
-                body: c.body,
-                // Edits take effect at their edit time, so use updated_at.
-                submitted_at: c.updated_at || c.created_at,
-                author_association: c.author_association,
-                user: c.user,
-                state: 'COMMENTED',
-              }));
-
-              const allReviews = reviews.concat(normalizedComments);
-
-              const eligibleReviews = allReviews.filter((r) => {
+              const eligibleReviews = reviews.filter((r) => {
                 if (r.state === 'DISMISSED' || !r.submitted_at || !r.body) {
                   return false;
                 }
@@ -1485,14 +1422,14 @@ jobs:
                 }
                 const msg = reasons.join('; ');
                 await setCommitStatus('failure', msg);
-                failRun(`Engine Review Pass blocked: ${msg}`);
+                core.setFailed(`Engine Review Pass blocked: ${msg}`);
                 return;
               }
 
               if (nonAuthorPassMarkers.length === 0) {
                 const msg = 'No passing review from a non-author engine for current head SHA';
                 await setCommitStatus('failure', msg);
-                failRun(`Engine Review Pass failed: ${msg}`);
+                core.setFailed(`Engine Review Pass failed: ${msg}. A marker counts only in a pull request review, not in a comment.`);
                 return;
               }
 
@@ -1504,5 +1441,5 @@ jobs:
             } catch (err) {
               core.error(`Unexpected error: ${err.message}`);
               await setCommitStatus('failure', `Error: ${err.message}`.slice(0, 140));
-              failRun(err.message);
+              core.setFailed(err.message);
             }

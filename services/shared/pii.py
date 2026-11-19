@@ -10,6 +10,7 @@ functions are for application logs, NOT audit records.
 
 from __future__ import annotations
 
+import hashlib
 import re
 
 # PII patterns for redaction before external API calls (#981)
@@ -76,8 +77,6 @@ def mask_email(email: str | None) -> str:
 # vendors), so plaintext identifiers in logs widen the blast radius of
 # any credential leak or vendor breach. These helpers produce a
 # stable, correlatable-but-not-reversible surface.
-
-import hashlib
 
 
 def mask_identifier(value: str | None, *, keep_suffix: int = 2) -> str:

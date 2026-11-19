@@ -1,3 +1,5 @@
+// Stays hand-rolled (WI-11, 2026-11-04): the signed-out demo allowlist, rate
+// limit and tenant-field stripping are local logic, not a plain proxy.
 import { NextRequest, NextResponse } from "next/server";
 import {
     CSRF_HEADER,

@@ -1,3 +1,5 @@
+-- alembic-revision: 1faec7148e78
+-- rendered-from: alembic/versions/20261020_1faec7148e78_v134_sel314_rls_policy_dedupe.py (downgrade)
 -- Rollback for apply_sel314_rls_dedupe.sql. Recreates the eleven out-of-band
 -- `authenticated` policies exactly as they were observed on 2026-10-20 and
 -- restores the two original fsma.tenant_portal_links policies.
