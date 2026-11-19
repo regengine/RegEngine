@@ -216,6 +216,9 @@ def ingest_db(db, monkeypatch):
     monkeypatch.setattr(compat, "_generate_alerts", lambda *args: [])
     monkeypatch.setattr(compat, "_publish_graph_sync", lambda *args: None)
     monkeypatch.setattr(compat, "record_outcomes", lambda *args: None)
+    # Source-file receipts need fsma.ingestion_runs, which this database does not create.
+    monkeypatch.setattr(compat, "_open_ingestion_run", lambda *args: None)
+    monkeypatch.setattr(compat, "_close_ingestion_run", lambda *args, **kwargs: None)
     monkeypatch.setattr(CTEPersistence, "store_event", store)
     monkeypatch.setattr(CanonicalEventStore, "persist_event", canonical)
     monkeypatch.setattr(RulesEngine, "evaluate_event", lambda *args, **kwargs: SimpleNamespace(compliant=True))
@@ -296,7 +299,11 @@ def test_real_routes_reject_changed_resend_after_post_commit_error_without_redis
         key_id="test-key", tenant_id=TENANT, scopes=["*"], auth_mode="test"
     )
     raw = (Path(__file__).parent / "fixtures/edi_corpus/asn_856.edi").read_bytes()
-    data = {"tenant_id": TENANT, "traceability_lot_code": "00012345678901-LOT001"}
+    data = {
+        "tenant_id": TENANT,
+        "traceability_lot_code": "00012345678901-LOT001",
+        "tlc_source_reference": "0061414100001",
+    }
     ingest_db["cleanup"] = RuntimeError("cleanup failed")
     with TestClient(app, raise_server_exceptions=False) as client:
         first = client.post(f"/api/v1/ingest/edi{route}", data=data, files={"file": ("asn.edi", raw)})
@@ -424,7 +431,11 @@ def test_database_lock_returns_retryable_503_through_production_handlers(db, ing
     )
     raw = (Path(__file__).parent / "fixtures/edi_corpus/asn_856.edi").read_bytes()
     envelope = EDIInterchange.from_envelope(routes._extract_856_fields(routes._parse_x12_segments(raw.decode())))
-    data = {"tenant_id": TENANT, "traceability_lot_code": "00012345678901-LOT001"}
+    data = {
+        "tenant_id": TENANT,
+        "traceability_lot_code": "00012345678901-LOT001",
+        "tlc_source_reference": "0061414100001",
+    }
     with _session(db) as owner, TestClient(app) as client:
         envelope.reserve(owner, TENANT)
         response = client.post(f"/api/v1/ingest/edi{route}", data=data, files={"file": ("asn.edi", raw)})
@@ -435,4 +446,33 @@ def test_database_lock_returns_retryable_503_through_production_handlers(db, ing
         owner.rollback()
         retry = client.post(f"/api/v1/ingest/edi{route}", data=data, files={"file": ("asn.edi", raw)})
         assert retry.status_code == 201, retry.text
+        assert _counts(db) == (1, 2)
+
+
+@pytest.mark.parametrize("route", ["", "/document"])
+def test_stored_receipt_answers_a_replay_before_content_checks(db, ingest_db, monkeypatch, route):
+    """With no cache, the database receipt still turns a refused-looking resend into a 409."""
+    monkeypatch.setattr(dedup, "_redis_client", lambda: None)
+    monkeypatch.delenv("EDI_REQUIRE_PARTNER_ID", raising=False)
+    monkeypatch.delenv("EDI_PARTNER_ALLOWLIST", raising=False)
+    monkeypatch.setattr(routes, "ingest_events", compat.ingest_events)
+    monkeypatch.setattr("shared.database.SessionLocal", lambda: _session(db))
+    app = FastAPI()
+    app.include_router(router)
+    app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
+        key_id="test-key", tenant_id=TENANT, scopes=["*"], auth_mode="test"
+    )
+    raw = (Path(__file__).parent / "fixtures/edi_corpus/asn_856.edi").read_bytes()
+    data = {
+        "tenant_id": TENANT,
+        "traceability_lot_code": "00012345678901-LOT001",
+        "tlc_source_reference": "0061414100001",
+    }
+    with TestClient(app) as client:
+        first = client.post(f"/api/v1/ingest/edi{route}", data=data, files={"file": ("asn.edi", raw)})
+        assert first.status_code == 201, first.text
+        del data["tlc_source_reference"]
+        replay = client.post(f"/api/v1/ingest/edi{route}", data=data, files={"file": ("asn.edi", raw)})
+        assert replay.status_code == 409, replay.text
+        assert replay.json()["detail"]["idempotent_replay"] is True
         assert _counts(db) == (1, 2)

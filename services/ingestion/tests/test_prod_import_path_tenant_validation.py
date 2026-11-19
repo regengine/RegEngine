@@ -414,7 +414,11 @@ def test_csv_and_edi_routes_call_ingest_events_under_prod_path(
 
         edi_resp = client.post(
             "/api/v1/ingest/edi",
-            data={"traceability_lot_code": "00012345678901-LOT001", "tenant_id": TENANT},
+            data={
+                "traceability_lot_code": "00012345678901-LOT001",
+                "tlc_source_reference": "0061414100001",
+                "tenant_id": TENANT,
+            },
             files={"file": ("asn_856.edi", edi_bytes, "application/edi-x12")},
         )
         assert edi_resp.status_code != 500, edi_resp.text
