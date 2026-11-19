@@ -36,7 +36,8 @@ it('labels local checks as preliminary and cannot commit without authentication'
   selectCsv();
   await screen.findByText('Lettuce, green');
   await userEvent.click(screen.getByRole('button', { name: 'Check my file' }));
-  expect(await screen.findByText('Sign in to validate this file on the server')).toBeInTheDocument();
+  // SEL-642: Exact client-side validation success message for unauthenticated users
+  expect(await screen.findByText('Your file looks right. Sign in to run the full check and save.')).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Save records' })).toBeDisabled();
   expect(mocks.parse).not.toHaveBeenCalled();
   expect(mocks.commit).not.toHaveBeenCalled();

@@ -354,7 +354,10 @@ describe('SEL-643: Bulk-upload success state', () => {
     await waitFor(() => screen.getByRole('button', { name: /save records/i }));
     await user.click(screen.getByRole('button', { name: /save records/i }));
 
-    expect((await screen.findAllByText('Lot codes')).length).toBeGreaterThan(0);
+    // SEL-642: Exact assertion on "Lot codes" label - appears in parse result summary,
+    // validation preview, and commit summary (3 total in the success flow)
+    const lotCodesElements = await screen.findAllByText('Lot codes');
+    expect(lotCodesElements).toHaveLength(3);
   });
 
   it('shows action links after successful commit', async () => {
