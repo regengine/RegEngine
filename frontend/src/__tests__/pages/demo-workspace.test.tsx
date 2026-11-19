@@ -2,7 +2,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import DemoWorkspacePage from '@/app/demo/page';
 import { metadata } from '@/app/demo/layout';
-import { scenarios } from '@/lib/demo-workspace/model';
+import { CSV_HEADER, scenarios } from '@/lib/demo-workspace/model';
 
 vi.mock('@/lib/conversion-events', () => ({
   trackScenarioTab: vi.fn(),
@@ -55,6 +55,21 @@ describe('/demo public workspace', () => {
     expect(screen.getByText(`${total - all.length} entries · hash-chained`)).toBeInTheDocument();
   });
 
+  it('keeps the current view when the skip link changes the hash', () => {
+    render(<DemoWorkspacePage />);
+    fireEvent.click(nav().getByRole('button', { name: /ledger/i }));
+    expect(screen.getByRole('heading', { level: 1, name: 'Evidence ledger' })).toBeInTheDocument();
+
+    // The root layout's skip link targets #main-content, which is not a view id.
+    window.history.replaceState(null, '', '#main-content');
+    fireEvent(window, new Event('hashchange'));
+    expect(screen.getByRole('heading', { level: 1, name: 'Evidence ledger' })).toBeInTheDocument();
+
+    window.history.replaceState(null, '', '#export');
+    fireEvent(window, new Event('hashchange'));
+    expect(screen.getByRole('heading', { level: 1, name: 'Export packages' })).toBeInTheDocument();
+  });
+
   it('jumps from an attention row to the import view with that record selected', () => {
     render(<DemoWorkspacePage />);
     const rows = screen.getAllByRole('row').filter((row) => within(row).queryByText('Needs correction'));
@@ -90,11 +105,14 @@ describe('/demo public workspace', () => {
     expect(nav().getByRole('button', { name: /fix queue/i })).not.toHaveTextContent(/\d/);
   });
 
-  it('hands the visitor a CSV from the export view', () => {
+  it('hands the visitor a CSV from the export view', async () => {
     const createObjectURL = vi.fn((_blob: Blob) => 'blob:demo');
     const revokeObjectURL = vi.fn();
     vi.stubGlobal('URL', Object.assign(URL, { createObjectURL, revokeObjectURL }));
-    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    const downloads: string[] = [];
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+      downloads.push(this.download);
+    });
 
     render(<DemoWorkspacePage />);
     fireEvent.click(screen.getByRole('button', { name: /export packages/i }));
@@ -105,7 +123,10 @@ describe('/demo public workspace', () => {
     expect(createObjectURL).toHaveBeenCalledTimes(1);
     const blob = createObjectURL.mock.calls[0][0];
     expect(blob.type).toBe('text/csv');
-    expect(click).toHaveBeenCalled();
+    expect(downloads).toEqual([`fda_sortable_${all[0].id}.csv`]);
+    const text = await blob.text();
+    expect(text.split('\n')[0]).toBe(CSV_HEADER);
+    expect(text.split('\n')).toHaveLength(all[0].chain.length + 1);
     click.mockRestore();
   });
 });

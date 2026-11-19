@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { DemoShell } from '@/components/demo-workspace/DemoShell';
 import { useDemoWorkspace } from '@/components/demo-workspace/useDemoWorkspace';
 import { ExportView } from '@/components/demo-workspace/views/ExportView';
@@ -37,16 +37,17 @@ const TITLES: Record<ViewId, [string, string]> = {
   export: ['Export packages', 'One FDA-shaped sortable spreadsheet per chain, with a hash manifest. Hashes here are stand-ins, not SHA-256.'],
 };
 
-function subscribeHash(onChange: () => void) {
-  window.addEventListener('hashchange', onChange);
-  return () => window.removeEventListener('hashchange', onChange);
-}
-
-const readHash = () => parseView(window.location.hash);
-const serverView = (): ViewId => 'overview';
-
 export default function DemoWorkspacePage() {
-  const view = useSyncExternalStore(subscribeHash, readHash, serverView);
+  const [view, setView] = useState<ViewId>('overview');
+
+  // The hash names the view. A hash that is not a view id, such as the
+  // layout's `#main-content` skip link, keeps the view the visitor is on.
+  useEffect(() => {
+    const sync = () => setView((current) => parseView(window.location.hash, current));
+    sync();
+    window.addEventListener('hashchange', sync);
+    return () => window.removeEventListener('hashchange', sync);
+  }, []);
   const ws = useDemoWorkspace('workspace');
   const { all, scenario, state } = ws;
 

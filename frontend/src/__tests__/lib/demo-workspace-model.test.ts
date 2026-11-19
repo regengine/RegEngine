@@ -192,6 +192,16 @@ describe('csv and packages', () => {
     expect(done.exportReady).toBe(true);
     expect(done.exportBadge).toBe('Ready to export');
   });
+
+  it('shows the chain hash the ledger view shows for the latest entry of the chain', () => {
+    const ledger = deriveLedger(all, {});
+    const lastOfFirst = ledger.filter((e) => e.scenarioId === first.id).pop()!;
+    expect(heroStatus(first, {}, all).latestHash).toBe(lastOfFirst.chainHash);
+    expect(heroStatus(first, {}, all).latestHash).not.toBe(lastOfFirst.eventHash);
+
+    const fixedLedger = deriveLedger(all, { [first.id]: true });
+    expect(heroStatus(first, { [first.id]: true }, all).latestHash).toBe(fixedLedger[fixedLedger.length - 1].chainHash);
+  });
 });
 
 describe('overview derivations', () => {
@@ -218,5 +228,8 @@ describe('overview derivations', () => {
     expect(parseView('ledger')).toBe('ledger');
     expect(parseView('#nope')).toBe('overview');
     expect(parseView('')).toBe('overview');
+    // A hash that is not a view id (the skip link, for one) keeps the current view.
+    expect(parseView('#main-content', 'ledger')).toBe('ledger');
+    expect(parseView('#export', 'ledger')).toBe('export');
   });
 });

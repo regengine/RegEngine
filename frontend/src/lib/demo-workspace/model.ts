@@ -108,9 +108,14 @@ export function recordState(record: ChainRecord, scenarioFixed: boolean): Record
   return scenarioFixed ? 'corrected' : 'needs-correction';
 }
 
-export function parseView(hash: string): ViewId {
+/**
+ * The view named by a location hash. A hash that is not a view id (for
+ * example the `#main-content` skip link) leaves the current view alone, so
+ * callers pass the view they are showing as the fallback.
+ */
+export function parseView(hash: string, fallback: ViewId = 'overview'): ViewId {
   const value = hash.replace(/^#/, '');
-  return (VIEW_IDS as readonly string[]).includes(value) ? (value as ViewId) : 'overview';
+  return (VIEW_IDS as readonly string[]).includes(value) ? (value as ViewId) : fallback;
 }
 
 /** Deterministic stand-in hash: `xxxxxxxx…xxxx`. Not SHA-256. */
@@ -268,18 +273,22 @@ export interface HeroStatus {
   exportReady: boolean;
 }
 
-export function heroStatus(scenario: Scenario, fixed: FixedMap): HeroStatus {
-  const scenarioFixed = isFixed(scenario, fixed);
+/**
+ * Status strip for one chain. `all` is the dataset the ledger is built from,
+ * so the "latest" hash is the chain hash the Ledger view shows for this chain.
+ */
+export function heroStatus(scenario: Scenario, fixed: FixedMap, all: readonly Scenario[] = [scenario]): HeroStatus {
   const committed = committedRecords(scenario, fixed);
   const total = scenario.chain.length;
   const open = total - committed.length;
-  const gap = gapRecord(scenario);
-  const latest = scenarioFixed && gap ? gap : committed[committed.length - 1];
+  const latest = deriveLedger(all, fixed)
+    .filter((entry) => entry.scenarioId === scenario.id)
+    .pop();
   return {
     committed: committed.length,
     total,
     open,
-    latestHash: latest ? eventHash(scenario, latest) : '',
+    latestHash: latest?.chainHash ?? '',
     ledgerLine: `${committed.length} of ${total} records committed`,
     exportBadge: open ? `${committed.length} of ${total} ready` : 'Ready to export',
     exportLine: open

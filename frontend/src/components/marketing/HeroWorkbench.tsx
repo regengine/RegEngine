@@ -33,7 +33,7 @@ export function HeroWorkbench() {
   const gapIdx = gapIndex(scenario);
   const { visible, hidden } = windowRows(rows, gapIdx, state.expanded);
   const detail = detailFor(scenario, state.row, state.fixed, 'landing');
-  const status = heroStatus(scenario, state.fixed);
+  const status = heroStatus(scenario, state.fixed, all);
   const fixed = isFixed(scenario, state.fixed);
   const showHint = !fixed && !state.touched;
   const panelId = useId();
