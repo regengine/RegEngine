@@ -127,7 +127,7 @@ describe('SEL-640: Signed-out CSV template download', () => {
     });
 
     // Click "Parse + Validate" to trigger client-side validation
-    await user.click(screen.getByRole('button', { name: /parse \+ validate/i }));
+    await user.click(screen.getByRole('button', { name: /check my file/i }));
 
     // Should show validation errors for missing required columns
     await waitFor(() => {
@@ -183,9 +183,9 @@ describe('SEL-640: Signed-out CSV template download', () => {
 
     const input = screen.getByLabelText(/upload your file/i);
     await user.upload(input, file);
-    await user.click(screen.getByRole('button', { name: /parse \+ validate/i }));
-    await waitFor(() => screen.getByRole('button', { name: /commit import/i }));
-    await user.click(screen.getByRole('button', { name: /commit import/i }));
+    await user.click(screen.getByRole('button', { name: /check my file/i }));
+    await waitFor(() => screen.getByRole('button', { name: /save records/i }));
+    await user.click(screen.getByRole('button', { name: /save records/i }));
 
     expect(await screen.findByText('Technical details')).toBeInTheDocument();
   });
@@ -236,9 +236,9 @@ describe('SEL-640: Signed-out CSV template download', () => {
 
     const input = screen.getByLabelText(/upload your file/i);
     await user.upload(input, file);
-    await user.click(screen.getByRole('button', { name: /parse \+ validate/i }));
-    await waitFor(() => screen.getByRole('button', { name: /commit import/i }));
-    await user.click(screen.getByRole('button', { name: /commit import/i }));
+    await user.click(screen.getByRole('button', { name: /check my file/i }));
+    await waitFor(() => screen.getByRole('button', { name: /save records/i }));
+    await user.click(screen.getByRole('button', { name: /save records/i }));
 
     expect(await screen.findByText('Records saved')).toBeInTheDocument();
     // The "with notes" message comes from sync warnings
@@ -526,7 +526,7 @@ describe('SEL-644 & SEL-646: Trace page error messages', () => {
     const user = userEvent.setup();
     render(<TracePage />);
 
-    await user.type(screen.getByPlaceholderText(/enter tlc/i), 'EMPTY-LOT');
+    await user.type(screen.getByPlaceholderText(/enter a lot code/i), 'EMPTY-LOT');
     await user.click(screen.getByRole('button', { name: /export fda spreadsheet/i }));
 
     // Should show no-records message
