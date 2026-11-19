@@ -127,7 +127,7 @@ describe('SEL-640: Signed-out CSV template download', () => {
     });
 
     // Click "Parse + Validate" to trigger client-side validation
-    await user.click(screen.getByRole('button', { name: /parse \+ validate/i }));
+    await user.click(screen.getByRole('button', { name: /check my file/i }));
 
     // Should show validation errors for missing required columns
     await waitFor(() => {
@@ -183,9 +183,9 @@ describe('SEL-640: Signed-out CSV template download', () => {
 
     const input = screen.getByLabelText(/upload your file/i);
     await user.upload(input, file);
-    await user.click(screen.getByRole('button', { name: /parse \+ validate/i }));
-    await waitFor(() => screen.getByRole('button', { name: /commit import/i }));
-    await user.click(screen.getByRole('button', { name: /commit import/i }));
+    await user.click(screen.getByRole('button', { name: /check my file/i }));
+    await waitFor(() => screen.getByRole('button', { name: /save records/i }));
+    await user.click(screen.getByRole('button', { name: /save records/i }));
 
     expect(await screen.findByText('Technical details')).toBeInTheDocument();
   });
@@ -236,9 +236,9 @@ describe('SEL-640: Signed-out CSV template download', () => {
 
     const input = screen.getByLabelText(/upload your file/i);
     await user.upload(input, file);
-    await user.click(screen.getByRole('button', { name: /parse \+ validate/i }));
-    await waitFor(() => screen.getByRole('button', { name: /commit import/i }));
-    await user.click(screen.getByRole('button', { name: /commit import/i }));
+    await user.click(screen.getByRole('button', { name: /check my file/i }));
+    await waitFor(() => screen.getByRole('button', { name: /save records/i }));
+    await user.click(screen.getByRole('button', { name: /save records/i }));
 
     expect(await screen.findByText('Records saved')).toBeInTheDocument();
     // The "with notes" message comes from sync warnings
@@ -297,11 +297,11 @@ describe('SEL-643: Bulk-upload success state', () => {
     const input = screen.getByLabelText(/upload your file/i);
     await user.upload(input, file);
 
-    await waitFor(() => screen.getByRole('button', { name: /parse \+ validate/i }));
-    await user.click(screen.getByRole('button', { name: /parse \+ validate/i }));
+    await waitFor(() => screen.getByRole('button', { name: /check my file/i }));
+    await user.click(screen.getByRole('button', { name: /check my file/i }));
 
-    await waitFor(() => screen.getByRole('button', { name: /commit import/i }));
-    await user.click(screen.getByRole('button', { name: /commit import/i }));
+    await waitFor(() => screen.getByRole('button', { name: /save records/i }));
+    await user.click(screen.getByRole('button', { name: /save records/i }));
 
     expect(await screen.findByText('Records saved')).toBeInTheDocument();
   });
@@ -348,13 +348,16 @@ describe('SEL-643: Bulk-upload success state', () => {
     const input = screen.getByLabelText(/upload your file/i);
     await user.upload(input, file);
 
-    await waitFor(() => screen.getByRole('button', { name: /parse \+ validate/i }));
-    await user.click(screen.getByRole('button', { name: /parse \+ validate/i }));
+    await waitFor(() => screen.getByRole('button', { name: /check my file/i }));
+    await user.click(screen.getByRole('button', { name: /check my file/i }));
 
-    await waitFor(() => screen.getByRole('button', { name: /commit import/i }));
-    await user.click(screen.getByRole('button', { name: /commit import/i }));
+    await waitFor(() => screen.getByRole('button', { name: /save records/i }));
+    await user.click(screen.getByRole('button', { name: /save records/i }));
 
-    expect(await screen.findByText('Lot codes')).toBeInTheDocument();
+    // SEL-642: Exact assertion on "Lot codes" label - appears in parse result summary,
+    // validation preview, and commit summary (3 total in the success flow)
+    const lotCodesElements = await screen.findAllByText('Lot codes');
+    expect(lotCodesElements).toHaveLength(3);
   });
 
   it('shows action links after successful commit', async () => {
@@ -399,11 +402,11 @@ describe('SEL-643: Bulk-upload success state', () => {
     const input = screen.getByLabelText(/upload your file/i);
     await user.upload(input, file);
 
-    await waitFor(() => screen.getByRole('button', { name: /parse \+ validate/i }));
-    await user.click(screen.getByRole('button', { name: /parse \+ validate/i }));
+    await waitFor(() => screen.getByRole('button', { name: /check my file/i }));
+    await user.click(screen.getByRole('button', { name: /check my file/i }));
 
-    await waitFor(() => screen.getByRole('button', { name: /commit import/i }));
-    await user.click(screen.getByRole('button', { name: /commit import/i }));
+    await waitFor(() => screen.getByRole('button', { name: /save records/i }));
+    await user.click(screen.getByRole('button', { name: /save records/i }));
 
     expect(await screen.findByRole('link', { name: /trace a lot/i })).toHaveAttribute('href', '/trace');
     expect(await screen.findByRole('link', { name: /export fda spreadsheet/i })).toHaveAttribute('href', '/trace');
@@ -427,7 +430,7 @@ describe('SEL-644 & SEL-646: Trace page error messages', () => {
     const user = userEvent.setup();
     render(<TracePage />);
 
-    await user.type(screen.getByPlaceholderText(/enter tlc/i), 'TLC-NOTFOUND');
+    await user.type(screen.getByPlaceholderText(/enter a lot code/i), 'TLC-NOTFOUND');
     await user.click(screen.getByRole('button', { name: /trace/i }));
 
     expect(await screen.findByText(/no records found for lot code/i)).toBeInTheDocument();
@@ -442,7 +445,7 @@ describe('SEL-644 & SEL-646: Trace page error messages', () => {
     const user = userEvent.setup();
     render(<TracePage />);
 
-    await user.type(screen.getByPlaceholderText(/enter tlc/i), 'TLC-ERROR');
+    await user.type(screen.getByPlaceholderText(/enter a lot code/i), 'TLC-ERROR');
     await user.click(screen.getByRole('button', { name: /trace/i }));
 
     expect(await screen.findByText(/we could not run this trace/i)).toBeInTheDocument();
@@ -459,7 +462,7 @@ describe('SEL-644 & SEL-646: Trace page error messages', () => {
     const user = userEvent.setup();
     render(<TracePage />);
 
-    await user.type(screen.getByPlaceholderText(/enter tlc/i), 'TLC-NOTFOUND');
+    await user.type(screen.getByPlaceholderText(/enter a lot code/i), 'TLC-NOTFOUND');
     await user.click(screen.getByRole('button', { name: /export fda spreadsheet/i }));
 
     expect(await screen.findByText(/there are no records for lot code/i)).toBeInTheDocument();
@@ -474,7 +477,7 @@ describe('SEL-644 & SEL-646: Trace page error messages', () => {
     const user = userEvent.setup();
     render(<TracePage />);
 
-    await user.type(screen.getByPlaceholderText(/enter tlc/i), 'TLC-UNAUTH');
+    await user.type(screen.getByPlaceholderText(/enter a lot code/i), 'TLC-UNAUTH');
     await user.click(screen.getByRole('button', { name: /export fda spreadsheet/i }));
 
     expect(await screen.findByText(/your session ended/i)).toBeInTheDocument();
@@ -489,7 +492,7 @@ describe('SEL-644 & SEL-646: Trace page error messages', () => {
     const user = userEvent.setup();
     render(<TracePage />);
 
-    await user.type(screen.getByPlaceholderText(/enter tlc/i), 'TLC-FORBIDDEN');
+    await user.type(screen.getByPlaceholderText(/enter a lot code/i), 'TLC-FORBIDDEN');
     await user.click(screen.getByRole('button', { name: /export fda spreadsheet/i }));
 
     expect(await screen.findByText(/your session ended/i)).toBeInTheDocument();
@@ -504,7 +507,7 @@ describe('SEL-644 & SEL-646: Trace page error messages', () => {
     const user = userEvent.setup();
     render(<TracePage />);
 
-    await user.type(screen.getByPlaceholderText(/enter tlc/i), 'TLC-ERROR');
+    await user.type(screen.getByPlaceholderText(/enter a lot code/i), 'TLC-ERROR');
     await user.click(screen.getByRole('button', { name: /export fda spreadsheet/i }));
 
     expect(await screen.findByText(/we could not build the fda spreadsheet/i)).toBeInTheDocument();
@@ -526,7 +529,7 @@ describe('SEL-644 & SEL-646: Trace page error messages', () => {
     const user = userEvent.setup();
     render(<TracePage />);
 
-    await user.type(screen.getByPlaceholderText(/enter tlc/i), 'EMPTY-LOT');
+    await user.type(screen.getByPlaceholderText(/enter a lot code/i), 'EMPTY-LOT');
     await user.click(screen.getByRole('button', { name: /export fda spreadsheet/i }));
 
     // Should show no-records message

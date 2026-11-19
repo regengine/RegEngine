@@ -336,7 +336,7 @@ export default function BulkUploadPage() {
               <span className="text-sm font-semibold text-[var(--re-text-primary)]">Free preview mode</span>
             </div>
             <p className="text-xs text-[var(--re-text-muted)] leading-relaxed">
-              Upload a CSV to preview and validate your data against FSMA 204 traceability expectations. No account required. Sign in to commit with cryptographic integrity and generate review-ready records.
+              Upload a CSV to preview your data against FSMA 204 traceability expectations. Download the template with no account required. Sign in to validate and save your records.
             </p>
           </div>
         )}
@@ -349,9 +349,9 @@ export default function BulkUploadPage() {
             <Hash className="w-5 h-5 text-[var(--re-brand)]" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-[var(--re-text-primary)] mb-1">Cryptographic integrity built in</h3>
+            <h3 className="text-sm font-semibold text-[var(--re-text-primary)] mb-1">Every saved record is tamper evident</h3>
             <p className="text-xs text-[var(--re-text-muted)] leading-relaxed">
-              Every bulk-uploaded record is SHA-256 hashed and inserted into the same workspace-wide Merkle tree as manual entries. Audit trails are tamper-evident from the moment data lands.
+              Each record you save gets a fingerprint. If anyone changes it later, your audit trail shows it.
             </p>
           </div>
         </div>
@@ -384,9 +384,14 @@ export default function BulkUploadPage() {
               <div className="w-10 h-10 rounded-lg bg-[var(--re-surface-elevated)] border border-[var(--re-surface-border)] flex items-center justify-center flex-shrink-0 group-hover:bg-[var(--re-brand)] group-hover:border-[var(--re-brand)] transition-colors duration-300">
                 <ClipboardCheck className="w-5 h-5 text-[var(--re-brand)] group-hover:text-white transition-colors duration-300" />
               </div>
-              <div>
-                <h3 className="text-sm font-semibold text-[var(--re-text-primary)] mb-0.5">XLSX Template</h3>
-                <p className="text-[11px] sm:text-xs text-[var(--re-text-muted)]">Multi-sheet workbook with validation</p>
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <h3 className="text-sm font-semibold text-[var(--re-text-primary)]">XLSX Template</h3>
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-label font-semibold uppercase tracking-wide bg-[var(--re-brand-muted)] text-[var(--re-brand)] border border-[var(--re-brand)]/20">
+                    Preview
+                  </span>
+                </div>
+                <p className="text-[11px] sm:text-xs text-[var(--re-text-muted)]">Preview. Multi-sheet workbook. Upload the CSV for now.</p>
                 {!isAuthenticated && (
                   <p className="mt-1 text-[11px] text-[var(--re-text-disabled)]">Sign in to download</p>
                 )}
@@ -405,12 +410,12 @@ export default function BulkUploadPage() {
         >
           {/* File input */}
           <label htmlFor="supplier-bulk-file" className="block mb-1 text-sm font-semibold text-[var(--re-text-primary)]">Upload your file</label>
-          <p className="text-xs text-[var(--re-text-muted)] mb-3">Accepts CSV, XLSX, JSON, or PDF. Max 10 MB.</p>
+          <p className="text-xs text-[var(--re-text-muted)] mb-3">Upload one CSV file, up to 10 MB.</p>
           <input
             id="supplier-bulk-file"
             disabled={isBusy}
             type="file"
-            accept=".csv,.xlsx,.json,.pdf"
+            accept=".csv"
             onChange={onFileSelected}
             className="block w-full rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] p-2.5 text-sm text-[var(--re-text-secondary)] file:mr-3 file:rounded-md file:border-0 file:bg-[var(--re-brand-muted)] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-[var(--re-brand)]"
           />
@@ -424,7 +429,7 @@ export default function BulkUploadPage() {
               className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--re-brand)] px-5 py-2.5 text-sm font-semibold text-[var(--re-brand-foreground)] hover:-translate-y-0.5 transition-all disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 min-h-[48px] w-full sm:w-auto"
             >
               {isBusy && !commitResult ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-              {isBusy && !commitResult ? 'Working...' : 'Parse + Validate'}
+              {isBusy && !commitResult ? 'Working...' : 'Check my file'}
             </button>
 
             <button
@@ -434,7 +439,7 @@ export default function BulkUploadPage() {
               className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--re-brand)] px-5 py-2.5 text-sm font-semibold text-[var(--re-brand-foreground)] hover:-translate-y-0.5 transition-all disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 min-h-[48px] w-full sm:w-auto"
             >
               <CheckCircle2 className="w-4 h-4" />
-              Commit Import
+              Save records
             </button>
 
             <button
@@ -443,7 +448,7 @@ export default function BulkUploadPage() {
               type="button"
               className="inline-flex items-center justify-center gap-2 rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] px-5 py-2.5 text-sm font-medium text-[var(--re-text-secondary)] hover:border-[var(--re-brand)]/30 transition-all disabled:cursor-not-allowed disabled:opacity-50 min-h-[48px] w-full sm:w-auto"
             >
-              Refresh Status
+              Check save status
             </button>
           </div>
 
@@ -707,8 +712,8 @@ export default function BulkUploadPage() {
               }`}>
                 {clientValidation.canProceed ? <CheckCircle2 className="w-4 h-4" /> : <span>!</span>}
                 {clientValidation.canProceed
-                  ? 'Local structure checks passed. Server validation is required before commit.'
-                  : 'Fix the errors above before proceeding to commit.'}
+                  ? 'Your file looks right. Sign in to run the full check and save.'
+                  : 'Fix the errors above, then check your file again.'}
               </div>
 
               {/* CTA to sign in for full commit */}
@@ -752,8 +757,8 @@ export default function BulkUploadPage() {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {[
                   { label: 'Facilities', value: parseResult.facilities },
-                  { label: 'FTL Scopes', value: parseResult.ftl_scopes },
-                  { label: 'TLCs', value: parseResult.tlcs },
+                  { label: 'Food Traceability List foods', value: parseResult.ftl_scopes },
+                  { label: 'Lot codes', value: parseResult.tlcs },
                   { label: 'Events', value: parseResult.events },
                 ].map((item) => (
                   <div key={item.label} className="rounded-lg bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] p-3 text-center">
@@ -783,12 +788,12 @@ export default function BulkUploadPage() {
                   <p className="font-semibold">{validateResult.preview.facilities_to_create} create / {validateResult.preview.facilities_to_update} update</p>
                 </div>
                 <div className="rounded-lg bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] p-3">
-                  <p className="text-xs text-[var(--re-text-muted)] mb-0.5">TLCs</p>
+                  <p className="text-xs text-[var(--re-text-muted)] mb-0.5">Lot codes</p>
                   <p className="font-semibold">{validateResult.preview.tlcs_to_create} create / {validateResult.preview.tlcs_to_update} update</p>
                 </div>
                 <div className="rounded-lg bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] p-3">
-                  <p className="text-xs text-[var(--re-text-muted)] mb-0.5">FTL / Events</p>
-                  <p className="font-semibold">{validateResult.preview.ftl_scopes_to_upsert} upserts / {validateResult.preview.events_to_chain} chain</p>
+                  <p className="text-xs text-[var(--re-text-muted)] mb-0.5">Foods and events</p>
+                  <p className="font-semibold">{validateResult.preview.ftl_scopes_to_upsert} foods, {validateResult.preview.events_to_chain} events to save</p>
                 </div>
               </div>
               <div className={`mt-3 rounded-lg p-3 text-sm font-semibold flex items-center gap-2 ${
@@ -797,7 +802,7 @@ export default function BulkUploadPage() {
                   : 'bg-re-danger/10 text-re-danger border border-re-danger/20'
               }`}>
                 {validateResult.preview.can_commit ? <CheckCircle2 className="w-4 h-4" /> : <span>!</span>}
-                {validateResult.preview.can_commit ? 'Ready to commit.' : 'Resolve validation errors before commit.'}
+                {validateResult.preview.can_commit ? 'Ready to save.' : 'Fix the errors listed below, then check your file again.'}
               </div>
               {validateResult.preview.errors?.length > 0 && (
                 <ul className="mt-3 list-disc pl-5 text-xs text-re-danger">
