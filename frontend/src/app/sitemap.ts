@@ -38,6 +38,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     const marketingPages = [
         { url: `${baseUrl}/`, changeFrequency: 'weekly' as const, priority: 1.0 },
         { url: `${baseUrl}/pricing`, changeFrequency: 'monthly' as const, priority: 0.9 },
+        { url: `${baseUrl}/demo`, changeFrequency: 'monthly' as const, priority: 0.8 },
         { url: `${baseUrl}/security`, changeFrequency: 'monthly' as const, priority: 0.8 },
         // /alpha, /verticals/food-safety and /developer/register are redirect
         // stubs (the last one a next.config.js redirect to /login), so they are

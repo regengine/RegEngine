@@ -6,7 +6,7 @@ import { Moon, Sun } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 export function ThemeToggle() {
-    const { theme, setTheme } = useTheme();
+    const { theme, setTheme, forcedTheme } = useTheme();
     const [mounted, setMounted] = useState(false);
 
     // next-themes cannot know the resolved theme during SSR, so the documented
@@ -14,6 +14,10 @@ export function ThemeToggle() {
     // after hydration by definition — that is the point of the guard.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(() => setMounted(true), []);
+
+    // A route that forces its theme has nothing to toggle; the control would
+    // be a dead button, so it is not rendered there.
+    if (forcedTheme) return null;
 
     if (!mounted) {
         // Render placeholder to avoid layout shift

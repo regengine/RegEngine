@@ -11,7 +11,7 @@ import {
   setConsentCookie,
   type ConsentValue,
 } from '@/lib/cookie-consent';
-import { shouldHideMarketingChrome } from '@/lib/app-routes';
+import { shouldHideCookieBanner } from '@/lib/app-routes';
 import {
   filterConversionAnalyticsEvent,
   getConversionAttribution,
@@ -53,7 +53,7 @@ export function CookieBanner({ enableAnalytics }: CookieBannerProps) {
   const [consent, setConsent] = useState<ConsentValue | null | 'loading'>('loading');
   const [visible, setVisible] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const hideBanner = shouldHideMarketingChrome(pathname);
+  const hideBanner = shouldHideCookieBanner(pathname);
 
   // Read stored consent on mount
   useEffect(() => {
