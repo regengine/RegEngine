@@ -81,7 +81,7 @@ python-multipart>=0.0.32
 defusedxml>=0.7.1
 webauthn>=3.0.1
 
-# Observability — all 4 otel packages must share the same version
+# Observability — keep the stable and instrumentation release sets aligned
 # 1.45.2 / 0.66b2 fixes CVE-2026-126360 in opentelemetry-api: a crafted
 # traceparent value makes TraceContextTextMapPropagator.extract() backtrack in
 # quadratic time. The SDK, exporter and instrumentation packages pin the API
@@ -165,7 +165,7 @@ apscheduler>=3.11.3
 # Document Parsing
 beautifulsoup4>=4.15.0
 # Transitive of beautifulsoup4 (CSS selector engine). Floored for
-# CVE-2026-126190 (fixed in 4.0) and CVE-2026-126192 (fixed in 2.10):
+# CVE-2026-126190/126191/126192/126193:
 # selector matching on untrusted HTML takes polynomial time. Pinned here so
 # the lockfile cannot regress below the fix.
 soupsieve>=4.0.1
