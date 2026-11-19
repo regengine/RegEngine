@@ -381,13 +381,15 @@ def test_authenticated_tenant_writes_are_denied_even_with_matching_context(harde
 @pytest.mark.parametrize("role", ["regengine", "regengine_sysadmin"])
 def test_missing_backend_context_never_defaults_to_system_tenant(hardened_db, role, context):
     with _as_role(hardened_db, role, tenant=context) as conn:
-        assert conn.execute(text("SELECT id, status FROM public.tenants")).all() == []
+        with pytest.raises(DBAPIError, match="tenant context required"):
+            conn.execute(text("SELECT id, status FROM public.tenants")).all()
     with _as_role(hardened_db, role, tenant=context) as conn:
         with pytest.raises(DBAPIError, match="tenant context required"):
             conn.execute(text("SELECT * FROM public.memberships")).all()
     if role == "regengine_sysadmin":
         with _as_role(hardened_db, role, tenant=context) as conn:
-            assert conn.execute(text("UPDATE public.tenants SET name = 'changed'")).rowcount == 0
+            with pytest.raises(DBAPIError, match="tenant context required"):
+                conn.execute(text("UPDATE public.tenants SET name = 'changed'"))
 
 
 @pytest.mark.parametrize("role", ["regengine", "regengine_sysadmin"])
@@ -416,6 +418,8 @@ def test_sysadmin_exception_requires_the_existing_database_role(hardened_db):
         }
         if hardened_db.with_v111:
             assert conn.execute(text("UPDATE public.tenants SET name = name")).rowcount == 3
+        else:
+            assert conn.execute(text("UPDATE public.tenants SET name = name")).rowcount == 0
 
 
 def test_service_role_catalog_access_and_policy_survive_force_rls(hardened_db):

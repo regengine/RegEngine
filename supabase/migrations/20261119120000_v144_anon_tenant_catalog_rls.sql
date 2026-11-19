@@ -63,23 +63,27 @@ CREATE POLICY tenants_backend_context_read ON public.tenants
             WHEN current_user = 'regengine_sysadmin'
                  AND current_setting('regengine.is_sysadmin', true) = 'true'
                 THEN true
-            ELSE id::text = NULLIF(current_setting('app.tenant_id', true), '')
+            ELSE id = public.get_tenant_context()
         END
     );
 
 DROP POLICY IF EXISTS tenants_write_own ON public.tenants;
 CREATE POLICY tenants_write_own ON public.tenants
     FOR UPDATE TO regengine, regengine_sysadmin
+    -- Global sysadmin writes remain authorized by v111's separate
+    -- policy. Do not evaluate the raising helper on that path.
     USING (
         CASE
-            WHEN NULLIF(current_setting('app.tenant_id', true), '') IS NULL
+            WHEN current_user = 'regengine_sysadmin'
+                 AND current_setting('regengine.is_sysadmin', true) = 'true'
                 THEN false
             ELSE id = public.get_tenant_context()
         END
     )
     WITH CHECK (
         CASE
-            WHEN NULLIF(current_setting('app.tenant_id', true), '') IS NULL
+            WHEN current_user = 'regengine_sysadmin'
+                 AND current_setting('regengine.is_sysadmin', true) = 'true'
                 THEN false
             ELSE id = public.get_tenant_context()
         END
