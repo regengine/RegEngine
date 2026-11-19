@@ -1,0 +1,36 @@
+name: Engine Review Pass Tests
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/ci/engine-review-pass.test.mjs'
+      - '.github/workflows/pr-guards.yml'
+      - '.github/workflows/engine-review-pass-tests.yml'
+      - '.nvmrc'
+  push:
+    paths:
+      - 'scripts/ci/engine-review-pass.test.mjs'
+      - '.github/workflows/pr-guards.yml'
+      - '.github/workflows/engine-review-pass-tests.yml'
+      - '.nvmrc'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  engine-review-pass-tests:
+    name: Engine Review Pass Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v6
+        with:
+          node-version-file: .nvmrc
+      - run: node --test scripts/ci/engine-review-pass.test.mjs
