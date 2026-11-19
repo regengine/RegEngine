@@ -157,10 +157,14 @@ class AssemblyMixin:
         # package so both evidence artefacts describe rules the same way;
         # the stored shape stays the catalog map this package always had.
         # The per-event evaluations are already gathered above, so only the
-        # catalog is requested here (one query, as before).
+        # catalog is requested here (one query, as before). The catalog
+        # status is stored beside it so an empty catalog ("ok", no rules)
+        # stays distinguishable from one that could not be read.
         from shared.rules.versions import snapshot_rule_versions
 
-        rule_versions = snapshot_rule_versions(self.db).get("catalog", {})
+        rule_versions_snapshot = snapshot_rule_versions(self.db)
+        rule_versions = rule_versions_snapshot.get("catalog", {})
+        rule_versions_status = rule_versions_snapshot.get("catalog_status", "unavailable")
 
         # Snapshot identity state at assembly time (single query with LEFT JOIN
         # to avoid N+1 — previously fired one alias query per entity).
@@ -230,6 +234,7 @@ class AssemblyMixin:
             "scoped_event_ids": sorted_event_ids,
             "rule_evaluation_ids": eval_ids,
             "rule_versions": rule_versions,
+            "rule_versions_status": rule_versions_status,
             "identity_state": identity_state,
             "exception_state": {
                 str(e.get("exception_id", "")): {

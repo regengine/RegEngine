@@ -584,7 +584,7 @@ class TestAssembledPackageHashLinkage:
     stored hash equals the helper's digest of the stored contents.
     """
 
-    def _fake_db(self, captured):
+    def _fake_db(self, captured, *, catalog_raises=None):
         import json as _json
 
         from sqlalchemy.sql.elements import TextClause
@@ -617,6 +617,8 @@ class TestAssembledPackageHashLinkage:
             sql = statement.text if isinstance(statement, TextClause) else str(statement)
             if "MAX(version_number)" in sql:
                 return _Result(scalar_value=0)
+            if catalog_raises is not None and "FROM fsma.rule_definitions" in sql:
+                raise catalog_raises
             if "INSERT INTO fsma.response_packages" in sql:
                 captured["contents_json"] = params["contents"]
                 captured["hash"] = params["hash"]
@@ -628,11 +630,11 @@ class TestAssembledPackageHashLinkage:
         db.execute.side_effect = _execute
         return db
 
-    def _assemble(self):
+    def _assemble(self, *, catalog_raises=None):
         from services.shared.request_workflow import RequestWorkflow
 
         captured = {}
-        db = self._fake_db(captured)
+        db = self._fake_db(captured, catalog_raises=catalog_raises)
         wf = RequestWorkflow(db)
         wf._get_case = MagicMock(return_value=_mock_case_row(status="assembling"))
         wf._get_scope_event_ids = MagicMock(return_value=[])
@@ -682,6 +684,24 @@ class TestAssembledPackageHashLinkage:
         contents = _json.loads(captured["contents_json"])
         check = {k: v for k, v in contents.items() if k != "package_hash"}
         assert captured["hash"] == compute_manifest_hash(check)
+
+    def test_rule_versions_status_stored_beside_catalog(self):
+        """An empty catalog that was read is 'ok'; the status is hashed with the rest."""
+        import json as _json
+
+        _, captured = self._assemble()
+        contents = _json.loads(captured["contents_json"])
+        assert contents["rule_versions"] == {}
+        assert contents["rule_versions_status"] == "ok"
+
+    def test_unreadable_rule_catalog_is_marked_unavailable(self):
+        """A catalog read failure leaves rule_versions empty but says why."""
+        import json as _json
+
+        _, captured = self._assemble(catalog_raises=RuntimeError("relation does not exist"))
+        contents = _json.loads(captured["contents_json"])
+        assert contents["rule_versions"] == {}
+        assert contents["rule_versions_status"] == "unavailable"
 
 
 # ---------------------------------------------------------------------------

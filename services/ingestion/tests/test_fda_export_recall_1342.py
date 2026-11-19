@@ -417,11 +417,19 @@ class TestCSVExport:
 class TestPackageExport:
     def test_package_happy_path(self, monkeypatch):
         events = [{"id": "e1"}, {"id": "e2"}, {"id": "e3"}]
-        _, _, cap = _install_stubs(
+        sess, _, cap = _install_stubs(
             monkeypatch,
             rows=[{"id": 1}],
             events=events,
         )
+        snapshot = {"catalog_status": "ok", "catalog": {"rule-a": {"version": 2}}, "evaluated": [], "evaluated_status": "ok"}
+        seen: dict = {}
+
+        def _snapshot(db_session, tenant_id, evts):
+            seen["args"] = (db_session, tenant_id, evts)
+            return snapshot
+
+        monkeypatch.setattr(r, "_rule_versions_for_events", _snapshot)
         resp = _call(format="package", include_pii=False)
         assert resp == "PKG-RESP"
         pkg_k = cap["package_response_kwargs"]
@@ -433,8 +441,12 @@ class TestPackageExport:
         assert pkg_k["extra_headers"]["X-KDE-Coverage"] == "0.95"
         assert pkg_k["include_pii"] is False
         # S7: gate outcome and rule-version snapshot reach the package builder.
+        # The snapshot is taken on the export's own session, for this
+        # tenant, over exactly the exported events, and is forwarded as-is.
         assert pkg_k["coverage_gate_bypassed"] is False
-        assert "catalog_status" in pkg_k["rule_versions"]
+        assert seen["args"] == (sess, "t-1", events)
+        assert seen["args"][0] is sess
+        assert pkg_k["rule_versions"] is snapshot
         # Did NOT go through the CSV response path
         assert cap["csv_response_kwargs"] is None
 
