@@ -108,7 +108,7 @@ export default function IntegrationsPage() {
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Button asChild variant="secondary" size="lg">
-              <Link href="/docs/quickstart" className="no-underline">
+              <Link href="/docs/api" className="no-underline">
                 <Code aria-hidden="true" className="h-4 w-4" strokeWidth={1.75} />
                 API docs
               </Link>
@@ -140,7 +140,7 @@ export default function IntegrationsPage() {
                 }
                 secondaryAction={
                   <Button asChild variant="secondary" size="sm">
-                    <Link href="/docs/quickstart" className="no-underline">JSON events API docs</Link>
+                    <Link href="/docs/quickstart" className="no-underline">Send your first JSON event</Link>
                   </Button>
                 }
               />
