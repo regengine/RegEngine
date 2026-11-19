@@ -110,7 +110,8 @@ mounting:
   The persisted share endpoints that once shared this router were deliberately
   left out, under the separate `sandbox_share` owner: that write path is
   unauthenticated and tenant-less, its `share_url` points at a deleted page,
-  and its rate limit is per-process. See `sandbox/share_router.py`.
+  and its rate limit is per-process. See
+  `services/ingestion/app/sandbox/share_router.py`.
 
 Together with `remediation` (15 routes across its two routers), these three
 account for 17 routes that were absent from the router inventory before

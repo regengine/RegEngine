@@ -356,7 +356,7 @@ if _router_enabled("sandbox"):
 # stateless surface could be promoted into the production allowlist without
 # them. Mirrors server/routers_mount.py — keep the two mount sites in sync.
 if _router_enabled("sandbox_share"):
-    from app.sandbox.share_router import router as sandbox_share_router
+    from services.ingestion.app.sandbox.share_router import router as sandbox_share_router
 
     app.include_router(sandbox_share_router)
 
