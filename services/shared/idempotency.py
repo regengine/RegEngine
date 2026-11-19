@@ -7,6 +7,9 @@ The default degrade mode can dispatch duplicates on an ambiguous Redis failure;
 use closed mode where cache-level duplicate suppression is required.
 
 Keys bind exact request bytes, URL, content type, and credential to the tenant.
+A multipart/form-data upload binds its parts instead of its bytes: HTTP clients
+draw a new boundary for every send, so a retried upload never has the bytes of
+the first attempt (see ``_multipart_form_identity``).
 Conflicting and legacy unbound cache entries return 409. An active or uncertain
 reservation also returns 409 and remains for the 24-hour retry window after a
 crash or failed publish. Such outcomes need reconciliation before retrying with
@@ -48,6 +51,8 @@ from uuid import UUID, uuid4
 import redis.asyncio as redis
 import structlog
 from fastapi import Request, Response
+from python_multipart import MultipartParser
+from python_multipart.multipart import parse_options_header
 from shared.internal_caller import internal_tenant_id
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -64,6 +69,96 @@ logger = structlog.get_logger("idempotency")
 IDEMPOTENCY_KEY_PREFIX = "idempotency:"
 IDEMPOTENCY_TTL_SECONDS = 86400  # 24 hours
 _ANONYMOUS_TENANT = "_anonymous_"  # placeholder when no tenant resolvable
+# Starlette's form parser refuses more than 1000 files and 1000 fields, so no
+# route reads a form with more parts than this.
+_MULTIPART_MAX_PARTS = 2000
+# The form parser is synchronous. The body goes to it in slices of this size,
+# with the event loop free to run other requests between two slices.
+_MULTIPART_SLICE_BYTES = 64 * 1024
+
+
+async def _multipart_form_identity(content_type: str, body: bytes) -> Optional[list[Any]]:
+    """Describe a multipart/form-data request by its form, not by its boundary.
+
+    curl, requests and httpx draw a new random boundary for every send. It is
+    in the Content-Type header and in every delimiter line of the body, so the
+    bytes of a retried upload differ from the first attempt although the form
+    is the same.
+
+    The identity is what Starlette's form parser hands to a route: the media
+    type with its parameters other than ``boundary``, then every part in
+    order, as its headers and a digest of its bytes. The parser is the one
+    Starlette uses, so two requests have one identity only when a route reads
+    the same form from both. Bytes that parser discards (the delimiter lines
+    and anything before the first or after the last one) are not in it.
+
+    Returns ``None`` when the request is not multipart/form-data, names no
+    boundary, has more parts than a route accepts, or is not read through to
+    its closing delimiter. The caller then binds the exact bytes, as before.
+    """
+    try:
+        media_type, params = parse_options_header(content_type)
+        boundary = params.pop(b"boundary", b"")
+        if media_type != b"multipart/form-data" or not boundary:
+            return None
+        # Every part ends with one delimiter line. Counting them is cheap, and
+        # it turns away a body stuffed with look-alike delimiters before the
+        # parser walks them one at a time.
+        if body.count(b"\r\n--" + boundary) > _MULTIPART_MAX_PARTS:
+            return None
+
+        parts: list[list[Any]] = []
+        name, value = bytearray(), bytearray()
+        closed: list[bool] = []
+
+        def on_part_begin() -> None:
+            parts.append([[], hashlib.sha256()])
+
+        def on_header_field(data: bytes, start: int, end: int) -> None:
+            name.extend(data[start:end])
+
+        def on_header_value(data: bytes, start: int, end: int) -> None:
+            value.extend(data[start:end])
+
+        def on_header_end() -> None:
+            # Starlette lowercases the name and keeps the value as sent.
+            parts[-1][0].append([bytes(name).lower().decode("latin-1"), value.decode("latin-1")])
+            name.clear()
+            value.clear()
+
+        def on_part_data(data: bytes, start: int, end: int) -> None:
+            parts[-1][1].update(data[start:end])
+
+        def on_part_end() -> None:
+            parts[-1][1] = parts[-1][1].hexdigest()
+
+        parser = MultipartParser(
+            boundary,
+            {
+                "on_part_begin": on_part_begin,
+                "on_header_field": on_header_field,
+                "on_header_value": on_header_value,
+                "on_header_end": on_header_end,
+                "on_part_data": on_part_data,
+                "on_part_end": on_part_end,
+                "on_end": lambda: closed.append(True),
+            },
+        )
+        for offset in range(0, len(body), _MULTIPART_SLICE_BYTES):
+            if offset:
+                await asyncio.sleep(0)
+            parser.write(body[offset : offset + _MULTIPART_SLICE_BYTES])
+        # finalize() does not check that the closing delimiter was seen.
+        if not closed:
+            return None
+    except Exception as exc:
+        # The parser's errors subclass ValueError, which dispatch() reads as a
+        # body over the size cap. A form that cannot be read is not an error
+        # here: it keeps the exact-byte fingerprint.
+        logger.debug("idempotency_multipart_form_unreadable", error=type(exc).__name__)
+        return None
+    parameters = sorted([key.decode("latin-1"), val.decode("latin-1")] for key, val in params.items())
+    return [media_type.decode("latin-1"), parameters, parts]
 
 
 def _tenant_value_to_str(value: Any) -> Optional[str]:
@@ -275,7 +370,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
     async def _request_fingerprint(self, request: Request) -> str:
         # Bind the exact operation and credential, not just the tenant. Never
         # persist raw credentials or body. JSON whitespace changes conflict too.
-        parts = [
+        parts: list[Any] = [
             request.method.upper(),
             str(request.url),
             request.headers.get("content-type", ""),
@@ -295,7 +390,6 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
                     hashlib.sha256(os.getenv("WEBHOOK_HMAC_SECRET", "").strip().encode()).hexdigest(),
                 ]
             )
-        digest = hashlib.sha256(json.dumps(parts).encode())
         # This middleware is outside RequestSizeLimitMiddleware in the monolith.
         # Bound actual streamed bytes before retaining a body for downstream use.
         body = bytearray()
@@ -305,6 +399,14 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
             body.extend(chunk)
         # Starlette's _CachedRequest replays _body to call_next after consumption.
         request._body = bytes(body)
+        form = await _multipart_form_identity(parts[2], request._body)
+        if form is not None:
+            # The form stands in for the Content-Type header and the body. It
+            # is a list where every other request has a string, so a form
+            # fingerprint can never equal an exact-byte one.
+            parts[2] = form
+            return hashlib.sha256(json.dumps(parts).encode()).hexdigest()
+        digest = hashlib.sha256(json.dumps(parts).encode())
         digest.update(body)
         return digest.hexdigest()
 
