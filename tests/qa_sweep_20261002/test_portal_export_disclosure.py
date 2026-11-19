@@ -7,8 +7,6 @@ storage, provider, or network operation is called.
 import csv
 import io
 
-import pytest
-
 _SYNTHETIC_CAPABILITY = "qa-only-invalid-portal-capability"
 
 
@@ -40,11 +38,6 @@ def test_portal_export_keeps_lot_and_redacts_location():
     assert "QA origin" not in row["Additional KDEs (JSON)"]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="BE-011: supplier portal bearer capability is disclosed in exported KDEs",
-)
 def test_redacted_fda_export_does_not_disclose_portal_capability():
     exported = _exported_portal_event_csv()
     assert _SYNTHETIC_CAPABILITY not in exported

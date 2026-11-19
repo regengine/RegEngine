@@ -13,6 +13,8 @@
  *   3. Middleware verifies: HMAC(headerValue, secret) === re_csrf_sig cookie
  */
 
+import { SUPPLIER_PORTAL_MUTATION_PATTERN } from './supplier-portal-paths';
+
 // ---------------------------------------------------------------------------
 // Server-side helpers (used in route handlers and middleware)
 // ---------------------------------------------------------------------------
@@ -153,6 +155,12 @@ export const CSRF_PROTECTED_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']
  *                                      If you add a local webhook handler
  *                                      there, that handler becomes CSRF-exempt
  *                                      silently - decide then, on purpose.
+ *
+ *  Added 2026-11-10:
+ *    /api/ingestion/api/v1/portal/{token}/(preflight|submit)
+ *                                      proxied path, correct form; POST only,
+ *                                      regex-anchored, same-origin still
+ *                                      required (isSameOriginOnlyMutation) ✓
  */
 export type CsrfExemptionRule = Readonly<{
     methods: readonly string[];
@@ -201,7 +209,26 @@ export const CSRF_EXEMPT_RULES: readonly CsrfExemptionRule[] = [
     { methods: ['POST'], path: '/api/tools/verify', match: 'exact' },
     // Public contact has no CSRF cookies; the proxy still checks origin and the route rate-limits.
     { methods: ['POST'], path: '/api/contact', match: 'exact' },
+    // Supplier portal preflight and submit. A supplier has no session and so
+    // no CSRF cookie: without this every portal POST is refused with "Missing
+    // CSRF token" and the portal cannot be used from a browser at all. The
+    // request is authorized by the unguessable link token in the path, not by
+    // a cookie, so there is no ambient credential for a forged request to
+    // ride. The proxy still checks origin (isSameOriginOnlyMutation) and the
+    // backend rate-limits per link. Link management (/portal/links...) is
+    // session- or key-authenticated and stays protected.
+    { methods: ['POST'], path: SUPPLIER_PORTAL_MUTATION_PATTERN, match: 'regex' },
 ];
+
+/**
+ * Exempt mutations that carry no CSRF cookie but must still come from this
+ * origin. src/proxy.ts applies the Origin/Referer check to these even though
+ * the token check is skipped.
+ */
+export function isSameOriginOnlyMutation(pathname: string, method: string): boolean {
+    if (method.toUpperCase() !== 'POST') return false;
+    return pathname === '/api/contact' || new RegExp(SUPPLIER_PORTAL_MUTATION_PATTERN).test(pathname);
+}
 
 function pathMatchesRule(pathname: string, rule: CsrfExemptionRule): boolean {
     if (rule.match === 'exact') return pathname === rule.path;
