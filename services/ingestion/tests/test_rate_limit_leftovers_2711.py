@@ -24,7 +24,9 @@ from app import authz  # noqa: E402
 
 # The package re-exports its APIRouter as ``router``, shadowing the module —
 # resolve the MODULE explicitly.
-sandbox_router = importlib.import_module("app.sandbox.router")
+# #3825: the share-bucket limiter moved with the /share endpoints into
+# app.sandbox.share_router when the stateless evaluator was promoted.
+sandbox_router = importlib.import_module("app.sandbox.share_router")
 
 
 # ---------------------------------------------------------------------------

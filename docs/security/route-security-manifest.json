@@ -25,6 +25,7 @@
     "recall",
     "request_workflow",
     "rules",
+    "sandbox",
     "score",
     "sla_tracking"
   ],
@@ -1587,6 +1588,28 @@
       ],
       "storage_boundary": "postgres-rls:credential-bound-tenant",
       "test_adapter": "tenant_api_key_postgres_rls"
+    },
+    {
+      "operation": "sandbox:POST:/api/v1/sandbox/evaluate",
+      "owner": "sandbox",
+      "method": "POST",
+      "path": "/api/v1/sandbox/evaluate",
+      "classification": "public",
+      "authentication": "none",
+      "required_permissions": [],
+      "storage_boundary": "none:stateless-no-persistence",
+      "test_adapter": "public_no_auth"
+    },
+    {
+      "operation": "sandbox:POST:/api/v1/sandbox/trace",
+      "owner": "sandbox",
+      "method": "POST",
+      "path": "/api/v1/sandbox/trace",
+      "classification": "public",
+      "authentication": "none",
+      "required_permissions": [],
+      "storage_boundary": "none:stateless-no-persistence",
+      "test_adapter": "public_no_auth"
     },
     {
       "operation": "sla_tracking:GET:/api/v1/sla/alerts/{tenant_id}",
@@ -4483,17 +4506,8 @@
       "probe_path": "/api/v1/remediation/supplier/session/current"
     },
     {
-      "operation": "sandbox:POST:/api/v1/sandbox/evaluate",
-      "owner": "sandbox",
-      "method": "POST",
-      "path": "/api/v1/sandbox/evaluate",
-      "inventory_source": "development-route-table",
-      "probe_method": "POST",
-      "probe_path": "/api/v1/sandbox/evaluate"
-    },
-    {
-      "operation": "sandbox:POST:/api/v1/sandbox/share",
-      "owner": "sandbox",
+      "operation": "sandbox_share:POST:/api/v1/sandbox/share",
+      "owner": "sandbox_share",
       "method": "POST",
       "path": "/api/v1/sandbox/share",
       "inventory_source": "development-route-table",
@@ -4501,22 +4515,13 @@
       "probe_path": "/api/v1/sandbox/share"
     },
     {
-      "operation": "sandbox:GET:/api/v1/sandbox/share/{share_id}",
-      "owner": "sandbox",
+      "operation": "sandbox_share:GET:/api/v1/sandbox/share/{share_id}",
+      "owner": "sandbox_share",
       "method": "GET",
       "path": "/api/v1/sandbox/share/{share_id}",
       "inventory_source": "development-route-table",
       "probe_method": "GET",
       "probe_path": "/api/v1/sandbox/share/00000000-0000-4000-8000-000000000000"
-    },
-    {
-      "operation": "sandbox:POST:/api/v1/sandbox/trace",
-      "owner": "sandbox",
-      "method": "POST",
-      "path": "/api/v1/sandbox/trace",
-      "inventory_source": "development-route-table",
-      "probe_method": "POST",
-      "probe_path": "/api/v1/sandbox/trace"
     },
     {
       "operation": "settings:GET:/api/v1/settings/{tenant_id}",
@@ -4970,12 +4975,12 @@
     }
   ],
   "summary": {
-    "enabled_operation_count": 259,
-    "disabled_operation_count": 180,
-    "disabled_unique_path_count": 163,
+    "enabled_operation_count": 261,
+    "disabled_operation_count": 178,
+    "disabled_unique_path_count": 161,
     "enabled_by_classification": {
       "global-sysadmin": 16,
-      "public": 30,
+      "public": 32,
       "tenant-scoped": 206,
       "workload-only": 7
     }

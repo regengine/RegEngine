@@ -83,8 +83,13 @@ def _restore_shared_database_on_module_teardown():
 # reliably — instead pull the *module* directly out of sys.modules after the
 # import side-effect has populated it.
 from app.sandbox.router import router as sandbox_router  # noqa: E402
+# #3825 split the persisted /share endpoints into their own router so the
+# stateless evaluator could be production-promoted without them. Both are
+# mounted here so this file keeps covering the same surface as before.
+from app.sandbox.share_router import router as sandbox_share_router  # noqa: E402
 
 sandbox_router_mod = sys.modules["app.sandbox.router"]
+share_router_mod = sys.modules["app.sandbox.share_router"]
 
 
 # ---------------------------------------------------------------------------
@@ -98,15 +103,16 @@ def _reset_rate_limiters(monkeypatch):
     # Silence the imported rate-limit guard used by evaluate/trace.
     monkeypatch.setattr(sandbox_router_mod, "_check_sandbox_rate_limit", lambda ip: None)
     # Reset share-buckets state for every test.
-    sandbox_router_mod._share_buckets.clear()
+    share_router_mod._share_buckets.clear()
     yield
-    sandbox_router_mod._share_buckets.clear()
+    share_router_mod._share_buckets.clear()
 
 
 @pytest.fixture
 def client() -> TestClient:
     app = FastAPI()
     app.include_router(sandbox_router)
+    app.include_router(sandbox_share_router)
     return TestClient(app)
 
 
@@ -640,7 +646,7 @@ class TestSharePost:
         db = _FakeDb()
         _install_get_db(monkeypatch, db)
         # Fill up the bucket to the limit.
-        for _ in range(sandbox_router_mod._SHARE_RATE_LIMIT):
+        for _ in range(share_router_mod._SHARE_RATE_LIMIT):
             resp = client.post("/api/v1/sandbox/share", json=_sample_share_payload())
             assert resp.status_code == 200
         # Next call trips the 429.
@@ -653,11 +659,11 @@ class TestSharePost:
         db = _FakeDb()
         _install_get_db(monkeypatch, db)
         # Seed bucket with entries ancient enough to be pruned.
-        sandbox_router_mod._share_buckets["testclient"] = [0.0]
+        share_router_mod._share_buckets["testclient"] = [0.0]
         resp = client.post("/api/v1/sandbox/share", json=_sample_share_payload())
         assert resp.status_code == 200
         # Bucket should now only contain the fresh entry (ancient one pruned).
-        assert len(sandbox_router_mod._share_buckets["testclient"]) == 1
+        assert len(share_router_mod._share_buckets["testclient"]) == 1
 
 
 # ===========================================================================
@@ -743,8 +749,8 @@ class TestModuleLevelDefaults:
         assert "Sandbox" in sandbox_router.tags
 
     def test_rate_limit_constants(self):
-        assert sandbox_router_mod._SHARE_RATE_LIMIT == 10
-        assert sandbox_router_mod._SHARE_WINDOW == 3600
+        assert share_router_mod._SHARE_RATE_LIMIT == 10
+        assert share_router_mod._SHARE_WINDOW == 3600
 
     def test_share_buckets_is_mutable_dict(self):
-        assert isinstance(sandbox_router_mod._share_buckets, dict)
+        assert isinstance(share_router_mod._share_buckets, dict)

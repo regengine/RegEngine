@@ -35,6 +35,14 @@ PUBLIC_OPERATIONS = frozenset(
         ("root", "GET", "/"),
         ("proof_verify", "POST", "/api/v1/proof/verify"),
         ("proof_recall", "POST", "/api/v1/proof/recall-drill"),
+        # #3825: public FSMA 204 checker behind the Inflow Lab CSV evaluator.
+        # Both are stateless — they evaluate caller-supplied data against the
+        # rule engine and persist nothing, so there is no tenant boundary to
+        # cross. Bounded by a per-IP rate limit and 2MB/500-event caps. The
+        # persisted /share endpoints are deliberately NOT here: they belong to
+        # the unpromoted "sandbox_share" owner.
+        ("sandbox", "POST", "/api/v1/sandbox/evaluate"),
+        ("sandbox", "POST", "/api/v1/sandbox/trace"),
         ("csv", "GET", "/api/v1/templates"),
         ("csv", "GET", "/api/v1/templates/{cte_type}"),
         ("portal", "GET", "/api/v1/portal/{portal_id}"),
@@ -369,6 +377,10 @@ def _public_storage_boundary(owner: str, path: str) -> str:
         return "postgres-rls:opaque-portal-capability"
     if owner in {"proof_verify", "proof_recall"}:
         return "public-proof-store:non-secret"
+    # #3825: the promoted sandbox operations touch no store at all — input is
+    # evaluated in memory and discarded with the request.
+    if owner == "sandbox":
+        return "none:stateless-no-persistence"
     if owner == "admin" and path.startswith(("/auth/", "/v1/auth/", "/api/v1/tools/")):
         return "admin-postgres:identity-bound-public-flow"
     return "public-static-or-health:no-tenant-secret"

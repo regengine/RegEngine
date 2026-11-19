@@ -22,6 +22,7 @@ VALID_ROUTER_NAMES = frozenset(
         "discovery",
         "sources",
         "sandbox",
+        "sandbox_share",
         "inflow_workbench",
         "fda_export",
         "csv",
@@ -79,6 +80,13 @@ VALID_ROUTER_NAMES = frozenset(
 # decision and must update the route-complete tenant/auth gate before deploy.
 PRODUCTION_ENABLED_ROUTERS = frozenset(
     {
+        # #3825: the stateless sandbox evaluator (/evaluate, /trace) backs the
+        # Inflow Lab CSV checker, which ships in production and 404'd without
+        # it. Promoted on the strength of its statelessness — it persists
+        # nothing, accepts no tenant id, and reads no tenant data. The
+        # persisted share endpoints deliberately stayed behind under the
+        # separate "sandbox_share" owner, which must NOT be added here.
+        "sandbox",
         "inflow_workbench",
         "fda_export",
         "csv",
@@ -112,7 +120,10 @@ EXPERIMENTAL_ROUTERS = frozenset(
         "scraping",
         "discovery",
         "sources",
-        "sandbox",
+        # #3825: "sandbox" itself is no longer experimental — it is in
+        # PRODUCTION_ENABLED_ROUTERS. Only the persisted share endpoints
+        # remain unpromoted; see share_router.py for why.
+        "sandbox_share",
         "sensitech",
         "audit",
         "sop",
