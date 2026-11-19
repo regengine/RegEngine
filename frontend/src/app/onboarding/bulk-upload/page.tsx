@@ -387,7 +387,7 @@ export default function BulkUploadPage() {
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-0.5">
                   <h3 className="text-sm font-semibold text-[var(--re-text-primary)]">XLSX Template</h3>
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide bg-[var(--re-brand-muted)] text-[var(--re-brand)] border border-[var(--re-brand)]/20">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-label font-semibold uppercase tracking-wide bg-[var(--re-brand-muted)] text-[var(--re-brand)] border border-[var(--re-brand)]/20">
                     Preview
                   </span>
                 </div>

@@ -21,9 +21,9 @@ it('keeps a successful commit distinct from a failed status refresh', async () =
   mocks.status.mockRejectedValue(new Error('Network error'));
   render(<BulkUploadPage />);
   selectCsv();
-  await userEvent.click(screen.getByRole('button', { name: 'Parse + Validate' }));
-  await screen.findByText('Ready to commit.');
-  await userEvent.click(screen.getByRole('button', { name: 'Commit Import' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Check my file' }));
+  await screen.findByText('Ready to save.');
+  await userEvent.click(screen.getByRole('button', { name: 'Save records' }));
   expect(await screen.findByText('Records saved')).toBeInTheDocument();
   expect(await screen.findByText(/Commit succeeded, but status refresh failed/)).toBeInTheDocument();
   expect(mocks.commit).toHaveBeenCalledTimes(1);
@@ -35,9 +35,9 @@ it('labels local checks as preliminary and cannot commit without authentication'
   render(<BulkUploadPage />);
   selectCsv();
   await screen.findByText('Lettuce, green');
-  await userEvent.click(screen.getByRole('button', { name: 'Parse + Validate' }));
-  expect(await screen.findByText('Local structure checks passed. Server validation is required before commit.')).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Commit Import' })).toBeDisabled();
+  await userEvent.click(screen.getByRole('button', { name: 'Check my file' }));
+  expect(await screen.findByText('Sign in to validate this file on the server')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Save records' })).toBeDisabled();
   expect(mocks.parse).not.toHaveBeenCalled();
   expect(mocks.commit).not.toHaveBeenCalled();
 });
