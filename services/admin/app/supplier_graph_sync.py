@@ -93,6 +93,7 @@ SET facility.name = $facility_name,
     facility.city = $city,
     facility.state = $state,
     facility.postal_code = $postal_code,
+    facility.phone = $phone,
     facility.fda_registration_number = $fda_registration_number,
     facility.roles = $roles,
     facility.updated_at = datetime()
@@ -464,6 +465,7 @@ class SupplierGraphSync:
         fda_registration_number: Optional[str],
         roles: list[str],
         categories: list[dict[str, Any]],
+        phone: Optional[str] = None,
         db: Optional["SQLASession"] = None,
     ) -> None:
         normalized_categories = [
@@ -486,6 +488,7 @@ class SupplierGraphSync:
             "city": city,
             "state": state,
             "postal_code": postal_code,
+            "phone": phone,
             "fda_registration_number": fda_registration_number,
             "roles": roles,
             "categories": normalized_categories,

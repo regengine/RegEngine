@@ -467,3 +467,51 @@ def test_outbox_enqueue_failure_rolls_back_bulk_import(
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+def test_facility_scoping_outbox_row_binds_every_cypher_parameter(
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """A replayed outbox row must supply every ``$param`` the Cypher reads.
+
+    ``FACILITY_FTL_SCOPING_QUERY`` gained ``$phone``. Neo4j rejects a query
+    with an unbound parameter, so a row without it can never drain.
+    """
+    import re
+
+    import app.bulk_upload.transaction_manager as tx_manager
+    from app.supplier_graph_sync import FACILITY_FTL_SCOPING_QUERY
+
+    monkeypatch.setattr(tx_manager.supplier_graph_sync, "record_cte_event", lambda **_kwargs: None)
+    monkeypatch.setattr(
+        tx_manager.supplier_graph_sync,
+        "record_facility_ftl_scoping",
+        lambda **_kwargs: None,
+    )
+
+    current_user = db_session.get(UserModel, TEST_USER_ID)
+    assert current_user is not None
+
+    payload = _build_payload(event_count=1)
+    payload["ftl_scopes"] = [
+        {
+            "facility_name": "Bulk Test Packhouse",
+            "category_id": next(iter(tx_manager.FTL_CATEGORY_LOOKUP)),
+        }
+    ]
+    tx_manager.execute_bulk_commit(
+        db_session,
+        tenant_id=TEST_TENANT_ID,
+        current_user=current_user,
+        normalized_payload=payload,
+    )
+
+    rows = [r for r in _outbox_rows(db_session) if r["operation"] == "facility_ftl_scoping"]
+    assert rows, "expected a facility_ftl_scoping outbox row"
+
+    required = set(re.findall(r"\$([A-Za-z_][A-Za-z0-9_]*)", FACILITY_FTL_SCOPING_QUERY))
+    assert "phone" in required
+    for row in rows:
+        params = row["params"] if isinstance(row["params"], dict) else json.loads(row["params"])
+        assert required <= set(params), f"unbound: {sorted(required - set(params))}"
