@@ -619,6 +619,39 @@
     },
     "foreign_keys": []
   },
+  "fsma.break_glass_arms": {
+    "columns": {
+      "armed_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "armed_by": {
+        "nullable": false,
+        "type": "text"
+      },
+      "min_age": {
+        "nullable": false,
+        "type": "interval"
+      },
+      "purpose": {
+        "nullable": false,
+        "type": "text"
+      },
+      "relid": {
+        "nullable": false,
+        "type": "oid"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "txid": {
+        "nullable": false,
+        "type": "bigint"
+      }
+    },
+    "foreign_keys": []
+  },
   "fsma.canonical_entities": {
     "columns": {
       "address": {
