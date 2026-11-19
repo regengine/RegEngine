@@ -65,7 +65,7 @@ Use plain work lanes such as backend, frontend, security, QA, infra, or docs whe
 
 - A PR merges only after a different engine posts a review whose body contains, alone on one line, `REVIEW: PASS <engine> <full 40-char head SHA>`. `REVIEW: BLOCKED` and `REVIEW: FAIL` in a review block the PR.
 - Post the marker as a review: `gh api repos/regengine/RegEngine/pulls/<n>/reviews -f event=COMMENT -f body='REVIEW: PASS <engine> <sha>'`, or `gh pr review <n> --comment --body-file <file>` for a longer body. A marker in a comment is not read, so a blocking comment does not block.
-- Post a marker only for a review that actually happened at that SHA, under the name of the engine that did it. The author engine's own PASS is ignored. A push changes the SHA, so the marker must be posted again.
+- Do not post a marker under an engine name that is not yours. The author engine's own PASS is ignored. A push changes the SHA, so the marker must be posted again.
 
 ## Jev Sidecar
 
