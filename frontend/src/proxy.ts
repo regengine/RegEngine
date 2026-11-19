@@ -652,6 +652,16 @@ export async function proxy(request: NextRequest) {
         return withCsp(NextResponse.next({ request: { headers: requestHeaders } }));
     }
 
+    // -----------------------------------------------------------------------
+    // PUBLIC: /onboarding/bulk-upload — CSV template download page.
+    // Allows signed-out visitors to view the page and download the CSV
+    // template. Server-side validate and commit operations remain behind auth.
+    // Exact match only — does not open /onboarding or /onboarding/setup.
+    // -----------------------------------------------------------------------
+    if (pathname === '/onboarding/bulk-upload') {
+        return withCsp(NextResponse.next({ request: { headers: requestHeaders } }));
+    }
+
     // Authenticated app routes — server-side session check
     if (isAuthenticatedAppRoute(pathname)) {
         return withCsp(await requireAppAuth(request, requestHeaders));
