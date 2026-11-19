@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 
 import { PageContainer } from '@/components/layout/page-container';
@@ -70,7 +71,7 @@ export default function TracePage() {
   }
   const [isLoading, setIsLoading] = useState(false);
   const [traceResult, setTraceResult] = useState<TraceResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<React.ReactNode | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [exportStatus, setExportStatus] = useState<string | null>(null);
 
@@ -93,8 +94,34 @@ export default function TracePage() {
       a.click();
       URL.revokeObjectURL(url);
       setExportStatus(`Downloaded ${filename} with ${recordCount} record${recordCount !== 1 ? 's' : ''} for TLC "${code}".`);
-    } catch {
-      setError('FDA spreadsheet export failed. Please try again.');
+    } catch (err: unknown) {
+      // Branch on error type
+      const errObj = err as { response?: { status?: number } };
+      const status = errObj.response?.status;
+
+      if (status === 404 || (err instanceof Error && err.message.toLowerCase().includes('no records'))) {
+        setError(
+          <>
+            There are no records for lot code &quot;{code}&quot; yet, so there is nothing to export.{' '}
+            <Link href="/onboarding/bulk-upload" className="underline">
+              Upload a CSV
+            </Link>{' '}
+            that includes this lot.
+          </>
+        );
+      } else if (status === 401 || status === 403) {
+        setError(
+          <>
+            Your session ended.{' '}
+            <Link href="/login" className="underline">
+              Sign in again
+            </Link>
+            , then export.
+          </>
+        );
+      } else {
+        setError('We could not build the FDA spreadsheet. Try again in a moment. If it keeps failing, send us the lot code.');
+      }
     } finally {
       setIsExporting(false);
     }
@@ -124,7 +151,15 @@ export default function TracePage() {
       );
 
       if (!preview.rows || preview.rows.length === 0) {
-        setError(`No CTE events found for TLC "${code}". Check the lot code and try again.`);
+        setError(
+          <>
+            No records found for lot code &quot;{code}&quot;. Check the code, or{' '}
+            <Link href="/onboarding/bulk-upload" className="underline">
+              upload a CSV
+            </Link>{' '}
+            that includes this lot.
+          </>
+        );
         setIsLoading(false);
         return;
       }
@@ -170,8 +205,11 @@ export default function TracePage() {
         total_count: preview.total_count,
       });
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Trace query failed';
-      setError(message);
+      // Log technical error details for debugging
+      if (err instanceof Error) {
+        console.error('Trace query error:', err.message);
+      }
+      setError('We could not run this trace. Try again in a moment. If it keeps failing, send us the lot code you searched.');
     } finally {
       setIsLoading(false);
     }

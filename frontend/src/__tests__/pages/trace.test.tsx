@@ -227,6 +227,6 @@ describe('TracePage', () => {
         await user.type(screen.getByPlaceholderText(/enter tlc/i), 'TLC-2026-SAL-0001');
         await user.click(screen.getByRole('button', { name: /export fda spreadsheet/i }));
 
-        expect(await screen.findByRole('alert')).toHaveTextContent('FDA spreadsheet export failed. Please try again.');
+        expect(await screen.findByRole('alert')).toHaveTextContent('We could not build the FDA spreadsheet. Try again in a moment. If it keeps failing, send us the lot code.');
     });
 });
