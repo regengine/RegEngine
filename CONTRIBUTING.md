@@ -75,12 +75,15 @@ then regenerate the locks in this order, under Python 3.11 with
 
 ```bash
 pip-compile --allow-unsafe --generate-hashes --output-file=requirements.lock requirements.in
-pip-compile --allow-unsafe --generate-hashes --output-file=requirements-dev.lock requirements-dev.in
-pip-compile --allow-unsafe --generate-hashes --output-file=requirements-experimental.lock requirements-experimental.in
+pip-compile --allow-unsafe --constraint=requirements.lock --generate-hashes --output-file=requirements-dev.lock requirements-dev.in
+pip-compile --allow-unsafe --constraint=requirements.lock --generate-hashes --output-file=requirements-experimental.lock requirements-experimental.in
 ```
 
-The dev and experimental files start with `-c requirements.lock`, so a package
-in both resolves to the production version. CI fails if any lock is stale.
+`--constraint=requirements.lock` makes a package in both resolve to the
+production version. Keep it on the command line: a `-c requirements.lock` line
+inside a `.in` file breaks the weekly Dependabot pip run, which fetches a
+constraint file only when its name ends in `.txt` or `.in`. CI fails if any
+lock is stale.
 
 ## Code Guidelines
 

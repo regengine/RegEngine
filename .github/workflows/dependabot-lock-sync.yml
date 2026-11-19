@@ -92,10 +92,11 @@ jobs:
             pip-compile --allow-unsafe --generate-hashes --output-file=requirements.lock requirements.in
           diff -u /tmp/lock.expected requirements.lock
           # The dev and experimental locks are constrained by requirements.lock
-          # (WI-06), so recompile them after it whether or not their .in changed.
+          # (WI-06, the --constraint flag), so recompile them after it whether
+          # or not their .in changed.
           for name in dev experimental; do
-            CUSTOM_COMPILE_COMMAND="pip-compile --allow-unsafe --generate-hashes --output-file=requirements-${name}.lock requirements-${name}.in" \
-              pip-compile --allow-unsafe --generate-hashes --output-file="requirements-${name}.lock" "requirements-${name}.in"
+            CUSTOM_COMPILE_COMMAND="pip-compile --allow-unsafe --constraint=requirements.lock --generate-hashes --output-file=requirements-${name}.lock requirements-${name}.in" \
+              pip-compile --allow-unsafe --constraint=requirements.lock --generate-hashes --output-file="requirements-${name}.lock" "requirements-${name}.in"
           done
 
       - name: Commit and push
