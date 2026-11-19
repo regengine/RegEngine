@@ -272,11 +272,193 @@ def test_api_key_main_refuses_hosted_database(monkeypatch):
 
     module = _load("create_test_api_key_main", SCRIPTS / "create_test_api_key.py")
     monkeypatch.setattr(sys, "argv", ["create_test_api_key.py"])
-    monkeypatch.setenv("DATABASE_URL", "postgresql://regengine@db.railway.app:5432/regengine")
+    # The script writes through ADMIN_DATABASE_URL, so that is the URL the
+    # guard judges. A local DATABASE_URL beside it must not excuse it.
+    monkeypatch.setenv("ADMIN_DATABASE_URL", "postgresql://regengine_sysadmin@db.railway.app:5432/regengine")
+    monkeypatch.setenv("DATABASE_URL", "postgresql://regengine@localhost:5432/regengine")
     monkeypatch.delenv("REGENGINE_ENV", raising=False)
     monkeypatch.delenv("REDIS_URL", raising=False)
     with pytest.raises(SystemExit, match="Refusing to mint"):
         asyncio.run(module._main())
+
+
+# --- create_test_api_key.py: writes as regengine_sysadmin, never another login ---
+#
+# Since v111 only regengine_sysadmin, with regengine.is_sysadmin armed for
+# the transaction, may insert into tenants and api_keys. The runtime
+# DATABASE_URL role gets "permission denied for table tenants".
+
+_SYSADMIN_URL = "postgresql://regengine_sysadmin@localhost:5432/regengine"
+
+
+def _local_script_env(monkeypatch, admin_url):
+    if admin_url is None:
+        monkeypatch.delenv("ADMIN_DATABASE_URL", raising=False)
+    else:
+        monkeypatch.setenv("ADMIN_DATABASE_URL", admin_url)
+    monkeypatch.setenv("DATABASE_URL", "postgresql://regengine@localhost:5432/regengine")
+    monkeypatch.delenv("REGENGINE_ENV", raising=False)
+    monkeypatch.delenv("REDIS_URL", raising=False)
+
+
+def test_api_key_main_requires_admin_database_url(monkeypatch):
+    import asyncio
+
+    module = _load("create_test_api_key_no_admin_url", SCRIPTS / "create_test_api_key.py")
+    monkeypatch.setattr(sys, "argv", ["create_test_api_key.py"])
+    _local_script_env(monkeypatch, None)
+    with pytest.raises(SystemExit, match="ADMIN_DATABASE_URL is not set") as exc:
+        asyncio.run(module._main())
+    assert "regengine_sysadmin" in str(exc.value)
+
+
+class _RecordingConnection:
+    """Records the SQL it is given and answers the role check with ``posture``."""
+
+    def __init__(self, posture):
+        self.posture = posture
+        self.statements = []
+
+    def execute(self, statement, params=None):
+        self.statements.append(str(statement))
+        return self
+
+    def one(self):
+        return self.posture
+
+
+@pytest.mark.parametrize(
+    "posture",
+    [
+        ("regengine", False, False),
+        ("regengine_migrator", False, False),
+        ("regengine_owner", True, True),
+        ("regengine_sysadmin", True, False),
+        ("regengine_sysadmin", False, True),
+    ],
+)
+def test_api_key_refuses_any_login_but_plain_sysadmin(posture):
+    module = _load("create_test_api_key_role", SCRIPTS / "create_test_api_key.py")
+    conn = _RecordingConnection(posture)
+    with pytest.raises(SystemExit, match="ADMIN_DATABASE_URL logs in as") as exc:
+        module._arm_sysadmin(conn)
+    assert repr(posture[0]) in str(exc.value)
+    assert not any("is_sysadmin" in statement for statement in conn.statements)
+
+
+def test_api_key_arms_control_plane_branch_after_role_check():
+    module = _load("create_test_api_key_arm", SCRIPTS / "create_test_api_key.py")
+    conn = _RecordingConnection(("regengine_sysadmin", False, False))
+    module._arm_sysadmin(conn)
+    assert len(conn.statements) == 2
+    assert "rolbypassrls" in conn.statements[0]
+    assert "set_config('regengine.is_sysadmin', 'true', true)" in conn.statements[1]
+
+
+@pytest.mark.parametrize(
+    "admin_url",
+    [
+        "postgresql://regengine_sysadmin@localhost:5432/regengine",
+        "postgresql+psycopg://regengine_sysadmin@localhost:5432/regengine",
+        "postgresql+asyncpg://regengine_sysadmin@localhost:5432/regengine",
+        "postgres://regengine_sysadmin@localhost:5432/regengine",
+    ],
+)
+def test_api_key_sysadmin_transaction_accepts_every_postgres_url_form(monkeypatch, admin_url):
+    """README writes postgresql://, the verify skill's env file postgresql+psycopg://."""
+    from contextlib import contextmanager
+
+    import sqlalchemy
+
+    module = _load("create_test_api_key_url_forms", SCRIPTS / "create_test_api_key.py")
+    conn = _RecordingConnection(("regengine_sysadmin", False, False))
+    seen = {}
+
+    class _Engine:
+        @contextmanager
+        def begin(self):
+            yield conn
+
+        def dispose(self):
+            seen["disposed"] = True
+
+    def _create_engine(url, **kwargs):
+        seen["url"] = url
+        return _Engine()
+
+    monkeypatch.setattr(sqlalchemy, "create_engine", _create_engine)
+    with module._sysadmin_transaction(admin_url) as yielded:
+        assert yielded is conn
+        assert any("is_sysadmin" in statement for statement in conn.statements)
+    assert seen["url"] == "postgresql+psycopg://regengine_sysadmin@localhost:5432/regengine"
+    assert seen["disposed"] is True
+
+
+def _run_api_key_main(monkeypatch, tmp_path, *extra_args):
+    """Run _main() with the database layer replaced; returns the calls it made."""
+    import asyncio
+    from contextlib import contextmanager
+
+    module = _load(f"create_test_api_key_wiring_{uuid4().hex}", SCRIPTS / "create_test_api_key.py")
+    calls = []
+
+    @contextmanager
+    def _transaction(url):
+        calls.append(("transaction", url))
+        yield "armed-connection"
+
+    def _seed(conn, tenant_id, tenant_name):
+        calls.append(("seed", conn))
+        return True
+
+    class _Store:
+        def __init__(self, **kwargs):
+            calls.append(("store", kwargs))
+
+        async def create_key(self, **kwargs):
+            return types.SimpleNamespace(
+                raw_key=f"rge_test.{uuid4().hex}",
+                key_id="rge_test",
+                tenant_id=kwargs["tenant_id"],
+                scopes=kwargs["scopes"],
+                expires_at=None,
+            )
+
+        async def close(self):
+            calls.append(("close",))
+
+    store_module = types.ModuleType("shared.api_key_store")
+    store_module.DatabaseAPIKeyStore = _Store
+    monkeypatch.setitem(sys.modules, "shared.api_key_store", store_module)
+    if "shared" not in sys.modules:
+        monkeypatch.setitem(sys.modules, "shared", types.ModuleType("shared"))
+    monkeypatch.setattr(module, "_sysadmin_transaction", _transaction)
+    monkeypatch.setattr(module, "_seed_tenant", _seed)
+    _local_script_env(monkeypatch, _SYSADMIN_URL)
+    key_file = tmp_path / "keys" / "key"
+    monkeypatch.setattr(
+        sys, "argv", ["create_test_api_key.py", "--key-file", str(key_file), "--no-seed-billing", *extra_args]
+    )
+    asyncio.run(module._main())
+    assert key_file.read_text().startswith("rge_test.")
+    return calls
+
+
+def test_api_key_main_writes_tenant_and_key_through_the_sysadmin_login(monkeypatch, tmp_path):
+    calls = _run_api_key_main(monkeypatch, tmp_path)
+    assert calls[:3] == [
+        ("transaction", _SYSADMIN_URL),
+        ("seed", "armed-connection"),
+        ("store", {"database_url": _SYSADMIN_URL, "arm_sysadmin_rls": True}),
+    ]
+
+
+def test_api_key_main_checks_the_login_even_without_seeding_a_tenant(monkeypatch, tmp_path):
+    calls = _run_api_key_main(monkeypatch, tmp_path, "--no-seed-tenant")
+    assert calls[:2] == [
+        ("transaction", _SYSADMIN_URL),
+        ("store", {"database_url": _SYSADMIN_URL, "arm_sysadmin_rls": True}),
+    ]
 
 
 # --- diag_db.py: database guard ---
