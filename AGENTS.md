@@ -59,6 +59,16 @@ Use plain work lanes such as backend, frontend, security, QA, infra, or docs whe
 - The repo has no `Makefile`, so do not suggest `make` commands.
 - Agents do not decide product direction. They execute scoped engineering tasks against the FSMA production spine.
 
+## Review Markers
+
+`Engine Review Pass` is a required check. It reads `REVIEW:` markers from pull request reviews only, never from comments.
+
+- A marker is one line, alone, in a review body: `REVIEW: <PASS|BLOCKED|FAIL> <engine> <full 40-char head SHA>`. A verdict without the engine and the SHA is not a marker, so `REVIEW: BLOCKED` on its own does not block.
+- A PR merges only after a different engine posts a `PASS` marker. A `BLOCKED` or `FAIL` marker blocks it. For each engine, its latest marker for the current head is the one that counts.
+- The gate counts a marker only if the review's author is an owner, member or collaborator of the repository and `<engine>` is in `ALLOWED_ENGINES` in the `engine-review-pass` job of `.github/workflows/pr-guards.yml`.
+- Post the marker as a review: `gh api repos/regengine/RegEngine/pulls/<n>/reviews -f event=COMMENT -f body='REVIEW: PASS <engine> <sha>'`, or `gh pr review <n> --comment --body-file <file>` for a longer body. A marker in a comment is not read, so a blocking comment does not block.
+- Do not post a marker under an engine name that is not yours. The author engine's own PASS is ignored. A push changes the SHA, so the marker must be posted again.
+
 ## Jev Sidecar
 
 Consult TypeSafe Jev alongside the user's requests.
