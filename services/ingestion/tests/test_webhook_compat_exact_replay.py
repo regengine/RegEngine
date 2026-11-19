@@ -41,7 +41,7 @@ KDES = {
 }
 
 
-def _ingest(*, cte_idempotent: bool, canonical_idempotent: bool):
+def _ingest(*, cte_idempotent: bool, canonical_idempotent: bool, canonical_error: Exception | None = None):
     """Run the real ingest loop for one event with storage and rules stubbed."""
     payload = WebhookPayload(
         source="edi_inbound_945",
@@ -69,6 +69,8 @@ def _ingest(*, cte_idempotent: bool, canonical_idempotent: bool):
     )
 
     def _persist(self, event):
+        if canonical_error is not None:
+            raise canonical_error
         return CanonicalStoreResult(
             success=True,
             event_id=STORED_CANONICAL_ID if canonical_idempotent else str(event.event_id),
@@ -134,3 +136,54 @@ def test_evaluating_a_new_cte_row_leaves_the_stored_canonical_row_alone():
     _, evaluate, _ = _ingest(cte_idempotent=False, canonical_idempotent=True)
     evaluate.assert_called_once()
     assert evaluate.call_args.args[0]["event_id"] != STORED_CANONICAL_ID
+
+
+# ---------------------------------------------------------------------------
+# A resend of a record that has no canonical copy
+# ---------------------------------------------------------------------------
+
+
+def _ledger_row_refusal() -> Exception:
+    """What the canonical store raises when the ledger row holds another hash."""
+    from shared.canonical_persistence import LedgerHashMismatchError
+
+    return LedgerHashMismatchError("Canonical content does not match the existing ledger event hash")
+
+
+@pytest.mark.parametrize("mode", ["off", "cte_only", "all"])
+def test_resend_of_a_record_without_a_canonical_copy_is_a_replay(monkeypatch, mode):
+    """The stored record's ledger row cannot attest a canonical copy, so nothing is stored.
+
+    With rules enforcement on this used to fail the whole request with HTTP 500,
+    on every resend, because the ledger row never changes.
+    """
+    monkeypatch.setenv("RULES_ENGINE_ENFORCE", mode)
+    response, evaluate, create_cases = _ingest(
+        cte_idempotent=True, canonical_idempotent=False, canonical_error=_ledger_row_refusal()
+    )
+    assert (response.accepted, response.rejected) == (1, 0)
+    assert response.events[0].event_id == STORED_CTE_ID
+    evaluate.assert_not_called()
+    create_cases.assert_not_called()
+
+
+@pytest.mark.parametrize("mode", ["cte_only", "all"])
+def test_refused_ledger_row_for_a_new_record_still_fails_under_enforcement(monkeypatch, mode):
+    """Only a resend is a replay. A new record whose ledger row is refused is a real fault."""
+    from fastapi import HTTPException
+
+    monkeypatch.setenv("RULES_ENGINE_ENFORCE", mode)
+    with pytest.raises(HTTPException) as failure:
+        _ingest(cte_idempotent=False, canonical_idempotent=False, canonical_error=_ledger_row_refusal())
+    assert failure.value.status_code == 500
+
+
+@pytest.mark.parametrize("mode", ["cte_only", "all"])
+def test_other_canonical_failures_on_a_resend_still_fail_under_enforcement(monkeypatch, mode):
+    """The replay path covers the refused ledger row and nothing else."""
+    from fastapi import HTTPException
+
+    monkeypatch.setenv("RULES_ENGINE_ENFORCE", mode)
+    with pytest.raises(HTTPException) as failure:
+        _ingest(cte_idempotent=True, canonical_idempotent=False, canonical_error=ValueError("write failed"))
+    assert failure.value.status_code == 500

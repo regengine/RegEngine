@@ -228,6 +228,23 @@ def _close_ingestion_run(
     )
 
 
+def _is_refused_replay(error: Exception, store_result: Any) -> bool:
+    """True when a resend met a stored record whose chain row cannot take a canonical copy.
+
+    The legacy store already holds the record, and its chain row was hashed
+    from other content: the legacy digest of a record stored without a
+    canonical copy, or an earlier projection. Nothing can be stored for it, so
+    the resend is a replay. A new record, or any other failure, is not.
+    """
+    if getattr(store_result, "idempotent", False) is not True:
+        return False
+    try:
+        from shared.canonical_persistence import LedgerHashMismatchError
+    except ImportError:
+        return False
+    return isinstance(error, LedgerHashMismatchError)
+
+
 def _undone_result(result: EventResult) -> EventResult:
     """Report an accepted event whose batch was rolled back as not stored."""
     if result.status != "accepted":
@@ -432,10 +449,9 @@ async def ingest_events(
                         raise canonical_error
                     canonical.event_id = uuid.UUID(str(store_result.event_id))
                     canonical.prepare_for_persistence()
-                    # skip_chain_write reuses the legacy write's chain row. It
-                    # raises if that row's hash is not this content's, which
-                    # leaves a legacy record from before the shared row
-                    # without a canonical copy rather than mislinked.
+                    # skip_chain_write reuses the legacy write's chain row and
+                    # refuses one whose hash is not this content's, so a record
+                    # is never linked to a chain row that does not attest it.
                     canonical_store = CanonicalEventStore(db_session, dual_write=False, skip_chain_write=True)
                     persist_result = canonical_store.persist_event(canonical)
                     canonical_exists = getattr(persist_result, "idempotent", False) is True
@@ -471,15 +487,25 @@ async def ingest_events(
                 except (ImportError, ValueError, TypeError, RuntimeError) as canon_err:
                     canon_sp.rollback()
                     summary = None
-                    # Finding A — under enforcement modes (cte_only/all)
-                    # a canonical/rules crash must not silently accept.
-                    # ``handle_preeval_exception`` raises HTTPException(500)
-                    # in those modes; under OFF it warns and returns
-                    # so the legacy best-effort accept path remains.
-                    from shared.rules.enforcement import handle_preeval_exception  # noqa: PLC0415
+                    if _is_refused_replay(canon_err, store_result):
+                        # A resend of a stored record whose chain row cannot
+                        # take this content. Nothing is accepted that was not
+                        # already stored, so this is a replay in every
+                        # enforcement mode: no canonical write, no rule
+                        # evaluation, and the stored record is reported as
+                        # before. The record keeps the canonical copy it had,
+                        # which may be none, and a resend cannot add one.
+                        logger.warning("compat_replay_chain_row_refused event_id=%s", store_result.event_id)
+                    else:
+                        # Finding A — under enforcement modes (cte_only/all)
+                        # a canonical/rules crash must not silently accept.
+                        # ``handle_preeval_exception`` raises HTTPException(500)
+                        # in those modes; under OFF it warns and returns
+                        # so the legacy best-effort accept path remains.
+                        from shared.rules.enforcement import handle_preeval_exception  # noqa: PLC0415
 
-                    handle_preeval_exception(canon_err, where="webhook_compat")
-                    logger.warning("compat_canonical_write_skipped: %s", str(canon_err))
+                        handle_preeval_exception(canon_err, where="webhook_compat")
+                        logger.warning("compat_canonical_write_skipped: %s", str(canon_err))
 
                 # Enforcement: if RULES_ENGINE_ENFORCE is set and the
                 # summary meets the reject policy, roll back the outer

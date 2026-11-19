@@ -456,3 +456,44 @@ def test_shared_row_reports_canonical_content_rewritten_with_its_hash(db_session
     result = store.verify_chain_canonical(tenant_id)
     assert result.valid is False
     assert result.tamper_rows, result.errors
+
+
+# ---------------------------------------------------------------------------
+# A resend of a record stored without its canonical copy
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("mode", ["off", "cte_only"])
+def test_resend_of_a_record_without_a_canonical_copy_is_a_replay(db_session, monkeypatch, mode) -> None:
+    """The stored record keeps its ledger row, and the resend stores nothing.
+
+    The canonical write is best-effort while rules enforcement is off, so a
+    record can exist in the legacy store only. Its ledger row was hashed from
+    the legacy content and cannot attest a canonical copy. With enforcement on,
+    a resend of such a record used to fail the request with HTTP 500 every time.
+    """
+    from shared.canonical_persistence import CanonicalEventStore
+    from shared.cte_persistence import CTEPersistence
+
+    session, tenant_id = db_session
+    shipped = _shipped_yesterday()
+    lots = ["TLC-COMPAT-LEGACY-ONLY"]
+
+    # First pass: the canonical projection cannot be built (payload over the cap).
+    monkeypatch.setenv("RULES_ENGINE_ENFORCE", "off")
+    monkeypatch.setenv("REGENGINE_RAW_PAYLOAD_MAX_BYTES", "10")
+    first = _ingest_through_compat(session, tenant_id, monkeypatch, lots, shipped=shipped)
+    assert first.accepted == 1, [e.errors for e in first.events]
+    stored = [tuple(row) for row in _ledger_rows(session, tenant_id)]
+    assert stored == [(first.events[0].event_id, True, False, None)], "expected a legacy-only record"
+
+    monkeypatch.delenv("REGENGINE_RAW_PAYLOAD_MAX_BYTES")
+    monkeypatch.setenv("RULES_ENGINE_ENFORCE", mode)
+    resend = _ingest_through_compat(session, tenant_id, monkeypatch, lots, shipped=shipped)
+
+    assert (resend.accepted, resend.rejected) == (1, 0), [e.errors for e in resend.events]
+    assert resend.events[0].event_id == first.events[0].event_id
+    assert [tuple(row) for row in _ledger_rows(session, tenant_id)] == stored, "the resend must store nothing"
+    assert CTEPersistence(session).verify_chain(tenant_id).valid is True
+    canonical = CanonicalEventStore(session, dual_write=False).verify_chain_canonical(tenant_id)
+    assert canonical.orphan_chain_rows == [] and canonical.tamper_rows == []
