@@ -64,7 +64,8 @@ def downgrade() -> None:
                 REVOKE UPDATE (closed_at, closing_record_id, closing_record_hash)
                     ON TABLE public.data_gap_events FROM regengine;
                 GRANT SELECT, INSERT, UPDATE ON TABLE public.data_gap_events TO regengine;
-                REVOKE SELECT ON TABLE public.data_gap_events FROM regengine_sysadmin;
+                -- Restore v135 privileges for both roles.
+                GRANT SELECT ON TABLE public.data_gap_events TO regengine_sysadmin;
                 REVOKE SELECT (tenant_id, tlc_code, facility_id) ON TABLE public.supplier_traceability_lots FROM regengine;
             END IF;
         END
