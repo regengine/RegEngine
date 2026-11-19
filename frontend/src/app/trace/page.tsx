@@ -87,6 +87,21 @@ export default function TracePage() {
 
     try {
       const { blob, filename, recordCount } = await apiClient.downloadSupplierFDARecords('xlsx', undefined, code);
+      
+      // Backend returns 200 with X-FDA-Record-Count: 0 for empty lot
+      if (recordCount === 0) {
+        setError(
+          <>
+            There are no records for lot code &quot;{code}&quot; yet, so there is nothing to export.{' '}
+            <Link href="/onboarding/bulk-upload" className="underline">
+              Upload a CSV
+            </Link>{' '}
+            that includes this lot.
+          </>
+        );
+        return;
+      }
+      
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
