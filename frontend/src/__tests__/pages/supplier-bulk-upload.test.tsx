@@ -24,7 +24,7 @@ it('keeps a successful commit distinct from a failed status refresh', async () =
   await userEvent.click(screen.getByRole('button', { name: 'Parse + Validate' }));
   await screen.findByText('Ready to commit.');
   await userEvent.click(screen.getByRole('button', { name: 'Commit Import' }));
-  expect(await screen.findByText('Commit Complete')).toBeInTheDocument();
+  expect(await screen.findByText('Records saved')).toBeInTheDocument();
   expect(await screen.findByText(/Commit succeeded, but status refresh failed/)).toBeInTheDocument();
   expect(mocks.commit).toHaveBeenCalledTimes(1);
   expect(mocks.refresh).toHaveBeenCalledTimes(1);

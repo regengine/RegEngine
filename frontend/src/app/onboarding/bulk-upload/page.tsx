@@ -7,7 +7,7 @@ import {
   Loader2, UploadCloud, ClipboardCheck, Search, ShieldCheck,
 } from 'lucide-react';
 
-import { parseCSVLocally, validateCSVLocally, type CsvPreview, type ClientValidationResult } from '@/lib/supplier-csv';
+import { parseCSVLocally, validateCSVLocally, REQUIRED_COLUMNS, RECOMMENDED_COLUMNS, type CsvPreview, type ClientValidationResult } from '@/lib/supplier-csv';
 import { apiClient } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth-context';
 import { notifyDashboardRefresh } from '@/hooks/use-dashboard-refresh';
@@ -233,6 +233,22 @@ export default function BulkUploadPage() {
   };
 
   const onDownloadTemplate = async (format: 'csv' | 'xlsx') => {
+    // CSV template works without auth (static header-only file)
+    if (format === 'csv') {
+      // Build header from validator column lists to stay in sync
+      const allColumns = [...REQUIRED_COLUMNS, ...RECOMMENDED_COLUMNS];
+      const csvHeaders = allColumns.join(',') + '\n';
+      const blob = new Blob([csvHeaders], { type: 'text/csv' });
+      const href = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = href;
+      anchor.download = 'regengine-bulk-upload-template.csv';
+      anchor.click();
+      URL.revokeObjectURL(href);
+      return;
+    }
+
+    // XLSX requires auth
     if (!isAuthenticated) {
       setError('Not authenticated. Sign in and try again.');
       return;
@@ -344,7 +360,7 @@ export default function BulkUploadPage() {
         <div className="grid sm:grid-cols-2 gap-3 sm:gap-4 mb-5 sm:mb-6">
           <button
             onClick={() => onDownloadTemplate('csv')}
-            disabled={isBusy || !isAuthenticated}
+            disabled={isBusy}
             type="button"
             className="group rounded-2xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-4 sm:p-5 text-left hover:border-[var(--re-brand)]/30 hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 min-h-[48px]"
           >
@@ -354,7 +370,7 @@ export default function BulkUploadPage() {
               </div>
               <div>
                 <h3 className="text-sm font-semibold text-[var(--re-text-primary)] mb-0.5">CSV Template</h3>
-                <p className="text-[11px] sm:text-xs text-[var(--re-text-muted)]">Lightweight, universal format</p>
+                <p className="text-[11px] sm:text-xs text-[var(--re-text-muted)]">Start here. One row per event, with the columns RegEngine checks.</p>
               </div>
             </div>
           </button>
@@ -371,6 +387,9 @@ export default function BulkUploadPage() {
               <div>
                 <h3 className="text-sm font-semibold text-[var(--re-text-primary)] mb-0.5">XLSX Template</h3>
                 <p className="text-[11px] sm:text-xs text-[var(--re-text-muted)]">Multi-sheet workbook with validation</p>
+                {!isAuthenticated && (
+                  <p className="mt-1 text-[11px] text-[var(--re-text-disabled)]">Sign in to download</p>
+                )}
               </div>
             </div>
           </button>
@@ -798,7 +817,7 @@ export default function BulkUploadPage() {
             >
               <p className="font-semibold text-sm text-[var(--re-text-primary)] mb-2 flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-re-brand" />
-                Commit Complete
+                Records saved
               </p>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs text-[var(--re-text-secondary)]">
                 <div className="rounded-lg bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] p-2.5">
@@ -806,17 +825,31 @@ export default function BulkUploadPage() {
                   <p className="font-semibold text-sm">{commitResult.summary.facilities_created} created / {commitResult.summary.facilities_updated} updated</p>
                 </div>
                 <div className="rounded-lg bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] p-2.5">
-                  <p className="text-[var(--re-text-muted)] mb-0.5">TLCs</p>
+                  <p className="text-[var(--re-text-muted)] mb-0.5">Lot codes</p>
                   <p className="font-semibold text-sm">{commitResult.summary.tlcs_created} created / {commitResult.summary.tlcs_updated} updated</p>
                 </div>
                 <div className="rounded-lg bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] p-2.5">
-                  <p className="text-[var(--re-text-muted)] mb-0.5">Events Chained</p>
+                  <p className="text-[var(--re-text-muted)] mb-0.5">Events saved</p>
                   <p className="font-semibold text-sm">{commitResult.summary.events_chained}</p>
                 </div>
               </div>
+              <div className="mt-4 flex flex-col sm:flex-row gap-2">
+                <Link
+                  href="/trace"
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--re-brand)] px-5 py-2.5 text-sm font-semibold text-[var(--re-brand-foreground)] hover:-translate-y-0.5 transition-all no-underline min-h-[44px]"
+                >
+                  Trace a lot
+                </Link>
+                <Link
+                  href="/trace"
+                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] px-5 py-2.5 text-sm font-medium text-[var(--re-text-secondary)] hover:border-[var(--re-brand)]/30 transition-all no-underline min-h-[44px]"
+                >
+                  Export FDA spreadsheet
+                </Link>
+              </div>
               {commitResult.summary.sync_warning_count > 0 && (
                 <div className="mt-3 rounded-lg border border-re-warning/20 bg-re-warning/5 p-3 text-xs text-re-warning">
-                  <p className="font-semibold mb-1">Graph sync warnings ({commitResult.summary.sync_warning_count})</p>
+                  <p className="font-semibold mb-1">Saved, with notes ({commitResult.summary.sync_warning_count})</p>
                   <ul className="list-disc pl-5">
                     {commitResult.summary.sync_warnings.map((warning) => (
                       <li key={warning}>{warning}</li>
@@ -835,7 +868,7 @@ export default function BulkUploadPage() {
                 </div>
               )}
               <details className="mt-3">
-                <summary className="text-xs text-[var(--re-text-muted)] cursor-pointer hover:text-[var(--re-text-secondary)]">Raw summary JSON</summary>
+                <summary className="text-xs text-[var(--re-text-muted)] cursor-pointer hover:text-[var(--re-text-secondary)]">Technical details</summary>
                 <pre className="mt-2 overflow-x-auto text-xs text-[var(--re-text-muted)] bg-[var(--re-surface-elevated)] rounded-lg p-3 border border-[var(--re-surface-border)]">
                   {JSON.stringify(commitResult.summary, null, 2)}
                 </pre>
