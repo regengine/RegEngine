@@ -9,16 +9,10 @@ Issue #1332 (first-event chain race) is already CLOSED — skipped here.
 
 from __future__ import annotations
 
-import hashlib
-import json
 from typing import Any, Dict, List, Optional
-from unittest.mock import MagicMock, call, patch
-from uuid import uuid4
-
-import pytest
+from unittest.mock import MagicMock
 
 from services.shared.cte_persistence.core import (
-    _REJECT_SEVERITIES,
     VALIDATION_STATUS_REJECTED,
     VALIDATION_STATUS_VALID,
     VALIDATION_STATUS_WARNING,

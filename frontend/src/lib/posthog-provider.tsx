@@ -7,12 +7,18 @@ import type posthog from 'posthog-js';
 import type { CaptureResult } from 'posthog-js';
 import { getStoredConsent } from './cookie-consent';
 import {
+  FIRST_TOUCH_UTM_KEYS,
+  cleanUtmValue,
+  clearFirstTouchUtm,
+  getFirstTouchUtm,
+} from './first-touch-utm';
+import {
   isInternalAnalyticsSession,
   safeMarketingPath,
   shouldTrackMarketingPageview,
 } from './marketing-analytics-routes';
 
-type CTAClickProps = { cta_label: string; page: string; destination?: string };
+type CTAClickProps = { cta_id: string };
 type SignupStartProps = { plan?: string; source?: string };
 type OnboardingCompleteProps = { step: string; tenant_id?: string };
 type ToolVisitProps = { tool: string; path: string };
@@ -25,11 +31,13 @@ const SAFE_PROPERTY_KEYS = new Set([
   'tool_id', 'lead_captured', 'categories_selected', 'covered_count',
   'risk_level', 'status', 'total_events', 'non_compliant_events',
   'compliant_events', 'tool', 'outcome', 'error_code', 'placement', 'form', 'step',
-  'grade', 'webinar', 'surface', 'scenario', 'cte', 'gap',
+  'grade', 'webinar', 'surface', 'scenario', 'cte', 'gap', 'cta_id',
 ]);
+const PRODUCT = 'RegEngine';
+/** AN1 signup events carry only product, page, cta_id and first-touch utm_* (no SDK envelope). */
+const MINIMAL_EVENTS = new Set(['request_access', 'cta_clicked']);
 const EMAIL_SHAPE = /^[^\s@]{1,64}@[^\s@]{1,253}\.[^\s@]{2,63}$/;
 const SAFE_LABEL = /^[a-z0-9][a-z0-9_-]{0,79}$/i;
-const SAFE_SOURCE_LABEL = /^[a-z0-9][a-z0-9_.-]{0,79}$/i;
 const SAFE_SDK_STRING = /^[a-z0-9](?:[a-z0-9_. -]{0,78}[a-z0-9])?$/i;
 const HOST_LABEL = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/i;
 const SDK_SIMPLE_KEYS = [
@@ -116,6 +124,7 @@ function clearStoredIdentity(): void {
   const domains = ['', `; domain=${hostname}`];
   if (parts.length > 1) domains.push(`; domain=.${parts.slice(-2).join('.')}`);
   for (const domain of domains) document.cookie = `${name}=; max-age=0; path=/${domain}`;
+  clearFirstTouchUtm();
   try {
     window.localStorage.removeItem(name);
   } catch {
@@ -180,6 +189,16 @@ function safeValue(value: unknown): string | number | boolean | string[] | undef
 function safeProperties(properties: Record<string, unknown> = {}): Record<string, unknown> {
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(properties)) {
+    if (key === 'product') {
+      if (value === PRODUCT) result.product = PRODUCT;
+      continue;
+    }
+    if (key === 'page') {
+      // Path only: safeMarketingPath rejects query strings and maps unknown segments to a section.
+      const page = safeMarketingPath(value);
+      if (page) result.page = page;
+      continue;
+    }
     if (!SAFE_PROPERTY_KEYS.has(key)) continue;
     const cleaned = safeValue(value);
     if (cleaned !== undefined) result[key] = cleaned;
@@ -220,6 +239,16 @@ function beforeSend(capture: CaptureResult | null): CaptureResult | null {
   // Anonymous / pre-identify events never create or enrich a person profile.
   if (!isIdentified) properties.$process_person_profile = false;
 
+  for (const key of FIRST_TOUCH_UTM_KEYS) {
+    const value = cleanUtmValue(key, capture.properties[key]);
+    if (value) properties[key] = value;
+  }
+  // First touch for this tab wins over SDK or current-URL campaign values.
+  Object.assign(properties, getFirstTouchUtm());
+  if (MINIMAL_EVENTS.has(capture.event)) {
+    return { ...capture, properties, $set: undefined, $set_once: undefined, $unset: undefined };
+  }
+
   const host = safeHostname(capture.properties.$host, false);
   if (host) properties.$host = host;
   const referringDomain = capture.properties.$referring_domain;
@@ -228,22 +257,8 @@ function beforeSend(capture: CaptureResult | null): CaptureResult | null {
     const domain = safeHostname(referringDomain, true);
     if (domain) properties.$referring_domain = domain;
   }
-  for (const key of ['utm_source', 'utm_medium', 'utm_campaign'] as const) {
-    const value = capture.properties[key];
-    if (isSafeString(value, key === 'utm_source' ? SAFE_SOURCE_LABEL : SAFE_LABEL)) {
-      properties[key] = value;
-    }
-  }
-  // SDK campaign/referrer persistence is disabled; derive only safe pageview attribution.
+  // SDK campaign/referrer persistence is disabled; derive only a safe pageview referrer.
   if (capture.event === '$pageview') {
-    const params = new URLSearchParams(window.location.search);
-    for (const key of ['utm_source', 'utm_medium', 'utm_campaign'] as const) {
-      const value = params.get(key);
-      if (properties[key] === undefined
-        && isSafeString(value, key === 'utm_source' ? SAFE_SOURCE_LABEL : SAFE_LABEL)) {
-        properties[key] = value;
-      }
-    }
     if (properties.$referring_domain === undefined) {
       if (!document.referrer) properties.$referring_domain = '$direct';
       else {
@@ -364,8 +379,16 @@ export function usePostHog() {
   return posthogClient;
 }
 
+function currentPage(): string | undefined {
+  return typeof window === 'undefined'
+    ? undefined : safeMarketingPath(window.location.pathname) ?? undefined;
+}
+
 export const ph = {
-  ctaClick: (props: CTAClickProps) => captureEvent('cta_clicked', props),
+  ctaClick: ({ cta_id }: CTAClickProps) =>
+    captureEvent('cta_clicked', { product: PRODUCT, page: currentPage(), cta_id }),
+  /** Successful /contact request. No form fields are ever passed here. */
+  requestAccess: () => captureEvent('request_access', { product: PRODUCT, page: currentPage() }),
   signupStart: (props: SignupStartProps) => captureEvent('signup_started', props),
   onboardingComplete: (props: OnboardingCompleteProps) => captureEvent('onboarding_completed', props),
   toolVisit: (props: ToolVisitProps) => captureEvent('tool_visited', props),
@@ -389,6 +412,8 @@ export function CSPostHogProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const refresh = () => {
       if (canTrack()) {
+        // Record landing UTMs (memory only until Accept) before any SPA navigation drops them.
+        getFirstTouchUtm();
         applyTrackingMode();
         void initializePostHog();
         // Consent may have arrived after a login-time identifyUser; apply now.

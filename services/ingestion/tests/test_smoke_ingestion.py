@@ -24,15 +24,8 @@ def test_health(monkeypatch) -> None:
             f"ingestion smoke tests require optional dependency '{exc.name}'",
         )
 
-    # The /health endpoint moved to app/routes_health_metrics.py (PR #2200's
-    # routes split, plus the routes_health_metrics extraction noted in
-    # routes.py). It only contacts Kafka via shared.kafka_consumer_base.
-    # kafka_health_check when KAFKA_BOOTSTRAP_SERVERS is set to a non-default
-    # value, so we force it unset to keep the smoke test hermetic. The old
-    # `app.routes.AdminClient` patch target was a leftover from the pre-split
-    # kafka_utils import path and no longer exists in either module.
-    monkeypatch.delenv("KAFKA_BOOTSTRAP_SERVERS", raising=False)
-
+    # The /health endpoint lives in app/routes_health_metrics.py and contacts
+    # no external service (the Kafka probe was retired in WI-05).
     with TestClient(app) as client:
         response = client.get("/health")
         assert response.status_code == 200

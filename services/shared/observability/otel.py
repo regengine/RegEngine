@@ -1,4 +1,4 @@
-from opentelemetry import _logs as logs, baggage, trace
+from opentelemetry import _logs as logs, trace
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
 try:
@@ -24,7 +24,7 @@ import os
 
 import structlog
 from fastapi import FastAPI
-from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+from opentelemetry.sdk._logs import LoggerProvider
 from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 
 logger = structlog.get_logger("observability")

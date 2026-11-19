@@ -40,6 +40,7 @@ from pathlib import Path
 from typing import Iterator
 
 import pytest
+from tests.migrations.rls_db import skip_or_fail_without_db
 
 # Skip the whole module if Docker / testcontainers unavailable.
 testcontainers = pytest.importorskip("testcontainers")  # noqa: F841
@@ -132,7 +133,7 @@ def pg_container() -> Iterator[PostgresContainer]:
         container = PostgresContainer("postgres:16", driver="psycopg")
         container.start()
     except Exception as exc:  # Docker missing, image pull fails, etc.
-        pytest.skip(f"PostgresContainer unavailable: {exc}")
+        skip_or_fail_without_db(f"PostgresContainer unavailable: {exc}")
 
     try:
         yield container
