@@ -7,7 +7,7 @@ import {
   Loader2, UploadCloud, ClipboardCheck, Search, ShieldCheck,
 } from 'lucide-react';
 
-import { parseCSVLocally, validateCSVLocally, REQUIRED_COLUMNS, RECOMMENDED_COLUMNS, type CsvPreview, type ClientValidationResult } from '@/lib/supplier-csv';
+import { parseCSVLocally, validateCSVLocally, SUPPLIER_BULK_UPLOAD_TEMPLATE_CSV, type CsvPreview, type ClientValidationResult } from '@/lib/supplier-csv';
 import { apiClient } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth-context';
 import { notifyDashboardRefresh } from '@/hooks/use-dashboard-refresh';
@@ -235,10 +235,8 @@ export default function BulkUploadPage() {
   const onDownloadTemplate = async (format: 'csv' | 'xlsx') => {
     // CSV template works without auth (static header-only file)
     if (format === 'csv') {
-      // Build header from validator column lists to stay in sync
-      const allColumns = [...REQUIRED_COLUMNS, ...RECOMMENDED_COLUMNS];
-      const csvHeaders = allColumns.join(',') + '\n';
-      const blob = new Blob([csvHeaders], { type: 'text/csv' });
+      // Same bytes the signed-in bulk-upload API serves, so a filled file can be saved.
+      const blob = new Blob([SUPPLIER_BULK_UPLOAD_TEMPLATE_CSV], { type: 'text/csv' });
       const href = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = href;
@@ -370,7 +368,7 @@ export default function BulkUploadPage() {
               </div>
               <div>
                 <h3 className="text-sm font-semibold text-[var(--re-text-primary)] mb-0.5">CSV Template</h3>
-                <p className="text-[11px] sm:text-xs text-[var(--re-text-muted)]">Start here. One row per event, with the columns RegEngine checks.</p>
+                <p className="text-[11px] sm:text-xs text-[var(--re-text-muted)]">Start here. Includes a facility, a lot, and one shipping event.</p>
               </div>
             </div>
           </button>

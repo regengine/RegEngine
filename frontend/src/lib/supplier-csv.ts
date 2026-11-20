@@ -18,7 +18,7 @@ const eventType = (value: string) => {
 };
 const columnName = (value: string) => {
   const normalized = value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
-  const aliases: Record<string, string> = { cte_type: 'event_type', tlc_code: 'lot_number', traceability_lot_code: 'lot_number', lot_code: 'lot_number', tlc: 'lot_number', event_time: 'event_datetime', event_date: 'event_datetime', timestamp: 'event_datetime', cte_date: 'event_datetime' };
+  const aliases: Record<string, string> = { cte_type: 'event_type', tlc_code: 'lot_number', traceability_lot_code: 'lot_number', lot_code: 'lot_number', tlc: 'lot_number', product_description: 'product_name', event_time: 'event_datetime', event_date: 'event_datetime', timestamp: 'event_datetime', cte_date: 'event_datetime' };
   return Object.hasOwn(aliases, normalized) ? aliases[normalized] : normalized;
 };
 
@@ -68,6 +68,17 @@ export const RECOMMENDED_COLUMNS = [
   'destination_facility_code', 'destination_facility_name',
 ];
 
+/**
+ * Signed-out CSV download. Must match
+ * services/admin/app/bulk_upload/templates.py so the file can be saved.
+ */
+export const SUPPLIER_BULK_UPLOAD_TEMPLATE_CSV = `record_type,facility_name,name,street,city,state,postal_code,fda_registration_number,roles,category_id,tlc_code,product_description,status,cte_type,event_time,kde_data,obligation_ids
+facility,,Salinas Packhouse,1200 Abbott St,Salinas,CA,93901,12345678901,"Grower,Packer",,,,,,,,
+ftl_scope,Salinas Packhouse,,,,,,,,2,,,,,,,
+tlc,Salinas Packhouse,,,,,,,,,TLC-2026-SAL-1001,Baby Spinach,active,,,,
+event,Salinas Packhouse,,,,,,,,,TLC-2026-SAL-1001,,,shipping,2026-03-03T12:00:00Z,"{""quantity"": 120, ""unit_of_measure"": ""cases"", ""reference_document"": ""BOL-1001""}",
+`;
+
 interface ValidationIssue {
   severity: 'error' | 'warning';
   row?: number;
@@ -93,6 +104,108 @@ export interface ClientValidationResult {
   dateRange: { earliest: string | null; latest: string | null };
 }
 
+function cellAt(cells: string[], index: number): string {
+  if (index < 0) return '';
+  return cells[index]?.trim() ?? '';
+}
+
+/** Multi-record supplier template: facility, scope, lot, and event rows. */
+function validateRecordTypeCsv(
+  lines: string[][],
+  columns: string[],
+  result: ClientValidationResult,
+): ClientValidationResult {
+  result.columnsFound = lines[0];
+  result.requiredColumnsPresent = ['record_type'];
+  const dataLines = lines.slice(1);
+  result.totalRows = dataLines.length;
+  const idx = (name: string) => columns.indexOf(name);
+  const recordIdx = idx('record_type');
+  const eventTypeIdx = idx('event_type');
+  const productNameIdx = idx('product_name');
+  const lotIdx = idx('lot_number');
+  const nameIdx = idx('name');
+  const facilityIdx = idx('facility_name');
+  const categoryIdx = idx('category_id');
+  const datetimeIdx = idx('event_datetime');
+
+  const productSet = new Set<string>();
+  const lotSet = new Set<string>();
+  const facSet = new Set<string>();
+  const dates: string[] = [];
+
+  for (let i = 0; i < dataLines.length; i++) {
+    const cells = dataLines[i];
+    const rowNum = i + 2;
+    const recordType = cellAt(cells, recordIdx).toLowerCase();
+    const facility = cellAt(cells, facilityIdx) || cellAt(cells, nameIdx);
+    const lot = cellAt(cells, lotIdx);
+    const product = cellAt(cells, productNameIdx);
+    if (facility) facSet.add(facility);
+    if (lot) lotSet.add(lot);
+    if (product) productSet.add(product);
+
+    if (recordType === 'facility' || recordType === 'facilities') {
+      if (!facility) {
+        result.issues.push({ severity: 'error', row: rowNum, column: 'name', message: 'Facility row needs a name.' });
+      }
+      continue;
+    }
+    if (recordType === 'ftl' || recordType === 'ftl_scope' || recordType === 'scope') {
+      if (!facility) {
+        result.issues.push({ severity: 'error', row: rowNum, column: 'facility_name', message: 'Food scope row needs a facility name.' });
+      }
+      if (!cellAt(cells, categoryIdx)) {
+        result.issues.push({ severity: 'error', row: rowNum, column: 'category_id', message: 'Food scope row needs a category id.' });
+      }
+      continue;
+    }
+    if (recordType === 'tlc' || recordType === 'lot') {
+      if (!lot) {
+        result.issues.push({ severity: 'error', row: rowNum, column: 'tlc_code', message: 'Lot row needs a lot code.' });
+      }
+      continue;
+    }
+    if (recordType === 'event' || recordType === 'cte' || recordType === 'cte_event') {
+      const et = cellAt(cells, eventTypeIdx);
+      if (!et) {
+        result.issues.push({ severity: 'error', row: rowNum, column: 'cte_type', message: 'Event row needs an event type.' });
+      } else if (!Object.hasOwn(EVENT_TYPE_LABELS, eventType(et))) {
+        result.invalidEventTypes.push({ row: rowNum, value: et });
+        result.issues.push({ severity: 'error', row: rowNum, column: 'cte_type', message: `Invalid event type "${et}".` });
+      } else {
+        const label = EVENT_TYPE_LABELS[eventType(et)];
+        result.eventTypeCounts[label] = (result.eventTypeCounts[label] || 0) + 1;
+      }
+      if (!lot) {
+        result.issues.push({ severity: 'error', row: rowNum, column: 'tlc_code', message: 'Event row needs a lot code.' });
+      }
+      const when = cellAt(cells, datetimeIdx);
+      if (when) dates.push(when);
+      continue;
+    }
+    result.issues.push({
+      severity: 'error',
+      row: rowNum,
+      column: 'record_type',
+      message: recordType
+        ? `Unknown record_type "${recordType}". Use facility, ftl_scope, tlc, or event.`
+        : 'Each row needs a record_type: facility, ftl_scope, tlc, or event.',
+    });
+  }
+
+  result.productNames = Array.from(productSet).slice(0, 15);
+  result.lotNumbers = Array.from(lotSet).slice(0, 15);
+  result.facilityNames = Array.from(facSet).slice(0, 15);
+  if (dates.length > 0) {
+    dates.sort();
+    result.dateRange = { earliest: dates[0], latest: dates[dates.length - 1] };
+  }
+  result.completenessScore = result.issues.some(issue => issue.severity === 'error') ? 40 : 100;
+  result.canProceed = !result.issues.some(issue => issue.severity === 'error');
+  return result;
+}
+
 export function validateCSVLocally(text: string): ClientValidationResult {
   const lines = parseCSVRecords(text);
   const result: ClientValidationResult = {
@@ -109,6 +222,9 @@ export function validateCSVLocally(text: string): ClientValidationResult {
   }
 
   const columns = lines[0].map(columnName);
+  if (columns.includes('record_type')) {
+    return validateRecordTypeCsv(lines, columns, result);
+  }
   result.columnsFound = lines[0];
   const dataLines = lines.slice(1);
   result.totalRows = dataLines.length;

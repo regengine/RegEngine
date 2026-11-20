@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseCSVLocally, parseCSVRecords, validateCSVLocally } from '@/lib/supplier-csv';
+import { SUPPLIER_BULK_UPLOAD_TEMPLATE_CSV, parseCSVLocally, parseCSVRecords, validateCSVLocally } from '@/lib/supplier-csv';
 
 describe('supplier CSV local checks', () => {
   it('shares complete CSV records across preview and validation', () => {
@@ -42,6 +42,15 @@ describe('supplier CSV local checks', () => {
 
   it('rejects files without data', () => {
     expect(validateCSVLocally('event_type,product_name,lot_number\r\n\r\n').canProceed).toBe(false);
+  });
+
+  it('accepts the commitable multi-record template', () => {
+    const validation = validateCSVLocally(SUPPLIER_BULK_UPLOAD_TEMPLATE_CSV);
+    expect(validation.canProceed).toBe(true);
+    expect(validation.eventTypeCounts).toEqual({ Shipping: 1 });
+    expect(validation.lotNumbers).toContain('TLC-2026-SAL-1001');
+    expect(validation.productNames).toContain('Baby Spinach');
+    expect(validation.facilityNames).toContain('Salinas Packhouse');
   });
 });
 
