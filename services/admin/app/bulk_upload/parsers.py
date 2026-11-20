@@ -89,11 +89,14 @@ def _normalize_key(value: str) -> str:
 
 # Canonical column alias map — all known variants collapse to internal names
 # at ingestion so downstream code only references canonical keys.
+#
+# destination_facility_name is intentionally NOT collapsed into facility_name.
+# The onboarding CSV template emits both origin and destination on one event
+# row; first-writer-wins would otherwise drop the destination KDE.
 COLUMN_ALIASES: dict[str, str] = {
-    # facility_name
+    # facility_name — the acting site. Origin wins when both are present.
     "location_name": "facility_name",
     "origin_facility_name": "facility_name",
-    "destination_facility_name": "facility_name",
     "business_name": "facility_name",
     "site_name": "facility_name",
     "sender_name": "facility_name",
@@ -112,6 +115,12 @@ COLUMN_ALIASES: dict[str, str] = {
     "event_date": "event_time",
     "cte_date": "event_time",
     "timestamp": "event_time",
+    # product / unit — match the signed-out onboarding CSV template
+    "product_name": "product_description",
+    "product": "product_description",
+    "unit": "unit_of_measure",
+    "uom": "unit_of_measure",
+    "units": "unit_of_measure",
 }
 
 
@@ -321,6 +330,13 @@ def _normalize_row(row: dict[str, Any]) -> dict[str, Any]:
         if canonical in normalized and normalized[canonical]:
             continue
         normalized[canonical] = value
+    # Receiving-only files may name the site as destination_facility_name
+    # with no origin column. Copy, don't alias, so the destination KDE
+    # is still present when both columns exist.
+    if not str(normalized.get("facility_name") or "").strip():
+        fallback = normalized.get("destination_facility_name") or normalized.get("origin_facility_name")
+        if str(fallback or "").strip():
+            normalized["facility_name"] = fallback
     return normalized
 
 

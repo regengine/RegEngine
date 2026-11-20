@@ -134,8 +134,13 @@ def _bridge_to_canonical(
             quantity = float(raw_quantity) if raw_quantity not in (None, "") else None
         except (TypeError, ValueError):
             quantity = None
-        unit_of_measure = kde_data.get("unit_of_measure")
+        unit_of_measure = (
+            kde_data.get("unit_of_measure") or kde_data.get("uom") or kde_data.get("unit")
+        )
         unit_of_measure = str(unit_of_measure).strip() if unit_of_measure is not None else ""
+        product_reference = (
+            kde_data.get("product_description") or kde_data.get("product_name") or ""
+        )
         missing = [
             name
             for name, present in (("quantity", quantity is not None), ("unit_of_measure", bool(unit_of_measure)))
@@ -159,7 +164,7 @@ def _bridge_to_canonical(
             event_type=CTEType(canonical_cte),
             event_timestamp=event.event_time,
             traceability_lot_code=tlc_code,
-            product_reference=kde_data.get("product_description", ""),
+            product_reference=product_reference,
             lot_reference=tlc_code,
             quantity=quantity,
             unit_of_measure=unit_of_measure,
@@ -239,7 +244,12 @@ def _persist_supplier_cte_event(
             facility_id=facility.id,
             tlc_code=normalized_tlc_code,
             product_description=(
-                normalized_kde_data.get("product_description") if isinstance(normalized_kde_data, dict) else None
+                (
+                    normalized_kde_data.get("product_description")
+                    or normalized_kde_data.get("product_name")
+                )
+                if isinstance(normalized_kde_data, dict)
+                else None
             ),
             status="active",
         )

@@ -391,6 +391,37 @@ class TestBridgeToCanonicalRequiresQuantityAndUnit:
         assert persisted.quantity == 42.5
         assert persisted.unit_of_measure == "lbs"
 
+    def test_template_unit_and_product_name_aliases_are_accepted(self, monkeypatch, reset_fake_store):
+        """Onboarding CSV uses ``unit`` / ``product_name``. Rows already
+        committed under those keys must still reach the canonical store."""
+        import shared.canonical_persistence as cp_mod
+        import shared.canonical_persistence.writer as cp_writer
+
+        monkeypatch.setattr(cp_mod, "CanonicalEventStore", _FakeCanonicalEventStore)
+        monkeypatch.setattr(cp_writer, "CanonicalEventStore", _FakeCanonicalEventStore)
+
+        event = MagicMock()
+        event.id = uuid.UUID("00000000-0000-0000-0000-000000000abc")
+        event.cte_type = "shipping"
+        event.event_time = datetime(2026, 4, 20, 12, 0, 0, tzinfo=timezone.utc)
+        facility = MagicMock()
+        facility.id = uuid.UUID("00000000-0000-0000-0000-000000000def")
+        del facility.gln
+
+        _bridge_to_canonical(
+            db=MagicMock(),
+            tenant_id=TENANT_ID,
+            event=event,
+            facility=facility,
+            tlc_code="TLC-1342-005",
+            kde_data={"quantity": "120", "unit": "cases", "product_name": "Baby Spinach"},
+        )
+
+        persisted = _FakeCanonicalEventStore.instances[0].persisted[0]
+        assert persisted.quantity == 120.0
+        assert persisted.unit_of_measure == "cases"
+        assert persisted.product_reference == "Baby Spinach"
+
 
 # ---------------------------------------------------------------------------
 # Line 178 — ``_persist_supplier_cte_event`` empty-TLC guard

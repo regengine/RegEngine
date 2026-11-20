@@ -17,6 +17,51 @@ def _make_upload_file(filename: str, content: bytes, content_type: str) -> Uploa
     )
 
 
+def test_parse_onboarding_csv_template_keeps_product_unit_and_destination():
+    """The signed-out CSV template is one event row with product_name/unit
+    and separate origin/destination columns. Those must survive parse so
+    FDA export and the canonical bridge see the values the user typed."""
+    csv_content = (
+        "event_type,product_name,lot_number,event_datetime,product_code,quantity,unit,"
+        "origin_facility_code,origin_facility_name,destination_facility_code,destination_facility_name\n"
+        "shipping,Baby Spinach,TLC-2026-SAL-1001,2026-03-03T12:00:00Z,SPIN-24,120,cases,"
+        "GLN-ORIGIN,Salinas Packhouse,GLN-DEST,Retail DC\n"
+    )
+    upload_file = _make_upload_file("regengine-bulk-upload-template.csv", csv_content.encode("utf-8"), "text/csv")
+    parsed = asyncio.run(parse_incoming_file(upload_file))
+
+    assert parsed["detected_format"] == "csv"
+    assert len(parsed["events"]) == 1
+    event = parsed["events"][0]
+    assert event["cte_type"] == "shipping"
+    assert event["tlc_code"] == "TLC-2026-SAL-1001"
+    assert event["facility_name"] == "Salinas Packhouse"
+    kde = event["kde_data"]
+    assert kde["product_description"] == "Baby Spinach"
+    assert kde["unit_of_measure"] == "cases"
+    assert kde["quantity"] == "120"
+    assert kde["destination_facility_name"] == "Retail DC"
+    assert kde["destination_facility_code"] == "GLN-DEST"
+    assert kde["origin_facility_code"] == "GLN-ORIGIN"
+    assert "product_name" not in kde
+    assert any(facility["name"] == "Salinas Packhouse" for facility in parsed["facilities"])
+
+
+def test_parse_destination_only_csv_still_sets_facility_name():
+    csv_content = (
+        "event_type,product_name,lot_number,destination_facility_name\n"
+        "receiving,Romaine Hearts,LOT-1,Fresno DC\n"
+    )
+    upload_file = _make_upload_file("receiving.csv", csv_content.encode("utf-8"), "text/csv")
+    parsed = asyncio.run(parse_incoming_file(upload_file))
+
+    assert len(parsed["events"]) == 1
+    event = parsed["events"][0]
+    assert event["facility_name"] == "Fresno DC"
+    assert event["kde_data"]["destination_facility_name"] == "Fresno DC"
+    assert event["kde_data"]["product_description"] == "Romaine Hearts"
+
+
 def test_parse_csv_mixed_records():
     csv_content = """record_type,name,street,city,state,postal_code,roles,facility_name,category_id,tlc_code,cte_type,event_time,kde_data
 facility,Salinas Packhouse,1200 Abbott St,Salinas,CA,93901,Grower|Packer,,,,,,

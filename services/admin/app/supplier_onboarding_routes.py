@@ -768,7 +768,7 @@ def _build_fda_export_rows(
     for event, lot, facility in event_rows:
         kde_data = event.kde_data if isinstance(event.kde_data, dict) else {}
         quantity_value = kde_data.get("quantity", kde_data.get("qty", ""))
-        unit_value = kde_data.get("unit_of_measure", kde_data.get("uom", ""))
+        unit_value = kde_data.get("unit_of_measure") or kde_data.get("uom") or kde_data.get("unit") or ""
         reference_document = (
             kde_data.get("reference_document")
             or kde_data.get("reference_document_id")
@@ -781,7 +781,9 @@ def _build_fda_export_rows(
             {
                 "event_id": str(event.id),
                 "tlc_code": lot.tlc_code,
-                "product_description": lot.product_description or kde_data.get("product_description"),
+                "product_description": lot.product_description
+                or kde_data.get("product_description")
+                or kde_data.get("product_name"),
                 "cte_type": event.cte_type,
                 "facility_name": facility.name,
                 "event_time": _iso_utc(_as_utc(event.event_time) or datetime.now(timezone.utc)),
