@@ -134,8 +134,6 @@ export function RecordsRequestChecklistClient() {
     const [leadSubmitted, setLeadSubmitted] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState('');
-    const [lastScore, setLastScore] = useState<{ score: number; grade: string }>({ score: 0, grade: 'F' });
-    const [lastAnswers, setLastAnswers] = useState<Record<string, any>>({});
 
     function calcScore(answers: Record<string, any>) {
         let totalScore = 0;
@@ -152,10 +150,11 @@ export function RecordsRequestChecklistClient() {
         return { score: totalScore, grade };
     }
 
-    const handleLeadSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    const handleLeadSubmit = async (e: React.FormEvent<HTMLFormElement>, answers: Record<string, any>) => {
         e.preventDefault();
         setSubmitting(true);
         setSubmitError('');
+        const { score, grade } = calcScore(answers);
         const formData = new FormData(e.currentTarget);
         const attribution = getConversionAttribution();
         const data: AssessmentFormData = {
@@ -170,9 +169,9 @@ export function RecordsRequestChecklistClient() {
             utmCampaign: attribution.utm_campaign,
             referrer: getReferrerHostname(),
             toolInputs: {
-                score: lastScore.score,
-                grade: lastScore.grade,
-                answers: lastAnswers
+                score,
+                grade,
+                answers
             }
         };
         try {
@@ -196,9 +195,7 @@ export function RecordsRequestChecklistClient() {
     };
 
     const renderResults = (answers: Record<string, any>) => {
-        const { score, grade } = calcScore(answers);
-        setLastScore({ score, grade });
-        setLastAnswers(answers);
+        const { score } = calcScore(answers);
 
         return (
             <motion.div
@@ -284,7 +281,7 @@ export function RecordsRequestChecklistClient() {
                     <div className="border-t border-re-border-subtle pt-8">
                         <div>
                             <h3 className="mb-4 text-center text-subheading text-re-text-primary">Want to Discuss Your Checklist?</h3>
-                            <form onSubmit={handleLeadSubmit} className="mx-auto max-w-md space-y-4">
+                            <form onSubmit={(e) => handleLeadSubmit(e, answers)} className="mx-auto max-w-md space-y-4">
                                 <div>
                                     <label htmlFor="rrc-name" className="sr-only">Full Name</label>
                                     <Input
