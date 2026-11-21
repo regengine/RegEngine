@@ -70,14 +70,14 @@ def database():
                     AS $$ SELECT nullif(current_setting('app.tenant_id', true), '')::uuid $$;
                 CREATE TABLE public.edi_test_events (kind text, tenant_id uuid, quantity float);
                 GRANT SELECT, INSERT ON public.edi_test_events TO regengine;
-                -- The routes also read the v144 line registry, which joins the event table.
+                -- The routes also read the v145 line registry, which joins the event table.
                 CREATE TABLE fsma.cte_events (id uuid PRIMARY KEY, tenant_id uuid, sha256_hash text, chain_hash text);
                 GRANT SELECT ON fsma.cte_events TO regengine;
             """)
             )
             with Operations.context(MigrationContext.configure(conn)):
                 _migration().upgrade()
-                _migration("20261114_62355c37e367_v144_edi_line_identities.py").upgrade()
+                _migration("20261121_62355c37e367_v145_edi_line_identities.py").upgrade()
         yield engine
 
 

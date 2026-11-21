@@ -382,8 +382,8 @@ whichever of the two EDI endpoints receives it.
   the survivor is compared with the first stored line and refused.
 - A line with no sender or no document number has no identity and relies on
   the event idempotency keys alone, as before.
-- Lines stored before Alembic v144 are not registered and behave as before.
-- Deploy Alembic v144 (`62355c37e367`) before the application. The table holds
+- Lines stored before Alembic v145 are not registered and behave as before.
+- Deploy Alembic v145 (`62355c37e367`) before the application. The table holds
   hashes and an event id, no business data, under forced RLS. The runtime role
   has SELECT and INSERT, and may update a row only when its event no longer
   exists. Registry failures roll back the event writes; they never fail open.

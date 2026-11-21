@@ -1,5 +1,5 @@
 -- alembic-revision: 62355c37e367
--- rendered-from: alembic/versions/20261114_62355c37e367_v144_edi_line_identities.py (upgrade)
+-- rendered-from: alembic/versions/20261121_62355c37e367_v145_edi_line_identities.py (upgrade)
 -- Apply before deploying the EDI line identity writer.
 
 CREATE TABLE IF NOT EXISTS fsma.edi_line_identities (

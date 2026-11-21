@@ -1,13 +1,13 @@
-"""Register each stored EDI line by a stable identity (v144, ADR-007).
+"""Register each stored EDI line by a stable identity (v145, ADR-007).
 
 Revision ID: 62355c37e367
-Revises: c4a9d2e761b0
+Revises: d8f3a1c6b902
 """
 
 from alembic import op
 
 revision = "62355c37e367"  # pragma: allowlist secret
-down_revision = "c4a9d2e761b0"  # pragma: allowlist secret
+down_revision = "d8f3a1c6b902"  # pragma: allowlist secret
 branch_labels = None
 depends_on = None
 

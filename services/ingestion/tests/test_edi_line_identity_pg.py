@@ -34,8 +34,8 @@ from sqlalchemy.orm import Session
 from tests.migrations.scratch_db import scratch_database_engine
 
 ROOT = Path(__file__).resolve().parents[3]
-MIGRATION = ROOT / "alembic/versions/20261114_62355c37e367_v144_edi_line_identities.py"
-SUPABASE_TWIN = ROOT / "supabase/migrations/20261114000000_v144_edi_line_identities.sql"
+MIGRATION = ROOT / "alembic/versions/20261121_62355c37e367_v145_edi_line_identities.py"
+SUPABASE_TWIN = ROOT / "supabase/migrations/20261121000000_v145_edi_line_identities.sql"
 TABLE = "fsma.edi_line_identities"
 TENANT = "11111111-1111-1111-1111-111111111111"
 OTHER_TENANT = "22222222-2222-2222-2222-222222222222"

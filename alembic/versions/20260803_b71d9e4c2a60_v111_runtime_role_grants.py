@@ -660,7 +660,7 @@ REGENGINE_TABLE_GRANTS.update(
 REGENGINE_COLUMN_GRANTS = {
     # v143: only expiry renewal may modify an EDI receipt; identity is fixed.
     "fsma.edi_interchanges": {"UPDATE": ("stored_at", "expires_at")},
-    # v144: a line identity may only be pointed at a new event once the old one is gone.
+    # v145: a line identity may only be pointed at a new event once the old one is gone.
     "fsma.edi_line_identities": {"UPDATE": ("content_digest", "event_id", "stored_at")},
     # Successful pre-authentication may maintain only usage telemetry.  It
     # cannot change identity, tenant, scopes, status, expiry, limits, or hash.

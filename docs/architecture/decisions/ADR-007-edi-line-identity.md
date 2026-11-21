@@ -68,7 +68,7 @@ behaviour it had before.
 ### 2. Identity lives in a registry, not in the keys
 
 `fsma.edi_line_identities` `(tenant_id, identity_key, content_digest, event_id, stored_at)`,
-Alembic v144, written in the same transaction as the events. It holds two
+Alembic v145, written in the same transaction as the events. It holds two
 hashes and an event id, no business data. Per line, inside `ingest_events` and
 only for the EDI routes:
 
@@ -79,7 +79,7 @@ only for the EDI routes:
 
 **Effect on stored rows: none.** Neither key formula changes. Stored keys,
 event hashes and the hash chain are untouched for old and new rows. Rows
-stored before v144 are not registered and behave as they did. They can be
+stored before v145 are not registered and behave as they did. They can be
 registered later by INSERT, without touching an event row.
 
 The registry is read under the tenant's chain lock, the lock both stores take
@@ -146,7 +146,8 @@ receipt answers 409. Corrections arrive under a new ISA13.
 - `POST /api/v1/ingest/edi` and `POST /api/v1/ingest/edi/document` build 856
   events separately. They must give a line the same identity and content, and
   `test_both_856_routes_describe_a_line_the_same_way` holds them to it.
-- v144 must be deployed before the application, as v143 was.
+- v145 must be deployed before the application, as v143 was. It follows v144
+  (`d8f3a1c6b902`) in the chain, so `alembic upgrade head` applies that first.
 - The registry points at `fsma.cte_events`, the id the API returns. It moves
   to the canonical table with that table's cutover (#1335).
 
