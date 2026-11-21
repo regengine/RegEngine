@@ -9,6 +9,7 @@ import { Callout } from "@/components/ui/callout";
 import { Card } from "@/components/ui/card";
 import { JSONLD } from '@/components/seo/json-ld';
 import { blogPostingJsonLd } from '@/lib/blog-jsonld';
+import { RelatedLinks } from "@/components/seo/related-links";
 
 export const metadata: Metadata = {
   title: "FSMA 204 Traceability Lot Codes (TLCs): A Complete Guide | RegEngine Blog",
@@ -204,7 +205,14 @@ export default function TLCGuidePage() {
             </div>
           </Card>
         </div>
-      </Container>
+      
+      <RelatedLinks
+        width="prose"
+        links={[
+            { href: "/tools/tlc-validator", label: "TLC Format Check" }
+        ]}
+      />
+</Container>
     </div>
   );
 }

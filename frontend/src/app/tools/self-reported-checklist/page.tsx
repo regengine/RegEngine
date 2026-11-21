@@ -6,6 +6,7 @@ import { EmailGate } from "@/components/tools/EmailGate";
 import { RelatedTools } from "@/components/tools/RelatedTools";
 import { Container } from "@/components/layout/container";
 import { Skeleton } from "@/components/ui/skeleton";
+import { RelatedLinks } from "@/components/seo/related-links";
 
 export const metadata: Metadata = {
     title: "Self Reported Checklist | FSMA 204 | RegEngine",
@@ -42,6 +43,7 @@ const relatedTools = [
 
 export default function SelfReportedChecklistPage() {
     return (
+        <>
         <Suspense fallback={
             <div className="min-h-screen bg-re-surface-base py-6 sm:py-8">
                 <Container width="tool">
@@ -66,5 +68,14 @@ export default function SelfReportedChecklistPage() {
             </EmailGate>
             <RelatedTools tools={relatedTools} />
         </Suspense>
-    );
+            <RelatedLinks
+              width="tool"
+              heading="Related"
+              links={[
+                { href: "/blog/fsma-204-compliance-checklist-2026", label: "FSMA 204 compliance checklist" },
+                { href: "/tools", label: "Free FSMA 204 tools" }
+              ]}
+            />
+        </>
+      );
 }

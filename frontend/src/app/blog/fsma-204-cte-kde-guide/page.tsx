@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { JSONLD } from '@/components/seo/json-ld';
 import { blogPostingJsonLd } from '@/lib/blog-jsonld';
+import { RelatedLinks } from "@/components/seo/related-links";
 
 export const metadata: Metadata = {
   title: 'CTEs and KDEs Explained | FSMA 204 Data Requirements Guide | RegEngine',
@@ -443,7 +444,16 @@ export default function CTEKDEGuidePage() {
             Questions? <a href="mailto:support@regengine.co" className="text-re-brand underline decoration-re-border-strong underline-offset-[3px] hover:decoration-re-brand">Contact our team</a> for technical guidance on CTE/KDE implementation.
           </p>
         </div>
-      </Container>
+      
+      <RelatedLinks
+        width="prose"
+        links={[
+            { href: "/fsma-204/harvesting", label: "Harvesting CTE" },
+            { href: "/tools/cte-mapper", label: "CTE Mapper" },
+            { href: "/tools/kde-checker", label: "KDE Field Checklist" }
+        ]}
+      />
+</Container>
     </div>
   );
 }

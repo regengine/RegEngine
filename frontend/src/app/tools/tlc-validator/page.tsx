@@ -7,6 +7,7 @@ import { EmailGate } from "@/components/tools/EmailGate";
 import { RelatedTools } from "@/components/tools/RelatedTools";
 import { Container } from "@/components/layout/container";
 import { Skeleton } from "@/components/ui/skeleton";
+import { RelatedLinks } from "@/components/seo/related-links";
 
 export const metadata: Metadata = {
     title: "TLC Format Check for FSMA 204 | RegEngine",
@@ -67,6 +68,14 @@ export default function TLCValidatorPage() {
                 { href: "/tools/ftl-checker", title: "FTL Checker", description: "Confirm your product is on the FDA Food Traceability List before building lot codes." },
                 { href: "/tools/export", title: "FDA-Oriented Export Generator", description: "Generate a verifiable records package from your traceability records." },
             ]} />
+            <RelatedLinks
+              width="tool"
+              heading="Related"
+              links={[
+                { href: "/blog/fsma-204-traceability-lot-codes", label: "Traceability lot code guide" },
+                { href: "/tools", label: "Free FSMA 204 tools hub" }
+              ]}
+            />
         </>
     );
 }

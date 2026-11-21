@@ -8,6 +8,7 @@ import { Callout } from '@/components/ui/callout';
 import { Card } from '@/components/ui/card';
 import { JSONLD } from '@/components/seo/json-ld';
 import { blogPostingJsonLd } from '@/lib/blog-jsonld';
+import { RelatedLinks } from "@/components/seo/related-links";
 
 export const metadata: Metadata = {
   title: 'FSMA 204 Compliance Checklist for 2026: Actionable Steps for July 2028',
@@ -352,7 +353,16 @@ export default function FSMA204ComplianceChecklist() {
             </div>
           </Card>
         </div>
-      </Container>
+      
+      <RelatedLinks
+        width="prose"
+        links={[
+            { href: "/tools", label: "Free FSMA 204 tools" },
+            { href: "/tools/ftl-checker", label: "FTL List Checker" },
+            { href: "/fsma-204/harvesting", label: "Harvesting CTE" }
+        ]}
+      />
+</Container>
     </div>
   );
 }
