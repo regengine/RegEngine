@@ -29,7 +29,7 @@ const CATEGORIES: { id: Category; label: string }[] = [
 const TOOLS = [
     ['ftl-checker', 'FTL List Checker', 'Look at the Food Traceability List. This page does not decide if you are a covered person.', Leaf, 'validate'],
     ['cte-mapper', 'CTE Mapper', 'Map the 7 Critical Tracking Events across a supply chain.', Map, 'validate'],
-    ['kde-checker', 'KDE Field Checklist', 'Check whether CTE/KDE fields are present for each FTL product and CTE type.', ClipboardList, 'validate'],
+    ['kde-checker', 'KDE Field Checklist', 'Check whether CTE and KDE fields are present for each FTL product and CTE type.', ClipboardList, 'validate'],
     ['tlc-validator', 'TLC Format Check', 'Check traceability lot code format and uniqueness assumptions.', FlaskConical, 'validate'],
     ['self-reported-checklist', 'Self Reported Checklist', 'You answer. It echoes what you reported. Not a readiness score.', ShieldCheck, 'assess'],
     ['records-request-checklist', 'Records Request Checklist', 'Self reported checklist. Not a 24 hour capability test.', Timer, 'assess'],

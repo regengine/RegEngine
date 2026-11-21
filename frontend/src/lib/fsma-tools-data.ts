@@ -220,7 +220,7 @@ export const FREE_TOOLS = [
     {
         id: 'kde-checker',
         title: 'KDE Field Checklist',
-        description: 'Check which CTE/KDE fields you need for each FTL product and CTE type.',
+        description: 'Check which CTE and KDE fields you need for each FTL product and CTE type.',
         icon: ClipboardList,
         href: '/tools/kde-checker'
     },
