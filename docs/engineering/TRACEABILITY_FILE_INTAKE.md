@@ -8,6 +8,7 @@ assertion and must match that principal.
 
 | Surface | Route | Permission | What it emits |
 | --- | --- | --- | --- |
+| Partner CSV | `POST /api/v1/ingest/csv` | `webhooks.ingest` | One CTE per data row. Rejected rows stay in the response; a file with no valid rows is HTTP 400 |
 | Excel workbook on the CSV route | `POST /api/v1/ingest/csv` | `webhooks.ingest` | `.xlsx` is converted to CSV text, then the existing CSV path runs |
 | EPCIS 2.0 upload on `/ingest` | `POST /api/v1/epcis/events`, `/events/batch`, `/events/xml` | tenant context (`require_tenant_context`) | The dashboard tab posts JSON or XML to those routes |
 | ASN and receiving advice lines | `POST /api/v1/ingest/edi` and `POST /api/v1/ingest/edi/document` | `edi.ingest` | X12 856 and 861, one CTE per item line |
@@ -16,6 +17,145 @@ assertion and must match that principal.
 
 `POST /api/v1/ingest/edi` accepts a single 856 transaction set. 861, 944,
 945, 850, and 810 belong on `/document`.
+
+A non-persisting read of the same CSV or workbook is
+`POST /api/v1/ingest/csv/diagnostic`. See
+[JEV_PILOT_DIAGNOSTIC.md](JEV_PILOT_DIAGNOSTIC.md).
+
+## Partner CSV row outcomes
+
+`parse_csv_rows` in `services/ingestion/app/csv_templates.py` is the row
+parser for a `.csv` upload and for the CSV text produced from an `.xlsx`
+workbook. Workbook limits in the next section are applied first. The
+converter writes comma-separated text (`csv.writer`), so the delimiter
+check below does not see Excel's own storage. Excel date cells become
+`YYYY-MM-DD` before this parser.
+
+When at least one row becomes an event, those events are persisted and
+the other rows are reported on the same response. The success body always
+includes `row_disposition_log`. When no row becomes an event and the
+parser recorded errors, the route is HTTP 400, nothing is stored, and
+the body includes `row_disposition_log` when the log is non-empty. A
+file with no data rows and no parse errors is HTTP 400 with the string
+`CSV contained no data rows` and no log. The same empty case on a workbook
+that produced formula warnings is HTTP 400 with `kde_warnings` and still
+no disposition log.
+
+Each physical data row has one exclusive outcome: `accepted` (reason
+`ingested`), `rejected`, or `skipped`. A `flagged` entry is an extra
+observation on that row. It does not replace the exclusive outcome.
+Cell values are not copied into the log.
+
+### File-level rejects
+
+These return HTTP 400. No row is ingested.
+
+| Condition | `reason` |
+| --- | --- |
+| Header line where semicolon, tab, or pipe occurs more often than commas, and at least once | `wrong_delimiter` |
+| Two columns normalize to the same name | `duplicate_column` |
+| First line has no column names | `missing_header` |
+| Unclosed quote, CR-only line endings, or a field over the `csv` module size limit | `unreadable_csv` |
+| Header cannot supply lot, quantity, unit, or event date | `missing_required_columns`, plus one `missing_column` per field |
+
+Partner ingest is comma-separated. Re-export as CSV (comma), or replace
+the delimiter. The missing-column error names the accepted aliases and,
+when a present header is a near miss, a suggestion. A suggestion requires
+both a similarity ratio of at least 0.85 and an edit distance of at most
+2. `cte_type` is not a file-level required column. A file without it
+fails later, per row. On this missing-column reject, rows past the 500-row
+cap are `rejected` / `missing_required_columns`, not skipped.
+
+`services/ingestion/app/gap_reasons.py` writes the reason sentence.
+A known CTE cites 21 CFR Part 1 Subpart S. Shipping paragraph numbers
+are added only for the shipping field names in that module, so an empty
+ship date is `21 CFR 1.1340(a)(6)`. The file-level column name
+`event_date` is not one of those names, so a missing date column cites
+`21 CFR 1.1340(a)` with no paragraph. An unknown or empty CTE string
+says the field is required by the application intake schema. Ingest
+does not use the retailer wording. That wording is only for Albertsons
+ASN fields inside `score_shipping_readiness`.
+
+### Row rejects and skips
+
+| Situation | Disposition | `reason` |
+| --- | --- | --- |
+| Blank physical line | skipped | `blank_physical_line` |
+| Blank data row | skipped | `blank_row` |
+| First cell starts with `#` | skipped | `comment_row` |
+| More fields than the header, and one of the extras is non-blank. A trailing comma is ignored | rejected | `extra_fields` |
+| Numeric date with both parts ≤ 12 and not equal (`05/06/2026`) | rejected | `ambiguous_date` |
+| Empty or unreadable date | rejected | `bad_date` |
+| Value in a real CTE column is not a known CTE | rejected | `unknown_cte_type` |
+| No CTE on the row and none on the upload | rejected | `missing_cte_type` |
+| Unit cell empty | rejected | `missing_unit_of_measure` |
+| Quantity empty | rejected | `missing_quantity` |
+| Quantity not numeric, not finite, or not greater than 0 | rejected | `bad_quantity` |
+| Lot shorter than 3 characters | rejected | `bad_tlc` |
+| GLN fails the check digit (`STRICT_GLN_VALIDATION` defaults to true) | rejected | `invalid_gln` |
+| Input quantities cannot be aligned with input lots | rejected | `bad_input_quantities` |
+| Data row 501 (`MAX_CSV_ROWS` is 500) | rejected | `row_limit_exceeded` |
+| Rows after that, when the header itself was acceptable | skipped | `row_limit_overflow` |
+| Unread tail past the cap that the parser cannot count | rejected | `unreadable_overflow_tail` |
+| Ingest duplicate in the same file (same CTE, TLC, timestamp, and location) | rejected | `duplicate` |
+| Rules-engine reject. Only when `RULES_ENGINE_ENFORCE` is `cte_only` or `all`. The default `off` does not reject | rejected | `rule_violation` |
+| Other ingest rejection, including a missing required KDE | rejected | `ingest_rejected` |
+
+Use `YYYY-MM-DD`. `05-05-2026` is not ambiguous, because both orders are
+the same day. ISO timestamps and dates with a day greater than 12 are
+parsed. An unreadable date does not become `1970-01-01`. Rows stored
+before that change may still carry that placeholder.
+
+A guessed column whose value is not a CTE is `flagged` /
+`mapped_cte_not_recognized`, and the upload's `cte_type` is used. A row
+with no CTE of its own is `flagged` / `cte_type_from_upload` when the
+form supplied one. An applied header suggestion is `flagged` /
+`header_guess_applied`; the cell value is omitted from the log. A parsed
+date that needed a guess is `flagged` / `date_guessed`. Lot codes with
+`O` or `I` next to a digit, and all-letter lots longer than 3 characters,
+are `flagged` (`lot_code_possible_character_swap`, `lot_code_no_digits`)
+and still ingest. Location abbreviations and mapped units are flagged
+(`location_normalized`, `unit_normalized`) and the normalized value is
+what is stored. An unrecognized column is flagged once
+(`unrecognized_column`, `row_number` 0) and its values are kept as KDEs.
+A receiving row whose same-lot shipping row was rejected is `flagged` /
+`broken_shipment_link`. That flag does not reject the receiving row.
+
+### KDE warnings are not the final disposition
+
+`_validate_kde_completeness` records missing KDEs on `kde_warnings` and
+still builds the event. `ingest_events` then runs
+`_validate_event_kdes` in
+`services/ingestion/app/webhook_router_v2/validation.py`.
+
+`shared.rules.ftl.is_ftl_food` decides whether that list applies:
+
+- `false` when `ftl_covered` is false, or a category string was sent and
+  it is not an FTL category. The required-KDE list is skipped.
+- `true` when the product is explicitly on the FTL.
+- `null` when the row carries no FTL hint. The required-KDE list still
+  applies. A partner file that omits `ftl_covered` is in this case.
+
+A miss rejects the event. The disposition reason is `ingest_rejected`,
+and the warning text is attached to that entry. The list is
+`REQUIRED_KDES_BY_CTE` in `services/ingestion/app/webhook_models.py`.
+Initial packing also requires harvest-location phone and address, a
+human-readable growing area or field name, and an explicit `cooled`
+yes/no. Cooling location and cooling date are required only when
+`cooled` is yes.
+
+A transformation `inputs` list that has a lot, a quantity, and a unit
+on every input satisfies the contract-v3 quantity KDEs. Those KDEs are
+still named `input_quantities` and `input_units_of_measure` on
+`REQUIRED_KDES_BY_CTE`. A transformation that names input lots and omits
+quantities is flagged `missing_input_quantity_data` and still parses.
+
+`dry_run_shipping_csv` and `score_shipping_readiness` in
+`services/ingestion/app/supplier_readiness/shipping.py` reuse
+`missing_field_reason` and score `pass`, `gap`, or `failure`. They do
+not ingest, and they are not mounted on a route. Buyer fields GTIN, PO
+number, SSCC, and product date are labeled "asked for by the retailer
+(Albertsons ASN field list)", not as a 21 CFR requirement.
 
 ## Excel `.xlsx` on `POST /api/v1/ingest/csv`
 
@@ -157,10 +297,10 @@ N104 is stored as the location id whether or not N103 is `UL`. The event
 check digit. The 856 event location is the ship-from GLN. The 861 event
 location is the receiving-location GLN.
 
-A missing date uses the ingest time. A date that is present and is not
-CCYYMMDD or YYMMDD is HTTP 400 `invalid_edi_date`. A parsed date older
-than 90 days, or more than 24 hours in the future, keeps that calendar
-date on the event and snaps the ingest timestamp to now.
+The event timestamp is the source date in UTC. BSN04 is the time of day
+when that element is present. A missing, unparseable, or future date is
+HTTP 400 before the interchange number is reserved. See
+[Event time](#event-time).
 
 ### `POST /api/v1/ingest/edi` (856 only)
 
@@ -168,13 +308,15 @@ One ST/SE set. A second set is HTTP 422 `multiple_transaction_sets`. The
 error text still says `/document` emits one CTE per ST/SE pair. For 856
 and 861, `/document` emits one CTE per item line.
 
-Required segments are ISA, GS, ST, BSN, HL, SE, GE, and IEA. Each line
-must carry a positive quantity, a recognized unit, and a product id or
-description. The set must carry a ship-from name, a ship-to name, and a
-BSN date. A miss is HTTP 422 `edi_856_missing_required_kdes`, the
-rejection is logged, and nothing is persisted. The route does not fill
-quantity `1.0`, unit `units`, product `EDI 856 Shipment`, an unknown
-location, or today's date.
+Required segments are ISA, GS, ST, BSN, HL, SE, GE, and IEA. A missing
+segment is HTTP 422 and names it. A BSN segment whose date element is
+empty is HTTP 400 `missing_edi_date`, not a placeholder of today's date
+and not `edi_856_missing_required_kdes`. Each line must carry a positive
+quantity, a recognized unit, and a product id or description. The set
+must carry a ship-from name and a ship-to name. A miss on those fields
+is HTTP 422 `edi_856_missing_required_kdes`, the rejection is logged,
+and nothing is persisted. The route does not fill quantity `1.0`, unit
+`units`, product `EDI 856 Shipment`, or an unknown location.
 
 `product_description`, `quantity_override`, `unit_of_measure_override`,
 `ship_from_location_override`, and `ship_to_location_override` apply to
@@ -206,8 +348,11 @@ persisted quantity is `1.0`, a missing product becomes `EDI 856 Item`
 or `EDI 861 Item`, and a missing location name becomes `Unknown`.
 
 Header KDEs are copied onto every line. 856 copies the ASN number
-(BSN02), carrier (TD5), and the reference document (`REF` `BM`, `SI`,
-`CN`, `PO`, or `PK`, else the ASN number). 861 copies the advice number,
+(BSN02), the carrier, and the reference document (`REF` `BM`, `SI`,
+`CN`, `PO`, or `PK`, else the ASN number). The carrier is TD503, the
+carrier identification code. TD505 routing text is used only when TD503
+is empty. TD502 is the identification-code qualifier and is not stored
+as the carrier. 861 copies the advice number,
 the PO when `REF*PO` is present, the condition code (RCD05), and the
 reference document (`PO`, `BM`, or `SI`, else the advice number).
 
@@ -287,11 +432,8 @@ assigned id and the GLN stays empty.
   if none of those appear, the depositor (N1*DE) is the ship-from.
 - 945 ship-from is N1*SF when present, otherwise the warehouse (N1*WH).
 - The event date prefers the header date (W1702 or W0603). A G62 date is
-  used only when that header date is empty. A missing date uses the ingest
-  time. A date that is present and is not CCYYMMDD or YYMMDD is HTTP 400
-  `invalid_edi_date`. A parsed date older than 90 days, or more than 24
-  hours in the future, keeps that calendar date and snaps the ingest
-  timestamp to now.
+  used only when that header date is empty. Normalization and rejection
+  match the other sets. See [Event time](#event-time).
 - 944 reference document number is the warehouse receipt number, else the
   shipment id. 945 uses the shipment id, else the depositor order number.
   N9 fills a blank reference (`BM`, `SI`, `PO`, `PK`, `CN`, in that order).
@@ -317,10 +459,34 @@ assigned id and the GLN stays empty.
   and event-idempotency protection. Malformed envelopes lacking sender/ISA13
   retain the existing event-idempotency fallback. This does not redefine event
   correction or identity when a sender issues a new ISA13.
-- ISA13 dedup is per tenant, sender and receiver. While the first attempt
-  is running, a retransmission gets HTTP 503 with `Retry-After`: nothing is
-  confirmed stored yet, so send it again. Once events are stored, a
-  retransmission gets HTTP 409 `duplicate_interchange`.
+- Envelope checks run in this order, and a failure stops the request:
+  1. ISA and GS sender or receiver are both present and disagree: HTTP 422
+     `edi_envelope_mismatch`.
+  2. GS sender is absent from `EDI_PARTNER_ALLOWLIST_{TENANT}`: HTTP 403
+     `trading_partner_not_allowed`. The tenant id is uppercased and hyphens
+     become underscores. An unset variable allows every GS sender. A missing
+     GS sender skips this list. This variable is not `EDI_PARTNER_ALLOWLIST`,
+     which checks the `X-Partner-ID` header, and it is not
+     `EDI_REQUIRE_PARTNER_ID`.
+  3. Event-date preflight, on the 856 route and on every transaction set
+     of `/document`. A date rejection does not reserve ISA13. See
+     [Event time](#event-time).
+  4. The Redis ISA13 claim, then the PostgreSQL receipt lock inside the
+     ingest transaction.
+- ISA13 dedup is per tenant, sender, and receiver. Sender and receiver are
+  the GS ids, or the ISA ids when the GS id is empty. The Redis key is
+  `edi:interchange:{tenant}:{sender}:{receiver}:{isa13}`. The in-flight
+  value is `pending:` and lasts 300 seconds. While it is pending, a
+  retransmission gets HTTP 503 with `Retry-After: 30`: nothing is
+  confirmed stored yet, so send it again. Once events are stored the
+  value is `stored:` for 7 days, and a retransmission gets HTTP 409
+  `duplicate_interchange` with `idempotent_replay` true. The message says
+  no events were ingested. The PostgreSQL receipt returns that same 409
+  when Redis has no marker, including when `REDIS_URL` is unset or Redis
+  errors. The claim is deleted only while it still holds this request's
+  token, and only when the request accepts no events. An exception after
+  the database commit can drop the Redis marker; the receipt still rejects
+  the resend.
 - An interchange stores completely or not at all. If any line is rejected
   during ingest, nothing is stored, every event in `ingestion_result` is
   rejected, and the ISA13 is freed, so the corrected document can reuse it.
@@ -344,13 +510,48 @@ assigned id and the GLN stays empty.
   `extracted.events`, one summary per line (`line_index`, lot, quantity,
   GTIN, UPC). `document_type` is `X12_944` or `X12_945`.
 
+## Event time
+
+`_ship_timestamp_and_date` in
+`services/ingestion/app/edi_ingestion/utils.py` is the clock for 856,
+861, 850, 810, 944, and 945. The stored timestamp is the source event
+time. It is not the time the file arrived.
+
+| Input | Result |
+| --- | --- |
+| `CCYYMMDD` | That calendar date at UTC midnight, plus `HHMM` when 856 BSN04 is present |
+| `YYMMDD` | `YY` below `EDI_CENTURY_PIVOT` (default 50) is 20YY. `YY` equal to the pivot or above is 19YY |
+| Any past date, including older than 90 days | Kept. The ingest time is not substituted |
+| Missing | HTTP 400 `missing_edi_date` |
+| Not 6 or 8 digits, or not a real calendar day | HTTP 400 `invalid_edi_date` |
+| BSN04 has at least four digits and is not a valid `HHMM` | HTTP 400 `invalid_edi_time`. Shorter time text is ignored |
+| More than 24 hours ahead of now | HTTP 400 `edi_date_in_future` |
+
+The date elements are BSN03 for 856, BRA02 for 861, the PO date (BEG05)
+for 850, the invoice date (BIG01) for 810, W1702 for 944, and W0603 for
+945. Only 856 reads a time element. The rejection is written to the EDI
+rejection log with `needs_review` true, and the body includes
+`rejection_id`. Nothing is persisted, and ISA13 is not reserved.
+
 ## Tests
 
 ```bash
-python3 -m pytest services/ingestion/tests/test_csv_xlsx_upload.py -q --no-cov
+python3 -m pytest services/ingestion/tests/test_csv_xlsx_upload.py \
+  services/ingestion/tests/test_csv_partner_file_hardening_sel549.py \
+  services/ingestion/tests/test_csv_gap_report.py \
+  services/ingestion/tests/test_a2190_kde_cte_ftl.py -q --no-cov
 python3 -m pytest services/ingestion/tests/test_edi_warehouse_944_945.py \
   services/ingestion/tests/test_edi_golden.py \
-  services/ingestion/tests/test_edi_wire_format_2974_2976_2978.py -q --no-cov
+  services/ingestion/tests/test_edi_wire_format_2974_2976_2978.py \
+  services/ingestion/tests/test_edi_preserve_event_time.py \
+  services/ingestion/tests/test_edi_date_reject_resend.py \
+  services/ingestion/tests/test_edi_856_carrier_td5.py \
+  services/ingestion/tests/test_edi_envelope_integrity.py \
+  services/ingestion/tests/test_edi_atomic_interchange.py -q --no-cov
 cd frontend && npm run test:run -- src/__tests__/lib/epcis-upload.test.ts \
   src/__tests__/pages/ingest-epcis.test.tsx
 ```
+
+`services/ingestion/tests/test_edi_interchange_pg.py` needs
+`REGENGINE_MIGRATION_TEST_DB` pointed at a disposable Postgres. CI runs
+it on the live Postgres gate.
