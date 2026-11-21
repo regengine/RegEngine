@@ -1,15 +1,20 @@
 # Cloudflare R2 provisioning runbook
 
-Unblocks the `/v1/ingest/{url,file,direct,regulation}` endpoints (currently
-returning 503 per #2348 because `OBJECT_STORAGE_*` env vars are unset).
-The `/api/v1/webhooks/ingest` quickstart path does NOT depend on R2 — it
-ingests events directly without document storage.
+> Historical provisioning instructions: current configuration, route availability,
+> disclosure, and deployment status have not been reverified. Check the target
+> environment and current release procedures before acting.
+
+This historical procedure addressed `/v1/ingest/{url,file,direct,regulation}`
+endpoints reported as returning 503 in #2348 when `OBJECT_STORAGE_*` variables
+were unset. It recorded that the `/api/v1/webhooks/ingest` quickstart path
+ingests events directly without document storage; verify current route and
+deployment behavior separately.
 
 ## Prereqs
 
 - Cloudflare account with R2 enabled (one-time, requires billing on file)
 - Railway CLI authenticated to `RegEngine-Prod`
-- DPA / Trust subprocessor disclosure: **already current** ([trust/page.tsx:415](frontend/src/app/trust/page.tsx#L415), [dpa/page.tsx:115](frontend/src/app/dpa/page.tsx#L115)). No customer-notice clock to manage — disclosure landed ahead of provisioning per PR sequence in `project_session_2026_05_13.md`.
+- DPA / Trust subprocessor disclosure: the earlier record stated disclosure landed ahead of provisioning (see [trust page](../../frontend/src/app/trust/page.tsx), [DPA page](../../frontend/src/app/dpa/page.tsx)). Reconfirm current disclosures and notice obligations before provisioning.
 
 ## Step 1 — Cloudflare console
 
@@ -40,8 +45,9 @@ railway variables set OBJECT_STORAGE_ACCESS_KEY_ID="<from step 1>"
 railway variables set OBJECT_STORAGE_SECRET_ACCESS_KEY="<from step 1>"
 ```
 
-Railway auto-redeploys after env changes. Watch the deploy with
-`railway logs --follow`.
+The historical procedure expected environment changes to trigger a Railway
+redeploy. Verify the target environment and its current release behavior before
+changing variables or interpreting deployment logs.
 
 ## Step 3 — Verify
 
@@ -54,28 +60,35 @@ railway variables --json | python3 -c "import json,sys,re; v=json.load(sys.stdin
 REGENGINE_API_BASE=https://regengine.co/api/ingestion REGENGINE_API_KEY=rge_live_... ./scripts/smoke_test_ingest.sh --allow-production
 ```
 
-Expected: all `/v1/ingest/*` endpoints return 200 (not 503). The smoke
-test script already encodes this — exit 0 means provisioning succeeded.
-A localhost pass does not count for this step: without REGENGINE_API_BASE
-and --allow-production the script probes the operator laptop, not Railway.
+The historical expectation was that the tested ingest endpoints would return
+200 rather than 503. Verify the currently enabled route set, target environment,
+response bodies, and behavior before interpreting a result as successful
+provisioning. The script also exits 0 when all probes return 503, so its exit
+code alone does not establish that R2 is provisioned. Without
+`REGENGINE_API_BASE`, the script defaults to localhost. For a non-loopback
+target it requires `--allow-production` or `REGENGINE_ALLOW_PRODUCTION=1`;
+otherwise it exits without probing.
 
 ## Step 4 — Lifespan probe
 
-On startup, [s3_utils.is_object_storage_configured](services/ingestion/app/s3_utils.py#L40) is logged by
+On startup, [s3_utils.is_object_storage_configured](../../services/ingestion/app/s3_utils.py) is logged by
 the FastAPI lifespan. Look for the `object_storage_not_configured` warning
 to disappear from logs after redeploy.
 
 ## Rollback
 
-If R2 misbehaves and you need to revert to the 503 gate:
+The historical procedure removed credentials to restore a 503 gate. Do not
+assume the current route set or deployed configuration behaves the same way;
+verify the rollback plan and expected effects before changing credentials.
+The old commands were:
 
 ```bash
 railway variables remove OBJECT_STORAGE_ACCESS_KEY_ID
 railway variables remove OBJECT_STORAGE_SECRET_ACCESS_KEY
 ```
 
-The endpoints return 503 (not 500) automatically — no code rollback
-needed. See #2348.
+The earlier record expected a 503 response after credential removal (#2348);
+this is not a verified guarantee for the current deployment.
 
 ## Cost guard
 

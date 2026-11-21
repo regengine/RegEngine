@@ -11,8 +11,8 @@ operator-controllable** — defaulting to availability (`degrade`).
 
 | Env var | Values | Default | Governs |
 | --- | --- | --- | --- |
-| `RATE_LIMIT_FAIL_MODE` | `degrade` \| `closed` | `degrade` | Request-path rate limits: `shared/tenant_rate_limiting.py` (`_RedisBucket`, `TenantRateLimitMiddleware`, `consume_tenant_rate_limit` — ingestion RBAC, webhook, portal-link, supplier-token buckets) and `shared/rate_limit.py` `BruteForceLimiter` reads |
-| `IDEMPOTENCY_FAIL_MODE` | `degrade` \| `closed` | `degrade` | `shared/idempotency.py` cache-READ errors (degrade = re-execute; duplicates still blocked by the v072 `UNIQUE (tenant_id, idempotency_key)` index) |
+| `RATE_LIMIT_FAIL_MODE` | `degrade` \| `closed` | `degrade` | Request-path rate limits: `services/shared/tenant_rate_limiting.py` (`_RedisBucket`, `TenantRateLimitMiddleware`, `consume_tenant_rate_limit` — ingestion RBAC, webhook, portal-link, supplier-token buckets) and `services/shared/rate_limit.py` `BruteForceLimiter` reads |
+| `IDEMPOTENCY_FAIL_MODE` | `degrade` \| `closed` | `degrade` | `services/shared/idempotency.py` cache-READ errors (degrade = re-execute; duplicates still blocked by the v072 `UNIQUE (tenant_id, idempotency_key)` index) |
 | `RATE_LIMIT_FALLBACK_DIVISOR` | int ≥ 1 | `WEB_CONCURRENCY`, else 1 | Per-process budget divisor while degraded (see math) |
 | `CIRCUIT_BREAKER_ALLOW_MEMORY_FALLBACK` | `1` | unset | Escape hatch: allow the old silent memory-store substitution when `CIRCUIT_BREAKER_BACKEND=redis` init fails (default now fails startup) |
 
@@ -109,8 +109,8 @@ regression tests assert it.
 
 ## Related fixes shipped with this runbook (#2699)
 
-* Sticky `_redis_failed` in `stripe_billing/rate_limiting.py` and
-  `sandbox/rate_limiting.py`: now retries Redis after a 30s cooldown and
+* Sticky `_redis_failed` in `services/ingestion/app/stripe_billing/rate_limiting.py` and
+  `services/ingestion/app/sandbox/rate_limiting.py`: now retries Redis after a 30s cooldown and
   logs the fallback at WARNING (was DEBUG — invisible in prod).
 * `circuit_breaker_store.get_store()`: explicitly configured
   `CIRCUIT_BREAKER_BACKEND=redis` that fails init now raises instead of

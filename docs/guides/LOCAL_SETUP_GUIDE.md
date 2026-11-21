@@ -1,555 +1,136 @@
-# 🚀 RegEngine Local Setup Guide
+# Local setup guide
 
-Complete step-by-step guide to run RegEngine locally and test the entire product flow.
-
-## 📋 Table of Contents
-
-1. [Prerequisites](#prerequisites)
-2. [Initial Setup](#initial-setup)
-3. [Start Backend Services](#start-backend-services)
-4. [Set Up CLI Tool](#set-up-cli-tool)
-5. [Create a Demo Tenant](#create-a-demo-tenant)
-6. [Start Frontend Dashboard](#start-frontend-dashboard)
-7. [Test the Complete Product Flow](#test-the-complete-product-flow)
-8. [Run FSMA 204 Demo](#run-fsma-204-demo)
-9. [Access Points & UIs](#access-points--uis)
-10. [Troubleshooting](#troubleshooting)
-
----
+This guide starts the consolidated backend, PostgreSQL and Redis, and the
+frontend for development. It does not establish deployment readiness or prove
+that a live environment has the same configuration. See the [root README](../../README.md)
+for the capability inventory and [frontend README](../../frontend/README.md) for
+frontend details.
 
 ## Prerequisites
 
-Before starting, ensure you have the following installed:
+- Python 3.11 or 3.12, as specified in [pyproject.toml](../../pyproject.toml).
+- Node 22 from the repository's [.nvmrc](../../.nvmrc), and npm.
+- Docker Engine or Desktop with Docker Compose.
+- Access to the repository and package registries.
 
-### Required Software
+Run these commands from the repository root unless stated otherwise. The
+example password below is for an isolated local database only. Keep real
+credentials out of tracked files and do not print them in logs.
 
-- **Docker Desktop** (or Docker Engine + Docker Compose)
-  - Version: 20.10+ recommended
-  - [Install Docker](https://docs.docker.com/get-docker/)
-
-- **Python 3.11+**
-  - Check: `python3 --version`
-  - [Install Python](https://www.python.org/downloads/)
-
-- **Node.js 18+** (for Frontend)
-  - Check: `node --version`
-  - [Install Node.js](https://nodejs.org/)
-
-### System Requirements
-
-- **RAM**: 8GB minimum, 16GB recommended
-- **Disk Space**: 10GB free space (for Docker images and volumes)
-- **Network**: Internet connection for downloading images and models
-
----
-
-## Initial Setup
-
-### Step 1: Clone the Repository
+## Start infrastructure and migrate
 
 ```bash
-# If you haven't already
-git clone https://github.com/regengine/RegEngine.git
-cd RegEngine
-```
+python3 -m venv venv
+source venv/bin/activate
+pip install --require-hashes -r requirements.lock
 
-### Step 2: Configure Environment Variables
-
-```bash
-# Copy the example environment file
-cp .env.example .env
-```
-
-### Step 3: Generate Required Secrets
-
-Open `.env` in your text editor and set at least the secrets required by the
-current local dev stack:
-
-```bash
-# Local Postgres password used by docker-compose.dev.yml
-python -c "import secrets; print(secrets.token_urlsafe(32))"
-# Copy the output and paste it as POSTGRES_PASSWORD in .env
-
-# JWT/CSRF signing secret shared by backend and frontend
-python -c "import secrets; print(secrets.token_urlsafe(64))"
-# Copy the output and paste it as AUTH_SECRET_KEY in .env
-```
-
-Copy the same `AUTH_SECRET_KEY` into `frontend/.env.local` as well. The
-backend signs RegEngine login tokens with this value, and the Next.js session
-route verifies those tokens before writing the HTTP-only workspace cookie.
-
-Your `.env` file should look like this:
-
-```bash
-# REQUIRED SECRETS
-POSTGRES_PASSWORD=your_generated_postgres_password_here
-AUTH_SECRET_KEY=your_generated_auth_secret_here
-
-# Object storage credentials are required only when you run ingestion/object
-# storage services locally. Use test values only with a local mock.
-OBJECT_STORAGE_ACCESS_KEY_ID=test
-OBJECT_STORAGE_SECRET_ACCESS_KEY=test
-
-# Environment
-REGENGINE_ENV=development
-```
-
-> **Note**: The object storage credentials "test/test" are ONLY for a local
-> S3-compatible mock. Never use these in production.
-
----
-
-## Start Backend Services
-
-### Step 1: Start Local Postgres
-
-```bash
-# Start local Postgres
+export POSTGRES_PASSWORD=regengine
 docker compose -f docker-compose.dev.yml up -d
-```
-
-This starts the minimal local infrastructure used by the current dev setup:
-- **PostgreSQL** (port 5432) - relational database with RLS
-
-Run backend services locally from the repo after Postgres is healthy.
-
-### Step 2: Wait for Services to Initialize
-
-```bash
-# Check service status
 docker compose -f docker-compose.dev.yml ps
 
-# Watch logs (optional)
-docker compose -f docker-compose.dev.yml logs -f
+export DATABASE_URL="postgresql://regengine:${POSTGRES_PASSWORD}@localhost:5432/regengine"
+export ADMIN_DATABASE_URL="postgresql://regengine_sysadmin:${POSTGRES_PASSWORD}@localhost:5432/regengine"
+export MIGRATIONS_DATABASE_URL="postgresql://regengine_owner:${POSTGRES_PASSWORD}@localhost:5432/regengine"
+export REDIS_URL="redis://localhost:6379/0"
+./scripts/run-migrations.sh
 ```
 
-**Expected startup time**: 30-90 seconds on first run (longer if pulling images)
+Wait until PostgreSQL is healthy before running migrations. Compose starts
+PostgreSQL 17 and Redis 7; it does not start the backend, Neo4j, or a message
+broker. The initialization script creates separate local runtime and schema
+owner roles on a new database volume. Existing volumes retain their existing
+credentials and data; changing `POSTGRES_PASSWORD` does not reinitialize them.
+The migration runner refuses to stamp an existing unversioned application
+schema. Investigate its reported state before proceeding.
 
-### Step 3: Verify Services Are Healthy
+## Start the backend
+
+In a shell with the virtual environment and the variables above loaded:
 
 ```bash
-# Check local Postgres
-docker compose -f docker-compose.dev.yml exec postgres pg_isready -U regengine
+export ENABLE_DB_API_KEYS=true
+uvicorn server.main:app --reload --port 8000
 ```
 
-Postgres should report `accepting connections`.
-
-### Step 4: Optional Object Storage Buckets
+The consolidated app listens at `http://localhost:8000`; in development its
+OpenAPI interface is at `http://localhost:8000/docs`. Check liveness and
+readiness separately:
 
 ```bash
-# When running a local S3-compatible object storage service, create buckets manually:
-aws --endpoint-url=http://localhost:4566 s3 mb s3://reg-engine-raw-data-dev
-aws --endpoint-url=http://localhost:4566 s3 mb s3://reg-engine-processed-data-dev
+curl -fsS http://localhost:8000/health
+curl -fsS http://localhost:8000/readiness
 ```
 
----
+A successful health or readiness response does not validate a complete ingest
+or export journey. Inspect readiness details and backend logs when it fails.
+Legacy individual service entrypoints exist, but they are not the default
+consolidated setup.
 
-## Set Up CLI Tool
+## Create a local API key
 
-The `regctl` CLI tool is used for tenant management and system operations.
-
-### Step 1: Install CLI Dependencies
+With the migrated local database and Redis running, and the same environment
+variables set, run:
 
 ```bash
-# From the repository root
-pip install -r scripts/regctl/requirements.txt
+./venv/bin/python scripts/create_test_api_key.py
 ```
 
-### Step 2: Verify CLI Installation
+The script seeds a local test tenant and attempts to set its Redis subscription
+to `trialing`; check its output for a skipped billing seed. The key is written
+once to `~/.regengine/test-api-key` with restricted permissions, not printed in
+full. The script refuses to overwrite the file by default; use a separate
+`--key-file` for another key. Supply the key through `X-RegEngine-API-Key` to
+protected API endpoints, and keep `ENABLE_DB_API_KEYS=true` in the backend
+process. A local API key is not a browser login: protected UI workflows also
+require the relevant user and tenant provisioning and authentication setup.
+See the [authentication guide](../engineering/Authentication.md) and
+[frontend README](../../frontend/README.md) for the identity and UI setup context.
 
-```bash
-python scripts/regctl/tenant.py --help
-```
+## Start the frontend
 
-You should see the CLI help menu with available commands.
-
----
-
-## Create a Demo Tenant
-
-Every API request requires an API key scoped to a tenant. Let's create a demo tenant with sample data.
-
-### Method 1: Quick Demo Script (Recommended)
-
-```bash
-./scripts/demo/quick_demo.sh
-```
-
-This will:
-- Verify services are running
-- Create a demo FSMA tenant
-- Load sample traceability data
-- Display your API key and tenant ID
-- Save credentials to `.demo_env`
-
-### Method 2: Manual CLI Creation
-
-```bash
-# Create demo FSMA tenant
-python scripts/regctl/tenant.py create "Demo Foods" --demo-mode
-```
-
-### Save Your Credentials
-
-After creation, you'll see output like:
-
-```
-✅ Tenant created successfully!
-
-Tenant ID: 550e8400-e29b-41d4-a716-446655440000
-API Key: rge_1234567890abcdef1234567890abcdef
-```
-
-**Save these values!** You'll need them for API calls and frontend access.
-
-### Load Credentials (if using quick_demo.sh)
-
-```bash
-source .demo_env
-echo $REGENGINE_API_KEY
-echo $REGENGINE_TENANT_ID
-```
-
----
-
-## Start Frontend Dashboard
-
-The frontend provides a modern React-based UI for compliance officers and administrators.
-
-### Step 1: Install Frontend Dependencies
+In a separate shell:
 
 ```bash
 cd frontend
-npm ci  # Use 'ci' for clean install based on package-lock.json
-```
-
-### Step 2: Start Development Server
-
-```bash
+npm ci
+INGESTION_SERVICE_URL=http://localhost:8000 \
+ADMIN_SERVICE_URL=http://localhost:8000 \
+COMPLIANCE_SERVICE_URL=http://localhost:8000 \
+GRAPH_SERVICE_URL=http://localhost:8000 \
+NLP_SERVICE_URL=http://localhost:8000 \
 npm run dev
 ```
 
-The dashboard will be available at **http://localhost:3000**
+Open `http://localhost:3000`. All five upstream names point to the same
+backend process. They override the frontend's legacy per-service localhost
+fallbacks; setting them does not enable an experimental router. Do not put
+secrets in `NEXT_PUBLIC_*` variables, which are exposed to browsers.
 
-### Step 3: Access Dashboard with Your Tenant
-
-Open your browser and navigate to:
-
-```
-http://localhost:3000/dashboard?tenant=YOUR_TENANT_ID
-```
-
-Replace `YOUR_TENANT_ID` with the tenant ID from Step 5.
-
----
-
-## Test the Complete Product Flow
-
-Now let's test the current local pipeline: **Ingestion → PostgreSQL persistence → API query**
-
-### Step 1: Prepare Your API Key
+## Validation and troubleshooting
 
 ```bash
-# Set your API key as an environment variable
-export API_KEY="rge_your_api_key_here"
+# From the repository root, with the venv active
+python3 -m pytest services/ingestion/tests -q --no-cov
 
-# OR load from .demo_env if you used quick_demo.sh
-source .demo_env
-export API_KEY=$REGENGINE_API_KEY
+# From frontend/
+npm run lint
+npm run test:run
 ```
 
-### Step 2: Ingest a Document
-
-```bash
-# Ingest a sample regulatory document URL
-curl -X POST http://localhost:8002/api/v1/ingest/url \
-  -H "Content-Type: application/json" \
-  -H "X-RegEngine-API-Key: $API_KEY" \
-  -d '{
-    "url": "https://www.federalregister.gov/api/v1/documents/2023-12345.json",
-    "source_system": "Federal Register"
-  }'
-```
-
-**Expected Response:**
-```json
-{
-  "doc_id": "uuid-here",
-  "status": "processing",
-  "message": "Document accepted for ingestion"
-}
-```
-
-### Step 3: Verify Ingested Data
-
-```bash
-# Confirm the ingestion service is healthy
-curl http://localhost:8002/health | jq
-```
-
-For the current minimal local stack, traceability data is written to PostgreSQL
-by the running backend service. Legacy event-broker and graph components are
-optional and are not started by `docker-compose.dev.yml`.
-
-### Step 4: Query Current APIs
-
-Query the services you started locally:
-
-```bash
-# Ingestion health
-curl http://localhost:8002/health | jq
-
-# Compliance health, if the compliance service is running
-curl -H "X-RegEngine-API-Key: $API_KEY" \
-  http://localhost:8500/health | jq
-```
-
----
-
-## Review FSMA 204 records
-
-Upload supplier records you are authorized to use, then inspect their validation results and traceability evidence in the application. Exports are available only after the workspace contains accepted records.
-
----
-
-## Access Points & UIs
-
-Here's a summary of all available endpoints and UIs:
-
-### Backend APIs
-
-| Service | URL | Documentation |
-|---------|-----|---------------|
-| **Admin API** | http://localhost:8400 | http://localhost:8400/docs |
-| **Ingestion API** | http://localhost:8002 | http://localhost:8002/docs |
-| **NLP Service** | http://localhost:8100 | http://localhost:8100/docs |
-| **Graph Service** | http://localhost:8200 | http://localhost:8200/docs |
-| **Compliance API** | http://localhost:8500 | http://localhost:8500/docs |
-
-### Frontend & UIs
-
-| UI | URL | Purpose |
-|----|-----|---------|
-| **Frontend Dashboard** | http://localhost:3000 | Main React dashboard |
-
-### Database Connections
-
-| Database | Connection String |
-|----------|-------------------|
-| **PostgreSQL** | `postgresql://regengine:<POSTGRES_PASSWORD>@localhost:5432/regengine` |
-
----
-
-## Troubleshooting
-
-### Services Won't Start
-
-**Problem**: Docker services fail to start or are unhealthy
-
-**Solutions**:
-
-```bash
-# Check Docker is running
-docker ps
-
-# View service logs
-docker compose -f docker-compose.dev.yml logs -f postgres
-
-# Check environment variables are set
-cat .env | grep POSTGRES_PASSWORD
-cat .env | grep AUTH_SECRET_KEY
-
-# Restart services
-docker compose -f docker-compose.dev.yml down -v  # Remove volumes
-docker compose -f docker-compose.dev.yml up -d
-```
-
-### "Missing Required Secret" Error
-
-**Problem**: Docker Compose fails with `POSTGRES_PASSWORD must be set` or similar
-
-**Solution**:
-
-1. Edit `.env` file
-2. Generate secrets as described in [Initial Setup](#step-3-generate-required-secrets)
-3. Save the file
-4. Restart services: `docker compose -f docker-compose.dev.yml up -d`
-
-### Ollama Model Not Downloading
-
-**Problem**: NLP service fails because Llama3 model isn't available
-
-**Solution**:
-
-```bash
-# Manually pull the model
-docker exec -it $(docker ps -qf name=ollama) ollama pull llama3:8b
-
-# Wait for download (this may take 5-10 minutes)
-
-# Restart NLP service
-docker compose restart nlp-service
-```
-
-### Frontend Build Errors
-
-**Problem**: `npm ci` or `npm run dev` fails
-
-**Solutions**:
-
-```bash
-# Clear npm cache
-cd frontend
-rm -rf node_modules package-lock.json
-npm cache clean --force
-
-# Reinstall
-npm install
-npm run dev
-```
-
-### API Returns 401 Unauthorized
-
-**Problem**: API calls return `401 Unauthorized` error
-
-**Solutions**:
-
-1. **Verify API key format**: Should start with `rge_`
-2. **Check header**: Use `X-RegEngine-API-Key` (not `Authorization`)
-3. **List your tenants**: `python scripts/regctl/tenant.py list`
-4. **Create new API key**: Recreate tenant or manually generate
-
-### Service Cannot Connect to Postgres
-
-**Problem**: A backend service cannot connect to the local database
-
-**Solutions**:
-
-```bash
-# Check Postgres is running
-docker compose -f docker-compose.dev.yml ps
-
-# Check Postgres logs
-docker compose -f docker-compose.dev.yml logs postgres
-
-# Restart Postgres
-docker compose -f docker-compose.dev.yml restart postgres
-```
-
-### Out of Disk Space
-
-**Problem**: Docker runs out of disk space
-
-**Solutions**:
-
-```bash
-# Remove unused Docker resources
-docker system prune -a --volumes
-
-# Check disk usage
-docker system df
-
-# Remove RegEngine volumes (WARNING: deletes all data)
-docker compose down -v
-```
-
-### Events Not Appearing in the Dashboard
-
-**Problem**: Events were submitted but dashboard pages do not update
-
-**Solutions**:
-
-```bash
-# Confirm ingestion and compliance services are both running
-curl http://localhost:8002/health | jq
-curl http://localhost:8500/health | jq
-
-# Confirm migrations were applied
-alembic upgrade head
-```
-
-### Frontend Can't Connect to Backend
-
-**Problem**: Frontend shows "Network Error" or "Failed to fetch"
-
-**Solutions**:
-
-1. **Check CORS**: Ensure backend allows `localhost:3000`
-2. **Verify API is running**: `curl http://localhost:8002/health`
-3. **Check frontend env**: Look for `NEXT_PUBLIC_API_URL` in frontend config
-4. **Browser console**: Open DevTools → Console for detailed errors
-
----
-
-## Next Steps
-
-Now that you have RegEngine running locally:
-
-1. **Explore the API Documentation**
-   - Visit http://localhost:8002/docs (Swagger UI)
-   - Try the interactive API explorer
-
-2. **Test Different Frameworks**
-   - Create tenants with different control frameworks (NIST, SOC2, ISO27001)
-   - Compare the data models
-
-3. **Ingest Real Documents**
-   - Try PDF documents
-   - Test different source systems
-
-4. **Build Custom Queries**
-   - Query PostgreSQL traceability tables
-   - Create compliance reports
-
-5. **Develop New Features**
-   - Add custom extractors
-   - Implement new API endpoints
-   - Extend the frontend
-
----
-
-## Quick Reference Commands
-
-```bash
-# Start local Postgres
-docker compose -f docker-compose.dev.yml up -d
-
-# Stop local Postgres
-docker compose -f docker-compose.dev.yml down
-
-# View logs
-docker compose -f docker-compose.dev.yml logs -f postgres
-
-# Restart a service
-docker compose -f docker-compose.dev.yml restart postgres
-
-# Create tenant
-python scripts/regctl/tenant.py create "Company Name" --demo-mode
-
-# List tenants
-python scripts/regctl/tenant.py list
-
-# Test ingestion
-make smoke-ingest
-
-# Format code
-make fmt
-
-# Run tests
-make pytest
-```
-
----
-
-## Support & Documentation
-
-- **Project Repository**: https://github.com/regengine/RegEngine
-- **Product Roadmap**: [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md)
-- **Deployment Guide**: [DEPLOYMENT.md](DEPLOYMENT.md)
-- **API Authentication**: [AUTHENTICATION.md](AUTHENTICATION.md)
-- **FSMA 204 Spec**: [docs/specs/FSMA_204_MVP_SPEC.md](docs/specs/FSMA_204_MVP_SPEC.md)
-
----
-
-**Happy Testing! 🎉**
+Some integration tests require additional services or database configuration;
+consult their skip or failure output. For a persisted local integration proof,
+see the Inflow-to-RegEngine command in the [root README](../../README.md#local-development).
+
+- If Compose is unhealthy, check `docker compose -f docker-compose.dev.yml ps`
+  and the relevant service logs. PostgreSQL must be ready before migration.
+- If authenticated ingest returns `401`, verify the key, header, and backend
+  `ENABLE_DB_API_KEYS` setting. A missing or inactive subscription can return
+  `402`; Redis uncertainty can return `503`.
+- If the frontend cannot reach the backend, confirm the backend is listening on
+  port 8000 and the upstream variables were set in the shell running Next.js.
+- Stop the local services with `docker compose -f docker-compose.dev.yml down`.
+  This preserves the database volume. Removing volumes destroys local data and
+  should only be done intentionally after any needed backup.
+
+See the [documentation index](../README.md) for architecture, runbooks, and
+other guides.

@@ -4,17 +4,18 @@ The project-level orientation document. Five runbooks, `FOUNDER_KNOWLEDGE.md`,
 `CANONICAL_OWNERSHIP.md` and `docs/CLAUDE_MD_SUGGESTED.md` all point here for
 "the verified map"; this file is that destination (#2926, #2874).
 
-**Every claim below was checked against the working tree.** Where the repo
-contains something misleading, this file says so rather than describing the
-tidy version. `scripts/check_docs_links.py` runs in CI and fails when a doc in
+This is an orientation map, not a live deployment attestation. Important
+claims should be checked against the current source and target environment.
+`scripts/check_docs_links.py` runs in CI and fails when a doc in
 the live set references a repo path that does not exist, which is the specific
 rot that made this file necessary.
 
 ---
 
-## 1. Production topology
+## 1. Configured topology
 
-Two deployed artifacts. Not six services, despite the directory layout.
+The checked-in configuration describes a consolidated backend and a separate
+frontend. It does not verify the current live deployment.
 
 | Artifact | What | Where |
 |---|---|---|
@@ -24,8 +25,9 @@ Two deployed artifacts. Not six services, despite the directory layout.
 Supporting infrastructure: PostgreSQL (Supabase, RLS-enforced), Redis, and
 Neo4j (optional graph mirror — see §6).
 
-The `services/*` directories are **router domains and code paths inside that
-one process**, not separate deployments. Any document, manifest or runbook that
+The `services/*` directories organize router domains and code paths used by the
+consolidated app; their presence does not establish separate deployments. Any
+document, manifest or runbook that
 describes a six-service topology is describing the retired architecture; all
 five narrative runbooks under `docs/runbooks/legacy/` carry an explicit `LEGACY:` banner saying so. The
 manifests, gateway config, swarm runtime and workflow of that topology live
@@ -40,11 +42,11 @@ written to local disk is lost on every deploy.
 
 | Path | Role |
 |---|---|
-| `server/` | The monolith entrypoint. `main.py` mounts every router; `workers/` holds the in-process background runners. |
+| `server/` | The monolith entrypoint. `main.py` composes routers according to runtime policy; `workers/` holds the in-process background runners. |
 | `services/` | Domain code mounted by the monolith (see §3). |
 | `alembic/versions/` | **Sole owner of the database schema.** The app performs no runtime DDL. |
-| `frontend/` | Next.js app deployed to Vercel; has its own CI workflow. |
-| `regengine/` | The published Python SDK/CLI (`regengine-verify` etc.), packaged separately from the platform. |
+| `frontend/` | Next.js app with its own CI workflow and deployment configuration. |
+| `regengine/` | The source-installable Python SDK/CLI (`regengine-verify` etc.), packaged separately from the platform. |
 | `tests/` | Cross-cutting suites: data integrity, SDK, scripts, shared. |
 | `scripts/` | Operational and CI helper scripts. |
 | `.github/workflows/` | 33 workflows (see §7). |
@@ -67,7 +69,7 @@ relative weight, not a contract.
 | `services/scheduler/` | Runs **in-process** in the monolith via `server/workers/embedded_scheduler.py`, with Postgres advisory-lock leader election. | 22 / 27 |
 | `services/compliance/` | Compliance evidence surface. | 9 / 13 |
 
-## 4. Router gating — what is actually reachable in production
+## 4. Router gating
 
 `server/routers_mount.py` makes 81 `include_owned_router` calls (the router
 registration split out of `server/main.py` in WI-14, moved earlier from bare
@@ -97,27 +99,26 @@ Two consequences worth internalising:
 ## 5. Database
 
 Schema is owned entirely by Alembic (`alembic/versions/`). The app performs no
-runtime DDL as of v098/v099. `ARCHITECTURE.md` carries the current head
-revision and a per-revision summary; that section is the authority, not this
-one, because it is updated with each migration.
+runtime DDL as of v098/v099. Inspect the revision graph and migration status
+for the target database; repository files alone do not establish that migrations
+have been applied.
 
-Tenant isolation is enforced by **PostgreSQL RLS policies**, not by application
-code. A policy that fails open is a cross-tenant data exposure, so RLS changes
-belong in a migration with an explicit `USING` **and** `WITH CHECK` clause.
+Tenant isolation depends on both authenticated application tenant context and
+PostgreSQL RLS policies. The tenant GUC is caller-settable by a holder of runtime
+credentials, so RLS is not a defense against arbitrary SQL with those credentials.
+See [ADR-004](architecture/decisions/ADR-004-security-release-boundary.md).
 
 ## 6. Background work and health
 
-`ASYNC_PROCESSES.md` is the authority for everything that runs without a user
-clicking a button. Two facts that are load-bearing during an incident:
-
-- **Postgres is the only component that can return 503 from `/readiness`.**
-  Every other component reports per-component status and degrades the payload
-  to a 200 `degraded`, so an optional dependency cannot block a deploy.
-- **Neo4j is not on the deploy-gating path.** It is probed only when the graph
-  subsystem is mounted, and graph is experimental — so in production Neo4j is
-  reported `not_probed` and never contacted. A Neo4j outage is therefore
-  *invisible* in `/readiness`; watch `shared.circuit_breaker.neo4j_circuit`
-  metrics instead.
+[`ASYNC_PROCESSES.md`](../ASYNC_PROCESSES.md) describes background work.
+[`server/main.py`](../server/main.py) defines `/health` as liveness and
+`/readiness` as a bounded dependency check. Readiness returns 503 for a failed
+PostgreSQL check, unavailable Redis in strict runtimes, a failed essential
+ingestion worker or enabled embedded scheduler, and probe timeout or capacity
+exhaustion. Neo4j and rate-limiter checks do not independently fail readiness.
+With graph disabled, Neo4j can be reported as not probed; that does not prove
+its availability. Consult the component details in the response and the target
+system's own monitoring.
 
 ## 7. Tests and CI
 

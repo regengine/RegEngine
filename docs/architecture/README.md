@@ -1,48 +1,17 @@
-# RegEngine Architecture Documentation
+# RegEngine architecture documentation
 
-## Overview
+These pages describe the checked-in FSMA-first application and its configured
+release surface. Source review is not evidence of a successful live deployment,
+customer use, regulatory approval, or compliance.
 
-This directory contains the formal architecture documentation for RegEngine following the C4 model and Arc42 template.
+- [Architecture overview](ARCHITECTURE.md): data flow, routing and trust boundaries.
+- [C4 context](c4-context.md): actors and external dependencies.
+- [C4 containers](c4-containers.md): frontend, consolidated backend and stores.
+- [C4 components](c4-components.md): key code paths in the backend.
+- [Consolidation](CONSOLIDATION.md): current build wiring and legacy scaffolding.
+- [Decisions](decisions/): architecture decision records, each with its own date and scope.
 
-## Contents
-
-| Document | Description |
-|----------|-------------|
-| [C4 Context](c4-context.md) | System context - users and external systems |
-| [C4 Containers](c4-containers.md) | High-level container/service breakdown |
-| [C4 Components](c4-components.md) | Per-service component details |
-| [decisions/](decisions/) | Architecture Decision Records (ADRs) |
-
-## Quick Reference
-
-```mermaid
-graph TB
-    subgraph External
-        USER[Compliance<br/>Analysts]
-        ADMIN[System<br/>Admins]
-        EURLEX[EUR-Lex]
-        SEC[SEC EDGAR]
-        NYDFS[NY DFS]
-    end
-    
-    subgraph RegEngine
-        FE[Frontend]
-        API[API Gateway]
-        SERVICES[Microservices]
-        DATA[Data Layer]
-    end
-    
-    USER --> FE
-    ADMIN --> FE
-    EURLEX --> SERVICES
-    SEC --> SERVICES
-    NYDFS --> SERVICES
-    FE --> API --> SERVICES --> DATA
-```
-
-## Principles
-
-1. **Event-Driven** - Kafka-based async processing
-2. **Multi-Tenant** - Tenant isolation at database level
-3. **Human-in-the-Loop** - Low-confidence extractions require review
-4. **Regulatory First** - Audit trails for all operations
+The release-approved route set is maintained in
+[`server/router_policy.py`](../../server/router_policy.py), with mount points in
+[`server/main.py`](../../server/main.py). A route existing in source does not
+establish that it is enabled or deployed.

@@ -1,6 +1,8 @@
 # RegEngine FSMA 204 Phase 1: Critical Fixes Implementation Roadmap
 
-**Priority:** CRITICAL - Must complete before FDA production use
+> **Historical plan, last updated 2026-03-27.** This is not a current implementation guide or evidence of regulatory readiness. Its paths, estimates, priorities, and unchecked tasks have not been reconciled to the current tree. For example, `first_land_based_receiving` now appears in the canonical event model and CSV templates. Revalidate each item against current code and tests before acting; see the [repository README](../../README.md) and [October product PRD](../product/PRODUCT_PRD_2026-10.md) for newer context.
+
+**Priority at time of plan:** CRITICAL - Must complete before FDA production use
 **Target Timeline:** 2-3 weeks (with focused team of 2)
 **Last Updated:** 2026-03-27
 

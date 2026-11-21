@@ -97,7 +97,7 @@ cold storage facility might appear as "ABC Cold Storage", "ABC Cold Storage LLC"
    matching fields with per-field similarity scores. Status: pending,
    confirmed_match, confirmed_distinct, deferred.
 
-The `IdentityResolutionService` (`services/shared/identity_resolution.py`)
+The `IdentityResolutionService` (`services/shared/identity_resolution/service.py`)
 provides the API: `register_entity`, `add_alias`, `find_entity_by_alias`,
 `find_potential_matches` (fuzzy, via `SequenceMatcher`).
 

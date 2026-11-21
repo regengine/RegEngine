@@ -1,195 +1,31 @@
-# C4 Model: Component Diagram (Level 3)
+# C4 components: consolidated backend
 
-## Admin Service Components
-
-```mermaid
-graph TB
-    subgraph admin["Admin API :8400"]
-        AR[Routes<br/>routes.py]
-        AM[Models<br/>models.py]
-        ADB[Database<br/>database.py]
-        AME[Metrics<br/>metrics.py]
-        ARC[Review Consumer<br/>review_consumer.py]
-    end
-    
-    AR --> AM
-    AR --> ADB
-    AR --> AME
-    ARC --> ADB
-    ARC --> AME
-    
-    subgraph external
-        PG[(PostgreSQL)]
-        KAFKA[Kafka]
-    end
-    
-    ADB --> PG
-    ARC --> KAFKA
-```
-
-| Component | File | Responsibility |
-|-----------|------|----------------|
-| **Routes** | `routes.py` | API endpoints for tenants, keys, review |
-| **Models** | `models.py` | Pydantic models, TenantContext |
-| **Database** | `database.py` | SQLAlchemy session management |
-| **Metrics** | `metrics.py` | HallucinationTracker, Prometheus |
-| **Review Consumer** | `review_consumer.py` | Kafka consumer for low-confidence items |
-
----
-
-## Ingestion Service Components
+This diagram is a simplified map of code paths; it does not imply that every
+request traverses every component, or that all routers are release-enabled.
 
 ```mermaid
-graph TB
-    subgraph ingestion["Ingestion :8000"]
-        IR[Routes<br/>routes.py]
-        IN[Normalizer<br/>normalizer.py]
-        IS3[S3 Utils<br/>s3_utils.py]
-        ISC[Scrapers<br/>scrapers/]
-    end
-    
-    IR --> IN
-    IR --> IS3
-    IR --> ISC
-    
-    subgraph external
-        S3[(S3/MinIO)]
-        KAFKA[Kafka]
-        WEB[External URLs]
-    end
-    
-    IS3 --> S3
-    IR --> KAFKA
-    ISC --> WEB
+graph LR
+    Request[Request] --> Routing[Router and auth policy]
+    Routing --> Intake[Webhook, CSV, EPCIS and Workbench intake]
+    Intake --> Validate[Normalization and rules]
+    Validate --> Persist[CTE and canonical persistence]
+    Persist --> DB[(PostgreSQL)]
+    DB --> Export[FDA-oriented export and verification]
+    Routing --> Admin[Admin and session routes]
 ```
 
-| Component | File | Responsibility |
-|-----------|------|----------------|
-| **Routes** | `routes.py` | `/ingest/url`, `/scrape/*` endpoints |
-| **Normalizer** | `normalizer.py` | PDF/HTML extraction, hashing |
-| **S3 Utils** | `s3_utils.py` | Raw/normalized document storage |
-| **Scrapers** | `scrapers/` | NYDFS, CPPA, generic state adapters |
+| Area | Source |
+| --- | --- |
+| Composition and route policy | [`server/main.py`](../../server/main.py), [`server/router_policy.py`](../../server/router_policy.py) |
+| Webhook intake | [`webhook_router_v2/`](../../services/ingestion/app/webhook_router_v2/); requires authorization, idempotency and, in strict runtimes, configured HMAC verification. |
+| Other intake | [`csv_templates.py`](../../services/ingestion/app/csv_templates.py), [`epcis/`](../../services/ingestion/app/epcis/), [`inflow_workbench.py`](../../services/ingestion/app/inflow_workbench.py) |
+| Rules and persistence | [`rules/`](../../services/shared/rules/), [`cte_persistence/`](../../services/shared/cte_persistence/), [`canonical_persistence/`](../../services/shared/canonical_persistence/) |
+| Exports | [`fda_export/`](../../services/ingestion/app/fda_export/) |
+| Admin and sessions | [`services/admin/app/`](../../services/admin/app/), [`services/shared/auth.py`](../../services/shared/auth.py) |
+| Background tasks | [`task_processor.py`](../../server/workers/task_processor.py), [`task_queue.py`](../../services/shared/task_queue.py), [`embedded_scheduler.py`](../../server/workers/embedded_scheduler.py) |
 
----
-
-## NLP Service Components
-
-```mermaid
-graph TB
-    subgraph nlp["NLP :8100"]
-        NC[Consumer<br/>consumer.py]
-        NE[Extractors<br/>extractors/]
-        NTL[Text Loader<br/>text_loader.py]
-    end
-    
-    NC --> NE
-    NC --> NTL
-    
-    subgraph external
-        KAFKA[Kafka]
-        S3[(S3)]
-        OLLAMA[Ollama LLM]
-    end
-    
-    NC --> KAFKA
-    NTL --> S3
-    NE --> OLLAMA
-```
-
-| Component | File | Responsibility |
-|-----------|------|----------------|
-| **Consumer** | `consumer.py` | Kafka consumer, confidence routing |
-| **Extractors** | `extractors/` | NYDFS, SEC, generic extractors |
-| **Text Loader** | `text_loader.py` | S3 fetch, PDF/HTML parsing |
-
----
-
-## Graph Service Components
-
-```mermaid
-graph TB
-    subgraph graph["Graph :8200"]
-        GR[Routes<br/>routes.py]
-        GC[Consumer<br/>consumer.py]
-        GNU[Neo4j Utils<br/>neo4j_utils.py]
-        GOW[Overlay Writer<br/>overlay_writer.py]
-        GEP[Event Publisher<br/>graph_event_publisher.py]
-    end
-    
-    GR --> GNU
-    GC --> GNU
-    GC --> GOW
-    GOW --> GEP
-    
-    subgraph external
-        NEO[(Neo4j)]
-        KAFKA[Kafka]
-    end
-    
-    GNU --> NEO
-    GC --> KAFKA
-    GEP --> KAFKA
-```
-
-| Component | File | Responsibility |
-|-----------|------|----------------|
-| **Routes** | `routes.py` | `/v1/provisions/*` queries |
-| **Consumer** | `consumer.py` | `graph.update` Kafka consumer |
-| **Neo4j Utils** | `neo4j_utils.py` | Driver, upsert operations |
-| **Overlay Writer** | `overlay_writer.py` | Tenant controls, mappings |
-| **Event Publisher** | `graph_event_publisher.py` | Audit events to Kafka |
-
----
-
-## Compliance Service Components
-
-```mermaid
-graph TB
-    subgraph compliance["Compliance :8500"]
-        CM[Main<br/>main.py]
-        CCE[Checklist Engine<br/>checklist_engine.py]
-        CFE[FSMA Engine<br/>fsma_engine.py]
-    end
-    
-    CM --> CCE
-    CM --> CFE
-    
-    subgraph external
-        PLUGINS[Industry Plugins]
-        NEO[(Neo4j)]
-    end
-    
-    CCE --> PLUGINS
-    CFE --> NEO
-```
-
-| Component | File | Responsibility |
-|-----------|------|----------------|
-| **Main** | `main.py` | FastAPI app, endpoints |
-| **Checklist Engine** | `checklist_engine.py` | Plugin loading, validation |
-| **FSMA Engine** | `fsma_engine.py` | Food safety assessment |
-
----
-
-## Opportunity Service Components
-
-```mermaid
-graph TB
-    subgraph opportunity["Opportunity :8300"]
-        OR[Routes<br/>routes.py]
-        ONU[Neo4j Utils<br/>neo4j_utils.py]
-    end
-    
-    OR --> ONU
-    
-    subgraph external
-        NEO[(Neo4j)]
-    end
-    
-    ONU --> NEO
-```
-
-| Component | File | Responsibility |
-|-----------|------|----------------|
-| **Routes** | `routes.py` | `/opportunities/arbitrage`, `/opportunities/gaps` |
-| **Neo4j Utils** | `neo4j_utils.py` | Cypher queries for comparison |
+Canonical and legacy persistence paths coexist; see the
+[persistence cutover](../persistence/dual-write-cutover.md). Enforcement and
+availability depend on the route and configuration. Graph and NLP code is
+excluded from the checked-in production allowlist; its existence is not evidence
+that graph-backed functionality is available in a deployed environment.

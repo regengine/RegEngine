@@ -5,6 +5,9 @@
 **Audit Period:** TBD
 **Status:** Preparation
 
+This dated planning matrix is not evidence of a SOC 2 audit, certification, or
+current control operation. Revalidate each control and its evidence before use.
+
 ---
 
 ## Trust Services Criteria Mapping
@@ -23,7 +26,7 @@
 
 | Control ID | Criteria | RegEngine Implementation | Evidence |
 |------------|----------|--------------------------|----------|
-| CC2.1 | Information Quality | Schema validation on all inputs | `shared/schemas.py` |
+| CC2.1 | Information Quality | Schema validation on all inputs | `services/shared/schemas.py` |
 | CC2.2 | Internal Communication | Slack channels, documentation | `README.md`, docs/ |
 | CC2.3 | External Communication | API documentation, changelog | `CHANGELOG.md` |
 
@@ -33,7 +36,7 @@
 |------------|----------|--------------------------|----------|
 | CC3.1 | Risk Objectives | NFR document with targets | `NFR_REQUIREMENTS.md` |
 | CC3.2 | Risk Identification | Gap analysis, threat modeling | `gap_analysis_validation.md` |
-| CC3.3 | Fraud Consideration | Rate limiting, audit trails | `shared/rate_limit.py` |
+| CC3.3 | Fraud Consideration | Rate limiting, audit trails | `services/shared/rate_limit.py` |
 | CC3.4 | Change Assessment | ADR process for architecture | `docs/architecture/decisions/` |
 
 ### CC4: Monitoring Activities
@@ -55,14 +58,14 @@
 
 | Control ID | Criteria | RegEngine Implementation | Evidence |
 |------------|----------|--------------------------|----------|
-| CC6.1 | Logical Access | API key authentication | `shared/auth.py`, `AUTHENTICATION.md` |
+| CC6.1 | Logical Access | API key authentication | `services/shared/auth.py`, `AUTHENTICATION.md` |
 | CC6.2 | Access Provisioning | Admin API for key creation | `POST /admin/keys` |
 | CC6.3 | Access Removal | Key revocation endpoint | `DELETE /admin/keys/{id}` |
 | CC6.4 | Access Review | Key listing with metadata | `GET /admin/keys` |
 | CC6.5 | Physical Access | AWS/Cloud provider controls | AWS SOC 2 report |
 | CC6.6 | Logical Threats | SSRF protection, input validation | `services/ingestion/app/routes.py` |
-| CC6.7 | Identity Management | Tenant isolation, scoped keys | `shared/api_key_store.py` |
-| CC6.8 | Access Credentials | Key hashing (bcrypt) | `shared/auth.py` |
+| CC6.7 | Identity Management | Tenant isolation, scoped keys | `services/shared/api_key_store.py` |
+| CC6.8 | Access Credentials | API key digest (HMAC-SHA256 when pepper is configured; legacy SHA-256 supported) | `services/shared/api_key_store.py` |
 
 ### CC7: System Operations
 
@@ -112,7 +115,7 @@
 
 | Control ID | Criteria | RegEngine Implementation | Evidence |
 |------------|----------|--------------------------|----------|
-| PI1.1 | Processing Accuracy | Schema validation | `shared/schemas.py` |
+| PI1.1 | Processing Accuracy | Schema validation | `services/shared/schemas.py` |
 | PI1.2 | Processing Completeness | Kafka exactly-once (future) | Consumer config |
 | PI1.3 | Processing Timeliness | Latency monitoring | Prometheus metrics |
 | PI1.4 | Output Accuracy | Human-in-the-loop review | Review queue system |

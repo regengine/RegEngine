@@ -1,6 +1,6 @@
 # Engineering Hand-Off: Authority & Fact Lineage System
 
-> **Status: Ship. Commit. Proceed.**
+> **Historical handoff:** This document refers to an earlier authority and fact-lineage system and paths that no longer exist in this checkout. It is not a current implementation or release checklist. For current architecture and schema guidance, see [ARCHITECTURE.md](../../ARCHITECTURE.md) and [SCHEMA_CHANGE_POLICY.md](SCHEMA_CHANGE_POLICY.md).
 
 ---
 
@@ -18,7 +18,7 @@
 
 | File | Purpose |
 |------|---------|
-| `docs/SCHEMA_CHANGE_POLICY.md` | Change classification, deployment protocol, hard invariants |
+| `docs/engineering/SCHEMA_CHANGE_POLICY.md` | Change classification, deployment protocol, hard invariants |
 
 **Instruction:** Any schema PR that violates this document is rejected without debate.
 

@@ -5,5 +5,5 @@ This file described an older multi-surface database layout that included non-FSM
 Use the current FSMA-first sources instead:
 
 - `README.md`
-- `docs/FSMA_RAILWAY_DEPLOYMENT.md`
+- `docs/operations/FSMA_RAILWAY_DEPLOYMENT.md`
 - `docs/specs/FSMA_204_MVP_SPEC.md`
