@@ -337,6 +337,32 @@ class TestExportFdaEndpoint:
         assert "X-RegEngine-Disclaimer" not in response.headers
         assert [line for line in response.text.splitlines() if line] == [epcis_export.FDA_CSV_HEADER]
 
+    def test_carrier_column_emits_joined_carrier(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+        ts = datetime(2026, 3, 12, 14, 30, tzinfo=timezone.utc)
+        row = {
+            "event_type": "shipping",
+            "traceability_lot_code": "LOT-A",
+            "product_description": "Romaine Hearts",
+            "quantity": 10,
+            "unit_of_measure": "cases",
+            "event_timestamp": ts,
+            "location_name": "Valley Fresh Farms",
+            "location_gln": "",
+            "ship_from": "Valley Fresh Farms",
+            "ship_from_gln": "",
+            "ship_to": "Metro DC",
+            "ship_to_gln": "",
+            "carrier": "Cold Express Logistics",
+            "temperature_c": "",
+            "sha256_hash": "",
+        }
+        monkeypatch.setattr(epcis_export, "_query_tenant_events", lambda *a, **k: [row])
+        response = client.post("/api/v1/export/fda", json={"tenant_id": str(uuid4())})
+        assert response.status_code == 200
+        lines = [line for line in response.text.splitlines() if line]
+        assert lines[0] == epcis_export.FDA_CSV_HEADER
+        assert "Cold Express Logistics" in lines[1]
+
 
 class TestListExportFormats:
     def test_lists_formats(self, client: TestClient) -> None:

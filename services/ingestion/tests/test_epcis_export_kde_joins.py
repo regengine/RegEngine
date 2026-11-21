@@ -75,6 +75,12 @@ def test_query_selects_shipping_and_harvest_kde_aliases(monkeypatch: pytest.Monk
     assert "kde_key = 'immediate_previous_source'" in sql
     assert "kde_key = 'harvester_name'" in sql
     assert "kde_key = 'field_id'" in sql
+    # EDI, CSV, and webhook persist carrier as `carrier`. The supplier
+    # portal still writes `carrier_name`. Join both; never `IN (...)` — two
+    # keys on one event would duplicate the CTE row.
+    assert "kde_key = 'carrier'" in sql
+    assert "kde_key = 'carrier_name'" in sql
+    assert "COALESCE(k_carrier.kde_value, k_carrier_name.kde_value) AS carrier" in sql
 
 
 def test_every_tenant_kdes_join_has_tenant_predicate(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -154,7 +154,7 @@ def _query_tenant_events(
                     k_from_gln.kde_value AS ship_from_gln,
                     k_to.kde_value AS ship_to,
                     k_to_gln.kde_value AS ship_to_gln,
-                    k_carrier.kde_value AS carrier,
+                    COALESCE(k_carrier.kde_value, k_carrier_name.kde_value) AS carrier,
                     k_temp.kde_value AS temperature_c,
                     k_ref.kde_value AS reference_document,
                     k_tlc_src.kde_value AS tlc_source_reference,
@@ -172,7 +172,8 @@ def _query_tenant_events(
                 LEFT JOIN tenant_kdes k_from_gln ON k_from_gln.cte_event_id = e.id AND k_from_gln.tenant_id = e.tenant_id AND k_from_gln.kde_key = 'ship_from_gln'
                 LEFT JOIN tenant_kdes k_to ON k_to.cte_event_id = e.id AND k_to.tenant_id = e.tenant_id AND k_to.kde_key = 'ship_to_location'
                 LEFT JOIN tenant_kdes k_to_gln ON k_to_gln.cte_event_id = e.id AND k_to_gln.tenant_id = e.tenant_id AND k_to_gln.kde_key = 'ship_to_gln'
-                LEFT JOIN tenant_kdes k_carrier ON k_carrier.cte_event_id = e.id AND k_carrier.tenant_id = e.tenant_id AND k_carrier.kde_key = 'carrier_name'
+                LEFT JOIN tenant_kdes k_carrier ON k_carrier.cte_event_id = e.id AND k_carrier.tenant_id = e.tenant_id AND k_carrier.kde_key = 'carrier'
+                LEFT JOIN tenant_kdes k_carrier_name ON k_carrier_name.cte_event_id = e.id AND k_carrier_name.tenant_id = e.tenant_id AND k_carrier_name.kde_key = 'carrier_name'
                 LEFT JOIN tenant_kdes k_temp ON k_temp.cte_event_id = e.id AND k_temp.tenant_id = e.tenant_id AND k_temp.kde_key = 'temperature_celsius'
                 LEFT JOIN tenant_kdes k_ref ON k_ref.cte_event_id = e.id AND k_ref.tenant_id = e.tenant_id AND k_ref.kde_key = 'reference_document'
                 LEFT JOIN tenant_kdes k_tlc_src ON k_tlc_src.cte_event_id = e.id AND k_tlc_src.tenant_id = e.tenant_id AND k_tlc_src.kde_key = 'tlc_source_reference'
