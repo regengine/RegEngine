@@ -1323,3 +1323,306 @@ def test_real_refresh_route_ignores_preexisting_cached_token_response(monkeypatc
     assert "old-cached-token" not in response.text
     store.claim_session_by_token.assert_awaited_once()
     assert fake.get_calls == []
+
+
+def _multipart_upload(
+    boundary,
+    *,
+    payload=b"ISA*data\x00\xff boundary-A inside file",
+    lot="LOT-1",
+    filename="receipt.edi",
+    media_type="application/edi-x12",
+    duplicate=False,
+    reverse=False,
+):
+    fields = [("lot", lot), ("file", payload)]
+    if duplicate:
+        fields.append(("lot", lot))
+    if reverse:
+        fields.reverse()
+    body = b""
+    for name, data in fields:
+        body += f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"'.encode()
+        if name == "file":
+            body += f'; filename="{filename}"\r\nContent-Type: {media_type}'.encode()
+        body += b"\r\n\r\n" + (data.encode() if isinstance(data, str) else data) + b"\r\n"
+    return body + f"--{boundary}--\r\n".encode()
+
+
+def _multipart_headers(boundary, **extra):
+    return {
+        "Idempotency-Key": "multipart",
+        **_tenant_headers("tenant"),
+        "Content-Type": f'multipart/form-data; boundary="{boundary}"',
+        **extra,
+    }
+
+
+@pytest.mark.asyncio
+async def test_real_redis_multipart_retry_with_fresh_boundary(monkeypatch, disposable_redis):
+    """Across replicas: fresh framing recognizes pending and completed uploads."""
+    import asyncio
+
+    _patched_middleware(monkeypatch, disposable_redis)
+    started, release = asyncio.Event(), asyncio.Event()
+    calls = []
+
+    async def handler(request):
+        # Middleware must replay the ORIGINAL body to the route's normal parser.
+        async with request.form() as form:
+            upload = form["file"]
+            calls.append((form["lot"], upload.filename, await upload.read()))
+        started.set()
+        await release.wait()
+        return {"receipt": "stored-once"}
+
+    async with AsyncClient(transport=ASGITransport(app=_build_app(handler)), base_url="http://test") as a:
+        async with AsyncClient(transport=ASGITransport(app=_build_app(handler)), base_url="http://test") as b:
+            first = asyncio.create_task(
+                a.post("/echo", headers=_multipart_headers("boundary-A"), content=_multipart_upload("boundary-A"))
+            )
+            await asyncio.wait_for(started.wait(), 3)
+            try:
+                pending = await b.post(
+                    "/echo", headers=_multipart_headers("boundary-B"), content=_multipart_upload("boundary-B")
+                )
+                assert pending.status_code == 409
+                assert pending.json() == {"error": "idempotency_request_in_progress"}
+                changed = await b.post(
+                    "/echo",
+                    headers=_multipart_headers("boundary-C"),
+                    content=_multipart_upload("boundary-C", payload=b"changed"),
+                )
+                assert changed.json() == {"error": "idempotency_key_conflict"}
+            finally:
+                release.set()
+                original = await first
+            retry = await b.post(
+                "/echo", headers=_multipart_headers("boundary-D"), content=_multipart_upload("boundary-D")
+            )
+    assert original.status_code == retry.status_code == 200
+    assert original.json() == retry.json() == {"receipt": "stored-once"}
+    assert calls == [("LOT-1", "receipt.edi", b"ISA*data\x00\xff boundary-A inside file")]
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"payload": b"changed"},
+        {"lot": "LOT-2"},
+        {"filename": "other.edi"},
+        {"media_type": "text/plain"},
+        {"duplicate": True},
+        {"reverse": True},
+    ],
+)
+def test_multipart_changed_contents_still_conflict(monkeypatch, change):
+    _patched_middleware(monkeypatch, _FakeAsyncRedis())
+    calls = []
+
+    async def handler(request):
+        calls.append(await request.body())
+        return {"stored": True}
+
+    with TestClient(_build_app(handler)) as client:
+        assert (
+            client.post(
+                "/echo", headers=_multipart_headers("boundary-A"), content=_multipart_upload("boundary-A")
+            ).status_code
+            == 200
+        )
+        retry = client.post(
+            "/echo", headers=_multipart_headers("boundary-B"), content=_multipart_upload("boundary-B", **change)
+        )
+    assert retry.status_code == 409
+    assert retry.json() == {"error": "idempotency_key_conflict"}
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize(
+    "body,content_type",
+    [
+        (b"broken", "multipart/form-data"),
+        (b"--boundary-A\r\n", "multipart/form-data; boundary=boundary-A"),
+        (b"--boundary-A\r\ninvalid header\r\n\r\nx\r\n--boundary-A--\r\n", "multipart/form-data; boundary=boundary-A"),
+        (b"tiny", "multipart/form-data; boundary=" + "x" * 257),
+    ],
+)
+def test_malformed_multipart_never_reserves_or_replays(monkeypatch, body, content_type):
+    fake = _FakeAsyncRedis()
+    _patched_middleware(monkeypatch, fake)
+    with TestClient(_build_app()) as client:
+        response = client.post(
+            "/echo", content=body, headers=_multipart_headers("boundary-A", **{"Content-Type": content_type})
+        )
+    assert response.status_code == 400
+    assert response.json() == {"error": "invalid_multipart_body"}
+    assert not fake.store
+
+
+def test_httpx_generated_boundaries_replay_same_upload(monkeypatch):
+    _patched_middleware(monkeypatch, _FakeAsyncRedis())
+    calls = []
+
+    async def handler(request):
+        calls.append(await request.body())
+        return {"receipt": "one"}
+
+    with TestClient(_build_app(handler)) as client:
+        headers = {"Idempotency-Key": "httpx-upload", **_tenant_headers("tenant")}
+        first = client.post(
+            "/echo",
+            headers=headers,
+            data={"lot": "LOT-1"},
+            files={"file": ("receipt.edi", b"ISA*data", "application/edi-x12")},
+        )
+        retry = client.post(
+            "/echo",
+            headers=headers,
+            data={"lot": "LOT-1"},
+            files={"file": ("receipt.edi", b"ISA*data", "application/edi-x12")},
+        )
+    assert first.request.headers["content-type"] != retry.request.headers["content-type"]
+    assert first.status_code == retry.status_code == 200
+    assert first.json() == retry.json()
+    assert len(calls) == 1
+
+
+def test_multipart_legacy_fingerprint_fails_closed(monkeypatch):
+    """Changing the fingerprint must never reexecute an old cached operation."""
+    import hashlib
+
+    fake = _FakeAsyncRedis()
+    _patched_middleware(monkeypatch, fake)
+    headers = _multipart_headers("boundary-A")
+    body = _multipart_upload("boundary-A")
+    old = hashlib.sha256(
+        json.dumps(
+            [
+                "POST",
+                "http://testserver/echo",
+                headers["Content-Type"],
+                "",
+                "",
+                _INTERNAL_SECRET,
+                "",
+                "",
+            ]
+        ).encode()
+    )
+    old.update(body)
+    fake.store[b"idempotency:tenant:multipart"] = json.dumps(
+        {
+            "fingerprint": old.hexdigest(),
+            "status": 200,
+            "body": '{"stored":true}',
+            "headers": {},
+        }
+    ).encode()
+    calls = []
+
+    async def handler(request):
+        calls.append(1)
+        return {"stored": True}
+
+    with TestClient(_build_app(handler)) as client:
+        retry = client.post("/echo", content=body, headers=headers)
+    assert retry.status_code == 409
+    assert retry.json() == {"error": "idempotency_key_conflict"}
+    assert calls == []
+    assert not fake.setex_calls
+
+
+@pytest.mark.parametrize("file_part", [False, True])
+def test_multipart_part_count_limit_rejects_before_reservation(monkeypatch, file_part):
+    """Stop at part 1001, even when many more empty parts fit under 10 MiB."""
+    import shared.idempotency as module
+
+    fake = _FakeAsyncRedis()
+    _patched_middleware(monkeypatch, fake)
+    parser_type = module.MultipartParser
+    completed_parts = []
+
+    def counting_parser(boundary, callbacks):
+        original = callbacks["on_part_end"]
+
+        def part_end():
+            completed_parts.append(1)
+            original()
+
+        return parser_type(boundary, {**callbacks, "on_part_end": part_end})
+
+    monkeypatch.setattr(module, "MultipartParser", counting_parser)
+    filename = '; filename="empty.edi"' if file_part else ""
+    part = f'--boundary-A\r\nContent-Disposition: form-data; name="item"{filename}\r\n\r\n\r\n'.encode()
+    body = part * 10_000 + b"--boundary-A--\r\n"
+    assert len(body) < 10 * 1024 * 1024
+    calls = []
+
+    async def handler(request):
+        calls.append(1)
+        return {"accepted": True}
+
+    with TestClient(_build_app(handler)) as client:
+        response = client.post("/echo", headers=_multipart_headers("boundary-A"), content=body)
+    assert response.status_code == 400
+    assert response.json() == {"error": "invalid_multipart_body"}
+    assert len(completed_parts) == 1000
+    assert not calls
+    assert not fake.store
+
+
+def test_multipart_file_and_field_limits_are_independent(monkeypatch):
+    """Permit 1000 fields plus 1000 files, as Starlette does by default."""
+    _patched_middleware(monkeypatch, _FakeAsyncRedis())
+    field = b'--boundary-A\r\nContent-Disposition: form-data; name="item"\r\n\r\n\r\n'
+    file = b'--boundary-A\r\nContent-Disposition: form-data; name="file"; filename=""\r\n\r\n\r\n'
+    body = (field + file) * 1000 + b"--boundary-A--\r\n"
+    with TestClient(_build_app()) as client:
+        response = client.post("/echo", headers=_multipart_headers("boundary-A"), content=body)
+    assert response.status_code == 200
+
+
+@pytest.mark.parametrize("file_part", [False, True])
+def test_multipart_field_size_limit_does_not_limit_files(monkeypatch, file_part):
+    """Starlette's 1 MiB part limit applies to text fields, not file data."""
+    fake = _FakeAsyncRedis()
+    _patched_middleware(monkeypatch, fake)
+    filename = '; filename="receipt.edi"' if file_part else ""
+    body = (
+        f'--boundary-A\r\nContent-Disposition: form-data; name="item"{filename}\r\n\r\n'.encode()
+        + b"x" * (1024 * 1024 + 1)
+        + b"\r\n--boundary-A--\r\n"
+    )
+
+    async def handler(request):
+        return {"bytes": len(await request.body())}
+
+    with TestClient(_build_app(handler)) as client:
+        response = client.post("/echo", headers=_multipart_headers("boundary-A"), content=body)
+    assert response.status_code == (200 if file_part else 400)
+    assert bool(fake.store) == file_part
+
+
+def test_non_multipart_content_type_cannot_impersonate_multipart_fingerprint(monkeypatch):
+    from shared.idempotency import _multipart_fingerprint
+
+    _patched_middleware(monkeypatch, _FakeAsyncRedis())
+    headers = _multipart_headers("boundary-A")
+    body = _multipart_upload("boundary-A")
+    calls = []
+
+    async def handler(request):
+        calls.append(1)
+        return {"stored": True}
+
+    with TestClient(_build_app(handler)) as client:
+        assert client.post("/echo", headers=headers, content=body).status_code == 200
+        response = client.post(
+            "/echo",
+            headers={**headers, "Content-Type": "multipart-v1"},
+            content=_multipart_fingerprint(headers["Content-Type"], body),
+        )
+    assert response.status_code == 409
+    assert response.json() == {"error": "idempotency_key_conflict"}
+    assert calls == [1]
