@@ -7,7 +7,6 @@ import { Container } from '@/components/layout/container';
 import { PageHeader } from '@/components/layout/page-header';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { trackBookCallClick } from '@/lib/conversion-events';
 
 export default function ContactPage() {
   return (
@@ -16,26 +15,19 @@ export default function ContactPage() {
         <PageHeader
           size="hero"
           eyebrow={<span className="font-mono uppercase">Contact</span>}
-          title="Talk with the RegEngine team"
+          title="Contact RegEngine"
           description="Reach out for FSMA 204 implementation support, pilot onboarding, or enterprise pricing."
           className="border-b-0 pb-0"
         />
 
-        {/* Gap Analysis Offer */}
+        {/* Email only ask */}
         <Card padding="compact" className="mt-6 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
           <span className="text-ui text-re-text-secondary">
-            <strong className="font-medium text-re-text-primary">Book a free gap-analysis call:</strong>{' '}
-            30 minutes with the founder to walk through your FSMA 204 posture and identify coverage gaps.
+            <strong className="font-medium text-re-text-primary">Ask by email:</strong>{' '}
+            Email the founder at christopher@regengine.co with your FSMA 204 questions and where your records have gaps. RegEngine is in Beta, and email is the way to reach the founder right now.
           </span>
           <Button asChild variant="secondary" size="lg" className="shrink-0">
-            <a
-              href="https://calendly.com/regengine/fsma-strategy-session"
-              onClick={() => trackBookCallClick('contact_page')}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Book call
-            </a>
+            <a href="mailto:christopher@regengine.co">Email the founder</a>
           </Button>
         </Card>
 
@@ -59,17 +51,15 @@ export default function ContactPage() {
 
             <Card padding="spacious">
               <Clock className="mb-2 h-4 w-4 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
-              <p className="text-subheading text-re-text-primary">Talk to the Founder</p>
+              <p className="text-subheading text-re-text-primary">Email the Founder</p>
               <p className="mt-1 text-ui text-re-text-secondary">
-                Christopher Sellers, founder and engineer. Typical response within one business day.
+                Christopher Sellers, founder and engineer. Email is the way to reach him right now.
               </p>
               <a
-                href="https://www.linkedin.com/in/christophersellers"
-                target="_blank"
-                rel="noopener noreferrer"
+                href="mailto:christopher@regengine.co"
                 className="mt-3 inline-block text-ui text-re-brand underline decoration-re-border-strong underline-offset-[3px] hover:decoration-re-brand"
               >
-                Connect on LinkedIn
+                christopher@regengine.co
               </a>
             </Card>
           </div>
