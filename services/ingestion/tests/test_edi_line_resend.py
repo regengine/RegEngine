@@ -53,7 +53,7 @@ from app.edi_ingestion import (  # noqa: E402
 )
 from app.edi_interchange import EDIInterchange  # noqa: E402
 from app.edi_line_identity import EDILineRegistry, StoredLine  # noqa: E402
-from fastapi import FastAPI  # noqa: E402
+from fastapi import FastAPI, HTTPException  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from shared.cte_persistence import core as cte_core  # noqa: E402
 from shared.cte_persistence.models import StoreResult  # noqa: E402
@@ -298,7 +298,7 @@ def test_case_b_a_corrected_quantity_is_refused_not_dropped(post, stores: _Store
     # The stored value stands and nothing else was written.
     assert stores.snapshot() == before
     assert (f"{GTIN}-LOT-B", 25.0) in stores.quantities()
-    # The correction is on record for review, with the value it proposed.
+    # The rejection log holds the correction, with the value it proposed.
     record = rejection_log._edi_rejection_store[TENANT][detail["rejection_id"]]
     assert record["reason"] == "edi_line_content_conflict"
     assert record["needs_review"] is True
@@ -399,6 +399,39 @@ def test_a_refused_correction_frees_its_isa13(post, stores: _Stores, monkeypatch
 
     assert refused.status_code == 409, refused.text
     # Only the first interchange holds a claim, so the partner can use this ISA13 again.
+    assert len(stores.redis) == 1
+
+
+def test_a_refusal_the_log_cannot_record_sends_no_rejection_id(
+    post, stores: _Stores, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A ``rejection_id`` is returned only once the rejection log took the record.
+
+    If the recorder fails, its error replaces the 409. Nothing is stored and
+    the ISA13 is free, so the same document sent again is refused with a record.
+    """
+    monkeypatch.setattr(dedup_mod, "_redis_client", lambda: _Redis(stores.redis))
+    _stored(post, stores)
+    before = stores.snapshot()
+    corrected = shipping_advice([LINES[0], ("30", "LOT-B"), LINES[2]], **NEW_ENVELOPE)
+
+    def _unavailable(**kwargs: Any) -> None:
+        raise HTTPException(status_code=503, detail="EDI rejection could not be recorded.")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(edi_routes, "_record_edi_rejection", _unavailable)
+        unrecorded = post(corrected)
+
+    assert unrecorded.status_code == 503, unrecorded.text
+    # The recorder's own error: no conflicts and no id for a record that does not exist.
+    assert unrecorded.json() == {"detail": "EDI rejection could not be recorded."}
+    assert stores.snapshot() == before
+    assert len(stores.redis) == 1
+
+    retried = post(corrected)
+
+    assert retried.status_code == 409, retried.text
+    assert retried.json()["detail"]["rejection_id"] in rejection_log._edi_rejection_store[TENANT]
     assert len(stores.redis) == 1
 
 

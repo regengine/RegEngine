@@ -374,8 +374,10 @@ whichever of the two EDI endpoints receives it.
 - The 409 lists each conflicting line with its lot and `stored_event_id`,
   sets `needs_review`, and returns a `rejection_id` from the EDI rejection
   log. It never returns the stored values. The rejection record holds each
-  refused line as submitted. A resend does not change a stored record;
-  superseding events are a later change.
+  refused line as submitted and is only as durable as that log: while the
+  log is a per-worker memory buffer, a restart loses the record. No
+  `rejection_id` is returned unless the log took the record. A resend does
+  not change a stored record; superseding events are a later change.
 - A line missing from a resend is not a retraction. Its stored event stays.
 - Two lines with the same lot and product both persist, told apart by
   occurrence. If one of two such lines with different quantities is removed,

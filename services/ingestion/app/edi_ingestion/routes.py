@@ -422,11 +422,13 @@ async def _store_edi_events(
 
     A line already stored with other content is refused by ``ingest_events``
     with 409. The refusal is written to the EDI rejection log here with what
-    each refused line said, so the correction is on record for review and is
-    neither applied nor dropped. ``extracted`` is only the first transaction
-    set, so the line itself is recorded: it may sit in a later set. The 409
-    body is unchanged. The exception also frees the ISA13 claim: nothing was
-    stored.
+    each refused line said, so the correction is neither applied nor dropped
+    without notice. The record is only as durable as that log, which
+    ``rejection_log`` describes, and its id is returned only if the log took
+    the record: an error from the recorder replaces the 409. ``extracted`` is
+    only the first transaction set, so the line itself is recorded: it may
+    sit in a later set. The 409 body is unchanged. The exception also frees
+    the ISA13 claim: nothing was stored.
     """
     try:
         return await ingest_events(
@@ -447,6 +449,7 @@ async def _store_edi_events(
             event.kdes.get("edi_line_index") or index + 1: event.model_dump(mode="json")
             for index, event in enumerate(payload.events)
         }
+        # Not caught: no ``rejection_id`` is sent for a record the log did not take.
         record = _record_edi_rejection(
             tenant_id=sender_tenant_id,
             transaction_set=transaction_set,

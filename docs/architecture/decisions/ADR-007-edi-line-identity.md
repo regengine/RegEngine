@@ -92,10 +92,19 @@ and replaced on the next store.
 A line whose identity is stored with different content returns HTTP 409
 `edi_line_content_conflict` before anything is written. The response names
 each stored event, sets `needs_review` and carries a `rejection_id`. It never
-returns stored values, because the caller may hold a write-only key. The
-rejection record holds each refused line as it was submitted. Nothing
+returns stored values, because the caller may hold a write-only key. Nothing
 from the interchange is stored and the ISA13 stays free. The correction is
-neither dropped nor applied.
+neither applied nor dropped without notice: the sender has the 409.
+
+The rejection record holds each refused line as it was submitted. It goes to
+the EDI rejection log and is only as durable as that log. When this was
+written the log was one worker's memory, capped per tenant, and the warning
+it writes to the application log carries identifiers only, so a restart loses
+what the partner submitted. This limit was found in review, after the
+question behind this section was answered. Storing the log in PostgreSQL is a
+separate change (PR 3818) that covers this refusal with every other EDI
+rejection. The `rejection_id` is returned only if the log took the record: an
+error from the recorder replaces the 409.
 
 The target is the amendment chain the canonical model already defines: a new
 event with `supersedes_event_id`, the stored row moving `active` to
@@ -143,6 +152,9 @@ receipt answers 409. Corrections arrive under a new ISA13.
   other four sets are not pinned.
 - Refusals are all-or-nothing: one conflicting line holds back the other lines
   of that interchange.
+- Until the EDI rejection log is durable (section 3), the review record of a
+  refused correction is lost when its worker restarts. The partner keeps the
+  409 and the document.
 - `POST /api/v1/ingest/edi` and `POST /api/v1/ingest/edi/document` build 856
   events separately. They must give a line the same identity and content, and
   `test_both_856_routes_describe_a_line_the_same_way` holds them to it.
@@ -154,5 +166,6 @@ receipt answers 409. Corrections arrive under a new ISA13.
 ## References
 
 - PR 3811, #3833, #3840; `docs/engineering/TRACEABILITY_FILE_INTAKE.md`, Line identity
+- PR 3818 (the EDI rejection log in PostgreSQL)
 - `docs/engineering/SCHEMA_CHANGE_POLICY.md` sections 5.1 and 5.2
 - #1335 (the two key formulas differ by design)
