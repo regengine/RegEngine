@@ -53,6 +53,86 @@ def test_missing_required_field_resolves_to_none() -> None:
     assert svc._event_value_for_required_field({}, "traceability_lot_code") is None
 
 
+def test_official_csv_template_keys_fill_named_fda_columns() -> None:
+    """Shipping CSV templates persist carrier_name / reference_document / temperature_celsius."""
+    row = svc._event_to_fda_row(
+        {
+            "kdes": {
+                "carrier_name": "Cold Express Logistics",
+                "reference_document": "BOL-2026-0227-042",
+                "temperature_celsius": "3.5",
+                "po_number": "PO-2026-4521",
+            }
+        }
+    )
+    assert row["Carrier"] == "Cold Express Logistics"
+    assert row["Reference Document Number"] == "BOL-2026-0227-042"
+    assert row["Temperature (°F)"] == "3.5"
+    extras = json.loads(row["Additional KDEs (JSON)"])
+    assert extras.get("po_number") == "PO-2026-4521"
+    assert "carrier_name" not in extras
+    assert "reference_document" not in extras
+    assert "temperature_celsius" not in extras
+
+
+def test_canonical_kde_wins_over_ingest_alias() -> None:
+    row = svc._event_to_fda_row(
+        {
+            "kdes": {
+                "carrier": "Canonical Carrier",
+                "carrier_name": "Template Carrier",
+                "reference_document_number": "ASN-1",
+                "reference_document": "BOL-2",
+            }
+        }
+    )
+    assert row["Carrier"] == "Canonical Carrier"
+    assert row["Reference Document Number"] == "ASN-1"
+
+
+def test_edi_reference_document_number_satisfies_required_shipping_kde() -> None:
+    event = {
+        "event_type": "shipping",
+        "id": "edi-856",
+        "traceability_lot_code": "LOT-1",
+        "product_description": "Roma Tomatoes",
+        "quantity": 200,
+        "unit_of_measure": "cases",
+        "kdes": {
+            "ship_date": "2026-02-27",
+            "ship_from_location": "Valley Fresh Farms",
+            "ship_to_location": "Metro DC",
+            "tlc_source_reference": "PACK-1",
+            "reference_document_number": "BOL-9001",
+        },
+    }
+    assert svc._event_value_for_required_field(event, "reference_document") == "BOL-9001"
+    summary = svc._build_completeness_summary([event])
+    assert "reference_document" not in summary.get("missing_required_by_field", {})
+    assert event["id"] not in [item["event_id"] for item in summary["missing_required_events"]]
+
+
+def test_edi_bol_alias_keeps_shipping_coverage_above_export_gate() -> None:
+    """Without the alias, a stored BOL plus a real TLC-source gap is 7/9 (<80%) and 409s."""
+    event = {
+        "event_type": "shipping",
+        "id": "edi-856",
+        "traceability_lot_code": "LOT-1",
+        "product_description": "Roma Tomatoes",
+        "quantity": 200,
+        "unit_of_measure": "cases",
+        "kdes": {
+            "ship_date": "2026-02-27",
+            "ship_from_location": "Valley Fresh Farms",
+            "ship_to_location": "Metro DC",
+            "reference_document_number": "BOL-9001",
+        },
+    }
+    summary = svc._build_completeness_summary([event])
+    assert summary["missing_required_by_field"] == {"tlc_source_reference": 1}
+    assert summary["required_kde_coverage_ratio"] == round(8 / 9, 4)
+
+
 def test_empty_completeness_has_no_checks() -> None:
     summary = svc._build_completeness_summary([])
     assert summary["required_checks_total"] == 0

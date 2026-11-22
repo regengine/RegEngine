@@ -97,6 +97,39 @@ _NAMED_KDE_COLUMNS = {
     "growing_area_name": "Growing Area",
 }
 
+# Ingest paths persist these alternate keys. Official CSV templates use
+# ``reference_document`` / ``carrier_name`` / ``temperature_celsius``;
+# EDI 850/856/810 store the BOL as ``reference_document_number``. Named
+# FDA columns and required-KDE coverage must read either spelling or the
+# 24-hour spreadsheet blanks a present KDE (and can 409 the export).
+_KDE_VALUE_ALIASES: dict[str, tuple[str, ...]] = {
+    "reference_document": ("reference_document_number",),
+    "reference_document_number": ("reference_document",),
+    "carrier": ("carrier_name",),
+    "temperature": ("temperature_celsius",),
+}
+
+# Alias keys of named columns, excluded from Additional KDEs once the
+# canonical column consumed them.
+_NAMED_KDE_ALIAS_KEYS = frozenset(
+    alias
+    for canonical, aliases in _KDE_VALUE_ALIASES.items()
+    if canonical in _NAMED_KDE_COLUMNS
+    for alias in aliases
+)
+
+
+def _kde_get(kdes: dict, key: str) -> Any:
+    """Read a KDE, falling back to the ingest-path alias when the canonical key is empty."""
+    value = kdes.get(key)
+    if value is not None and str(value).strip() != "":
+        return value
+    for alias in _KDE_VALUE_ALIASES.get(key, ()):
+        alias_value = kdes.get(alias)
+        if alias_value is not None and str(alias_value).strip() != "":
+            return alias_value
+    return value
+
 # KDE keys consumed by the literal dict block inside ``_event_to_fda_row``
 # (Ship From/To GLN+Name, Immediate Previous Source, TLC Source GLN/FDA
 # Reg). These must also be excluded from the "Additional KDEs (JSON)"
@@ -260,7 +293,7 @@ def _event_to_fda_row(event: dict, *, include_pii: bool = False) -> dict:
     # Map named KDE columns. Apply PII redaction on the named columns
     # that land in _PII_LOCATION_COLUMNS (e.g. "Receiving Location").
     for kde_key, col_name in _NAMED_KDE_COLUMNS.items():
-        raw = kdes.get(kde_key)
+        raw = _kde_get(kdes, kde_key)
         sanitized = sanitize_cell(raw) if raw else ""
         row[col_name] = _redact_location_value(sanitized, col_name, include_pii)
 
@@ -285,7 +318,13 @@ def _event_to_fda_row(event: dict, *, include_pii: bool = False) -> dict:
     # ``contact``) before encoding. This is a defensive default — the
     # primary PII columns are already redacted above; this catches the
     # long tail of unknown-shape KDE data.
-    extra_kdes = {k: v for k, v in kdes.items() if k not in _NAMED_KDE_COLUMNS and k not in _LITERAL_CONSUMED_KDES}
+    extra_kdes = {
+        k: v
+        for k, v in kdes.items()
+        if k not in _NAMED_KDE_COLUMNS
+        and k not in _LITERAL_CONSUMED_KDES
+        and k not in _NAMED_KDE_ALIAS_KEYS
+    }
     if extra_kdes and not include_pii:
         extra_kdes = _redact_extra_kde_pii(extra_kdes)
     row["Additional KDEs (JSON)"] = sanitize_cell(json.dumps(extra_kdes)) if extra_kdes else ""
@@ -494,7 +533,7 @@ def _event_value_for_required_field(event: dict, required_field: str) -> Any:
         return event.get(required_field)
     if required_field == "location_name":
         return event.get("location_name") or kdes.get("location_name")
-    return kdes.get(required_field)
+    return _kde_get(kdes, required_field)
 
 
 def _build_completeness_summary(events: list[dict]) -> dict:
