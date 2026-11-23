@@ -1,317 +1,73 @@
-# RLS Deployment Runbook
+# RLS deployment
 
-**Purpose**: Step-by-step guide for deploying RLS security layer to Supabase  
-**Audience**: DevOps / Deployment Team  
-**Estimated Time**: 30 minutes (+ backup/restore time if needed)
+The previous copy of this page told operators to run `./scripts/deploy_rls.sh` against local, staging, and production, then optionally disable row level security on every table in `public`. That procedure is retired.
 
----
+`scripts/deploy_rls.sh` now prints that direct RLS SQL deployment is retired (service-level Flyway SQL was removed in #2004) and exits 2. It does not apply migrations. Do not follow the old V27/V28 `pcos_*` steps, and do not disable row level security as a rollback.
 
-## Prerequisites
+Current database changes, including RLS policies, go through the Alembic chain as `regengine_migrator`. The blocking procedure is [Runtime Database Role Cutover](DATABASE_ROLE_CUTOVER.md). Production hard-requires RLS (`REGENGINE_REQUIRE_RLS_ENFORCEMENT=1`). A bypass-RLS credential is not an acceptable rollback.
 
-✅ **Required**:
-- [ ] PostgreSQL client (`psql`) installed
-- [ ] Supabase database credentials
-- [ ] Git branch `feature/tenant-isolation-infrastructure` merged/accessible
-- [ ] Recent database backup (CRITICAL!)
+## v144 client reads (`d8f3a1c6b902`)
 
-✅ **Environment Variables**:
+Revision v144 (`alembic/versions/20261119_d8f3a1c6b902_v144_anon_tenant_catalog_rls.py`, mirrored at `supabase/migrations/20261119120000_v144_anon_tenant_catalog_rls.sql`) removes anonymous and public SELECT on live tenant metadata and the product catalog. The migration header states it is **not applied to production** and must not be applied without an explicit yes from C.Lee. Merging the revision into `main` is not a production apply.
+
+Once the revision is applied on a database that has the Supabase client roles and `auth.uid()`:
+
+| Surface | Who can SELECT | Notes |
+|---|---|---|
+| `public.memberships` | `authenticated`, only rows where `user_id = auth.uid()` (`memberships_authenticated_self_read`) | Created only when the `authenticated` role and `auth.uid()` exist. `tenant_isolation_memberships` is narrowed to `regengine` and `regengine_sysadmin`. Membership writes are not broadened. |
+| `public.tenants` | `authenticated` members (`tenants_authenticated_member_read`: `id` is in the caller's memberships) | `tenants_read_all` is dropped. `anon` loses SELECT, INSERT, UPDATE, DELETE, TRUNCATE, TRIGGER, and REFERENCES. `authenticated` keeps SELECT only; the other six privileges, including TRUNCATE, are revoked. |
+| `public.tenants` | `regengine` / `regengine_sysadmin` (`tenants_backend_context_read`) | A sysadmin read requires `current_user = regengine_sysadmin` and `regengine.is_sysadmin = true`. Otherwise the row id must equal `get_tenant_context()`. |
+| `public.tenants` writes | backend roles only (`tenants_write_own`, UPDATE) | The sysadmin-flag branch of this policy is false, so v111's separate sysadmin policy remains the global write path. Other backend writes require `id = get_tenant_context()`. |
+| `public.product_catalog` | `authenticated` members | `tenant_id` (text) is compared to `memberships.tenant_id::text`. `FORCE ROW LEVEL SECURITY` is enabled. `public_read_product_catalog` is dropped and `anon` SELECT is revoked. `service_role_full_access` and service-role grants are left unchanged. |
+
+App-only databases that lack `product_catalog`, the `anon` or `authenticated` roles, or `auth.uid()` skip the client policies that need those objects. Dropping `tenants_read_all` still happens. Missing client objects fail closed: the member policies are not created without `auth.uid()`.
+
+Authenticated catalog and tenant reads depend on existing SELECT on `memberships.user_id` and `memberships.tenant_id`. v144 does not grant those columns. A missing grant fails with permission denied.
+
+A `regengine` session with no tenant selected now fails inside `get_tenant_context()` (`app.tenant_id not set`) instead of returning an empty tenant list. `regengine_sysadmin` with `regengine.is_sysadmin=true` does not take that branch.
+
+The supported migration runner reapplies v111 after upgrading to head. That reapply drops `tenants_write_own` only when `tenants_backend_context_read` is absent, so a later v144 policy is preserved. Startup pins the resulting tenant policy tuples in `services/shared/database.py` (`_EXPECTED_RUNTIME_POLICY_MANIFEST_SHA256` for `regengine` and `regengine_sysadmin`). Boot with `REGENGINE_REQUIRE_RLS_ENFORCEMENT=1` refuses policy-manifest drift. Do not copy those digests into this page; they change when the catalog changes.
+
+Downgrade restores the previous public and anonymous exposure and the excess client grants, including TRUNCATE. It is not a security-preserving rollback. Do not paste the commented downgrade block from the SQL mirror into a hosted session.
+
+### Checks before an approved apply
+
+Run the structural tests, then the disposable-PostgreSQL cases. A machine without PostgreSQL skips the database cases; CI must run them with `--require-db` before anyone applies v144.
+
 ```bash
-# For local testing
-export LOCAL_SUPABASE_DB_URL='postgresql://postgres:postgres@localhost:54322/postgres'
-
-# For staging
-export STAGING_SUPABASE_DB_URL='postgresql://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres'
-
-# For production  
-export PROD_SUPABASE_DB_URL='postgresql://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres'
+python3 -m pytest tests/migrations/test_v144_anon_tenant_catalog_rls.py tests/migrations/test_v144_runtime_policy_manifest.py tests/migrations/test_v111_runtime_role_grants.py -q --no-cov -o addopts=''
 ```
 
----
+On a disposable database after apply, `tenants_read_all` and `public_read_product_catalog` must be gone. On a Supabase database that has `auth.uid()`, these policy names must exist: `memberships_authenticated_self_read`, `tenants_authenticated_member_read`, `tenants_backend_context_read`, `tenants_write_own`, and `product_catalog_authenticated_member_read`. An app-only database that skipped the client policies will not have the `authenticated` policies.
 
-## Phase 1: Local Testing (REQUIRED)
-
-### 1.1 Start Local Supabase
-```bash
-cd /path/to/RegEngine
-supabase start
-```
-
-### 1.2 Run Deployment Script
-```bash
-./scripts/deploy_rls.sh local
-```
-
-**Expected Output**:
-```
-✅ Database connection successful
-✅ All pre-flight checks passed
-✅ V27__rls_core_security_tables.sql completed
-✅ V28__rls_pcos_vertical_tables.sql completed
-✅ RLS enabled on 60+ tables
-```
-
-### 1.3 Verify Tenant Isolation
-```bash
-psql $LOCAL_SUPABASE_DB_URL -f services/admin/migrations/verify_rls_isolation.sql
-```
-
-**Expected Output**: All tests show `✅ PASS`
-
-### 1.4 Test PostgREST API
-```bash
-# Test with tenant header
-curl http://localhost:54321/rest/v1/pcos_projects \
-  -H "apikey: YOUR_ANON_KEY" \
-  -H "Authorization: Bearer YOUR_JWT_WITH_TENANT_CLAIM"
-
-# Should return only tenant's projects
-```
-
-**✋ STOP**: If any test fails, fix issues before proceeding to staging!
-
----
-
-## Phase 2: Staging Deployment
-
-### 2.1 Create Backup
-1. Go to Supabase Dashboard → Database → Backups
-2. Click "Create Backup"
-3. Wait for completion (~5-10 min for typical DBs)
-4. ✅ Verify backup shows "Completed"
-
-### 2.2 Deploy to Staging
-```bash
-./scripts/deploy_rls.sh staging
-```
-
-**Monitor** deployment output for any errors.
-
-### 2.3 Post-Deployment Verification
-```bash
-# Run verification script
-psql $STAGING_SUPABASE_DB_URL -f services/admin/migrations/verify_rls_isolation.sql
-
-# Check RLS status
-psql $STAGING_SUPABASE_DB_URL -c "
-  SELECT 
-    schemaname,
-    tablename,
-    rowsecurity AS rls_enabled
-  FROM pg_tables
-  WHERE schemaname = 'public'
-    AND tablename LIKE 'pcos_%'
-  ORDER BY tablename
-  LIMIT 10;
-"
-```
-
-### 2.4 Integration Testing
-- [ ] Test frontend login flows
-- [ ] Test API endpoints with proper JWTs
-- [ ] Verify dashboard shows only tenant data
-- [ ] Test multi-tenant scenarios
-- [ ] Check application logs for RLS errors
-
-### 2.5 Rollback (if needed)
-```bash
-# Restore from backup via Supabase Dashboard
-# OR manually:
-psql $STAGING_SUPABASE_DB_URL -c "
-  -- Disable RLS on all tables
-  DO \$\$
-  DECLARE
-    table_name text;
-  BEGIN
-    FOR table_name IN 
-      SELECT tablename FROM pg_tables WHERE schemaname = 'public'
-    LOOP
-      EXECUTE 'ALTER TABLE ' || table_name || ' DISABLE ROW LEVEL SECURITY';
-    END LOOP;
-  END \$\$;
-"
-```
-
-**✋ STOP**: Only proceed to production if staging tests pass 100%
-
----
-
-## Phase 3: Production Deployment
-
-### 3.1 Pre-Deployment Checklist
-- [ ] All staging tests passed
-- [ ] Recent production backup exists (< 24 hours old)
-- [ ] Maintenance window scheduled
-- [ ] Team notified of deployment
-- [ ] Rollback plan ready
-- [ ] Monitoring dashboards open
-
-### 3.2 Maintenance Window Starts
-1. **Optional**: Enable maintenance mode in app
-2. **Optional**: Stop non-critical background jobs
-
-### 3.3 Create Production Backup
-```bash
-# Via Supabase Dashboard (recommended)
-# OR
-pg_dump $PROD_SUPABASE_DB_URL > backup_before_rls_$(date +%Y%m%d_%H%M%S).sql
-```
-
-### 3.4 Deploy RLS Migrations
-```bash
-./scripts/deploy_rls.sh prod
-```
-
-**Watch** for any errors. Abort if deployment fails.
-
-### 3.5 Immediate Verification
-```bash
-# Quick smoke test
-psql $PROD_SUPABASE_DB_URL -f services/admin/migrations/verify_rls_isolation.sql
-
-# Check table count
-psql $PROD_SUPABASE_DB_URL -c "
-  SELECT COUNT(*) as rls_enabled_tables
-  FROM pg_tables t
-  JOIN pg_class c ON c.relname = t.tablename
-  WHERE t.schemaname = 'public' AND c.relrowsecurity = true;
-"
-```
-
-**Expected**: ~60 tables with RLS enabled
-
-### 3.6 Application Testing
-- [ ] Frontend loads correctly
-- [ ] Users can log in
-- [ ] Dashboard shows correct tenant data
-- [ ] API endpoints respond normally
-- [ ] No RLS errors in logs
-
-### 3.7 Monitoring (First Hour)
-Watch for:
-- ❌ 403 errors (RLS denying access)
-- ❌ Slow query warnings (RLS overhead)
-- ❌ Cross-tenant data leaks
-- ✅ Normal application behavior
-
-### 3.8 End Maintenance Window
-- [ ] Disable maintenance mode
-- [ ] Resume background jobs
-- [ ] Notify team of successful deployment
-
----
-
-## Phase 4: Post-Deployment
-
-### 4.1 Performance Monitoring
 ```sql
--- Check for slow queries (daily for first week)
-SELECT 
-  query,
-  calls,
-  mean_exec_time,
-  total_exec_time
-FROM pg_stat_statements
-WHERE query LIKE '%pcos_%' OR query LIKE '%tenants%'
-ORDER BY mean_exec_time DESC
-LIMIT 20;
+SELECT tablename, policyname, roles
+FROM pg_policies
+WHERE schemaname = 'public'
+  AND tablename IN ('tenants', 'memberships', 'product_catalog')
+ORDER BY 1, 2;
 ```
 
-### 4.2 Security Audit
-```bash
-# Weekly check: Verify RLS still enabled
-psql $PROD_SUPABASE_DB_URL -c "
-  SELECT 
-    tablename,
-    CASE WHEN rowsecurity THEN '✅ RLS ON' ELSE '❌ RLS OFF' END
-  FROM pg_tables t
-  JOIN pg_class c ON c.relname = t.tablename
-  WHERE t.schemaname = 'public' AND t.tablename LIKE 'pcos_%';
-"
-```
+## Invite acceptance under FORCE RLS (SEL-612)
 
-### 4.3 Documentation Updates
-- [ ] Update architecture diagrams
-- [ ] Document JWT claim requirements
-- [ ] Update API documentation
-- [ ] Add RLS to onboarding docs
+`POST /v1/auth/accept-invite` is unauthenticated and rate-limited to 10 requests per minute. The handler is `accept_invite` in `services/admin/app/invite_routes.py`. The consolidated app mounts that router at `/v1` only when the `admin` router is enabled (`server/routers_mount.py`). The legacy admin entrypoint uses the same prefix. `public.invites` is FORCE RLS. Reading it with no tenant context raises, because `get_tenant_context()` raises when `app.tenant_id` is unset (v097). The handler does not broaden policies or grants.
 
----
+On PostgreSQL it:
 
-## Rollback Procedures
+1. Hashes the token with SHA-256 and calls `get_invite_tenant_by_token_hash`. A token that matches no still-usable invite returns no tenant. The handler then returns HTTP 400 with detail `Invite is not usable` and does not read `invites` without context.
+2. Sets that tenant with `TenantContext.set_tenant_context`, so later statements use the ordinary tenant policies.
+3. Arms global identity context only around two blocks, and disarms in `finally` even when the block fails. `tests/security/test_global_admin_context_allowlist.py` classifies `accept_invite` as `auth-bootstrap` with exactly two `arm_global_admin_context` calls.
+   - First arm: case-insensitive global user lookup or create. New users are `is_sysadmin=False` and `status=active`. A user whose `status` or `global_status` is not `active` is not reinstated. The user insert is flushed before disarm.
+   - Second arm: `ensure_passwordless_identity` for the invited mailbox and the invite's organization, then `flush` while the context is still armed.
+4. Attaches the membership from the invite's tenant and role, writes the `invite.accept` audit event, and commits. An audit-chain write failure rolls back and returns HTTP 500 with error `audit_write_failed`. Duplicate-user, duplicate-membership, and email-ownership races roll back and return the same 400 as an unusable invite.
 
-### If Caught Early (< 5 minutes)
-```bash
-# Restore from backup via Supabase Dashboard
-# Dashboard → Database → Backups → Restore
-```
+SQLite and other non-PostgreSQL binds skip `get_invite_tenant_by_token_hash`. They still use the same handler. An existing membership marks the invite accepted and then returns 400 so the token cannot be reused.
 
-### If Caught Late (> 5 minutes)
-1. **Don't panic** - RLS is additive, doesn't delete data
-2. Assess impact:
-   - Are users blocked from their data?
-   - Is there cross-tenant leakage?
-3. Choose rollback strategy:
-   - **Full restore**: From backup (loses recent data)
-   - **Disable RLS**: Temporarily disable, fix, re-enable
-   ```sql
-   -- Emergency disable (if blocking users)
-   ALTER TABLE problematic_table DISABLE ROW LEVEL SECURITY;
-   ```
+The invite link puts the one-time token in the URL fragment (`/accept-invite#token=...`), so the secret is not sent to servers or proxies. Creating an invite is the authenticated route `POST /v1/admin/invites` (`users.invite`).
 
-### Post-Rollback
-- [ ] Identify root cause
-- [ ] Fix migrations locally
-- [ ] Re-test in staging
-- [ ] Schedule new deployment
+### Pitfalls
 
----
-
-## Troubleshooting
-
-### Issue: "Users can't see their data"
-**Cause**: JWT missing `tenant_id` claim  
-**Fix**: Update auth logic to include claim in JWT
-
-### Issue: "Query too slow after RLS"
-**Cause**: Missing index on `tenant_id`  
-**Fix**: Already added in V002 migrations, verify:
-```sql
-SELECT tablename, indexname 
-FROM pg_indexes 
-WHERE indexname LIKE '%tenant%';
-```
-
-### Issue: "Admin can't see all tenants"
-**Cause**: Admin queries need service role, not RLS  
-**Fix**: Use service role key for admin operations
-
-### Issue: "Migration failed halfway"
-**Cause**: Table doesn't exist, syntax error, etc.  
-**Fix**: Check migration output, fix SQL, rollback, retry
-
----
-
-## Success Criteria
-
-✅ All 60+ tables have RLS enabled  
-✅ Tenant isolation verification passes  
-✅ No cross-tenant data leaks  
-✅ Application functions normally  
-✅ Performance impact < 10% on queries  
-✅ Zero RLS-related errors in logs
-
----
-
-## Support Contacts
-
-- **Database Issues**: DBA team
-- **Application Issues**: Backend team
-- **Security Questions**: Security team
-- **Emergency Rollback**: On-call engineer
-
----
-
-**Deployment Completed By**: __________  
-**Date**: __________  
-**Result**: ✅ Success / ❌ Rolled Back  
-**Notes**: ___________________________
+- A uniform 400 hides expired, revoked, accepted, unknown, inactive-user, ambiguous case-variant user, and ownership-conflict cases. Do not add distinct client errors for those.
+- Leaving global admin context armed past the `finally` would let later statements on that session bypass tenant RLS. Both arms stay inside `try`/`finally`.
+- v144 and SEL-612 solve different problems. v144 closes anonymous PostgREST reads of `tenants` and `product_catalog`. SEL-612 lets pre-auth invite acceptance write global identity rows under FORCE RLS without a standing admin context.
+- Applying v144 without the membership SELECT grants makes authenticated client reads fail closed. Applying the v144 downgrade reopens anonymous reads.

@@ -61,3 +61,11 @@ If the header is missing or the key is invalid you will receive **401 Unauthor
 - Rotate keys at least every 90 days.
 - Limit each key to a single tenant and minimal scopes.
 - Enable audit logging (already provided by `shared/api_key_store.py`).
+
+## Invite acceptance
+
+API keys are not the onboarding path. `POST /v1/admin/invites` creates a tenant invite (`users.invite`). The recipient accepts it without a session at `POST /v1/auth/accept-invite`.
+
+The accept handler is unauthenticated, rate-limited to 10 requests per minute, and runs under FORCE RLS. It binds only the tenant of a still-usable invite, then arms global identity context twice (user lookup/create, then passwordless identity) and disarms in `finally`. New users are not sysadmins. Unusable invites return HTTP 400 `Invite is not usable`.
+
+The one-time token is in the URL fragment (`/accept-invite#token=...`). Operator constraints, including the separate v144 anonymous-read lockdown, are in [the RLS deployment note](../operations/rls_deployment_runbook.md).

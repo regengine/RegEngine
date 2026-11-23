@@ -9,6 +9,7 @@ RegEngine handles tenant-scoped food traceability data. The security model is bu
 - Cross-tenant writes are forbidden.
 - Tenant context must come from authenticated request context, trusted service context, or validated server-side mappings.
 - Client-supplied tenant identifiers must not override authenticated tenant context.
+- Anonymous database roles must not read `public.tenants` or `public.product_catalog`. Authenticated client reads of those tables are limited to the caller's own memberships (v144, revision `d8f3a1c6b902`). The revision is in source and is not authorization to apply it in production. See `docs/operations/rls_deployment_runbook.md`.
 
 ## Persistence Boundary
 
@@ -23,6 +24,7 @@ RegEngine handles tenant-scoped food traceability data. The security model is bu
 - API-key and JWT validation must fail closed outside explicitly configured development or test environments.
 - Development auth fallbacks are not production controls.
 - Supabase session state and internal RegEngine JWT handling are under consolidation; route behavior must be verified by tests, not assumed from client state.
+- `POST /v1/auth/accept-invite` is the pre-auth onboarding exception. It resolves a still-usable invite by token hash, binds that invite's tenant, and arms global identity context only for user lookup/create and passwordless identity provisioning (two `auth-bootstrap` arms, each disarmed in `finally`). New users are not sysadmins. Every unusable invite state returns HTTP 400 `Invite is not usable`.
 
 ## Administrative Boundary
 
