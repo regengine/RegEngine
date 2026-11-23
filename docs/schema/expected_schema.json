@@ -7103,6 +7103,10 @@
         "nullable": false,
         "type": "text"
       },
+      "phone": {
+        "nullable": true,
+        "type": "text"
+      },
       "postal_code": {
         "nullable": false,
         "type": "text"
