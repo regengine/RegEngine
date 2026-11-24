@@ -428,7 +428,7 @@ export default function CTEKDEGuidePage() {
             </p>
             <div className="flex flex-col flex-wrap gap-3 sm:flex-row">
               <Button asChild size="lg">
-                <Link href="/retailer-readiness">
+                <Link href="/buyer-programs">
                   <span>Get Your Readiness Score</span>
                   <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
                 </Link>

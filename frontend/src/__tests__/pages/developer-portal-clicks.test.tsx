@@ -2,7 +2,7 @@
  * The portal pages are static: they read the signed-in session from useAuth
  * and make no network calls. Every link they offer must land on a real page.
  *
- * SEL-419: The developer portal features live JSON events API status,
+ * SEL-419: The developer portal features JSON events API status,
  * endpoints dynamically derived from publicOpenApiSpec, and API keys list
  * with revocation action.
  */
@@ -116,8 +116,8 @@ describe('developer portal page', () => {
     it('renders the exact live header and labels EPCIS as (Preview)', () => {
         render(<DeveloperPortalPage />);
 
-        expect(screen.getByRole('heading', { name: 'The JSON events API is live.' })).toBeInTheDocument();
-        expect(screen.getByText('The JSON events API is live.')).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'The JSON events API is available by request with an issued API key.' })).toBeInTheDocument();
+        expect(screen.getByText('The JSON events API is available by request with an issued API key.')).toBeInTheDocument();
         expect(screen.getByText(/EPCIS \(Preview\)/)).toBeInTheDocument();
 
         const containerHtml = document.body.innerHTML;

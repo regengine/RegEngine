@@ -13,11 +13,11 @@ import { INGEST_CURL_SAMPLE, INGEST_ENV_SETUP } from '@/lib/api-samples/ingest-s
 export const metadata: Metadata = {
     title: 'Developers | RegEngine FSMA 204 Compliance API',
     description:
-        'Build on the RegEngine API: a JSON events API with KDE validation, 36 FSMA 204 rules, identity resolution, FDA export, compliance scoring, and request workflow management.',
+        'Build on the RegEngine API, including a JSON events API available by request with an issued API key, with KDE validation, 36 FSMA 204 rules, identity resolution, FDA export, compliance scoring, and request workflow management.',
     openGraph: {
         title: 'Developers | RegEngine FSMA 204 Compliance API',
         description:
-            'Build on the RegEngine API: JSON events API, rules engine, identity resolution, FDA export, compliance scoring, and request workflow.',
+            'Build on the RegEngine API: a JSON events API available by request with an issued API key, plus a rules engine, identity resolution, FDA export, compliance scoring, and request workflow.',
         url: 'https://regengine.co/developers',
         type: 'website',
     },
@@ -28,7 +28,7 @@ const capabilities = [
     {
         Icon: Braces,
         title: 'JSON events API',
-        description: 'POST CTE events as JSON with KDE validation. Inbound events are validated against FSMA 204 Key Data Elements; failures surface as exceptions before package assembly.',
+        description: 'The JSON events API is available by request with an issued API key. POST CTE events as JSON with KDE validation. Inbound events are validated against FSMA 204 Key Data Elements; failures surface as exceptions before package assembly.',
     },
     {
         Icon: Cog,

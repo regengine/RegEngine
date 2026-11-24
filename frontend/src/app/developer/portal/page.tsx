@@ -85,7 +85,7 @@ export default function DeveloperPortalPage() {
     return (
         <PageContainer className="space-y-6">
             <PageHeader
-                title="The JSON events API is live."
+                title="The JSON events API is available by request with an issued API key."
                 eyebrow="Developer portal"
                 description="How to reach the RegEngine API from your workspace. EPCIS (Preview) support is available for preview workflows."
                 className="mb-0"

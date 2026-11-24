@@ -52,7 +52,7 @@ export default function ContactPage() {
               <MessageSquare className="mb-2 h-4 w-4 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
               <p className="text-subheading text-re-text-primary">Assessment Intake</p>
               <p className="mt-1 text-ui text-re-text-secondary">Submit retailer readiness and receive founder review.</p>
-              <Link href="/retailer-readiness" className="mt-3 inline-block text-ui text-re-brand underline decoration-re-border-strong underline-offset-[3px] hover:decoration-re-brand">
+              <Link href="/buyer-programs" className="mt-3 inline-block text-ui text-re-brand underline decoration-re-border-strong underline-offset-[3px] hover:decoration-re-brand">
                 Open assessment
               </Link>
             </Card>

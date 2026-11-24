@@ -182,19 +182,19 @@ export function DataImportClient() {
     return (
         <FreeToolPageShell
             title="Data Import Hub"
-            subtitle="Get your traceability data into RegEngine. Upload CSV or XLSX files (including Sensitech TempTale logs), or connect via the JSON events API."
+            subtitle="Get your traceability data into RegEngine. Upload CSV or XLSX files (including Sensitech TempTale logs). The JSON events API is available by request with an issued API key."
             relatedToolIds={['ftl-checker', 'cte-mapper', 'kde-checker']}
         >
             <LeadGate
                 source="data-import"
                 headline="Unlock the Data Import Hub"
-                subheadline="Upload CSV or XLSX files (including IoT temperature logs), or connect via the JSON events API to start building your traceability records."
+                subheadline="Upload CSV or XLSX files (including IoT temperature logs) to start building your traceability records. The JSON events API is available by request with an issued API key."
                 ctaText="Access Import Tools"
                 teaser={
                     <Card padding="spacious" className="text-center">
                         <Upload className="mx-auto mb-3 h-6 w-6 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
                         <p className="text-subheading text-re-text-primary">Three Ways to Import</p>
-                        <p className="mt-2 text-ui text-re-text-secondary">CSV and XLSX upload with templates for every Critical Tracking Event (CTE) type, Sensitech TempTale CSV import, and the JSON events API.</p>
+                        <p className="mt-2 text-ui text-re-text-secondary">CSV and XLSX upload with templates for every Critical Tracking Event (CTE) type, plus Sensitech TempTale CSV import. The JSON events API is available by request with an issued API key.</p>
                     </Card>
                 }
             >
@@ -462,7 +462,7 @@ export function DataImportClient() {
                                     <div>
                                         <CardTitle>JSON Events API</CardTitle>
                                         <CardDescription>
-                                            Push CTE events from any system using a single REST endpoint.
+                                            The JSON events API is available by request with an issued API key. Push CTE events from any system using a single REST endpoint.
                                         </CardDescription>
                                     </div>
                                 </div>

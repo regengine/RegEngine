@@ -62,7 +62,7 @@ const problem = [
 const evidenceCards = [
   {
     title: "Ingest workspace",
-    description: "CTE/KDE records arrive through CSV upload or the JSON events API and enter the inflow workbench for coverage checking.",
+    description: "CTE and KDE records arrive through CSV upload and enter the inflow workbench for coverage checking. The JSON events API is available by request with an issued API key.",
     state: "needs-correction" as const,
     meta: "Inflow workbench",
     icon: Gauge,
@@ -84,7 +84,7 @@ const evidenceCards = [
 ];
 
 const workflow = [
-  { label: "Ingest", detail: "CSV uploads and JSON events API submissions enter the workbench.", icon: ScanLine },
+  { label: "Ingest", detail: "CSV uploads enter the workbench. The JSON events API is available by request with an issued API key.", icon: ScanLine },
   { label: "Check", detail: "CTE/KDE coverage and completeness are flagged in the inflow workbench.", icon: Database },
   { label: "Fix", detail: "Every gap gets a reason, owner, and recovery path.", icon: ClipboardCheck },
   { label: "Commit", detail: "Commit is our append-only step. After the checks you configure, accepted records enter the evidence ledger. Commit is not a certification, not an FDA gate, and not a retailer gate.", icon: ShieldCheck },
@@ -112,6 +112,7 @@ function IngestPathsCard() {
             </li>
           ))}
         </ul>
+        <p className="mt-3 text-small text-re-text-tertiary">The JSON events API is available by request with an issued API key.</p>
       </div>
       <div>
         <h3 className="text-heading text-re-text-primary">Preview</h3>
@@ -148,7 +149,7 @@ export default function HomePage() {
             RegEngine checks supplier records for CTE and KDE gaps before they become evidence, routes each gap to an owner, and keeps accepted records in an append-only ledger you can export to support your response to a request.
           </p>
           <p className="mt-3 max-w-[68ch] text-body text-re-text-secondary">
-            Send records by CSV upload or the JSON events API. EPCIS 2.0 is in Preview.
+            Send records by CSV upload. The JSON events API is available by request with an issued API key. EPCIS 2.0 is in Preview.
           </p>
           <Callout tone="neutral" className="mt-6 max-w-[68ch]">
             <p>

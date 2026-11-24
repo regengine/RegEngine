@@ -207,7 +207,7 @@ head -20 lot-export.csv`}
             {filterExperimentalToolLinks([
               { title: 'Try a Recall Drill', desc: 'Simulate an FDA recall request against the data you just posted', href: '/dashboard/recall-drills' },
               { title: 'CSV Bulk Ingest', desc: 'Upload a real supplier CSV through the Data Import Hub', href: '/tools/data-import' },
-              { title: 'EPCIS intake (Preview)', desc: 'Send records by CSV upload or the JSON events API. EPCIS 2.0 is in Preview on the Ingest page.', href: '/ingest' },
+              { title: 'EPCIS intake (Preview)', desc: 'Send records by CSV upload. The JSON events API is available by request with an issued API key. EPCIS 2.0 is in Preview on the Ingest page.', href: '/ingest' },
             ]).map(({ title, desc, href }) => (
               <li key={href}>
                 <Link

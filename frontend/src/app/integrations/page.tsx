@@ -32,10 +32,10 @@ import { cn } from "@/lib/utils";
 export const metadata: Metadata = {
   title: "Integrations: Supplier Data Intake | RegEngine",
   description:
-    "RegEngine accepts supplier data via CSV upload and the JSON events API, with custom-scoped connectors for ERP, food-safety, and retailer systems. EPCIS 2.0 is in Preview.",
+    "RegEngine accepts supplier data via CSV upload, with custom-scoped connectors for ERP, food-safety, and retailer systems. The JSON events API is available by request with an issued API key. EPCIS 2.0 is in Preview.",
   openGraph: {
     title: 'Integrations: Supplier Data Intake | RegEngine',
-    description: 'CSV upload and JSON events API intake, plus custom-scoped connectors for ERP, food-safety, and retailer systems. EPCIS 2.0 is in Preview.',
+    description: 'CSV upload intake, plus custom-scoped connectors for ERP, food-safety, and retailer systems. The JSON events API is available by request with an issued API key. EPCIS 2.0 is in Preview.',
     url: 'https://regengine.co/integrations',
     type: 'website',
   },
@@ -53,7 +53,7 @@ const CATEGORY_META: Record<
   CapabilityCategory,
   { title: string; eyebrow: string; icon: typeof Shield }
 > = {
-  developer_api: { title: "Developer APIs", eyebrow: "CSV upload, JSON events API, EPCIS (Preview)", icon: Code },
+  developer_api: { title: "Developer APIs", eyebrow: "CSV upload, JSON events API by request, EPCIS (Preview)", icon: Code },
   erp_warehouse: { title: "ERP & warehouse", eyebrow: "Files, extracts, mapping", icon: FileSpreadsheet },
   food_safety_iot: { title: "Food safety & IoT", eyebrow: "Audits, sensors, cold chain", icon: Thermometer },
   retailer_network: { title: "Retailer exports", eyebrow: "Outbound packages", icon: ShoppingCart },
@@ -104,7 +104,7 @@ export default function IntegrationsPage() {
             Know which sources are ready, guided, or custom scoped.
           </h1>
           <p className="mt-5 max-w-[68ch] text-body text-re-text-secondary">
-            A compact view of available intake modes, guided workflows, and custom-scoped implementation paths. Named vendor and retailer workflows require scope confirmation and evidence review before being treated as production connectors. Send records by CSV upload or the JSON events API. EPCIS 2.0 is in Preview.
+            A compact view of available intake modes, guided workflows, and custom-scoped implementation paths. Named vendor and retailer workflows require scope confirmation and evidence review before being treated as production connectors. Send records by CSV upload. The JSON events API is available by request with an issued API key. EPCIS 2.0 is in Preview.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Button asChild variant="secondary" size="lg">
@@ -132,7 +132,7 @@ export default function IntegrationsPage() {
             {grouped.length === 0 && (
               <EmptyState
                 title={NO_DATA_YET}
-                description="No intake paths are listed yet. Send records by CSV upload or the JSON events API."
+                description="No intake paths are listed yet. Send records by CSV upload. The JSON events API is available by request with an issued API key."
                 action={
                   <Button asChild size="sm">
                     <Link href="/onboarding/bulk-upload" className="no-underline">Upload a CSV</Link>

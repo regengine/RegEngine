@@ -100,7 +100,7 @@ export default function SupplierCompliancePage() {
 
                 <div className="flex flex-col justify-center gap-3 sm:flex-row">
                     <Button asChild size="lg">
-                        <Link href="/retailer-readiness" className="no-underline">
+                        <Link href="/buyer-programs" className="no-underline">
                             Check Your Readiness Score <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
                         </Link>
                     </Button>
@@ -273,7 +273,7 @@ export default function SupplierCompliancePage() {
                     </p>
                     <div className="flex flex-wrap justify-center gap-3">
                         <Button asChild size="lg">
-                            <Link href="/retailer-readiness" className="no-underline">
+                            <Link href="/buyer-programs" className="no-underline">
                                 Free Readiness Assessment <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
                             </Link>
                         </Button>

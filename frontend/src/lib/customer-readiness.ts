@@ -294,10 +294,10 @@ export const CAPABILITY_REGISTRY: CapabilityRegistryEntry[] = [
         id: 'webhooks',
         name: 'JSON events API (inbound)',
         category: 'developer_api',
-        status: 'implemented',
+        status: 'custom_scoped',
         delivery_mode: 'native_api',
         integration_type: 'api_based_custom',
-        customer_copy: 'Submit CTE events as JSON to POST /api/v1/webhooks/ingest for validation and downstream normalization (one-way inbound).',
+        customer_copy: 'The JSON events API is available by request with an issued API key. Submit CTE events as JSON to POST /api/v1/webhooks/ingest for validation and downstream normalization (one-way inbound).',
         evidence_url: '/docs/api',
     },
     {

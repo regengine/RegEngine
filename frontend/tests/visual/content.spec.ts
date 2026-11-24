@@ -115,14 +115,14 @@ test.describe('global content rules', () => {
 });
 
 test.describe('page-specific content rules', () => {
-    test('home: only CSV upload and JSON events API labeled Live', async ({ page }) => {
+    test('home: only CSV upload labeled Live', async ({ page }) => {
         await stabilize(page, '/');
         const live = await innermostMatching(page, '\\bLive\\b');
         const csvOrJson = /csv|json/i;
         for (const el of live) {
             expect.soft(
                 csvOrJson.test(el.text),
-                `home: non-CSV/JSON element labeled Live: <${el.tag}> ${el.text}`,
+                `home: non-CSV element labeled Live: <${el.tag}> ${el.text}`,
             ).toBe(true);
         }
     });
