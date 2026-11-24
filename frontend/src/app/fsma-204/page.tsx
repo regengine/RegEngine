@@ -289,6 +289,13 @@ export default function FSMA204BusinessGuidePage() {
             </p>
           </Card>
         </div>
+        <p className="mt-6 max-w-[68ch] text-ui text-re-text-secondary">
+          Building the spreadsheet yourself?{" "}
+          <Link href="/fsma-204/sortable-spreadsheet" className="text-re-brand underline decoration-re-border-strong underline-offset-[3px] hover:decoration-re-brand">
+            How to build the FSMA 204 sortable spreadsheet
+          </Link>
+          , with one tab per Critical Tracking Event and a free example workbook.
+        </p>
       </Section>
 
       {/* - HOW TO COMPLY - */}
