@@ -1221,13 +1221,21 @@ def _quantity_element_present(transaction_set: str, segments: list[list[str]]) -
 
 
 def _nonblank_quantity_value_present(transaction_set: str, segments: list[list[str]]) -> bool:
-    """True when a supplied quantity element is non-blank but invalid."""
+    """True when a supplied quantity element is non-blank but invalid.
+
+    A valid quantity on one line says nothing about a blank one on another,
+    so only a value that is present and not a positive number counts.
+    """
     wanted = _QUANTITY_SEGMENT_BY_SET.get(transaction_set)
     if not wanted:
         return False
     index = _QUANTITY_ELEMENT_INDEX_BY_SET.get(transaction_set, 2)
     return any(
-        segment and segment[0].upper() == wanted and len(segment) > index and bool(str(segment[index]).strip())
+        segment
+        and segment[0].upper() == wanted
+        and len(segment) > index
+        and bool(str(segment[index]).strip())
+        and _positive_float_or_none(segment[index]) is None
         for segment in segments
     )
 

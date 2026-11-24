@@ -477,6 +477,20 @@ def test_one_856_line_with_no_product_id_rejects_the_document(
     _assert_rejected_before_reservation(response, "856", ["product_description"], stored, reserved)
 
 
+@pytest.mark.parametrize("route", ["/", "/document"])
+def test_blank_856_line_quantity_beside_a_valid_one_is_a_missing_kde(
+    client: TestClient, stored: list[dict[str, Any]], reserved: list[Any], route: str
+) -> None:
+    """A valid quantity on one line does not make a blank one on another 'non-positive'."""
+    raw = _document(
+        "856", *ASN_HEADER, SHIP_FROM, SHIP_TO, *ASN_LINE, "LIN**SK*ROMAINE-6CT", "SN1***CA", "REF*BM*BOL-9001"
+    )
+
+    response = _post(client, route, raw, tlc_source_reference=TLC_SOURCE)
+
+    _assert_rejected_before_reservation(response, "856", ["quantity"], stored, reserved)
+
+
 def test_product_description_override_supplies_the_missing_product(
     client: TestClient, stored: list[dict[str, Any]]
 ) -> None:
