@@ -624,7 +624,7 @@ REGENGINE_TABLE_GRANTS.update(
         "fsma.evidence_attachments": ("SELECT",),
         "fsma.exception_comments": ("SELECT", "INSERT"),
         "fsma.exception_signoffs": ("SELECT", "INSERT"),
-        # v144 -- EDI rejection evidence. Append-only: never updated or deleted.
+        # v145 -- EDI rejection evidence. Append-only: never updated or deleted.
         "fsma.edi_rejections": ("SELECT", "INSERT"),
         "fsma.fda_export_log": ("SELECT", "INSERT"),
         "fsma.fda_sla_requests": ("SELECT", "INSERT", "UPDATE"),

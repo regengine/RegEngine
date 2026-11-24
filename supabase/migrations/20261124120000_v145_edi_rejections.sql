@@ -1,8 +1,8 @@
 -- alembic-revision: 056ffd2f8045
--- rendered-from: alembic/versions/20261111_056ffd2f8045_v144_edi_rejections.py (upgrade)
--- v144: durable EDI rejections.
+-- rendered-from: alembic/versions/20261124_056ffd2f8045_v145_edi_rejections.py (upgrade)
+-- v145: durable EDI rejections.
 --
--- Mirrors alembic/versions/20261111_056ffd2f8045_v144_edi_rejections.py.
+-- Mirrors alembic/versions/20261124_056ffd2f8045_v145_edi_rejections.py.
 -- Rejection ids were backed only by one worker's memory. Append-only for the
 -- runtime role; RLS is forced. v111's inventory keeps these grants across
 -- deploys.
