@@ -28,7 +28,7 @@ describe('/signup request access', () => {
     render(<SignupPage />);
 
     expect(screen.getByRole('heading', { name: /create your regengine workspace/i })).toBeInTheDocument();
-    expect(screen.getByText(/reviews each request and replies by email/i)).toBeInTheDocument();
+    expect(screen.getByText(/the founder reviews each request and replies by email/i)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /sign in/i })).toHaveAttribute('href', '/login');
     expect(screen.getByLabelText(/^name/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/^email/i)).toBeInTheDocument();
