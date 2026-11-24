@@ -14,7 +14,7 @@ describe("HomePage", () => {
       }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/send records by csv upload or the json events api\. epcis 2\.0 is in preview\./i),
+      screen.getByText(/send records by csv upload\. the json events api is available by request with an issued api key\. epcis 2\.0 is in preview\./i),
     ).toBeInTheDocument();
     expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
     expect(screen.getByText(/21 CFR 1\.1455\(c\)\(3\)\(ii\)/)).toBeInTheDocument();
