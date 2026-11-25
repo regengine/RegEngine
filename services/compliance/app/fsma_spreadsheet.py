@@ -17,7 +17,7 @@ from __future__ import annotations
 import csv
 import io
 import json
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timezone
 from typing import Any
 
 from .csv_safety import sanitize_cell, sanitize_sequence
@@ -196,6 +196,62 @@ def _parse_timestamp(raw: str, *, strict: bool = False) -> tuple[str, str]:
         # Legacy, non-strict behavior: return raw[:10] for non-FDA
         # callers that only need a best-effort display value.
         return (str(raw)[:10], "")
+
+
+def _event_sort_datetime(row: dict[str, str]) -> datetime:
+    """Return the UTC-aware instant used to sort one normalised row.
+
+    Sorting on the formatted ``event_date`` and ``event_time`` strings
+    compares a naive local clock against a UTC clock and lets the ``Z``
+    suffix split rows that are at the same instant. Parsing the strings
+    back into a datetime gives every row one comparable instant.
+
+    Policy for naive values: no tenant or facility zone is available on
+    this export path, so a naive time is taken as UTC for ordering only,
+    the same assumption as ``snapshots._as_dt``. The output labelling is
+    unchanged, so a naive time is still emitted without a ``Z`` and is
+    not falsely claimed to be UTC. Rows with no parseable date sort
+    first, matching the previous empty-string-first behaviour, and the
+    stable sort keeps the input order of rows at the same instant.
+    """
+    earliest = datetime.min.replace(tzinfo=timezone.utc)
+    date_text = (row.get("event_date") or "").strip()
+    time_text = (row.get("event_time") or "").strip()
+    if not date_text:
+        return earliest
+    # An explicit kdes.event_time override can carry a full timestamp.
+    if "T" in time_text:
+        try:
+            instant = datetime.fromisoformat(time_text.replace("Z", "+00:00"))
+        except ValueError:
+            instant = None
+        if instant is not None:
+            if instant.tzinfo is None:
+                return instant.replace(tzinfo=timezone.utc)
+            return instant.astimezone(timezone.utc)
+    try:
+        day = date.fromisoformat(date_text)
+    except ValueError:
+        return earliest
+    if not time_text:
+        return datetime.combine(day, time.min, tzinfo=timezone.utc)
+    parsed_time: time | None
+    try:
+        parsed_time = time.fromisoformat(time_text.replace("Z", "+00:00"))
+    except ValueError:
+        parsed_time = None
+        for fmt in ("%H:%M:%S", "%H:%M"):
+            try:
+                parsed_time = datetime.strptime(time_text, fmt).time()
+                break
+            except ValueError:
+                continue
+    if parsed_time is None:
+        return earliest
+    instant = datetime.combine(day, parsed_time)
+    if instant.tzinfo is None:
+        return instant.replace(tzinfo=timezone.utc)
+    return instant.astimezone(timezone.utc)
 
 
 def _is_recorded(value: Any) -> bool:
@@ -382,7 +438,9 @@ def generate_fda_csv(
     # ``strict_dates=True`` refuses to truncate malformed event_dates
     # into the FDA submission (issue #1108).
     normalised = [_normalise_event(e, strict_dates=True) for e in events]
-    normalised.sort(key=lambda r: (r.get("event_date") or "", r.get("event_time") or ""))
+    # Sort on a UTC-aware datetime, not the formatted strings, so zoned
+    # and unzoned rows on the same date share one ordering (issue #3618).
+    normalised.sort(key=_event_sort_datetime)
 
     for row in normalised:
         writer.writerow(sanitize_sequence([row[col] for col in FDA_COLUMNS]))
