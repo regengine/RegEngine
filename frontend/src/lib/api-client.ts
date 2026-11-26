@@ -1160,4 +1160,50 @@ class APIClient {
   }
 }
 
+/**
+ * The one place product code under src/app, src/components and src/hooks may
+ * reach `fetch` (tech-debt WI-11, 2026-11-04). ESLint rejects a bare `fetch(`
+ * there (`no-restricted-syntax` in eslint.config.mjs); route handlers under
+ * src/app/api keep their own. Use `apiClient` for authenticated service calls.
+ * Use `rawFetch` only when the request must NOT carry the session's
+ * Authorization / X-Tenant-ID headers, or needs Next.js fetch options
+ * (`next: { revalidate }`, `cache`): public endpoints, same-origin health
+ * probes, the public proof verifier upload. It passes both arguments through
+ * untouched, so a call site's request shape is exactly what it writes.
+ */
+export function rawFetch(
+  input: RequestInfo | URL,
+  init?: RequestInit & { next?: { revalidate?: number | false; tags?: string[] } },
+): Promise<Response> {
+  return fetch(input, init);
+}
+
+/**
+ * Minimal JSON request without session headers. Sends `Content-Type:
+ * application/json` only when a body is present, parses JSON when the body is
+ * JSON and keeps text otherwise, and throws `{ status, data }` on a non-2xx
+ * response. Moved verbatim from the supplier portal page (WI-11).
+ */
+export async function requestPublicJson<T>(url: string, init?: RequestInit): Promise<T> {
+  const response = await rawFetch(url, {
+    ...init,
+    headers: {
+      ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(init?.headers || {}),
+    },
+  });
+  const data = await response.text().then((text) => {
+    if (!text) return null;
+    try {
+      return JSON.parse(text);
+    } catch {
+      return text;
+    }
+  });
+  if (!response.ok) {
+    throw { status: response.status, data };
+  }
+  return data as T;
+}
+
 export const apiClient = new APIClient();

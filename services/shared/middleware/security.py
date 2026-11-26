@@ -77,5 +77,6 @@ def add_security(app: FastAPI):
         allow_credentials=should_allow_credentials(),
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=get_allowed_headers(),
+        expose_headers=["X-RegEngine-Preview"],
     )
     add_trusted_host(app)

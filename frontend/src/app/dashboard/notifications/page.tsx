@@ -10,6 +10,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Callout } from '@/components/ui/callout';
 import { ErrorState } from '@/components/ui/error-state';
+import { BetaUnavailableState } from '@/components/ui/beta-unavailable-state';
+import { isBetaUnavailableError } from '@/lib/dashboard-load-failure';
 import { Spinner } from '@/components/ui/spinner';
 import { fieldControlClasses } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
@@ -24,7 +26,7 @@ import {
 
 import { useAuth } from '@/lib/auth-context';
 import { useTenant } from '@/lib/tenant-context';
-import { getErrorRequestId, withRequestId } from '@/lib/api-error';
+import { apiError, getErrorRequestId, withRequestId } from '@/lib/api-error';
 
 /* ── Types matching NotificationPreferences ── */
 
@@ -81,7 +83,7 @@ async function apiFetchPrefs(tenantId: string): Promise<NotificationPreferences>
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
     });
-    if (!res.ok) throw withRequestId(new Error(`API error: ${res.status} ${res.statusText}`), res);
+    if (!res.ok) throw withRequestId(apiError(res.status, res.statusText), res);
     return res.json();
 }
 
@@ -244,7 +246,7 @@ export default function NotificationPrefsPage() {
                     <div className="flex justify-center py-16"><Spinner size="lg" /></div>
                 )}
 
-                {fetchFailed && <ErrorState message="We could not load this page." onRetry={() => refetchPrefs()} retrying={isFetching} requestId={getErrorRequestId(prefsError)} />}
+                {fetchFailed && (isBetaUnavailableError(prefsError) ? <BetaUnavailableState feature="Notification preferences" /> : <ErrorState message="We could not load this page." onRetry={() => refetchPrefs()} retrying={isFetching} requestId={getErrorRequestId(prefsError)} />)}
 
                 {saveError && (
                     <Callout tone="danger" role="alert" icon={AlertTriangle}>

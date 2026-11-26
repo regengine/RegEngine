@@ -123,5 +123,5 @@ def extract_domain(email: str) -> str:
     """Extract the domain from an email address."""
     try:
         return email.strip().lower().split("@")[1]
-    except (IndexError, AttributeError):
-        raise ValueError(f"Invalid email format: {email}")
+    except (IndexError, AttributeError) as exc:
+        raise ValueError(f"Invalid email format: {email}") from exc

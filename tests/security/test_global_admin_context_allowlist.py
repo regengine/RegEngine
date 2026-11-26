@@ -27,6 +27,9 @@ APPROVED_GLOBAL_ADMIN_ARMS = {
         1,
     ),
     ("services/admin/app/auth_routes.py", "get_me"): ("auth-bootstrap", 1),
+    # A usable invite proves mailbox control before either scoped arm:
+    # global user lookup/create, then passwordless identity provisioning.
+    ("services/admin/app/invite_routes.py", "accept_invite"): ("auth-bootstrap", 2),
     ("services/admin/app/dependencies.py", "get_current_user"): (
         "auth-bootstrap",
         2,
@@ -90,6 +93,13 @@ APPROVED_GLOBAL_ADMIN_ARMS = {
     # user ID across that user's own tenant history.
     ("services/admin/app/erasure_routes.py", "request_erasure"): (
         "identity-global-self-service",
+        1,
+    ),
+    # Tenant-scoped directory under PermissionChecker("users.read").
+    # Arm unlocks users_self_or_admin peer rows; MembershipModel.tenant_id
+    # still filters. SET LOCAL via arm/disarm (try/finally).
+    ("services/admin/app/user_routes.py", "list_users"): (
+        "tenant-scoped-directory",
         1,
     ),
     # Background coordination paths. These run only on ADMIN_DATABASE_URL and
@@ -191,5 +201,6 @@ def test_allowlist_uses_only_reviewed_authority_classes():
         "global-human",
         "global-human-or-workload",
         "identity-global-self-service",
+        "tenant-scoped-directory",
         "worker-maintenance",
     }

@@ -1,3 +1,5 @@
+// Hand-rolled on purpose (WI-11, 2026-11-04): a first-party beacon sink with
+// its own sampling and payload limits; nothing is proxied upstream.
 /**
  * First-party client error beacon (WS-10).
  *

@@ -72,8 +72,8 @@ def record_rejection(
         # Local import so test environments that stub out
         # ``shared.database`` (and SQLite-only test runs that monkey-patch
         # ``SessionLocal``) pick up the active value at call time.
-        from shared.database import SessionLocal  # noqa: PLC0415
-    except Exception:  # pragma: no cover  # noqa: BLE001
+        from shared.database import SessionLocal  # noqa: PLC0415 -- lazy import, avoids a module-load cycle
+    except Exception:  # noqa: BLE001 -- fail-safe path: this operation must not propagate a failure
         logger.error("rule_rejection_audit_no_session_factory")
         _capture_sentry("rule_rejection_audit_no_session_factory", {})
         raise RejectionAuditUnavailable("Rejection audit storage is unavailable") from None
@@ -86,7 +86,7 @@ def record_rejection(
     session = None
     try:
         session = SessionLocal()
-        from sqlalchemy import text  # noqa: PLC0415
+        from sqlalchemy import text  # noqa: PLC0415 -- lazy import, keeps module load light
 
         session.execute(
             text(
@@ -118,12 +118,12 @@ def record_rejection(
             },
         )
         session.commit()
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:  # noqa: BLE001 -- fail-safe path: this operation must not propagate a failure
         # Keep rejection fail-closed and make loss of durable evidence visible.
         try:
             if session is not None:
                 session.rollback()
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001 -- fail-safe path: this operation must not propagate a failure
             pass
         logger.error(
             "rule_rejection_audit_failed tenant=%s rule=%s error_type=%s",
@@ -144,13 +144,13 @@ def record_rejection(
         if session is not None:
             try:
                 session.close()
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001 -- fail-safe path: this operation must not propagate a failure
                 pass
 
 
 def _capture_sentry(message: str, extras: dict) -> None:
     try:
-        import sentry_sdk  # noqa: PLC0415
+        import sentry_sdk  # noqa: PLC0415 -- lazy import, keeps module load light
 
         sentry_sdk.capture_message(
             message,
@@ -158,7 +158,7 @@ def _capture_sentry(message: str, extras: dict) -> None:
             extras=extras,
             tags={"subsystem": "rules_engine", "component": "rejection_audit"},
         )
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 -- fail-safe path: this operation must not propagate a failure
         # Sentry is best-effort. The structured log line above is the
         # diagnostic fallback; neither substitutes for the required DB audit.
         logger.debug("sentry_capture_failed component=rejection_audit")

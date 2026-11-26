@@ -28,8 +28,6 @@ def _clear_env(monkeypatch):
     for var in (
         "RAW_DATA_BUCKET",
         "PROCESSED_DATA_BUCKET",
-        "KAFKA_BOOTSTRAP_SERVERS",
-        "KAFKA_TOPIC_NORMALIZED",
         "API_KEY",
         "REGENGINE_API_KEY",
         "AUTH_TEST_BYPASS_TOKEN",
@@ -52,10 +50,6 @@ def _clear_env(monkeypatch):
 
 
 class TestSettingsDefaults:
-    def test_kafka_dlq_default(self, _clear_env):
-        s = Settings()
-        assert s.kafka_topic_dlq == "ingest.dlq"
-
     def test_google_keys_none_by_default(self, _clear_env):
         s = Settings()
         assert s.google_api_key is None
@@ -69,14 +63,6 @@ class TestSettingsDefaults:
         s = Settings()
         assert s.raw_bucket == "reg-engine-raw-data-dev"
         assert s.processed_bucket == "reg-engine-processed-data-dev"
-
-    def test_kafka_bootstrap_default(self, _clear_env):
-        s = Settings()
-        assert s.kafka_bootstrap_servers == "redpanda:9092"
-
-    def test_kafka_topic_normalized_default(self, _clear_env):
-        s = Settings()
-        assert s.kafka_topic_normalized == "ingest.normalized"
 
     def test_static_api_key_is_not_a_setting(self, _clear_env):
         s = Settings()

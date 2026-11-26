@@ -18,7 +18,6 @@ from shared.tenant_models import (
     TenantControl,
 )
 
-from .graph_event_publisher import GraphEventPublisher
 from .neo4j_utils import Neo4jClient
 
 logger = structlog.get_logger("overlay-writer")
@@ -35,7 +34,6 @@ class OverlayWriter:
         """
         self.tenant_id = tenant_id
         self.db_name = Neo4jClient.get_tenant_database_name(tenant_id)
-        self.publisher = GraphEventPublisher()  # Initialize Kafka publisher for audit events
         logger.info(
             "overlay_writer_initialized",
             tenant_id=str(tenant_id),
@@ -108,8 +106,13 @@ class OverlayWriter:
                     framework=control.framework,
                 )
 
-                # Emit Kafka audit event for control creation
-                self.publisher.publish_control_event(tenant_id=str(self.tenant_id), control_data=control.dict())
+                # Audit trail: the Kafka graph.audit publisher was retired
+                # (WI-05); the structured log line is the record now.
+                logger.info(
+                    "tenant_control_committed",
+                    tenant_id=str(self.tenant_id),
+                    control_id=str(getattr(control, "id", None) or getattr(control, "control_id", None)),
+                )
 
                 return control
         finally:
@@ -189,8 +192,12 @@ class OverlayWriter:
                     confidence=mapping.confidence,
                 )
 
-                # Emit Kafka audit event for mapping creation
-                self.publisher.publish_mapping_event(tenant_id=str(self.tenant_id), mapping_data=mapping.dict())
+                # Audit trail: see create_tenant_control above.
+                logger.info(
+                    "control_mapping_committed",
+                    tenant_id=str(self.tenant_id),
+                    mapping_id=str(getattr(mapping, "id", None) or getattr(mapping, "mapping_id", None)),
+                )
 
                 return mapping
         finally:
