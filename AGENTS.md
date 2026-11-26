@@ -94,3 +94,22 @@ and `npm run build` for type errors. Full script list is in
 `frontend/package.json`.
 
 Some integration tests require PostgreSQL, Redis, Neo4j, Docker, or live services. If a command is blocked by local infrastructure or secrets, say so explicitly.
+
+A CLI backend deploy goes through `scripts/railway_deploy.sh`, never a bare `railway up`, and a backend change is live only once `/health` reports its SHA in `.build.commit_sha` (see "Deploying the backend by CLI"). The GitHub Actions path is the manual `workflow_dispatch` on `.github/workflows/deploy.yml`.
+
+## Deploying the backend by CLI
+
+The Railway service has no GitHub source. `.github/workflows/deploy.yml` deploys only on `workflow_dispatch` (the operator must pass confirm=deploy-prod), so a merge to `main` does not deploy. A CLI deploy from a checkout uses:
+
+```bash
+scripts/railway_deploy.sh
+```
+
+- Run it from a clean checkout whose HEAD is on `origin/main`. It refuses a dirty tree or an unmerged HEAD; `--allow-unmerged` overrides the second check on purpose.
+- It stamps the HEAD SHA into `build-sha.txt` for the upload only and restores the tracked placeholder afterwards. Never commit a real SHA into that file.
+- It runs `railway up --ci` with the service and environment from `RAILWAY_SERVICE_ID` / `RAILWAY_ENVIRONMENT_ID`, or from the linked project in `railway status`, plus `--project` when `RAILWAY_PROJECT_ID` is set, and attaches the message `<commit subject> @<short sha>`.
+- Run it from the primary checkout, not a git worktree: `railway up` cannot index a checkout whose `.git` is a file, and the script refuses one.
+- The default health URL belongs to one target: project RegEngine-Prod, environment production, service RegEngine, as `railway status` reports them. For anything else (an id picked by hand, or another linked project, environment or service) set `BACKEND_URL` to that target's public https URL; the script refuses otherwise, because the production default could pass while the real target never served the upload.
+- It then polls `${BACKEND_URL:-https://regengine-production.up.railway.app}/health` for up to 900 s and exits non-zero unless `.build.commit_sha` equals the SHA it shipped. Quote that line, not the upload, when reporting that a change is live.
+- Never run a bare `railway up`: the image it ships cannot say which commit it is, and `/health` answers `build.commit_sha: null`. The older `scripts/deploy_railway.sh` pushes `main` and waits for a GitHub-triggered deploy that no longer exists; do not use it.
+- Deploying is a production action. Do it only when Christopher asks for that deploy.
