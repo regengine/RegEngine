@@ -295,6 +295,35 @@ async def test_accept_invite_existing_user_gets_identity_rows(db_session, monkey
     assert identity[0].id == user.id
 
 
+async def test_accept_invite_identity_flush_conflict_rolls_back_real_session(db_session, monkeypatch):
+    """A failed flush expires ORM state before the handler calls rollback."""
+    from fastapi import HTTPException
+
+    token = _seed_invite(db_session, "flush-race@acme.test")
+
+    def provision_with_conflicting_membership(db, **kwargs):
+        ensure_passwordless_identity(db, **kwargs)
+        # Duplicate the pending membership to trigger a real constraint error
+        # at the same flush boundary as a concurrent successful acceptance.
+        db.add(MembershipModel(user_id=kwargs["user"].id, tenant_id=TENANT_ID, role_id=ROLE_ID))
+
+    monkeypatch.setattr(
+        "services.admin.app.invite_routes.ensure_passwordless_identity", provision_with_conflicting_membership
+    )
+    with pytest.raises(HTTPException) as exc:
+        await _accept_invite(db_session, token, monkeypatch)
+
+    assert exc.value.status_code == 400
+    assert exc.value.detail == "Invite is not usable"
+    assert db_session.is_active
+    assert db_session.info["is_admin"] is False
+    assert db_session.execute(select(UserModel).where(UserModel.email == "flush-race@acme.test")).first() is None
+    for model in (MembershipModel, UserEmailModel, OrganizationMembershipModel):
+        assert db_session.execute(select(func.count()).select_from(model)).scalar_one() == 0
+    invite = db_session.execute(select(InviteModel).where(InviteModel.email == "flush-race@acme.test")).scalar_one()
+    assert invite.accepted_at is None
+
+
 # ─────────────────────────────────────────────────────────────────────
 # Case-variant email handling (audit: acceptance moved a user_emails row
 # from another user when addresses differed only by case)
