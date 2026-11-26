@@ -114,7 +114,7 @@ def _edi_app() -> FastAPI:
 
 
 @pytest.fixture()
-def client(monkeypatch: pytest.MonkeyPatch, ingested: list) -> TestClient:
+def client(monkeypatch: pytest.MonkeyPatch, ingested: list, edi_rejection_rows) -> TestClient:
     monkeypatch.delenv("EDI_REQUIRE_PARTNER_ID", raising=False)
     monkeypatch.delenv(ALLOWLIST_ENV, raising=False)
     monkeypatch.delenv("EDI_PARTNER_ALLOWLIST", raising=False)
@@ -187,6 +187,88 @@ def test_missing_date_rejection_is_logged_for_review(client, store):
     record = rejection_log.list_edi_rejections(TENANT)[0]
     assert record["rejection_id"] == detail["rejection_id"]
     assert record["needs_review"] is True
+    assert store.keys == {}
+
+
+@pytest.mark.parametrize("route", ["", "/document"])
+def test_date_rejection_retains_source_document(client, store, route):
+    raw = _future_variant()
+    response = _post(client, raw, route)
+    assert response.status_code == 400, response.json()
+    record = rejection_log.list_edi_rejections(TENANT)[0]
+    assert record["source_document"] == raw.decode("utf-8")
+    assert record["rejected_date"] == record["extracted"]["ship_date_raw"]
+
+
+def test_later_set_date_rejection_retains_the_whole_interchange(client, store, ingested, edi_rejection_rows):
+    raw = FIXTURE.read_text(encoding="utf-8")
+    start, end = raw.index("ST*856"), raw.index("GE*")
+    valid_set = raw[start:end]
+    invalid_set = _future_variant().decode("utf-8")[start:]
+    invalid_set = invalid_set[: invalid_set.index("GE*")]
+    invalid_set = invalid_set.replace("ST*856*0001~", "ST*856*0002~").replace("*0001~", "*0002~")
+    interchange = (raw[:start] + valid_set + invalid_set + raw[end:]).replace("GE*1*", "GE*2*")
+
+    response = _post(client, interchange.encode("utf-8"), "/document")
+    assert response.status_code == 400, response.json()
+    record = rejection_log.list_edi_rejections(TENANT)[0]
+    assert record["source_document"] == interchange
+    assert valid_set in record["source_document"]
+    assert invalid_set in record["source_document"]
+    assert edi_rejection_rows == [record]
+    assert ingested == []
+    assert store.keys == {}
+
+
+@pytest.mark.parametrize("route", ["", "/document"])
+def test_date_rejection_storage_failure_is_retryable(client, store, ingested, monkeypatch, route):
+    def unavailable(record):
+        raise rejection_log.EDIRejectionUnavailable("storage unavailable")
+
+    monkeypatch.setattr(rejection_log, "_append_rejection", unavailable)
+    response = _post(client, _future_variant(), route)
+    assert response.status_code == 503, response.json()
+    assert "rejection_id" not in response.text
+    assert rejection_log.list_edi_rejections(TENANT) == []
+    assert ingested == []
+    assert store.keys == {}
+
+
+@pytest.mark.parametrize(
+    "transaction_set,header,line",
+    [
+        ("944", "W17*F*{date}*RECEIPT", "W07*5*CA**VN*ITEM***{lot}"),
+        ("945", "W06*F*SHIPMENT*{date}", "W12*CC*5*5*0*CA**VN*ITEM*{lot}"),
+    ],
+)
+def test_warehouse_date_rejection_is_document_scoped(client, store, ingested, transaction_set, header, line):
+    future = (datetime.now(timezone.utc) + timedelta(days=5)).strftime("%Y%m%d")
+    raw = FIXTURE.read_text(encoding="utf-8")
+    start, end = raw.index("ST*856"), raw.index("GE*")
+    body = [
+        f"ST*{transaction_set}*0001",
+        header.format(date=future),
+        line.format(lot="LOT-A"),
+        line.format(lot="LOT-B"),
+        "SE*5*0001",
+    ]
+    document = raw[:start] + "~".join(body) + "~" + raw[end:]
+    response = client.post(
+        "/api/v1/ingest/edi/document",
+        data={
+            "traceability_lot_code": VALID_TLC,
+            "tenant_id": TENANT,
+            "tlc_source_reference": "  warehouse-reference  ",
+        },
+        files={"file": ("warehouse.edi", document.encode(), "application/edi-x12")},
+    )
+    assert response.status_code == 400, response.json()
+    record = rejection_log.list_edi_rejections(TENANT)[0]
+    assert record["traceability_lot_code"] is None
+    assert record["extracted"]["tlc_source_reference"] == "warehouse-reference"
+    assert [item["lot_number"] for item in record["extracted"]["line_items"]] == ["LOT-A", "LOT-B"]
+    assert record["source_document"] == document
+    assert ingested == []
     assert store.keys == {}
 
 

@@ -131,7 +131,7 @@ def captured_payload() -> dict:
 
 
 @pytest.fixture()
-def client(monkeypatch: pytest.MonkeyPatch, captured_payload: dict) -> TestClient:
+def client(monkeypatch: pytest.MonkeyPatch, captured_payload: dict, edi_rejection_rows) -> TestClient:
     app = FastAPI()
     app.include_router(edi_router)
     app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
@@ -730,4 +730,3 @@ def test_warehouse_stripped_empty_lot_rejected_before_rebuild(transaction_set, l
             "caller-tlc",
         )
     assert any(err["loc"][-1] == "lot_number" for err in excinfo.value.errors())
-
