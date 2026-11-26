@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { BookCallLink } from "@/components/conversion/BookCallLink";
 import type { Metadata } from "next";
 import {
   ArrowRight,
@@ -163,7 +162,7 @@ export default function HomePage() {
               </Link>
             </Button>
             <Button asChild variant="secondary" size="lg">
-              <BookCallLink href="/contact" placement="home_page">Book a 30-min call</BookCallLink>
+              <a href="mailto:christopher@regengine.co">Email the founder</a>
             </Button>
           </div>
           <p className="mt-3 text-small text-re-text-tertiary">
@@ -258,15 +257,15 @@ export default function HomePage() {
           </Card>
           <Card padding="compact" className="flex flex-col">
             <ScanLine className="h-5 w-5 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
-            <h3 className="mt-4 text-heading text-re-text-primary">Talk it through</h3>
+            <h3 className="mt-4 text-heading text-re-text-primary">Ask by email</h3>
             <p className="mt-2 flex-1 text-ui text-re-text-secondary">
-              Thirty minutes with the founder on your supplier data and the records you need to hold. Bring one supplier file if you have it.
+              Email the founder with your questions about your supplier data and the records you need to hold. RegEngine is in Beta, and email is the way to reach the founder right now.
             </p>
             <Button asChild variant="secondary" className="mt-5 self-start">
-              <BookCallLink href="/contact" placement="home_next_steps">
-                Book a 30-min call
+              <a href="mailto:christopher@regengine.co">
+                Email the founder
                 <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
-              </BookCallLink>
+              </a>
             </Button>
           </Card>
         </div>
