@@ -16,8 +16,9 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from regengine_ingestion.sources import ECFRAdapter, FDAAdapter, FederalRegisterAdapter
 from shared.task_queue import register_task_handler
+
+from services.ingestion.regengine_ingestion.sources import ECFRAdapter, FDAAdapter, FederalRegisterAdapter
 
 from .routes import _run_adapter_ingest
 

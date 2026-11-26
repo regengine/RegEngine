@@ -11,7 +11,7 @@ All functions catch exceptions and return fallback values — never crash the AP
 
 import json
 import logging
-from typing import Any, Optional
+from typing import Optional
 
 from sqlalchemy import text
 

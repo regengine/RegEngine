@@ -10,11 +10,11 @@ Package layout:
 
 # Schema — enums and data classes
 # Integrity — TRUST-CRITICAL hash chain logic
-from shared.audit_logging.integrity import (  # noqa: F401
+from shared.audit_logging.integrity import (  # noqa: F401 -- re-export for existing importers
     AuditIntegrity,
     verify_audit_chain,
 )
-from shared.audit_logging.schema import (  # noqa: F401
+from shared.audit_logging.schema import (  # noqa: F401 -- re-export for existing importers
     AuditActor,
     AuditContext,
     AuditEvent,
@@ -25,7 +25,7 @@ from shared.audit_logging.schema import (  # noqa: F401
 )
 
 # Storage backends
-from shared.audit_logging.storage import (  # noqa: F401
+from shared.audit_logging.storage import (  # noqa: F401 -- re-export for existing importers
     AuditStorageBackend,
     AuditStorageError,
     InMemoryAuditStorage,
@@ -33,7 +33,7 @@ from shared.audit_logging.storage import (  # noqa: F401
 )
 
 # Writer — main interface, convenience methods, decorator
-from shared.audit_logging.writer import (  # noqa: F401
+from shared.audit_logging.writer import (  # noqa: F401 -- re-export for existing importers
     AuditLogger,
     audit_action,
     get_audit_logger,

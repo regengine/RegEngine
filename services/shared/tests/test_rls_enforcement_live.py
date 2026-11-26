@@ -22,6 +22,7 @@ from __future__ import annotations
 import os
 
 import pytest
+from tests.migrations.rls_db import skip_or_fail_without_db
 
 psycopg = pytest.importorskip("psycopg")
 
@@ -49,7 +50,7 @@ def _connect():
     try:
         conn = psycopg.connect(DATABASE_URL, connect_timeout=3)
     except Exception as exc:  # pragma: no cover - environment dependent
-        pytest.skip(f"cannot connect to DATABASE_URL: {exc}")
+        skip_or_fail_without_db(f"cannot connect to DATABASE_URL: {exc}")
     conn.autocommit = False
     return conn
 
@@ -76,7 +77,7 @@ def conn():
     c = _connect()
     if not _rls_schema_present(c):
         c.close()
-        pytest.skip("RLS schema not migrated (get_tenant_context absent) — live RLS test needs a migrated DB")
+        skip_or_fail_without_db("RLS schema not migrated (get_tenant_context absent) — live RLS test needs a migrated DB")
     try:
         yield c
     finally:
@@ -121,7 +122,7 @@ class TestRlsSchemaConfig:
         with conn.cursor() as cur:
             cur.execute("SELECT to_regclass('fsma.traceability_events')")
             if cur.fetchone()[0] is None:
-                pytest.skip("fsma.traceability_events not present")
+                skip_or_fail_without_db("fsma.traceability_events not present")
             cur.execute(
                 """
                 SELECT pg_get_expr(polqual, polrelid)
@@ -334,7 +335,7 @@ class TestFailClosedOnForcedTable:
             cur.execute("SELECT to_regclass('fsma.cte_events')")
             if cur.fetchone()[0] is None:
                 conn.rollback()
-                pytest.skip("fsma.cte_events not present — needs a migrated DB")
+                skip_or_fail_without_db("fsma.cte_events not present — needs a migrated DB")
             cur.execute("SELECT 1 FROM pg_roles WHERE rolname = 'regengine' AND NOT rolbypassrls AND NOT rolsuper")
             if cur.fetchone() is None:
                 conn.rollback()

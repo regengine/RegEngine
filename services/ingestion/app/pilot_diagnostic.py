@@ -35,6 +35,7 @@ _REASONS = frozenset(
         "duplicate_column",
         "extra_fields",
         "header_guess_applied",
+        "invalid_field",
         "location_normalized",
         "lot_code_possible_character_swap",
         "lot_code_no_digits",
@@ -113,6 +114,10 @@ def _parse_preview(text: str, fallback_cte: Optional[str]) -> tuple[dict[str, An
     # Human-readable warnings may contain uploaded values. Their deterministic
     # conditions are represented by row_log and the KDE checks below instead.
     events, errors, _warnings = ct.parse_csv_rows(text, fallback_cte, row_log=row_log, event_source_rows=source_rows)
+    line_layout = ct._physical_data_line_layout(text)
+    record_indices = {line: index + 2 for index, line in enumerate(line_layout.record_lines)}
+    if line_layout.header_line:
+        record_indices[line_layout.header_line] = 1
     grouped: dict[tuple[str, Optional[str], str, bool], set[int]] = {}
 
     def add(reason: str, field: Optional[str], disposition: str, row: int) -> None:
@@ -123,7 +128,12 @@ def _parse_preview(text: str, fallback_cte: Optional[str]) -> tuple[dict[str, An
 
     for entry in row_log:
         if entry.disposition in {"rejected", "flagged", "skipped"}:
-            add(entry.reason, entry.field, entry.disposition, entry.row_number)
+            add(
+                entry.reason,
+                entry.field,
+                entry.disposition,
+                record_indices.get(entry.row_number, entry.row_number),
+            )
     for row, event in zip(source_rows, events):
         for field in ct._validate_kde_completeness(event.cte_type.value, event, event.kdes):
             add("missing_kde", field, "flagged", row)

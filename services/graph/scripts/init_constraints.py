@@ -9,10 +9,12 @@ import sys
 from pathlib import Path
 
 # Add app to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# The repo root for ``services.graph.app.*``, services/ for ``shared.*`` (WI-02).
+for _entry in (Path(__file__).resolve().parents[2], Path(__file__).resolve().parents[3]):
+    sys.path.insert(0, str(_entry))
 
 import structlog
-from app.neo4j_utils import Neo4jClient
+from services.graph.app.neo4j_utils import Neo4jClient
 from neo4j.exceptions import ClientError, ServiceUnavailable, SessionExpired
 
 logger = structlog.get_logger("graph-init")
