@@ -2,6 +2,7 @@
 
 Locks:
 - _get_real_tlc: happy path, no-rows, exception path, explicit-null column
+- _get_product_for_tlc: recorded description, None when no row, 503 on lookup failure (#3617)
 - StartDrillRequest / DrillStatus / DrillResponse / DrillGrade pydantic models
 - POST /drill/start: deterministic default, explicit index, index wrap-around,
   real TLC/product used, no real data -> 409 (SEL-513)
@@ -32,7 +33,7 @@ from app.mock_audit import (
     _get_real_tlc,
     router,
 )
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 # ---------------------------------------------------------------------------
@@ -119,6 +120,42 @@ class TestGetRealTlc:
 
         assert _get_real_tlc("tenant-1") is None
         assert fake_session.close.called
+
+
+# ---------------------------------------------------------------------------
+# _get_product_for_tlc (#3617)
+# ---------------------------------------------------------------------------
+
+
+class TestGetProductForTlc:
+    def test_returns_none_when_no_row(self, monkeypatch):
+        """A successful lookup with no description stays None, not an error."""
+        fake_session = MagicMock()
+        fake_session.execute.return_value.fetchone.return_value = None
+
+        import shared.database as db_mod
+
+        monkeypatch.setattr(db_mod, "SessionLocal", lambda: fake_session)
+
+        assert ma._get_product_for_tlc("tenant-1", "TLC-1") is None
+        assert fake_session.close.called
+
+    def test_lookup_failure_raises_503_and_closes_session(self, monkeypatch, caplog):
+        fake_session = MagicMock()
+        fake_session.execute.side_effect = RuntimeError("DB gone")
+
+        import shared.database as db_mod
+
+        monkeypatch.setattr(db_mod, "SessionLocal", lambda: fake_session)
+
+        with caplog.at_level("WARNING", logger="mock-audit"):
+            with pytest.raises(HTTPException) as exc:
+                ma._get_product_for_tlc("tenant-1", "TLC-1")
+
+        assert exc.value.status_code == 503
+        assert exc.value.detail == "Product lookup is unavailable"
+        assert fake_session.close.called
+        assert "Mock audit product lookup failed" in caplog.text
 
 
 # ---------------------------------------------------------------------------
@@ -582,8 +619,6 @@ def test_failed_completion_does_not_update_cache(client, monkeypatch):
 
 
 def test_failed_start_does_not_cache_a_drill(client, monkeypatch):
-    from fastapi import HTTPException
-
     def fail(*args):
         raise HTTPException(status_code=503, detail="Drill could not be saved")
 
@@ -592,3 +627,43 @@ def test_failed_start_does_not_cache_a_drill(client, monkeypatch):
     monkeypatch.setattr(ma, "_get_product_for_tlc", lambda tid, tlc: None)
     assert client.post("/api/v1/audit/drill/start", json={"tenant_id": "t1"}).status_code == 503
     assert not _active_drills
+
+
+def test_missing_product_stays_not_recorded(client, monkeypatch):
+    """Successful lookup with no description is still the Not recorded label."""
+    monkeypatch.setattr(ma, "_get_real_tlc", lambda tid: "TLC-NO-PRODUCT")
+    fake_session = MagicMock()
+    fake_session.execute.return_value.fetchone.return_value = None
+
+    import shared.database as db_mod
+
+    monkeypatch.setattr(db_mod, "SessionLocal", lambda: fake_session)
+
+    response = client.post("/api/v1/audit/drill/start", json={"tenant_id": "t1"})
+
+    assert response.status_code == 200
+    assert response.json()["target_product"] == "Not recorded"
+
+
+def test_product_lookup_failure_is_503_not_not_recorded(client, monkeypatch, caplog):
+    """A failed product SELECT must not be stored or shown as Not recorded."""
+    monkeypatch.setattr(ma, "_get_real_tlc", lambda tid: "TLC-LOOKUP-FAIL")
+    persisted: list = []
+    monkeypatch.setattr(ma, "_persist_drill", lambda drill_id, drill: persisted.append(drill))
+
+    import shared.database as db_mod
+
+    def _boom():
+        raise RuntimeError("DB gone")
+
+    monkeypatch.setattr(db_mod, "SessionLocal", _boom)
+
+    with caplog.at_level("WARNING", logger="mock-audit"):
+        response = client.post("/api/v1/audit/drill/start", json={"tenant_id": "t1"})
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Product lookup is unavailable"
+    assert "Not recorded" not in response.text
+    assert persisted == []
+    assert _active_drills == {}
+    assert "Mock audit product lookup failed" in caplog.text
