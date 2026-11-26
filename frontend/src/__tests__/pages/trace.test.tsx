@@ -107,7 +107,7 @@ describe('TracePage', () => {
         const user = userEvent.setup();
         render(<TracePage />);
 
-        await user.type(screen.getByPlaceholderText(/enter tlc/i), 'TLC-2026-SAL-0001');
+        await user.type(screen.getByPlaceholderText(/enter a lot code/i), 'TLC-2026-SAL-0001');
         await user.click(screen.getByRole('button', { name: 'Trace' }));
 
         await waitFor(() => {
@@ -125,7 +125,7 @@ describe('TracePage', () => {
 
         render(<TracePage />);
 
-        expect(screen.getByPlaceholderText(/enter tlc/i)).toHaveValue('LOT-2024/001');
+        expect(screen.getByPlaceholderText(/enter a lot code/i)).toHaveValue('LOT-2024/001');
         expect(screen.getByRole('button', { name: 'Trace' })).toBeEnabled();
     });
 
@@ -133,19 +133,19 @@ describe('TracePage', () => {
         mockUseAuth.mockReturnValue({ hasTenantSession: true });
         mockSearchParams.query = 'tlc=LOT-A';
         const { rerender } = render(<TracePage />);
-        expect(screen.getByPlaceholderText(/enter tlc/i)).toHaveValue('LOT-A');
+        expect(screen.getByPlaceholderText(/enter a lot code/i)).toHaveValue('LOT-A');
 
         mockSearchParams.query = 'tlc=LOT-B';
         rerender(<TracePage />);
-        expect(screen.getByPlaceholderText(/enter tlc/i)).toHaveValue('LOT-B');
+        expect(screen.getByPlaceholderText(/enter a lot code/i)).toHaveValue('LOT-B');
 
         const user = userEvent.setup();
-        await user.clear(screen.getByPlaceholderText(/enter tlc/i));
-        await user.type(screen.getByPlaceholderText(/enter tlc/i), 'TYPED');
+        await user.clear(screen.getByPlaceholderText(/enter a lot code/i));
+        await user.type(screen.getByPlaceholderText(/enter a lot code/i), 'TYPED');
 
         mockSearchParams.query = '';
         rerender(<TracePage />);
-        expect(screen.getByPlaceholderText(/enter tlc/i)).toHaveValue('TYPED');
+        expect(screen.getByPlaceholderText(/enter a lot code/i)).toHaveValue('TYPED');
     });
 
     it('prefills again when ?tlc= returns after being removed, even over a typed lot', async () => {
@@ -156,13 +156,13 @@ describe('TracePage', () => {
         mockSearchParams.query = '';
         rerender(<TracePage />);
         const user = userEvent.setup();
-        await user.clear(screen.getByPlaceholderText(/enter tlc/i));
-        await user.type(screen.getByPlaceholderText(/enter tlc/i), 'TYPED');
-        expect(screen.getByPlaceholderText(/enter tlc/i)).toHaveValue('TYPED');
+        await user.clear(screen.getByPlaceholderText(/enter a lot code/i));
+        await user.type(screen.getByPlaceholderText(/enter a lot code/i), 'TYPED');
+        expect(screen.getByPlaceholderText(/enter a lot code/i)).toHaveValue('TYPED');
 
         mockSearchParams.query = 'tlc=LOT-A';
         rerender(<TracePage />);
-        expect(screen.getByPlaceholderText(/enter tlc/i)).toHaveValue('LOT-A');
+        expect(screen.getByPlaceholderText(/enter a lot code/i)).toHaveValue('LOT-A');
     });
 
     it('keeps trace actions disabled when no tenant session is available', async () => {
@@ -174,7 +174,7 @@ describe('TracePage', () => {
         render(<TracePage />);
 
         const button = screen.getByRole('button', { name: 'Trace' });
-        await user.type(screen.getByPlaceholderText(/enter tlc/i), 'TLC-2026-SAL-0001');
+        await user.type(screen.getByPlaceholderText(/enter a lot code/i), 'TLC-2026-SAL-0001');
 
         expect(button).toBeDisabled();
         expect(screen.getByRole('button', { name: /export fda spreadsheet/i })).toBeDisabled();
@@ -200,7 +200,7 @@ describe('TracePage', () => {
         const exportButton = screen.getByRole('button', { name: /export fda spreadsheet/i });
         expect(exportButton).toBeDisabled();
 
-        await user.type(screen.getByPlaceholderText(/enter tlc/i), ' TLC-2026-SAL-0001 ');
+        await user.type(screen.getByPlaceholderText(/enter a lot code/i), ' TLC-2026-SAL-0001 ');
         await user.click(exportButton);
 
         await waitFor(() => {
@@ -224,9 +224,9 @@ describe('TracePage', () => {
         const user = userEvent.setup();
         render(<TracePage />);
 
-        await user.type(screen.getByPlaceholderText(/enter tlc/i), 'TLC-2026-SAL-0001');
+        await user.type(screen.getByPlaceholderText(/enter a lot code/i), 'TLC-2026-SAL-0001');
         await user.click(screen.getByRole('button', { name: /export fda spreadsheet/i }));
 
-        expect(await screen.findByRole('alert')).toHaveTextContent('FDA spreadsheet export failed. Please try again.');
+        expect(await screen.findByRole('alert')).toHaveTextContent('We could not build the FDA spreadsheet. Try again in a moment. If it keeps failing, send us the lot code.');
     });
 });

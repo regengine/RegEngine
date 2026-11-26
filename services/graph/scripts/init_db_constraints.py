@@ -9,9 +9,11 @@ import sys
 from pathlib import Path
 
 # Add parent directory to path to import neo4j_utils
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# The repo root for ``services.graph.app.*``, services/ for ``shared.*`` (WI-02).
+for _entry in (Path(__file__).resolve().parents[2], Path(__file__).resolve().parents[3]):
+    sys.path.insert(0, str(_entry))
 
-from app.neo4j_utils import Neo4jClient
+from services.graph.app.neo4j_utils import Neo4jClient
 
 
 def apply_constraints(neo4j_client: Neo4jClient):

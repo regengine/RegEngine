@@ -135,12 +135,12 @@ export default function IntegrationsPage() {
                 description="No intake paths are listed yet. Send records by CSV upload or the JSON events API."
                 action={
                   <Button asChild size="sm">
-                    <Link href="/ingest" className="no-underline">Upload a CSV</Link>
+                    <Link href="/onboarding/bulk-upload" className="no-underline">Upload a CSV</Link>
                   </Button>
                 }
                 secondaryAction={
                   <Button asChild variant="secondary" size="sm">
-                    <Link href="/docs/api" className="no-underline">JSON events API docs</Link>
+                    <Link href="/docs/quickstart" className="no-underline">Send your first JSON event</Link>
                   </Button>
                 }
               />

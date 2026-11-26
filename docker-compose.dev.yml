@@ -17,8 +17,12 @@ services:
     image: postgres:17
     restart: unless-stopped
     environment:
-      # The container bootstrap user owns migrations only. init-postgres.sh
-      # creates the two independent NOBYPASSRLS runtime logins.
+      # The container bootstrap user is a superuser and only creates roles
+      # and databases. init-postgres.sh creates the NOSUPERUSER/NOBYPASSRLS
+      # logins: regengine_migrator (database owner; run Alembic as this, like
+      # CI and prod) plus the regengine and regengine_sysadmin runtime roles.
+      # Init scripts only run on an empty volume: `docker compose -f
+      # docker-compose.dev.yml down -v` to re-bootstrap an older volume.
       POSTGRES_USER: regengine_owner
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
       POSTGRES_DB: regengine

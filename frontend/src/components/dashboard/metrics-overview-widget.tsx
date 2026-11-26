@@ -9,8 +9,8 @@ import { TimedSkeleton } from "@/components/ui/timed-skeleton";
 import type { WorkbenchReadinessSnapshot } from "@/lib/api-hooks";
 import { isExperimentalPageEnabled } from "@/lib/experimental-features";
 
-/** Where an empty tile sends the operator: the CSV tab of the import page. */
-export const CSV_UPLOAD_HREF = "/ingest?tab=file";
+/** Where an empty tile sends the operator: the dedicated bulk-upload page. */
+export const CSV_UPLOAD_HREF = "/onboarding/bulk-upload";
 
 const EMPTY_LABEL = "No data yet";
 

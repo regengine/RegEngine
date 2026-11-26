@@ -1,3 +1,5 @@
+// Hand-rolled on purpose (WI-11, 2026-11-04): validates and rate-limits the
+// marketing contact form locally before anything reaches a backend.
 /**
  * /api/contact — Marketing site contact-form handler.
  *
