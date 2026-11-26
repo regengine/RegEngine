@@ -46,7 +46,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List
 
 from sqlalchemy import event as sa_event, inspect as sa_inspect, text
 from sqlalchemy.orm import Session
@@ -96,6 +96,7 @@ LEGACY_DUAL_WRITE_SKIPPED = _safe_counter(
 def record_legacy_dual_write_skipped(path: str, count: int = 1) -> None:
     """Count canonical writes that skipped the legacy table (``path`` is single|batch)."""
     LEGACY_DUAL_WRITE_SKIPPED.labels(path=path).inc(count)
+
 
 if TYPE_CHECKING:
     from shared.canonical_event import TraceabilityEvent
@@ -470,8 +471,8 @@ def publish_graph_sync(event: "TraceabilityEvent") -> None:
 # events that were never persisted.
 #
 # Fix: stage the event in ``session.info`` at call time and install
-# ``after_commit`` / ``after_rollback`` listeners. Publishing runs only
-# after the SQL-level commit succeeds; a rollback discards the staged
+# transaction listeners. Publishing runs only after the outer SQL-level
+# commit succeeds; a rollback discards the affected staged
 # events silently. This is effectively a transactional outbox whose
 # "table" is the in-memory session, which is sufficient for a
 # temporary migration shim (the whole module is scheduled for
@@ -495,10 +496,14 @@ def _drain_pending_graph_sync(session: Session) -> None:
     single publish is swallowed and logged — graph sync is best-effort
     and the canonical DB row is the authoritative record of truth.
     """
-    pending: Optional[List[Any]] = session.info.pop(_SESSION_PENDING_KEY, None)
+    # SQLAlchemy also emits after_commit for RELEASE SAVEPOINT. Those
+    # writes can still be undone by their parent, so they must stay queued.
+    if session.in_nested_transaction():
+        return
+    pending = session.info.pop(_SESSION_PENDING_KEY, None)
     if not pending:
         return
-    for event in pending:
+    for _transaction, event in pending:
         try:
             publish_graph_sync(event)
         except Exception as exc:  # pragma: no cover - defensive
@@ -509,12 +514,7 @@ def _drain_pending_graph_sync(session: Session) -> None:
 
 
 def _clear_pending_graph_sync(session: Session) -> None:
-    """after_rollback listener: drop staged events so they never reach Redis.
-
-    This is the core of the #1276 fix: if the transaction rolls back we
-    MUST NOT publish — publishing would create the exact ghost event the
-    issue calls out. Signature matches ``after_rollback(session)``.
-    """
+    """Drop the queue when its outer transaction ends without publication."""
     dropped = session.info.pop(_SESSION_PENDING_KEY, None)
     if dropped:
         logger.info(
@@ -524,18 +524,25 @@ def _clear_pending_graph_sync(session: Session) -> None:
 
 
 def _clear_pending_graph_sync_soft(session: Session, previous_transaction: Any) -> None:
-    """after_soft_rollback listener: same semantics as the hard-rollback
-    drop, but SQLAlchemy dispatches this event with an extra
-    ``previous_transaction`` argument (the SessionTransaction that just
-    rolled back). A nested savepoint rollback counts as a "soft"
-    rollback; anything staged inside that savepoint must also be
-    dropped because the canonical row it referenced is gone.
+    """Discard a rolled-back savepoint and its children, preserving siblings."""
+    pending = session.info.get(_SESSION_PENDING_KEY)
+    if pending is None:
+        return
 
-    We keep this as a separate callable to match the event's 2-arg
-    signature; a unified ``*args``-style handler would work but makes
-    the signature intent less obvious in stack traces.
-    """
-    _clear_pending_graph_sync(session)
+    def was_rolled_back(transaction: Any) -> bool:
+        while transaction is not None:
+            if transaction is previous_transaction:
+                return True
+            transaction = transaction.parent
+        return False
+
+    session.info[_SESSION_PENDING_KEY] = [item for item in pending if not was_rolled_back(item[0])]
+
+
+def _end_graph_sync_transaction(session: Session, transaction: Any) -> None:
+    """Session.close() also discards work, without emitting after_rollback."""
+    if transaction.parent is None:
+        _clear_pending_graph_sync(session)
 
 
 def stage_graph_sync(session: Session, event: "TraceabilityEvent") -> None:
@@ -544,8 +551,8 @@ def stage_graph_sync(session: Session, event: "TraceabilityEvent") -> None:
     Call from any code path that currently runs inside a DB transaction
     and used to call ``publish_graph_sync`` directly. Semantics:
 
-    - On COMMIT: the event is published to Redis exactly once.
-    - On ROLLBACK: the event is discarded; Redis never sees it.
+    - On outer COMMIT: the event is published to Redis exactly once.
+    - On ROLLBACK: events in that transaction/savepoint are discarded.
     - If ``ENABLE_NEO4J_SYNC`` is off (the production default), this is
       a no-op and the staging dict is never even touched. The
       short-circuit keeps the hot path identical to the pre-fix
@@ -563,6 +570,9 @@ def stage_graph_sync(session: Session, event: "TraceabilityEvent") -> None:
     if not _neo4j_sync_enabled():
         return
 
+    transaction = session.get_nested_transaction() or session.get_transaction()
+    if transaction is None:
+        transaction = session.begin()
     pending: List[Any] = session.info.setdefault(_SESSION_PENDING_KEY, [])
 
     # Install listeners once per session. SQLAlchemy allows multiple
@@ -572,7 +582,7 @@ def stage_graph_sync(session: Session, event: "TraceabilityEvent") -> None:
     if not session.info.get(_SESSION_HOOKS_INSTALLED_KEY):
         session.info[_SESSION_HOOKS_INSTALLED_KEY] = True
         sa_event.listen(session, "after_commit", _drain_pending_graph_sync)
-        sa_event.listen(session, "after_rollback", _clear_pending_graph_sync)
         sa_event.listen(session, "after_soft_rollback", _clear_pending_graph_sync_soft)
+        sa_event.listen(session, "after_transaction_end", _end_graph_sync_transaction)
 
-    pending.append(event)
+    pending.append((transaction, event))
