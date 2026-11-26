@@ -83,6 +83,7 @@ def _restore_shared_database_on_module_teardown():
 # reliably — instead pull the *module* directly out of sys.modules after the
 # import side-effect has populated it.
 from app.sandbox.router import router as sandbox_router  # noqa: E402
+
 # #3825 split the persisted /share endpoints into their own router so the
 # stateless evaluator could be production-promoted without them. Both are
 # mounted here so this file keeps covering the same surface as before.

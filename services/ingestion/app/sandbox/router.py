@@ -27,6 +27,7 @@ from typing import Any, Dict, List
 import structlog
 from fastapi import APIRouter, HTTPException, Request
 
+from .client_ip import resolve_client_ip
 from .csv_parser import (
     _collect_value_normalizations,
     _normalize_for_rules,
@@ -45,7 +46,6 @@ from .models import (
     SandboxTraceRequest,
     TraceGraphResponse,
 )
-from .client_ip import resolve_client_ip
 from .rate_limiting import _check_sandbox_rate_limit
 from .tracer import _trace_in_memory, sandbox_trace as _sandbox_trace_impl
 from .validation import (

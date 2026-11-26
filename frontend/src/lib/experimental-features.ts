@@ -73,8 +73,12 @@ export const EXPERIMENTAL_PAGE_HREFS: ReadonlySet<string> = new Set([
 // (via the /api/inflow-lab proxy) rather than the experimental backend
 // routers. They honor the same per-tool override as their /tools sibling, so
 // e.g. NEXT_PUBLIC_ENABLED_EXPERIMENTAL_TOOLS=inflow-lab exposes the
-// dashboard tab in production while ENABLE_EXPERIMENTAL_ROUTERS stays off
-// (the sandbox-evaluate feeder inside the page degrades to an inline error).
+// dashboard tab in production while ENABLE_EXPERIMENTAL_ROUTERS stays off.
+// The sandbox-evaluate feeder inside the page no longer degrades to an inline
+// error: #3825 promoted the stateless `sandbox` router into the production
+// allowlist by name, so it answers independently of that flag (which
+// production rejects outright). Its persisted /share endpoints stayed behind
+// under the separate, unpromoted `sandbox_share` owner.
 const EXPERIMENTAL_PAGE_TOOL_SLUGS: ReadonlyMap<string, string> = new Map([
     ['/dashboard/inflow-lab', 'inflow-lab'],
 ]);
