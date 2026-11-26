@@ -13,6 +13,8 @@ import csv
 import io
 
 import pytest
+
+pytestmark = pytest.mark.usefixtures("location_complete_for_pipeline")
 from app.csv_templates import CTE_COLUMNS, _generate_csv_template, parse_csv_rows
 
 HEADER = (

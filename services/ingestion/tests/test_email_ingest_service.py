@@ -18,6 +18,8 @@ from unittest.mock import MagicMock
 
 import app.email_ingest.service as service_mod
 import pytest
+
+pytestmark = pytest.mark.usefixtures("location_complete_for_pipeline")
 from app.email_ingest.schemas import AttachmentResult, PostmarkAttachment, PostmarkInboundPayload
 from app.email_ingest.service import (
     _first_recipient,

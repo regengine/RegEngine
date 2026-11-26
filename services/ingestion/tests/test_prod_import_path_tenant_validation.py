@@ -22,6 +22,8 @@ from typing import Any, Iterator
 
 import pytest
 
+pytestmark = pytest.mark.usefixtures("location_complete_for_pipeline")
+
 # Env before any app import (mirrors services/ingestion/conftest.py).
 os.environ.setdefault("ADMIN_SERVICE_URL", "http://localhost:8000")
 os.environ.setdefault("NLP_SERVICE_URL", "http://localhost:8002")

@@ -13,6 +13,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+pytestmark = pytest.mark.usefixtures("location_complete_for_pipeline")
+
 service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 

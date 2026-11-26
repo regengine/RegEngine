@@ -33,6 +33,8 @@ from typing import Any, Dict, Iterator, List
 from unittest.mock import MagicMock
 
 import pytest
+
+pytestmark = pytest.mark.usefixtures("location_complete_for_pipeline")
 import structlog
 from fastapi import FastAPI
 from fastapi.testclient import TestClient

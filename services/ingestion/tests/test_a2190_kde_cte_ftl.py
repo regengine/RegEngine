@@ -22,6 +22,8 @@ def _event(cte: WebhookCTEType, kdes: dict, **top) -> SimpleNamespace:
         "unit_of_measure": "cases",
         "location_name": "Valley Fresh Farms",
         "location_gln": None,
+        "location_phone": None,
+        "location_address": None,
         "kdes": kdes,
     }
     base.update(top)

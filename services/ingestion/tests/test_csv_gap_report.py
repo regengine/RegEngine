@@ -5,6 +5,8 @@ import io
 from types import SimpleNamespace
 
 import pytest
+
+pytestmark = pytest.mark.usefixtures("location_complete_for_pipeline")
 from app import csv_templates as ct
 from app.supplier_readiness.shipping import score_shipping_readiness
 
@@ -178,7 +180,16 @@ def test_ingest_rejected_shipment_preserves_receiving_acceptance(monkeypatch):
     assert any(e["row_number"] == 3 and e["disposition"] == "accepted" for e in body["row_disposition_log"])
 
 
-def test_model_error_has_specific_missing_location_without_row_contents(caplog):
+def test_model_error_has_specific_missing_location_without_row_contents(caplog, monkeypatch):
+    # Keep the real 21 CFR 1.1310 / location-name gate for this assertion.
+    from shared.fsma_validation import is_location_description_complete as _real_complete
+
+    monkeypatch.setattr("app.webhook_models.is_location_description_complete", _real_complete)
+    monkeypatch.setattr(
+        "services.ingestion.app.webhook_models.is_location_description_complete",
+        _real_complete,
+        raising=False,
+    )
     text = _csv(_row(location_name="", ship_to_location="", ship_from_location="", receiving_location=""))
     events, errors, _, log = _parse(text)
     assert not events

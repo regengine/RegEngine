@@ -138,6 +138,13 @@ def location_complete_for_pipeline(monkeypatch):
     """Isolate pipeline tests from location completeness without inventing data.
 
     Opt in only for parsing/flow tests. Location rejection tests must use the
-    real 21 CFR 1.1310 validator.
+    real 21 CFR 1.1310 validator. Patch both import paths so prod-path and
+    package-path IngestEvent validators stay aligned.
     """
-    monkeypatch.setattr("app.webhook_models.is_location_description_complete", lambda **kwargs: True)
+    always_complete = lambda **kwargs: True  # noqa: E731
+    monkeypatch.setattr("app.webhook_models.is_location_description_complete", always_complete)
+    monkeypatch.setattr(
+        "services.ingestion.app.webhook_models.is_location_description_complete",
+        always_complete,
+        raising=False,
+    )

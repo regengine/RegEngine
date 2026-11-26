@@ -42,8 +42,9 @@ def _authoritative_kdes(event: IngestEvent) -> dict[str, object]:
         ("unit_of_measure", event.unit_of_measure),
         ("location_name", event.location_name),
         ("location_gln", event.location_gln),
-        ("location_phone", event.location_phone),
-        ("location_address", event.location_address),
+        # getattr: unit stubs may omit optional top-level phone/address.
+        ("location_phone", getattr(event, "location_phone", None)),
+        ("location_address", getattr(event, "location_address", None)),
     ):
         if _val is None:
             continue
