@@ -301,9 +301,18 @@ export async function generateMetadata({
   const data = CTE_DATA[cte];
   if (!data) return {};
 
+  const path = `/fsma-204/${cte}`;
+  const title = `${data.name} CTE: FSMA 204 ${data.cfr} Compliance | RegEngine`;
+  const description = `Everything you need to know about the ${data.name} Critical Tracking Event under FSMA 204 (${data.cfr}). Required KDEs, common mistakes, and how to validate your data.`;
   return {
-    title: `${data.name} CTE: FSMA 204 ${data.cfr} Compliance | RegEngine`,
-    description: `Everything you need to know about the ${data.name} Critical Tracking Event under FSMA 204 (${data.cfr}). Required KDEs, common mistakes, and how to validate your data.`,
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      url: path,
+      type: 'website',
+    },
   };
 }
 

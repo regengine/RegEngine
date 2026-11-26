@@ -23,18 +23,43 @@ const paths = entries.map((e) => e.url.replace(BASE_URL, '') || '/');
 
 /** Locate the page module backing a sitemap path, if any. */
 function pageFileFor(urlPath: string): string | null {
-    const file = path.join(APP_DIR, urlPath === '/' ? '' : urlPath, 'page.tsx');
-    return fs.existsSync(file) ? file : null;
+    const exact = path.join(APP_DIR, urlPath === '/' ? '' : urlPath, 'page.tsx');
+    if (fs.existsSync(exact)) return exact;
+    // /fsma-204/:slug → fsma-204/[cte]/page.tsx
+    const parts = urlPath.split('/').filter(Boolean);
+    if (parts.length === 2 && parts[0] === 'fsma-204') {
+        const cte = path.join(APP_DIR, 'fsma-204', '[cte]', 'page.tsx');
+        if (fs.existsSync(cte)) return cte;
+    }
+    return null;
 }
 
 /** Metadata can live on the page or on a layout in the same segment. */
 function segmentSource(urlPath: string): string {
-    const dir = path.join(APP_DIR, urlPath === '/' ? '' : urlPath);
-    return ['page.tsx', 'layout.tsx']
-        .map((f) => path.join(dir, f))
-        .filter((f) => fs.existsSync(f))
-        .map((f) => fs.readFileSync(f, 'utf8'))
-        .join('\n');
+    const dirs = [path.join(APP_DIR, urlPath === '/' ? '' : urlPath)];
+    if (urlPath.startsWith('/fsma-204/') && urlPath !== '/fsma-204') {
+        dirs.push(path.join(APP_DIR, 'fsma-204', '[cte]'));
+    }
+    const files: string[] = [];
+    for (const dir of dirs) {
+        for (const f of ['page.tsx', 'layout.tsx', 'opengraph-image.tsx']) {
+            const full = path.join(dir, f);
+            if (fs.existsSync(full)) files.push(full);
+        }
+    }
+    return files.map((f) => fs.readFileSync(f, 'utf8')).join('\n');
+}
+
+/** opengraph-image.tsx for a listed path, including dynamic [cte] routes. */
+function openGraphImageFor(urlPath: string): string | null {
+    const exact = path.join(APP_DIR, urlPath === '/' ? '' : urlPath, 'opengraph-image.tsx');
+    if (fs.existsSync(exact)) return exact;
+    const parts = urlPath.split('/').filter(Boolean);
+    if (parts.length === 2 && parts[0] === 'fsma-204') {
+        const cte = path.join(APP_DIR, 'fsma-204', '[cte]', 'opengraph-image.tsx');
+        if (fs.existsSync(cte)) return cte;
+    }
+    return null;
 }
 
 describe('sitemap', () => {
@@ -70,8 +95,7 @@ describe('sitemap', () => {
         // inherited by child segments — each listed route needs its own.
         const cardless = paths.filter((p) => {
             if (p === '/') return false; // homepage ships the designed static PNG
-            const dir = path.join(APP_DIR, p);
-            const hasFile = fs.existsSync(path.join(dir, 'opengraph-image.tsx'));
+            const hasFile = openGraphImageFor(p) !== null;
             const declaresImage = /openGraph:[\s\S]*?images:/.test(segmentSource(p));
             return !hasFile && !declaresImage;
         });
