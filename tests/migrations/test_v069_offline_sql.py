@@ -70,12 +70,15 @@ def test_upgrade_offline_emits_conditional_retrofit(monkeypatch):
 
 
 def test_downgrade_offline_emits_conditional_revert(monkeypatch):
-    module, sql = _run_offline(monkeypatch, "downgrade")
+    _, sql = _run_offline(monkeypatch, "downgrade")
+    _, executed = _run_online(monkeypatch, "downgrade", v31=True)
 
     assert "IF to_regclass('fsma.products') IS NOT NULL AND to_regprocedure('fsma.current_org_id()') IS NOT NULL THEN" in sql
     assert "CREATE POLICY fsma_org_isolation_products ON fsma.products" in sql
     assert "ALTER TABLE fsma.products DROP COLUMN IF EXISTS tenant_id" in sql
-    assert sql.count("EXECUTE $v069s$") == len(module._downgrade_statements())
+    assert sql.count("EXECUTE $v069s$") == len(executed)
+    for stmt in executed:
+        assert f"EXECUTE $v069s${stmt.strip()}$v069s$;" in sql
     assert "RAISE NOTICE 'v069 downgrade: Flyway V31 schema not present" in sql
 
 

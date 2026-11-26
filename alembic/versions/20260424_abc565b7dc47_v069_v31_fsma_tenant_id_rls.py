@@ -330,7 +330,24 @@ def _upgrade_statements() -> list[str]:
     return stmts
 
 
-def _downgrade_statements() -> list[str]:
+def downgrade() -> None:
+    # Drop tenant_isolation_* policies and tenant_id columns.
+    # Re-creates the original fsma_org_isolation_* policies using
+    # fsma.current_org_id() so the tables return to their V31 state
+    # (ENABLE-only RLS, isolation via the legacy app.current_org_id GUC).
+    # Note: app.current_org_id is never set by the current application,
+    # so the restored policies will silently deny all reads for regular
+    # roles — the same behaviour as before this migration.
+
+    offline = context.is_offline_mode()
+    if not offline and (not _v31_present() or not _v31_helper_fn_present()):
+        # Mirror the upgrade-side guard.  If V31 wasn't present at
+        # upgrade time we never altered anything, so there's nothing to
+        # revert.  See _v31_helper_fn_present for why the table canary
+        # alone misfires on Alembic-only environments after v078.
+        op.execute(f"DO $$ BEGIN RAISE NOTICE '{_DOWNGRADE_SKIP_NOTICE}'; END $$;")
+        return
+
     stmts: list[str] = []
 
     # fsma.compliance_snapshots
@@ -434,7 +451,19 @@ def _downgrade_statements() -> list[str]:
     stmts.append("ALTER TABLE fsma.products NO FORCE ROW LEVEL SECURITY")
     stmts.append("ALTER TABLE fsma.products DROP COLUMN IF EXISTS tenant_id")
 
-    return stmts
+    if offline:
+        op.execute(
+            _offline_conditional_block(
+                f"to_regclass('{_V31_CANARY}') IS NOT NULL"
+                " AND to_regprocedure('fsma.current_org_id()') IS NOT NULL",
+                _DOWNGRADE_SKIP_NOTICE,
+                stmts,
+            )
+        )
+        return
+
+    for stmt in stmts:
+        op.execute(stmt)
 
 
 def _offline_conditional_block(guard_sql: str, notice: str, stmts: list[str]) -> str:
@@ -484,36 +513,4 @@ def upgrade() -> None:
         return
 
     for stmt in _upgrade_statements():
-        op.execute(stmt)
-
-
-def downgrade() -> None:
-    # Drop tenant_isolation_* policies and tenant_id columns.
-    # Re-creates the original fsma_org_isolation_* policies using
-    # fsma.current_org_id() so the tables return to their V31 state
-    # (ENABLE-only RLS, isolation via the legacy app.current_org_id GUC).
-    # Note: app.current_org_id is never set by the current application,
-    # so the restored policies will silently deny all reads for regular
-    # roles — the same behaviour as before this migration.
-
-    if context.is_offline_mode():
-        op.execute(
-            _offline_conditional_block(
-                f"to_regclass('{_V31_CANARY}') IS NOT NULL"
-                " AND to_regprocedure('fsma.current_org_id()') IS NOT NULL",
-                _DOWNGRADE_SKIP_NOTICE,
-                _downgrade_statements(),
-            )
-        )
-        return
-
-    if not _v31_present() or not _v31_helper_fn_present():
-        # Mirror the upgrade-side guard.  If V31 wasn't present at
-        # upgrade time we never altered anything, so there's nothing to
-        # revert.  See _v31_helper_fn_present for why the table canary
-        # alone misfires on Alembic-only environments after v078.
-        op.execute(f"DO $$ BEGIN RAISE NOTICE '{_DOWNGRADE_SKIP_NOTICE}'; END $$;")
-        return
-
-    for stmt in _downgrade_statements():
         op.execute(stmt)
