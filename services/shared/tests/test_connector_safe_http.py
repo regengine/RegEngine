@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import httpx
 import pytest
-
 from services.shared.external_connectors.base import ConnectorConfig
 from services.shared.external_connectors.food_safety import (
     FoodDocsConnector,
@@ -69,9 +68,8 @@ async def test_safetyculture_private_base_url_is_refused():
 
 
 async def test_safetyculture_oversized_response_is_refused(monkeypatch):
-    from shared.safe_http import ResponseTooLargeError
-
     import services.shared.external_connectors.safetyculture as sc_module
+    from shared.safe_http import ResponseTooLargeError
 
     async def too_big(url, **kwargs):
         raise ResponseTooLargeError("Response body exceeds 5242880 bytes")
@@ -100,9 +98,8 @@ async def test_food_safety_fetch_propagates_ssrf_refusal(monkeypatch, cls, path)
     operator. Fails on the pre-fix code, which catches ``Exception`` and
     returns ``([], None)``.
     """
-    from shared.url_validation import SSRFError
-
     import services.shared.external_connectors.food_safety as fs_module
+    from shared.url_validation import SSRFError
 
     calls: list = []
 
@@ -130,9 +127,8 @@ async def test_food_safety_fetch_propagates_ssrf_refusal(monkeypatch, cls, path)
 )
 async def test_food_safety_fetch_propagates_size_refusal(monkeypatch, cls):
     """An oversized vendor body must surface, never read as no events."""
-    from shared.safe_http import ResponseTooLargeError
-
     import services.shared.external_connectors.food_safety as fs_module
+    from shared.safe_http import ResponseTooLargeError
 
     async def too_big(url, **kwargs):
         raise ResponseTooLargeError("Response body exceeds 5242880 bytes")
@@ -146,9 +142,8 @@ async def test_food_safety_fetch_propagates_size_refusal(monkeypatch, cls):
 
 @pytest.mark.parametrize("cls", [FoodReadyConnector, TiveConnector])
 async def test_food_safety_test_connection_refuses_private_base(monkeypatch, cls):
-    from shared.url_validation import SSRFError
-
     import services.shared.external_connectors.food_safety as fs_module
+    from shared.url_validation import SSRFError
 
     async def fake_get(url, **kwargs):
         raise SSRFError("Resolved IP 127.0.0.1 is not a public global address")

@@ -15,11 +15,34 @@ from starlette.requests import Request
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
+from shared.fsma_validation import verify_gs1_check_digit  # noqa: E402
 from services.graph.app import fsma_utils  # noqa: E402
+from services.graph.app.fsma.queries import EXPORT_EVENT_CAP  # noqa: E402
 from services.graph.app.routers.fsma import compliance  # noqa: E402
 
 FIXTURES = Path(__file__).resolve().parents[2] / "ingestion" / "tests" / "fixtures" / "epcis_gs1"
 TENANT = uuid.uuid4()
+
+
+def _independent_gs1_mod10_check_digit(data_digits: str, *, rightmost_weight: int = 3) -> int:
+    """GS1 mod-10 with configurable rightmost weight. Test-local oracle."""
+    total = 0
+    for i, ch in enumerate(reversed(data_digits)):
+        total += (rightmost_weight if i % 2 == 0 else 4 - rightmost_weight) * int(ch)
+    return (10 - (total % 10)) % 10
+
+
+def gs1_number(length):
+    digits = "0" + str(uuid.uuid4().int).zfill(length - 2)[:length - 2]
+    value = f"{digits}{_independent_gs1_mod10_check_digit(digits)}"
+    assert len(value) == length
+    assert value.isdigit()
+    assert verify_gs1_check_digit(value)
+    return value
+
+
+def lot_code():
+    return f"LOT-{uuid.uuid4().hex[:8].upper()}"
 
 
 def schema_file(name):
@@ -74,7 +97,12 @@ def graph_row(kind):
 
 
 async def export(format, rows):
-    async def query(client, start, end, tenant, **kwargs):
+    async def query(client, start, end, tenant, *, tlc=None, limit, export_cap):
+        assert start == today
+        assert end == today
+        assert tlc is None
+        assert limit == EXPORT_EVENT_CAP + 1
+        assert export_cap is True
         assert tenant == str(TENANT)
         return rows
 
@@ -95,7 +123,26 @@ async def export(format, rows):
             TENANT,
             object(),
         )
-        return await body(response)
+        assert response.headers["X-RegEngine-Preview"] == "true"
+        payload = await body(response)
+        if format == "json-ld":
+            document = json.loads(payload)
+            context = document["@context"]
+            assert isinstance(context, list)
+            assert context[1]["regengine"] == "https://regengine.co/ns/"
+            assert context[1]["preview"] == "regengine:preview"
+            assert context[1]["previewNotice"] == "regengine:previewNotice"
+            metadata = document["regengine:exportMetadata"]
+            for key in metadata:
+                assert context[1][key] == (
+                    {"@id": "regengine:skippedEventsByReason", "@type": "@json"}
+                    if key == "skippedEventsByReason" else f"regengine:{key}"
+                )
+            assert metadata["preview"] is True
+            assert metadata["previewNotice"] == (
+                "EPCIS export is in Preview. Validate with your trading partner before relying on it for compliance."
+            )
+        return payload
 
 
 @pytest.mark.parametrize("kind", ["RECEIVING", "TRANSFORMATION"])
@@ -119,7 +166,7 @@ def test_graph_json_and_xml_conform(kind):
     node = tree.xpath("//*[local-name()='EventList']/*")[0]
     if kind == "TRANSFORMATION":
         assert event["transformationID"] == rows[0]["event_id"]
-        assert node.find("transformationID") is not None
+        assert node.find("transformationID").text == rows[0]["event_id"]
     else:
         assert event["epcList"][0].endswith(rows[0]["tlc"])
         assert node.find("epcList") is not None
@@ -136,6 +183,12 @@ def test_empty_export_has_no_events_in_either_format():
     tree = etree.fromstring(xml, etree.XMLParser(no_network=True)).getroottree()
     assert schema.validate(tree), str(schema.error_log)
     assert tree.xpath("//*[local-name()='EventList']/*") == []
+    metadata = tree.getroot().find("{https://regengine.co/ns/}exportMetadata")
+    assert metadata is not None
+    assert metadata.find("{https://regengine.co/ns/}preview").text == "true"
+    assert metadata.find("{https://regengine.co/ns/}previewNotice").text == (
+        document["regengine:exportMetadata"]["previewNotice"]
+    )
 
 
 def test_missing_event_time_is_skipped():
@@ -143,16 +196,35 @@ def test_missing_event_time_is_skipped():
     row["event_time"] = None
     document = json.loads(asyncio.run(export("json-ld", [row])))
     assert document["epcisBody"]["eventList"] == []
+    assert document["regengine:exportMetadata"]["skippedEventsByReason"] == {"missing_time": 1}
 
 
-def test_gs1_location_check_digit_accepts_known_valid_gln():
+def test_gs1_location_check_digit_accepts_generated_valid_gln():
     """Graph location helper must use GS1 weight-3-from-right."""
     row = graph_row("RECEIVING")
-    row["location_gln"] = "0614141000005"
+    for _ in range(100):
+        digits = "0" + str(uuid.uuid4().int).zfill(11)[:11]
+        check_digit = _independent_gs1_mod10_check_digit(digits)
+        if check_digit != _independent_gs1_mod10_check_digit(digits, rightmost_weight=1):
+            break
+    else:
+        pytest.fail("Could not generate a GLN that distinguishes GS1 weighting")
+    row["location_gln"] = f"{digits}{check_digit}"
+    assert verify_gs1_check_digit(row["location_gln"])
     row["tlc"] = epc_identifier()
     document = json.loads(asyncio.run(export("json-ld", [row])))
     assert document["epcisBody"]["eventList"]
-    assert document["epcisBody"]["eventList"][0]["readPoint"]["id"] == "https://id.gs1.org/414/0614141000005"
+    read_point = document["epcisBody"]["eventList"][0]["readPoint"]["id"]
+    assert read_point.startswith("https://id.gs1.org/414/")
+    assert read_point.endswith(row["location_gln"])
+
+    bad_gln = f"{digits}{(check_digit + 1) % 10}"
+    assert not verify_gs1_check_digit(bad_gln)
+    row["location_gln"] = bad_gln
+    document = json.loads(asyncio.run(export("json-ld", [row])))
+    assert len(document["epcisBody"]["eventList"]) == 1
+    for event in document["epcisBody"]["eventList"]:
+        assert "readPoint" not in event
 
 
 def test_graph_exports_raw_tlc_with_lot_gtin_as_digital_link():
@@ -161,10 +233,10 @@ def test_graph_exports_raw_tlc_with_lot_gtin_as_digital_link():
         "type": "SHIPPING",
         "event_date": datetime.now(timezone.utc).date().isoformat(),
         "event_time": datetime.now(timezone.utc).time().isoformat(timespec="seconds"),
-        "tlc": "LOT-2024-001",
-        "gtin": "09506000134352",
-        "location_gln": "0614141000005",
-        "ship_from_gln": "0614141000005",
+        "tlc": lot_code(),
+        "gtin": gs1_number(14),
+        "location_gln": gs1_number(13),
+        "ship_from_gln": gs1_number(13),
         "ship_to_gln": location_identifier(),
         "quantity": 12,
         "unit_of_measure": "KGM",
@@ -175,7 +247,10 @@ def test_graph_exports_raw_tlc_with_lot_gtin_as_digital_link():
     assert len(events) == 1
     event = events[0]
     assert event["type"] == "ObjectEvent"
-    assert event["quantityList"][0]["epcClass"] == "https://id.gs1.org/01/09506000134352/10/LOT-2024-001"
+    epc_class = event["quantityList"][0]["epcClass"]
+    assert epc_class.startswith("https://id.gs1.org/01/")
+    assert f"/01/{row['gtin']}/10/" in epc_class
+    assert epc_class.endswith(row["tlc"])
     assert event["bizStep"] == "shipping"
     assert document["regengine:exportMetadata"]["skippedEventsCount"] == 0
 
@@ -185,28 +260,84 @@ def test_graph_exports_transformation_with_input_tlc_and_gtin():
         "type": "TRANSFORMATION",
         "event_date": datetime.now(timezone.utc).date().isoformat(),
         "event_time": datetime.now(timezone.utc).time().isoformat(timespec="seconds"),
-        "tlc": "OUT-LOT-9",
-        "gtin": "09506000134352",
-        "input_tlc": "IN-LOT-9",
-        "input_gtin": "09506000134352",
+        "tlc": lot_code(),
+        "gtin": gs1_number(14),
+        "input_tlc": lot_code(),
+        "input_gtin": gs1_number(14),
         "location_gln": location_identifier(),
-        "event_id": "evt-bare-id-123",
+        "event_id": uuid.uuid4().hex,
         "quantity": 3,
         "unit_of_measure": "KGM",
     }
     document = json.loads(asyncio.run(export("json-ld", [row])))
     event = document["epcisBody"]["eventList"][0]
     assert event["type"] == "TransformationEvent"
-    assert event["outputQuantityList"][0]["epcClass"].endswith("/10/OUT-LOT-9")
-    assert event["inputQuantityList"][0]["epcClass"].endswith("/10/IN-LOT-9")
-    assert event["transformationID"].startswith("urn:uuid:")
+    for quantity_list, gtin, tlc in (
+        ("outputQuantityList", "gtin", "tlc"),
+        ("inputQuantityList", "input_gtin", "input_tlc"),
+    ):
+        epc_class = event[quantity_list][0]["epcClass"]
+        assert epc_class.startswith("https://id.gs1.org/01/")
+        assert f"/01/{row[gtin]}/10/" in epc_class
+        assert epc_class.endswith(row[tlc])
+    assert event["transformationID"] == f"urn:uuid:{uuid.UUID(row['event_id'])}"
 
 
-def test_graph_harvesting_uses_collecting_bizstep():
-    row = graph_row("HARVESTING")
-    # graph_row uses split SGTIN-shaped tlc
+def test_graph_exports_output_only_transformation_with_raw_uuid():
+    row = graph_row("TRANSFORMATION")
+    del row["input_tlc"]
+    row["tlc"] = lot_code()
+    row["gtin"] = gs1_number(14)
+    raw_uuid = uuid.uuid4().hex
+    row["event_id"] = raw_uuid
+
     document = json.loads(asyncio.run(export("json-ld", [row])))
-    assert document["epcisBody"]["eventList"][0]["bizStep"] == "collecting"
+    events = document["epcisBody"]["eventList"]
+    assert len(events) == 1
+    assert events[0]["type"] == "TransformationEvent"
+    assert events[0]["outputQuantityList"]
+    assert events[0]["transformationID"] == f"urn:uuid:{uuid.UUID(raw_uuid)}"
+    assert "transformation_incomplete" not in document["regengine:exportMetadata"]["skippedEventsByReason"]
+
+
+@pytest.mark.parametrize("include_input_gtin", [False, True])
+def test_graph_skips_transformation_with_unencodable_input(include_input_gtin):
+    row = graph_row("TRANSFORMATION")
+    row.update(input_tlc=lot_code(), tlc=lot_code(), gtin=gs1_number(14), event_id=uuid.uuid4().hex)
+    if include_input_gtin:
+        row["input_gtin"] = None
+
+    document = json.loads(asyncio.run(export("json-ld", [row])))
+    assert document["epcisBody"]["eventList"] == []
+    assert document["regengine:exportMetadata"]["skippedEventsByReason"] == {
+        "transformation_input_unencodable": 1
+    }
+
+
+def test_graph_skips_transformation_with_invalid_id():
+    row = graph_row("TRANSFORMATION")
+    row.update(
+        input_tlc=lot_code(), input_gtin=gs1_number(14),
+        tlc=lot_code(), gtin=gs1_number(14),
+        event_id=f"not-a-uuid-{uuid.uuid4().hex}",
+    )
+
+    document = json.loads(asyncio.run(export("json-ld", [row])))
+    assert document["epcisBody"]["eventList"] == []
+    assert document["regengine:exportMetadata"]["skippedEventsByReason"] == {
+        "invalid_transformation_id": 1
+    }
+
+
+def test_graph_harvesting_uses_creating_class_instance_bizstep():
+    row = graph_row("HARVESTING")
+    document = json.loads(asyncio.run(export("json-ld", [row])))
+    assert document["epcisBody"]["eventList"][0]["bizStep"] == "creating_class_instance"
+    etree = pytest.importorskip("lxml.etree")
+    tree = etree.fromstring(asyncio.run(export("xml", [row])))
+    assert tree.xpath("//*[local-name()='bizStep']/text()") == [
+        "https://ref.gs1.org/cbv/BizStep-creating_class_instance"
+    ]
 
 
 def test_missing_event_time_records_skip_reason():
@@ -216,3 +347,14 @@ def test_missing_event_time_records_skip_reason():
     assert document["epcisBody"]["eventList"] == []
     assert document["regengine:exportMetadata"]["skippedEventsCount"] == 1
     assert document["regengine:exportMetadata"]["skippedEventsByReason"]["missing_time"] == 1
+
+
+def test_graph_harvesting_exports_lot_gtin_quantity_class():
+    row = graph_row("HARVESTING")
+    row.update(tlc=lot_code(), gtin=gs1_number(14), quantity=12, unit_of_measure="KGM")
+    document = json.loads(asyncio.run(export("json-ld", [row])))
+    event = document["epcisBody"]["eventList"][0]
+    assert event["bizStep"] == "creating_class_instance"
+    assert event["quantityList"][0]["epcClass"] == (
+        f"https://id.gs1.org/01/{row['gtin']}/10/{row['tlc']}"
+    )

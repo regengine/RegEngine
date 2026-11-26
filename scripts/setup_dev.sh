@@ -41,6 +41,10 @@ echo "📥 Installing dependencies from requirements.lock..."
 # Root requirements.lock is the pinned, hash-verified output of pip-compile
 # (source: requirements.in). Reproducible builds — see #1139.
 pip install --quiet --require-hashes -r requirements.lock
+echo "📥 Installing test tooling from requirements-dev.lock..."
+# pytest and the plugins the test commands below need live in the dev lock
+# (WI-06 split them out of the production lock the Dockerfile installs).
+pip install --quiet --require-hashes -r requirements-dev.lock
 
 # 4. Environment File Setup
 if [ ! -f ".env" ]; then

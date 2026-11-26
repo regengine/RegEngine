@@ -428,6 +428,7 @@ APPLICATION_TABLES = {
         "cte_events",
         "cte_kdes",
         "cte_kdes_backfill_log_v059",
+        "edi_interchanges",
         "entity_aliases",
         "entity_merge_history",
         "evidence_attachments",
@@ -499,6 +500,7 @@ APPLICATION_TABLES = {
         "compliance_notifications",
         "compliance_status_log",
         "controls",
+        "data_gap_events",
         "food_traceability_list",
         "funnel_events",
         "graph_outbox",
@@ -568,6 +570,10 @@ REGENGINE_TABLE_GRANTS = {
     "public.audit_logs": ("SELECT", "INSERT"),
     "public.compliance_alerts": ("SELECT", "INSERT"),
     "public.controls": ("SELECT",),
+    # v142 -- ingest opens and closes data gaps. No DELETE: gap history is
+    # evidence. UPDATE is column-scoped to the close fields (see
+    # REGENGINE_COLUMN_GRANTS).
+    "public.data_gap_events": ("SELECT", "INSERT"),
     "public.food_traceability_list": ("SELECT",),
     "public.funnel_events": ("SELECT", "INSERT"),
     "public.obligation_cte_rules": ("SELECT",),
@@ -612,6 +618,7 @@ REGENGINE_TABLE_GRANTS.update(
         "fsma.compliance_evidence_snapshots": ("SELECT", "INSERT", "UPDATE"),
         "fsma.cte_events": ("SELECT", "INSERT", "DELETE"),
         "fsma.cte_kdes": ("SELECT", "INSERT"),
+        "fsma.edi_interchanges": ("SELECT", "INSERT"),
         "fsma.entity_aliases": ("SELECT",),
         "fsma.evidence_attachments": ("SELECT",),
         "fsma.exception_comments": ("SELECT", "INSERT"),
@@ -649,6 +656,8 @@ REGENGINE_TABLE_GRANTS.update(
 )
 
 REGENGINE_COLUMN_GRANTS = {
+    # v143: only expiry renewal may modify an EDI receipt; identity is fixed.
+    "fsma.edi_interchanges": {"UPDATE": ("stored_at", "expires_at")},
     # Successful pre-authentication may maintain only usage telemetry.  It
     # cannot change identity, tenant, scopes, status, expiry, limits, or hash.
     "public.api_keys": {"UPDATE": ("last_used_at", "total_requests")},
@@ -659,6 +668,14 @@ REGENGINE_COLUMN_GRANTS = {
     # without exposing names/settings. v139 applies the same column grant to
     # databases already past v111; this inventory keeps it across cutover.
     "public.tenants": {"SELECT": ("id", "status")},
+    # v142 -- opening a gap attributes it to the lot's facility. Only the
+    # columns that lookup reads; the rest stays control-plane.
+    "public.supplier_traceability_lots": {"SELECT": ("tenant_id", "tlc_code", "facility_id")},
+    # v142 -- closing a gap sets only the close receipt. Opened rows, gap
+    # identity and tenant cannot be rewritten.
+    "public.data_gap_events": {
+        "UPDATE": ("closed_at", "closing_record_id", "closing_record_hash"),
+    },
     # v126 -- POST /api/v1/ingest/csv (#3122) retains each upload verbatim
     # in the ingest transaction (webhook_compat._open_ingestion_run).
     # v138 extends INSERT with storage_url for partner-uploads pointer rows;
@@ -727,6 +744,7 @@ REGENGINE_SYSADMIN_TABLE_GRANTS = {
     "public.audit_logs": ("SELECT", "INSERT"),
     "public.auth_challenges": ("SELECT", "INSERT", "UPDATE", "DELETE"),
     "public.compliance_alerts": ("SELECT", "INSERT", "UPDATE"),
+    "public.data_gap_events": ("SELECT",),
     "public.funnel_events": ("SELECT",),
     "public.graph_outbox": ("SELECT", "INSERT", "UPDATE"),
     "public.invites": ("SELECT", "INSERT", "UPDATE"),
@@ -840,13 +858,29 @@ $$;
 """
 
 
+def _column_grant_sql(role: str, object_name: str, privilege: str, columns: tuple[str, ...]) -> str:
+    # Same to_regclass guard as _grant_sql: a column grant can name a table a
+    # later revision creates (public.data_gap_events comes from v135), and a
+    # bare GRANT would abort a fresh `alembic upgrade head` at this revision.
+    grant = f"GRANT {privilege} ({', '.join(columns)}) ON TABLE {object_name} TO {role};"
+    return f"""
+DO $$
+BEGIN
+    IF to_regclass('{object_name}') IS NOT NULL THEN
+        EXECUTE '{grant}';
+    END IF;
+END
+$$;
+"""
+
+
 def _build_object_grants() -> str:
     statements = [_OBJECT_GRANT_BASE]
     for object_name, privileges in sorted(REGENGINE_TABLE_GRANTS.items()):
         statements.append(_grant_sql("regengine", object_name, privileges, "TABLE"))
     for object_name, privilege_map in sorted(REGENGINE_COLUMN_GRANTS.items()):
         for privilege, columns in sorted(privilege_map.items()):
-            statements.append(f"GRANT {privilege} ({', '.join(columns)}) ON TABLE {object_name} TO regengine;")
+            statements.append(_column_grant_sql("regengine", object_name, privilege, columns))
     for object_name, privileges in sorted(REGENGINE_SEQUENCE_GRANTS.items()):
         statements.append(_grant_sql("regengine", object_name, privileges, "SEQUENCE"))
 
@@ -854,7 +888,7 @@ def _build_object_grants() -> str:
         statements.append(_grant_sql("regengine_sysadmin", object_name, privileges, "TABLE"))
     for object_name, privilege_map in sorted(REGENGINE_SYSADMIN_COLUMN_GRANTS.items()):
         for privilege, columns in sorted(privilege_map.items()):
-            statements.append(f"GRANT {privilege} ({', '.join(columns)}) ON TABLE {object_name} TO regengine_sysadmin;")
+            statements.append(_column_grant_sql("regengine_sysadmin", object_name, privilege, columns))
     for object_name, privileges in sorted(REGENGINE_SYSADMIN_SEQUENCE_GRANTS.items()):
         statements.append(_grant_sql("regengine_sysadmin", object_name, privileges, "SEQUENCE"))
     return "\n".join(statements)
@@ -1732,7 +1766,21 @@ CREATE POLICY roles_sysadmin_scoped ON public.roles
 ALTER TABLE public.tenants ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tenants FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenants_read_all ON public.tenants;
-DROP POLICY IF EXISTS tenants_write_own ON public.tenants;
+-- The supported runner reapplies v111 after upgrading to head. v144 reuses
+-- tenants_write_own for a backend-only fail-hard UUID policy; preserve that
+-- later policy when its companion SELECT policy marks the v144 catalog.
+-- The exact post-v144 tuples remain pinned by the startup catalog canary.
+DO $tenant_write_policy$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies
+        WHERE schemaname = 'public' AND tablename = 'tenants'
+          AND policyname = 'tenants_backend_context_read'
+    ) THEN
+        DROP POLICY IF EXISTS tenants_write_own ON public.tenants;
+    END IF;
+END
+$tenant_write_policy$;
 DROP POLICY IF EXISTS tenants_runtime_own ON public.tenants;
 DROP POLICY IF EXISTS tenants_sysadmin_select ON public.tenants;
 DROP POLICY IF EXISTS tenants_sysadmin_tenant_select ON public.tenants;

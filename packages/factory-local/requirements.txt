@@ -8,6 +8,8 @@ neo4j>=5.23,<6
 streamlit>=1.38,<2
 pytest>=9.0.3,<10
 beautifulsoup4>=4.12,<5
-pypdf>=6.21.2,<7
+# Minimum release fixing CVE-2026-126190/126191/126192/126193.
+soupsieve>=4.0.1
+pypdf>=6.21.4,<7
 openai>=1.40,<3
 python-dotenv>=1.0,<2

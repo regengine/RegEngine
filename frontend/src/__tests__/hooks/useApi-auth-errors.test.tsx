@@ -11,6 +11,9 @@ vi.mock('@/lib/api-client', () => ({
     apiClient: {
         getSystemMetrics: (...args: unknown[]) => mocks.getSystemMetrics(...args),
     },
+    // use-api reaches the health probes through rawFetch (WI-11); keep it a
+    // passthrough so the stubbed global fetch below still sees the calls.
+    rawFetch: (...args: Parameters<typeof fetch>) => fetch(...args),
 }));
 
 import { useSystemMetrics, useSystemStatus } from '@/hooks/use-api';

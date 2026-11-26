@@ -45,7 +45,7 @@ def ensure_import_paths() -> None:
     ``scripts/`` itself is never put on ``sys.path``: its directories
     (``security``, ``scheduler``, ...) would shadow packages of the same name.
     """
-    for path in (ROOT / "services" / "ingestion", ROOT / "services"):
+    for path in (ROOT / "services", ROOT):  # repo root for services.*, services/ for shared.*
         text = str(path)
         if text not in sys.path:
             sys.path.insert(0, text)
