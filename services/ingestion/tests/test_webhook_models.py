@@ -95,5 +95,5 @@ class TestIngestEvent:
 
     def test_requires_location_gln_or_name(self):
         empty_event = models.IngestEvent.model_construct(kdes={})
-        with pytest.raises(ValueError, match="location identifier"):
+        with pytest.raises(ValueError, match=r"21 CFR 1\.1310"):
             empty_event.require_location()

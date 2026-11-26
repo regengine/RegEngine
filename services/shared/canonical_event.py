@@ -777,6 +777,8 @@ def normalize_webhook_event(
             "unit_of_measure": event.unit_of_measure,
             "location_gln": event.location_gln,
             "location_name": event.location_name,
+            "location_phone": getattr(event, "location_phone", None),
+            "location_address": getattr(event, "location_address", None),
             "timestamp": event.timestamp,
             "kdes": event.kdes,
         }
@@ -786,6 +788,10 @@ def normalize_webhook_event(
     # Extract facility references from KDEs
     kdes = dict(event.kdes) if event.kdes else {}
     kdes.setdefault("ingest_source", source)
+    for field in ("location_phone", "location_address"):
+        value = getattr(event, field, None)
+        if isinstance(value, str) and value.strip():
+            kdes.setdefault(field, value)
 
     # Promote input_traceability_lot_codes into kdes so _create_transformation_links()
     # can find them under the expected "input_lot_codes" key.  The webhook model keeps

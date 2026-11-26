@@ -10,6 +10,8 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
+from shared.fsma_validation import gln_for_export
+
 
 class RecallStatus(str, Enum):
     """Status of a recall drill."""
@@ -147,7 +149,7 @@ class RecallDrill:
             "severity": self.severity.value,
             "target_lot": self.target_lot,
             "target_gtin": self.target_gtin,
-            "target_facility_gln": self.target_facility_gln,
+            "target_facility_gln": gln_for_export(self.target_facility_gln),
             "initiated_by": self.initiated_by,
             "reason": self.reason,
             "description": self.description,
@@ -235,7 +237,7 @@ class RecallResult:
             "data_completeness_pct": self.data_completeness_pct,
             "affected_facilities": [
                 {
-                    "gln": f.gln,
+                    "gln": gln_for_export(f.gln),
                     "name": f.name,
                     "facility_type": f.facility_type,
                     "lots_affected": f.lots_affected,

@@ -8,8 +8,11 @@ from pathlib import Path
 from types import SimpleNamespace
 from uuid import UUID
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+
+pytestmark = pytest.mark.usefixtures("location_complete_for_pipeline")
 
 service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))

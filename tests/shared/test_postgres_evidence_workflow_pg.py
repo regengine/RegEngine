@@ -69,6 +69,8 @@ def workflow(monkeypatch):
         return connect(sock, address)
 
     monkeypatch.setattr(socket.socket, "connect", unix_only)
+    # Postgres evidence/RLS/hash-chain fixture — not 21 CFR 1.1310 location rules.
+    monkeypatch.setattr("app.webhook_models.is_location_description_complete", lambda **kwargs: True)
     proof = _load("pg_evidence_proof", ROOT / "scripts/verify_inflow_to_regengine_e2e.py")
     proof._configure_paths()
     admin = psycopg.connect(**admin_connect)

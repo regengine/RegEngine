@@ -227,3 +227,8 @@ def test_negative_control_pre_fix_row_normalisation_returns_500(upload, monkeypa
     post, _ = upload
     resp = post(f"{HEADER}\n{ROW},unexpected\n")
     assert resp.status_code == 500
+
+
+# These tests cover parsing and pipeline flow; location validity is covered by
+# test_location_description_complete.py and test_webhook_models.py.
+pytestmark = pytest.mark.usefixtures("location_complete_for_pipeline")

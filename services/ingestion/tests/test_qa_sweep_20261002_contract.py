@@ -13,6 +13,8 @@ import io
 import math
 
 import pytest
+
+pytestmark = pytest.mark.usefixtures("location_complete_for_pipeline")
 from app import csv_templates as ct
 from app.authz import IngestionPrincipal, get_ingestion_principal
 from app.webhook_compat import _verify_api_key

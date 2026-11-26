@@ -53,6 +53,8 @@ def _batch_dedup_key(event: IngestEvent) -> str:
     key = (
         f"{event.cte_type.value}|{event.traceability_lot_code}"
         f"|{event.timestamp}|{event.location_gln or event.location_name or ''}"
+        f"|{getattr(event, 'location_phone', None) or ''}"
+        f"|{getattr(event, 'location_address', None) or ''}"
     )
     # Repeated item lines can share a TLC, time, and location. Their
     # interchange position distinguishes 856 SN1, 861 RCD, and 944/945

@@ -369,3 +369,8 @@ def test_csv_sent_as_ms_excel_content_type_still_reads_as_csv(client, captured):
     assert resp.status_code == 200, resp.text
     assert resp.json()["accepted"] == 2
     assert captured["payload"].source == "csv_upload"
+
+
+# These tests cover parsing and pipeline flow; location validity is covered by
+# test_location_description_complete.py and test_webhook_models.py.
+pytestmark = pytest.mark.usefixtures("location_complete_for_pipeline")

@@ -25,6 +25,8 @@ def _empty_event(cte_type=WebhookCTEType.SHIPPING, **kdes):
         unit_of_measure="",
         location_name=None,
         location_gln=None,
+        location_phone=None,
+        location_address=None,
         kdes=kdes,
     )
 

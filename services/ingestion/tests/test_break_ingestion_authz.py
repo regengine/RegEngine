@@ -23,6 +23,8 @@ if str(_services_dir) not in sys.path:
     sys.path.insert(0, str(_services_dir))
 
 import pytest
+
+pytestmark = pytest.mark.usefixtures("location_complete_for_pipeline")
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 

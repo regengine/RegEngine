@@ -424,8 +424,12 @@ class SupplierSubmission(BaseModel):
     unit_of_measure: str = Field(..., description="Unit (cases, lbs, kg, pallets)")
     ship_date: str = Field(..., description="Ship date (YYYY-MM-DD)")
     ship_from_location: str = Field(..., description="Origin facility name")
+    ship_from_phone: Optional[str] = Field(None, description="Facility phone (optional)")
+    ship_from_address: Optional[str] = Field(None, description="Facility address (optional)")
     ship_from_gln: Optional[str] = Field(None, description="Origin GLN (optional)")
     ship_to_location: str = Field(..., description="Destination facility name")
+    ship_to_phone: Optional[str] = Field(None, description="Facility phone (optional)")
+    ship_to_address: Optional[str] = Field(None, description="Facility address (optional)")
     ship_to_gln: Optional[str] = Field(None, description="Destination GLN (optional)")
     carrier_name: Optional[str] = Field(None, description="Carrier/logistics company")
     po_number: Optional[str] = Field(None, description="Purchase order number")
@@ -464,6 +468,17 @@ def _submission_event_dict(portal_id: str, link: dict, submission: SupplierSubmi
         "submission_source": "supplier_portal",
         "portal_id": portal_id,
     }
+    for field in (
+        "ship_from_phone",
+        "ship_from_address",
+        "ship_to_phone",
+        "ship_to_address",
+        "ship_from_gln",
+        "ship_to_gln",
+    ):
+        value = getattr(submission, field)
+        if value:
+            kdes[field] = value
     if submission.carrier_name:
         kdes["carrier_name"] = submission.carrier_name
     if submission.po_number:
@@ -484,6 +499,8 @@ def _submission_event_dict(portal_id: str, link: dict, submission: SupplierSubmi
         "unit_of_measure": submission.unit_of_measure,
         "location_gln": submission.ship_from_gln,
         "location_name": submission.ship_from_location,
+        "location_phone": submission.ship_from_phone,
+        "location_address": submission.ship_from_address,
         "ship_from_location": submission.ship_from_location,
         "ship_to_location": submission.ship_to_location,
         "reference_document": kdes["reference_document"],
@@ -910,6 +927,8 @@ async def _submit_supplier_data_inner(
         unit_of_measure=submission.unit_of_measure,
         location_gln=submission.ship_from_gln,
         location_name=submission.ship_from_location,
+        location_phone=submission.ship_from_phone,
+        location_address=submission.ship_from_address,
         timestamp=event_data["timestamp"],
         kdes=kdes,
     )

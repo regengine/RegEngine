@@ -35,6 +35,8 @@ def test_initial_packing_requires_explicit_string_phone(phone):
         unit_of_measure="kg",
         location_name="Farm",
         location_gln=None,
+        location_phone=None,
+        location_address=None,
         kdes=kdes,
     )
     assert any("phone" in error.lower() for error in _validate_event_kdes(event))
@@ -53,6 +55,8 @@ def test_v2_accepts_supplied_phone():
         unit_of_measure="kg",
         location_name="Farm",
         location_gln=None,
+        location_phone=None,
+        location_address=None,
         kdes=kdes,
     )
     assert str(INFLOW_CONTRACT_VERSION) == "3"

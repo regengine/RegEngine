@@ -20,6 +20,8 @@ import json
 from datetime import datetime, timezone
 from typing import Any
 
+from shared.fsma_validation import gln_for_export
+
 from .csv_safety import sanitize_cell, sanitize_sequence
 
 # Mandatory FDA 204 spreadsheet columns in required sort order
@@ -269,10 +271,12 @@ def _normalise_event(
         "product_description": _pick(event.get("product_description"), kdes.get("product_description")),
         "quantity": _pick(event.get("quantity"), kdes.get("quantity")),
         "unit_of_measure": _pick(event.get("uom"), event.get("unit_of_measure"), kdes.get("unit_of_measure")),
-        "origin_gln": _pick(
-            event.get("facility_gln"),
-            event.get("location_gln"),
-            kdes.get("ship_from_gln"),
+        "origin_gln": gln_for_export(
+            _pick(
+                event.get("facility_gln"),
+                event.get("location_gln"),
+                kdes.get("ship_from_gln"),
+            )
         ),
         "origin_name": _pick(
             event.get("facility_name"),
@@ -280,10 +284,10 @@ def _normalise_event(
             kdes.get("ship_from_location"),
         ),
         "origin_address": _pick(event.get("facility_address"), event.get("ship_from_address")),
-        "destination_gln": _pick(event.get("dest_gln"), kdes.get("ship_to_gln")),
+        "destination_gln": gln_for_export(_pick(event.get("dest_gln"), kdes.get("ship_to_gln"))),
         "destination_name": _pick(event.get("dest_name"), kdes.get("ship_to_location")),
         "destination_address": _pick(event.get("dest_address"), event.get("ship_to_address")),
-        "tlc_source_gln": _pick(kdes.get("tlc_source_gln")),
+        "tlc_source_gln": gln_for_export(_pick(kdes.get("tlc_source_gln"))),
         "tlc_source_fda_reg": _pick(kdes.get("tlc_source_fda_reg")),
         "reference_document_type": _pick(kdes.get("reference_document_type"), event.get("document_type")),
         "reference_document_number": _pick(kdes.get("reference_document_number"), event.get("ref_doc")),

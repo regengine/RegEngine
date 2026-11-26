@@ -88,6 +88,8 @@ def _make_event():
         timestamp="2026-01-01T00:00:00Z",
         location_gln=None,
         location_name="Farm",
+        location_phone=None,
+        location_address=None,
         kdes={},
     )
 
