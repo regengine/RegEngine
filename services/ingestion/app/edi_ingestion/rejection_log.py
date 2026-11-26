@@ -1,30 +1,18 @@
-"""EDI FSMA-rejection audit log (#1174).
+"""Durable EDI rejection evidence (#1174, #3623).
 
-When an inbound EDI document fails FSMAEvent schema validation it MUST
-NOT flow into the canonical ingest stream — even in advisory mode.
-Previously ``?strict=false`` persisted the failed event alongside valid
-ones with ``fsma_validation_status=failed``, which polluted the FSMA
-204 traceability graph and forced downstream consumers (FDA export,
-recall simulator) to carry an exclusion filter on every read.
+Every rejection is appended to ``fsma.rule_rejections`` in an independent
+transaction before a caller receives its rejection ID. The table is tenant
+isolated and INSERT-only for the runtime role. The complete record lives in
+its JSONB ``reasons`` column under the fixed ``edi_rejection`` source.
 
-This module provides a dedicated rejection channel. The rejection is:
-
-* logged as a structured warning (`edi_fsma_rejection_recorded`) so ops
-  keeps a trail even if the store is ephemeral;
-* written to an in-memory tenant-scoped ring buffer that powers the
-  admin review UI and tests. The ring is capped per-tenant to bound
-  memory under abuse. Production deployments that need durable
-  rejection history should wire this module to a DB table by overriding
-  ``record_edi_rejection`` in a subclass or adapter — keeping the API
-  stable so callers don't change.
-
-Follows the same in-memory-fallback pattern as
-``app/epcis/persistence.py::_fallback_store_for`` so the subsystems
-behave consistently under test and development.
+The capped process-local cache remains a convenience for recent-record
+inspection. Cache eviction or restart never removes the durable evidence.
+Storage failures raise rather than acknowledging evidence that was lost.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 from collections import OrderedDict
@@ -42,6 +30,59 @@ _EDI_REJECTION_CAP_PER_TENANT = int(os.getenv("EDI_REJECTION_CAP_PER_TENANT", "1
 _edi_rejection_store: dict[str, "OrderedDict[str, dict]"] = {}
 
 
+class EDIRejectionUnavailable(RuntimeError):
+    """Rejection evidence could not be committed; the caller must return 503."""
+
+
+def _append_rejection(record: dict[str, Any]) -> None:
+    """Commit evidence separately so an ingest rollback cannot remove it."""
+    session = None
+    try:
+        from shared.database import SessionLocal
+        from shared.tenant_context import set_tenant_guc
+        from sqlalchemy import text
+
+        session = SessionLocal()
+        set_tenant_guc(session, record["tenant_id"])
+        session.execute(
+            text(
+                """
+                INSERT INTO fsma.rule_rejections (
+                    id, tenant_id, result, reasons, source, created_at
+                ) VALUES (
+                    :id, :tenant_id, 'rejected', CAST(:reasons AS JSONB),
+                    'edi_rejection', :created_at
+                )
+                """
+            ),
+            {
+                "id": str(uuid4()),
+                "tenant_id": record["tenant_id"],
+                "reasons": json.dumps(record),
+                "created_at": datetime.fromisoformat(record["recorded_at"]),
+            },
+        )
+        session.commit()
+    except Exception as exc:
+        if session is not None:
+            try:
+                session.rollback()
+            except Exception:
+                pass
+        logger.error(
+            "edi_rejection_audit_failed tenant=%s error_type=%s",
+            record["tenant_id"],
+            type(exc).__name__,
+        )
+        raise EDIRejectionUnavailable("EDI rejection storage is unavailable") from None
+    finally:
+        if session is not None:
+            try:
+                session.close()
+            except Exception:
+                pass
+
+
 def _rejection_store_for(tenant_id: str) -> "OrderedDict[str, dict]":
     return _edi_rejection_store.setdefault(tenant_id, OrderedDict())
 
@@ -50,20 +91,22 @@ def record_edi_rejection(
     *,
     tenant_id: str,
     transaction_set: str,
-    traceability_lot_code: str,
+    traceability_lot_code: str | None,
     errors: list[dict[str, Any]],
     extracted: dict[str, Any] | None = None,
     partner_id: str | None = None,
     source: str | None = None,
     reason: str = "fsma_validation_failed",
     needs_review: bool = False,
+    rejected_date: str | None = None,
+    source_document: str | None = None,
 ) -> dict[str, Any]:
     """Record an EDI FSMA validation rejection.
 
     Returns the rejection record (dict) so the caller can surface a
     rejection_id to the client without leaking internal storage
-    details. Always writes a structured warning log — even if storage
-    fails — so the audit trail survives.
+    details. Raises EDIRejectionUnavailable if the evidence cannot be
+    committed. Logs identify the rejection without including the document.
     """
     rejection_id = f"edi-rej-{uuid4().hex[:16]}"
     recorded_at = datetime.now(timezone.utc).isoformat()
@@ -76,46 +119,51 @@ def record_edi_rejection(
         "partner_id": partner_id,
         "source": source,
         "recorded_at": recorded_at,
-        "errors": errors,
-        # Snapshot of the extracted fields for forensic review. Drops
-        # any non-serializable values defensively.
+        "errors": _scrub(errors),
+        # Preserve a JSON-safe snapshot for forensic review.
         "extracted": _scrub(extracted or {}),
         "reason": reason,
         "needs_review": needs_review,
+        "rejected_date": rejected_date,
+        "source_document": source_document,
     }
+
+    _append_rejection(record)
 
     store = _rejection_store_for(tenant_id)
     store[rejection_id] = record
     while len(store) > _EDI_REJECTION_CAP_PER_TENANT:
         store.popitem(last=False)
 
-    # Always log — the in-memory store is not durable on its own.
     logger.warning(
-        "edi_fsma_rejection_recorded rejection_id=%s tenant=%s set=%s tlc=%s partner=%s errors=%d",
+        "edi_fsma_rejection_recorded rejection_id=%s tenant=%s set=%s tlc=%s partner=%s errors=%d "
+        "reason=%s rejected_date=%r",
         rejection_id,
         tenant_id,
         transaction_set,
         traceability_lot_code,
         partner_id,
         len(errors),
+        reason,
+        rejected_date,
     )
 
     return record
 
 
 def list_edi_rejections(tenant_id: str) -> list[dict[str, Any]]:
-    """Return recorded rejections for a tenant (most recent last)."""
+    """Return this process's cached tenant rejections (most recent last)."""
     return list(_rejection_store_for(tenant_id).values())
 
 
 def reset_edi_rejections() -> None:
-    """Test helper: clear the rejection store across tenants."""
+    """Test helper: clear the cache; durable evidence remains unchanged."""
     _edi_rejection_store.clear()
 
 
 def _scrub(value: Any) -> Any:
     """Best-effort JSON-safe scrub so the rejection record survives
-    serialization. Drops non-serializable leaves instead of failing.
+    serialization. Stringifies non-serializable leaves instead of failing.
     """
     if isinstance(value, dict):
         return {k: _scrub(v) for k, v in value.items()}

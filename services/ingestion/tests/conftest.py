@@ -11,8 +11,11 @@ from __future__ import annotations
 
 import sys
 from contextlib import suppress
+from copy import deepcopy
 from pathlib import Path
 from types import ModuleType
+
+import pytest
 
 _service_dir = str(Path(__file__).resolve().parents[1])  # services/ingestion
 if _service_dir not in sys.path:
@@ -129,3 +132,16 @@ _purge_stale_modules()
 
 def pytest_runtest_setup(item):  # type: ignore[no-untyped-def]
     _purge_stale_modules()
+
+
+@pytest.fixture
+def edi_rejection_rows(monkeypatch):
+    """Capture durable appends for EDI route unit tests without PostgreSQL.
+
+    Storage behavior is covered separately by rejection-log and live DB tests.
+    """
+    from app.edi_ingestion import rejection_log
+
+    rows = []
+    monkeypatch.setattr(rejection_log, "_append_rejection", lambda record: rows.append(deepcopy(record)))
+    return rows

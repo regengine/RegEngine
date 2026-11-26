@@ -10,7 +10,9 @@ diagnosed against a known-good primitive.
 
 from __future__ import annotations
 
+import json
 import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -18,6 +20,7 @@ import pytest
 service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
+from app.edi_ingestion import rejection_log
 from app.edi_ingestion.rejection_log import (
     list_edi_rejections,
     record_edi_rejection,
@@ -26,6 +29,58 @@ from app.edi_ingestion.rejection_log import (
 
 TENANT = "00000000-0000-0000-0000-0000000000aa"
 OTHER_TENANT = "00000000-0000-0000-0000-0000000000bb"
+
+
+class _Session:
+    def __init__(self, committed_rows, failure=None):
+        self.committed_rows = committed_rows
+        self.failure = failure
+        self.statements = []
+        self.pending = []
+        self.committed = False
+        self.rolled_back = False
+        self.closed = False
+
+    def execute(self, statement, params):
+        sql = str(statement)
+        self.statements.append((sql, params))
+        if "INSERT INTO" in sql:
+            if self.failure == "insert":
+                raise RuntimeError("simulated storage failure")
+            self.pending.append(params)
+
+    def commit(self):
+        if self.failure == "commit":
+            raise RuntimeError("simulated storage failure")
+        self.committed_rows.extend(self.pending)
+        self.committed = True
+
+    def rollback(self):
+        self.pending.clear()
+        self.rolled_back = True
+
+    def close(self):
+        self.closed = True
+
+
+@pytest.fixture(autouse=True)
+def durable_store(monkeypatch):
+    rows = []
+    sessions = []
+    failures = []
+
+    def session_factory():
+        failure = failures.pop(0) if failures else None
+        if failure == "connect":
+            raise RuntimeError("simulated storage failure")
+        session = _Session(rows, failure=failure)
+        sessions.append(session)
+        return session
+
+    database = types.ModuleType("shared.database")
+    database.SessionLocal = session_factory
+    monkeypatch.setitem(sys.modules, "shared.database", database)
+    return rows, sessions, failures
 
 
 @pytest.fixture(autouse=True)
@@ -107,3 +162,82 @@ def test_structured_warning_is_logged(caplog: pytest.LogCaptureFixture) -> None:
     assert any("edi_fsma_rejection_recorded" in rec.message for rec in caplog.records), (
         "rejection must always emit a structured warning for ops"
     )
+
+
+def test_rejection_is_committed_with_tenant_context(durable_store):
+    rows, sessions, _ = durable_store
+    record = record_edi_rejection(
+        tenant_id=TENANT,
+        transaction_set="856",
+        traceability_lot_code="LOT-A",
+        errors=[{"msg": "missing date"}],
+        extracted={"line_items": [{"traceability_lot_code": "LOT-A"}]},
+    )
+    assert len(rows) == 1
+    assert json.loads(rows[0]["reasons"]) == record
+    assert rows[0]["tenant_id"] == TENANT
+    session = sessions[0]
+    assert "set_config('app.tenant_id'" in session.statements[0][0]
+    assert session.statements[0][1] == {"tid": TENANT}
+    assert "INSERT INTO fsma.rule_rejections" in session.statements[1][0]
+    assert "RETURNING" not in session.statements[1][0]
+    assert "edi_rejection" in session.statements[1][0]
+    assert session.committed and session.closed
+    assert not session.rolled_back
+
+
+def test_committed_evidence_survives_cache_eviction_and_reset(monkeypatch, durable_store):
+    rows, _, _ = durable_store
+    monkeypatch.setattr(rejection_log, "_EDI_REJECTION_CAP_PER_TENANT", 1)
+    records = [
+        record_edi_rejection(
+            tenant_id=TENANT,
+            transaction_set="856",
+            traceability_lot_code=lot,
+            errors=[{"msg": "missing date"}],
+        )
+        for lot in ("LOT-A", "LOT-B")
+    ]
+    assert list_edi_rejections(TENANT) == [records[1]]
+    reset_edi_rejections()
+    assert list_edi_rejections(TENANT) == []
+    assert [json.loads(row["reasons"]) for row in rows] == records
+
+
+def test_full_document_and_rejected_date_are_persisted(durable_store, caplog):
+    rows, _, _ = durable_store
+    source_document = "ST*856*0001~BSN*00*DOC-A*20261001~SE*3*0001~ST*856*0002~BSN*00*DOC-B*bad-date~SE*3*0002~"
+    record = record_edi_rejection(
+        tenant_id=TENANT,
+        transaction_set="856",
+        traceability_lot_code=None,
+        errors=[{"msg": "invalid date"}],
+        reason="invalid_event_date",
+        rejected_date="bad-date",
+        source_document=source_document,
+    )
+    assert json.loads(rows[0]["reasons"])["source_document"] == source_document
+    assert record["rejected_date"] == "bad-date"
+    assert "reason=invalid_event_date" in caplog.text
+    assert "rejected_date='bad-date'" in caplog.text
+    assert source_document not in caplog.text
+
+
+@pytest.mark.parametrize("failure", ["connect", "insert", "commit"])
+def test_storage_failure_never_returns_or_caches_a_rejection(durable_store, caplog, failure):
+    rows, sessions, failures = durable_store
+    failures.append(failure)
+    with pytest.raises(rejection_log.EDIRejectionUnavailable, match="storage is unavailable"):
+        record_edi_rejection(
+            tenant_id=TENANT,
+            transaction_set="856",
+            traceability_lot_code="LOT-A",
+            errors=[{"msg": "missing date"}],
+        )
+    assert rows == []
+    assert list_edi_rejections(TENANT) == []
+    if sessions:
+        assert sessions[0].rolled_back and sessions[0].closed
+    assert "edi_fsma_rejection_recorded" not in caplog.text
+    assert "error_type=RuntimeError" in caplog.text
+    assert "simulated storage failure" not in caplog.text

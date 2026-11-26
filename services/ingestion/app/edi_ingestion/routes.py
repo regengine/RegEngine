@@ -98,7 +98,13 @@ def _record_edi_rejection(**kwargs):
     so ``app.edi_ingestion`` does not exist there.
     """
     rejection_log = importlib.import_module(".rejection_log", __package__)
-    return rejection_log.record_edi_rejection(**kwargs)
+    try:
+        return rejection_log.record_edi_rejection(**kwargs)
+    except rejection_log.EDIRejectionUnavailable:
+        raise HTTPException(
+            status_code=503,
+            detail="EDI rejection evidence storage is unavailable. Retry the document.",
+        ) from None
 
 
 # ISA13 claims taken by ``_enforce_envelope_integrity`` during the current
@@ -362,6 +368,7 @@ def _preflight_event_date(
     traceability_lot_code: str,
     partner_id: str | None,
     source: str,
+    source_document: str,
 ) -> None:
     """Reject a bad EDI event date BEFORE the ISA13 is reserved.
 
@@ -386,7 +393,7 @@ def _preflight_event_date(
         record = _record_edi_rejection(
             tenant_id=sender_tenant_id,
             transaction_set=transaction_set,
-            traceability_lot_code=traceability_lot_code,
+            traceability_lot_code=None if transaction_set in ("944", "945") else traceability_lot_code,
             errors=[
                 {
                     "loc": [date_field or "event_date"],
@@ -400,6 +407,8 @@ def _preflight_event_date(
             source=source,
             reason=str(detail.get("error") or "invalid_edi_date"),
             needs_review=True,
+            rejected_date=extracted.get(date_field) if date_field else None,
+            source_document=source_document,
         )
         detail["needs_review"] = True
         detail["rejection_id"] = record["rejection_id"]
@@ -724,6 +733,7 @@ async def ingest_edi_856(
             traceability_lot_code=traceability_lot_code,
             partner_id=x_partner_id,
             source=source,
+            source_document=raw_text,
         ),
     )
 
@@ -1262,7 +1272,10 @@ async def ingest_edi_document(
                     "transaction_set_index": slice_index,
                 },
             )
-        extractions.append(_extract_fields_for_set(slice_set, slice_segments))
+        slice_extracted = _extract_fields_for_set(slice_set, slice_segments)
+        if slice_set in ("944", "945"):
+            slice_extracted["tlc_source_reference"] = tlc_source_reference.strip() if tlc_source_reference else None
+        extractions.append(slice_extracted)
 
     extracted = extractions[0]
 
@@ -1277,6 +1290,7 @@ async def ingest_edi_document(
                 traceability_lot_code=traceability_lot_code,
                 partner_id=x_partner_id,
                 source=source,
+                source_document=raw_text,
             )
 
     # Event-date rejections run after the allowlist and before the ISA13
@@ -1293,7 +1307,6 @@ async def ingest_edi_document(
         if slice_set in ("856", "861", "944", "945"):
             header = {key: value for key, value in slice_extracted.items() if key != "line_items"}
             if slice_set in ("944", "945"):
-                header["tlc_source_reference"] = tlc_source_reference.strip() if tlc_source_reference else None
                 date_field = "receive_date_raw" if slice_set == "944" else "ship_date_raw"
                 header["_event_timestamp"], header["_event_date"] = _ship_timestamp_and_date(
                     header.get(date_field), None
