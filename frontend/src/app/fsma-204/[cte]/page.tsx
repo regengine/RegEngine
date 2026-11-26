@@ -110,32 +110,35 @@ const CTE_DATA: Record<string, CTEData> = {
       "Cross-references the TLC against harvesting events to ensure the chain is unbroken.",
     ],
   },
-  initial_packing: {
-    slug: "initial_packing",
+  "initial-packing": {
+    slug: "initial-packing",
     name: "Initial Packing",
     cfr: "21 CFR 1.1330",
     description:
-      "Records when harvested product is first packed into containers for sale. This is where lot codes often multiply and traceability chains are most likely to break.",
-    whoNeedsThis: ["Packhouses", "Fresh-cut processors", "Co-packers"],
+      "Records the initial packing of a raw agricultural commodity (other than food obtained from a fishing vessel) under 21 CFR 1.1330. This is where a Traceability Lot Code is often assigned for packed product and where harvest-to-pack links are most likely to break if TLC source fields are incomplete.",
+    whoNeedsThis: ["Packhouses", "Fresh-cut processors packing RACs", "Co-packers packing RACs other than seafood from a vessel"],
     kdes: [
-      { field: "Traceability Lot Code (TLC)", description: "New lot code assigned during packing", example: "PKG-2026-04-16-BLU-A01" },
-      { field: "Product Description", description: "FDA-standard description of the packed product", example: "Blueberries, fresh, 6oz clamshell" },
-      { field: "Quantity", description: "Number of units packed", example: "2,400" },
-      { field: "Unit of Measure", description: "UOM for the packed quantity", example: "clamshells" },
-      { field: "Location", description: "Address or GLN of the packing facility", example: "Valley Pack LLC, Watsonville, CA" },
-      { field: "Packing Date", description: "Date the product was packed", example: "2026-04-16" },
-      { field: "Input Lot Codes", description: "TLCs of the harvested lots that went into this pack run", example: "LOT-2026-04-15-BLU-001, LOT-2026-04-15-BLU-002" },
+      { field: "Traceability Lot Code (TLC)", description: "Lot code for the initially packed product", example: "PKG-2026-04-16-BLU-A01" },
+      { field: "Commodity and variety", description: "Product description for the packed RAC", example: "Blueberries, fresh, conventional" },
+      { field: "Quantity / Unit of Measure", description: "Amount packed and its unit", example: "2,400 clamshells" },
+      { field: "Date of initial packing", description: "Date the product was initially packed", example: "2026-04-16" },
+      { field: "Location description of the initial packer", description: "Address or GLN of the packing location", example: "Valley Pack LLC, Watsonville, CA" },
+      { field: "Location description for the TLC source", description: "Farm, growing area, or container that is the TLC source", example: "Sunny Acres Farm, Field B-12 North" },
+      { field: "TLC source reference", description: "Reference that links the packed lot to its TLC source", example: "HARVEST-REF-2026-04-15-BLU" },
+      { field: "Harvest date range of the lot", description: "Harvest date or date range for the lot being packed", example: "2026-04-15" },
+      { field: "Reference Document Type and Number", description: "Document type and number that identifies the packing event", example: "Pack ticket PT-44102" },
     ],
     commonMistakes: [
-      "Missing input lot codes: this is the single most common packing error. Without input TLCs, the traceability chain breaks at the packhouse.",
-      "Duplicate rows from ERP exports: many ERP systems export one row per case rather than one row per lot, creating thousands of duplicate CTE records.",
+      "Missing TLC source fields: without the TLC source location and reference, the packed lot cannot be tied back to harvest under §1.1330.",
+      "Harvest date range omitted or replaced with the pack date: the rule asks for the harvest date range of the lot, not only when packing happened.",
       "CTE type aliases: some systems label this event as 'packing', 'pack', 'IP', or 'initial pack'. Mixed labels cause mapping failures.",
+      "Duplicate rows from ERP exports: many ERP systems export one row per case rather than one row per lot.",
     ],
     howRegEngineHelps: [
-      "Requires input lot codes before an export can build, preventing the most common traceability break.",
-      "Deduplicates rows automatically when it detects ERP-style per-case exports.",
-      "Normalizes CTE type labels so 'packing', 'pack', and 'initial_packing' all map correctly.",
-      "Validates that input TLCs reference real harvesting or cooling events in your data.",
+      "RegEngine (Beta, pre-revenue) checks uploaded packing rows for the §1.1330 KDE fields listed above before you build an export package.",
+      "Flags missing TLC source location, TLC source reference, and harvest date range so you can fix gaps in your CSV or JSON events.",
+      "Maps common packing CTE label aliases toward initial packing so mixed ERP vocabularies are easier to review.",
+      "These checks do not determine whether your operation is covered by the rule. Verify the applicable record requirements under 21 CFR 1.1330.",
     ],
   },
   shipping: {
@@ -238,36 +241,38 @@ const CTE_DATA: Record<string, CTEData> = {
       "Maps the full input-to-output lineage so you can trace any finished product back to its raw ingredients.",
     ],
   },
-  first_land_based_receiving: {
-    slug: "first_land_based_receiving",
+  "first-land-based-receiving": {
+    slug: "first-land-based-receiving",
     name: "First Land-Based Receiving",
     cfr: "21 CFR 1.1335",
     description:
-      "Records the first land-based receipt of food obtained from a fishing vessel: the point at which seafood lands and enters the domestic traceability chain. This CTE applies only to food obtained from a fishing vessel; generic imported food entry is covered by ordinary Receiving (§1.1345).",
+      "Records the first land-based receiving of food obtained from a fishing vessel under 21 CFR 1.1335: the point at which that seafood lands and enters the domestic traceability chain. This CTE applies only to food obtained from a fishing vessel; generic imported food entry is covered by ordinary Receiving (§1.1345).",
     whoNeedsThis: [
       "Seafood docks and first receivers landing fish from vessels",
-      "Processors receiving directly from a fishing vessel",
+      "Processors receiving food directly from a fishing vessel",
     ],
     kdes: [
-      { field: "Traceability Lot Code (TLC)", description: "Lot code assigned at first land-based receipt", example: "FLBR-2026-04-18-TUNA-01" },
-      { field: "Product Description", description: "FDA-standard description of the commodity", example: "Yellowfin Tuna, fresh, whole" },
-      { field: "Quantity", description: "Amount received", example: "8,000" },
-      { field: "Unit of Measure", description: "UOM for the received quantity", example: "lbs" },
-      { field: "Location", description: "Address or GLN of the receiving facility", example: "Port of Long Beach, Terminal 4" },
-      { field: "Landing Date", description: "Date the product first arrived on U.S. soil", example: "2026-04-18" },
-      { field: "Immediate Previous Source", description: "Vessel name or foreign shipper information", example: "F/V Ocean Harvest, Fiji registry" },
+      { field: "Traceability Lot Code (TLC)", description: "Lot code assigned at first land-based receiving", example: "FLBR-2026-04-18-TUNA-01" },
+      { field: "Species / commodity", description: "Product description for the landed food", example: "Yellowfin Tuna, fresh, whole" },
+      { field: "Harvest date range", description: "Harvest date or date range for the lot", example: "2026-04-10 to 2026-04-17" },
+      { field: "Location description for the harvest area", description: "NMFS area or equivalent harvest-area description", example: "NMFS statistical area 17" },
+      { field: "Quantity / Unit of Measure", description: "Amount received and its unit", example: "8,000 lbs" },
+      { field: "Name and address of the harvest vessel", description: "Vessel identity for the fishing vessel source", example: "F/V Ocean Harvest, Fiji registry" },
+      { field: "Date of landing", description: "Date of first land-based receiving", example: "2026-04-18" },
+      { field: "Location description of the first land-based receiver", description: "Address or GLN of the receiving facility", example: "Port of Long Beach, Terminal 4" },
+      { field: "Reference Document Type and Number", description: "Document type and number that identifies the landing event", example: "Landing ticket LT-90821" },
     ],
     commonMistakes: [
       "Handwritten dock logs: many port facilities still use paper logs, leading to transcription errors and illegible records.",
+      "Harvest area or vessel identity missing: §1.1335 expects harvest-area location description and the harvest vessel name and address.",
       "Unparseable dates: international date formats (18/04/2026 vs 04/18/2026) and handwritten dates create ambiguity.",
-      "Vessel name inconsistency: the same vessel logged as 'Ocean Harvest', 'F/V OCEAN HARVEST', and 'OceanHarvest-FJ'.",
-      "Missing everything: first land-based receiving has the lowest data quality of any CTE because dock operations are fast-paced and often paper-based.",
+      "Confusing this CTE with ordinary Receiving (§1.1345): first land-based receiving applies only to food obtained from a fishing vessel.",
     ],
     howRegEngineHelps: [
-      "Accepts scanned or typed dock logs and validates that all required KDEs are present.",
-      "Normalizes international date formats and flags ambiguous dates for manual review.",
-      "Detects vessel name variations and maintains a canonical vessel registry.",
-      "Provides a pre-formatted template designed for dock operations: fast to fill out, impossible to miss a required field.",
+      "RegEngine (Beta, pre-revenue) checks uploaded first land-based receiving rows for the §1.1335 KDE fields listed above.",
+      "Flags missing vessel identity, harvest area, landing date, and reference document fields so you can repair CSV or JSON events.",
+      "Helps operators review dock-origin records before packaging an export; it does not replace your own dock log process.",
+      "These checks do not determine whether your operation is covered by the rule. Verify the applicable record requirements under 21 CFR 1.1335.",
     ],
   },
 };
@@ -277,16 +282,22 @@ const CTE_SLUGS = Object.keys(CTE_DATA);
 const CTE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   harvesting: Leaf,
   cooling: Snowflake,
-  initial_packing: Package,
+  "initial-packing": Package,
   shipping: Truck,
   receiving: Download,
   transformation: Repeat2,
-  first_land_based_receiving: Anchor,
+  "first-land-based-receiving": Anchor,
 };
 
 /* ------------------------------------------------------------------ */
 /*  STATIC PARAMS + METADATA                                           */
 /* ------------------------------------------------------------------ */
+
+/** Canonical marketing slugs use hyphens. Underscore aliases still resolve. */
+function resolveCteSlug(raw: string): string {
+  const normalized = raw.replaceAll("_", "-");
+  return CTE_DATA[normalized] ? normalized : raw;
+}
 
 export function generateStaticParams() {
   return CTE_SLUGS.map((cte) => ({ cte }));
@@ -298,12 +309,21 @@ export async function generateMetadata({
   params: Promise<{ cte: string }>;
 }): Promise<Metadata> {
   const { cte } = await params;
-  const data = CTE_DATA[cte];
+  const data = CTE_DATA[resolveCteSlug(cte)];
   if (!data) return {};
 
+  const path = `/fsma-204/${cte}`;
+  const title = `${data.name} CTE: FSMA 204 ${data.cfr} Compliance | RegEngine`;
+  const description = `Everything you need to know about the ${data.name} Critical Tracking Event under FSMA 204 (${data.cfr}). Required KDEs, common mistakes, and how to validate your data.`;
   return {
-    title: `${data.name} CTE: FSMA 204 ${data.cfr} Compliance | RegEngine`,
-    description: `Everything you need to know about the ${data.name} Critical Tracking Event under FSMA 204 (${data.cfr}). Required KDEs, common mistakes, and how to validate your data.`,
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      url: path,
+      type: 'website',
+    },
   };
 }
 
@@ -316,7 +336,8 @@ export default async function CTELandingPage({
 }: {
   params: Promise<{ cte: string }>;
 }) {
-  const { cte: cteSlug } = await params;
+  const { cte: cteParam } = await params;
+  const cteSlug = resolveCteSlug(cteParam);
   const data = CTE_DATA[cteSlug];
   if (!data) notFound();
 
@@ -421,7 +442,7 @@ export default async function CTELandingPage({
       {/* - HOW REGENGINE HELPS - */}
       <Section
         width="marketing"
-        eyebrow={<span className="font-mono uppercase">Automated validation</span>}
+        eyebrow={<span className="font-mono uppercase">Beta recordkeeping checks</span>}
         title="How RegEngine Helps"
         description={
           <>
