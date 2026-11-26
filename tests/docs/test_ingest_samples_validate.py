@@ -94,6 +94,9 @@ def _runtime_payload(when: datetime) -> dict:
         "quantity": 1,
         "unit_of_measure": "cases",
         "location_name": f"location-{token}",
+        # 21 CFR 1.1310: name + phone + address (or GLN). Synthetic tokens only.
+        "location_phone": f"phone-{token}",
+        "location_address": f"address-{token}",
         "timestamp": when.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "kdes": kdes,
     }

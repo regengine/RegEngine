@@ -31,6 +31,8 @@ const INGEST_BODY_SKELETON = {
       quantity: '<number greater than 0>',
       unit_of_measure: '<cases | lbs | kg | pallets | each>',
       location_name: '<your facility name>',
+      location_phone: '<facility phone, or omit if you send a valid GLN>',
+      location_address: '<facility address, or omit if you send a valid GLN>',
       timestamp: '{{EVENT_TIMESTAMP}}',
       kdes: {
         receive_date: '{{EVENT_DATE}}',
