@@ -10,6 +10,7 @@ from urllib.parse import unquote, urlparse
 
 import psycopg
 import pytest
+from tests.migrations.rls_db import skip_or_fail_without_db
 from regengine_ingestion.config import DatabaseConfig
 from regengine_ingestion.storage import database as database_module
 from regengine_ingestion.storage.database import DatabaseManager
@@ -242,7 +243,7 @@ def test_live_transaction_local_tenant_context() -> None:
 
     database_url = os.getenv("REGENGINE_INGESTION_DATABASE_TEST_URL")
     if not database_url:
-        pytest.skip("REGENGINE_INGESTION_DATABASE_TEST_URL is not configured")
+        skip_or_fail_without_db("REGENGINE_INGESTION_DATABASE_TEST_URL is not configured")
     assert database_url is not None
 
     parsed = urlparse(database_url.replace("postgresql+psycopg://", "postgresql://", 1))

@@ -53,6 +53,10 @@ class _FakeResult:
     def fetchone(self):
         return self._row
 
+    def fetchall(self):
+        # The open-gap lookup: these fakes model an export with no gaps.
+        return []
+
 
 class _FakeSession:
     def __init__(self, *, row=None, execute_raises=None):

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, call
+from unittest.mock import MagicMock
 
 _SHARED_DIR = Path(__file__).resolve().parent.parent
 _SERVICES_DIR = _SHARED_DIR.parent

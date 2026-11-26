@@ -553,7 +553,7 @@ def _rls_guc_counter():
     if _RLS_GUC_COUNTER is not None:
         return _RLS_GUC_COUNTER
     try:
-        from prometheus_client import REGISTRY, Counter  # noqa: PLC0415
+        from prometheus_client import REGISTRY, Counter  # noqa: PLC0415 -- lazy import, keeps module load light
 
         try:
             _RLS_GUC_COUNTER = Counter(
@@ -686,8 +686,8 @@ def install_rls_guc_hook() -> None:
     global _HOOK_INSTALLED
     if _HOOK_INSTALLED:
         return
-    from sqlalchemy import event as _sa_event  # noqa: PLC0415
-    from sqlalchemy.engine import Engine as _SAEngine  # noqa: PLC0415
+    from sqlalchemy import event as _sa_event  # noqa: PLC0415 -- lazy import, keeps module load light
+    from sqlalchemy.engine import Engine as _SAEngine  # noqa: PLC0415 -- lazy import, keeps module load light
 
     _sa_event.listen(_SAEngine, "begin", _apply_rls_gucs_on_begin)
     _HOOK_INSTALLED = True

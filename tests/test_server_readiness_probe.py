@@ -38,6 +38,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 import server.main as main
+import server.readiness as readiness_module
 
 
 @pytest.fixture
@@ -138,7 +139,7 @@ def test_neo4j_unset_reports_not_configured_and_ready(client, monkeypatch, _post
 
 def test_neo4j_not_probed_when_graph_subsystem_disabled(client, monkeypatch, _postgres_ok, _redis_unset):
     monkeypatch.setenv("NEO4J_URI", "bolt://neo4j.prod:7687")
-    monkeypatch.setattr(main, "_subsystem_active", lambda name: name != "graph")
+    monkeypatch.setattr(readiness_module, "_subsystem_active", lambda name: name != "graph")
 
     # If the probe touches Neo4j at all this would raise and surface as error.
     def _boom(*args, **kwargs):
@@ -160,7 +161,7 @@ def test_neo4j_probed_when_graph_subsystem_active(client, monkeypatch, _postgres
     """Symmetric guard: when graph IS active, the probe runs (existing tests
     rely on the non-prod default; this pins the branch explicitly)."""
     monkeypatch.setenv("NEO4J_URI", "bolt://neo4j.example:7687")
-    monkeypatch.setattr(main, "_subsystem_active", lambda name: True)
+    monkeypatch.setattr(readiness_module, "_subsystem_active", lambda name: True)
     monkeypatch.setattr(neo4j.GraphDatabase, "driver", lambda *a, **k: MagicMock())
 
     resp = client.get("/readiness")
@@ -570,8 +571,8 @@ def test_stalled_probe_is_bounded_and_does_not_block_liveness(monkeypatch):
         release.wait(timeout=2)
         return {"status": "ready"}
 
-    monkeypatch.setattr(main, "_readiness_checks", stalled_probe)
-    monkeypatch.setattr(main, "_READINESS_TIMEOUT_SECONDS", 0.1)
+    monkeypatch.setattr(readiness_module, "_readiness_checks", stalled_probe)
+    monkeypatch.setattr(readiness_module, "_READINESS_TIMEOUT_SECONDS", 0.1)
     app = FastAPI()
     app.add_api_route("/readiness", main.readiness, methods=["GET"])
 
@@ -616,9 +617,9 @@ def test_timed_out_or_cancelled_probes_retain_bounded_capacity(monkeypatch, canc
         release.wait(timeout=3)
         return {"status": "ready"}
 
-    monkeypatch.setattr(main, "_readiness_checks", stalled_probe)
-    monkeypatch.setattr(main, "_READINESS_TIMEOUT_SECONDS", 0.05)
-    monkeypatch.setattr(main, "_READINESS_SLOTS", threading.BoundedSemaphore(2))
+    monkeypatch.setattr(readiness_module, "_readiness_checks", stalled_probe)
+    monkeypatch.setattr(readiness_module, "_READINESS_TIMEOUT_SECONDS", 0.05)
+    monkeypatch.setattr(readiness_module, "_READINESS_SLOTS", threading.BoundedSemaphore(2))
     app = FastAPI()
     app.add_api_route("/readiness", main.readiness, methods=["GET"])
 
@@ -664,7 +665,7 @@ def test_timed_out_or_cancelled_probes_retain_bounded_capacity(monkeypatch, canc
                 await asyncio.gather(*probes, return_exceptions=True)
 
     with ThreadPoolExecutor(max_workers=2) as executor:
-        monkeypatch.setattr(main, "_READINESS_EXECUTOR", executor)
+        monkeypatch.setattr(readiness_module, "_READINESS_EXECUTOR", executor)
         asyncio.run(exercise())
 
 

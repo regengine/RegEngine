@@ -1,3 +1,5 @@
+// Stays hand-rolled (WI-11, 2026-11-04): the signed-out demo allowlist, rate
+// limit and tenant-field stripping are local logic, not a plain proxy.
 import { NextRequest, NextResponse } from "next/server";
 import {
     CSRF_HEADER,
@@ -16,7 +18,8 @@ const MAX_BODY_BYTES = 32 * 1024;
 const MAX_EXPORT_JSON_BYTES = 2 * 1024 * 1024;
 const TENANT_LIKE_KEY = /^(tenant(_?id)?|tenantId|customer(_?id)?|customerId|organization(_?id)?|org_id|orgId)$/i;
 const TRAVERSAL_ENCODED = /%2e|%2f|%5c/i;
-const SEGMENT_ALLOW = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
+// Colon allowed so EPCIS URN lot codes (urn:epc:id:sgtin:...) survive the public lineage path.
+const SEGMENT_ALLOW = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 
 // Best-effort per-instance token bucket (same posture as /api/client-errors).
 const DEFAULT_WINDOW_MS = 60_000;
@@ -175,11 +178,31 @@ function upstreamPathFor(relativePath: string): string {
         .join("/");
 }
 
+/**
+ * Public clients keep calling /api/regengine/export/* on the demo proxy.
+ * Upstream Inflow Lab serves the sandbox exports under /api/mock/regengine/export/*.
+ */
+function upstreamRelativePath(relativePath: string, contract: DemoContract): string {
+    if (
+        contract === "export"
+        && (
+            relativePath === "/api/regengine/export/fda-request"
+            || relativePath === "/api/regengine/export/epcis"
+        )
+    ) {
+        return relativePath.replace(
+            "/api/regengine/export/",
+            "/api/mock/regengine/export/",
+        );
+    }
+    return relativePath;
+}
+
 function contractFor(path: string, method: string): DemoContract | null {
     if (method === "GET" && path === "/api/healthz") return "health";
     if (method === "GET" && path === "/api/simulate/status") return "status";
     if (method === "GET" && path === "/api/events") return "events";
-    if (method === "GET" && /^\/api\/lineage\/[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(path)) {
+    if (method === "GET" && /^\/api\/lineage\/[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(path)) {
         return "lineage";
     }
     if (method === "POST" && path === "/api/simulate/start") return "start";
@@ -376,7 +399,7 @@ async function proxyPublic(request: NextRequest, params: Promise<{ path?: string
     const bodyResult = await readSanitizedBody(request);
     if (!bodyResult.ok) return bodyResult.response;
 
-    const upstreamUrl = new URL(`${serviceBaseUrl()}${upstreamPathFor(relativePath)}`);
+    const upstreamUrl = new URL(`${serviceBaseUrl()}${upstreamPathFor(upstreamRelativePath(relativePath, contract))}`);
     copyAllowedSearchParams(request.nextUrl.searchParams, upstreamUrl.searchParams);
 
     // Fresh minimal headers only — never forward browser cookies, Authorization,
@@ -493,5 +516,13 @@ export function GET(request: NextRequest, context: { params: Promise<{ path?: st
 }
 
 export function POST(request: NextRequest, context: { params: Promise<{ path?: string[] }> }) {
+    return proxyPublic(request, context.params);
+}
+
+export function PUT(request: NextRequest, context: { params: Promise<{ path?: string[] }> }) {
+    return proxyPublic(request, context.params);
+}
+
+export function DELETE(request: NextRequest, context: { params: Promise<{ path?: string[] }> }) {
     return proxyPublic(request, context.params);
 }
