@@ -8,11 +8,11 @@ Inflow Workbench prepares data with preflight checks, readiness scores, a fix qu
 
 [Website](https://regengine.co) · [Verify a bundle](https://regengine.co/verify) · [Product description](docs/PRODUCT_DESCRIPTION.md) · [Python SDK](regengine/README.md)
 
-This is a pre-production application with deployed public proof surfaces. The capability inventory below describes checked-in implementation and release policy, not proof of customer adoption or live configuration.
+This is a pre-production application. The capability inventory below describes checked-in implementation and release policy, not proof of deployment, customer adoption, or live configuration. Verify the deployed revision and settings separately.
 
 ## Public proof surface
 
-You don't have to take our word for any of this — try it yourself:
+The following verifier is intended to let a user check an exported bundle. Verify the live service and deployed revision separately:
 
 - [regengine.co/verify](https://regengine.co/verify) — drop an audit bundle exported from your own workspace into the verifier and confirm file-hash and Merkle-root integrity.
 
@@ -61,7 +61,7 @@ Implemented capabilities in the current tree. Route availability is controlled b
 | Public email-verification gate for free compliance tools (no-auth lead capture with rate limits, GDPR lead-erasure endpoints) | [services/admin/app/tool_verification_routes.py](services/admin/app/tool_verification_routes.py) |
 | Scheduler jobs (deadline monitor, data archival, outbox drains, scheduled recall drills with persisted mock-audit drill records) and scheduler metrics surface | [services/scheduler/](services/scheduler/) |
 | Frontend dashboard, auth, sandbox, docs, and product pages. `/contact` and `/signup` both post to `POST /api/contact` | [frontend/src/app/](frontend/src/app/), [docs/operations/LAUNCH_TRUST_PROVISIONING.md](docs/operations/LAUNCH_TRUST_PROVISIONING.md) |
-| Inbound email ingestion: Postmark inbound-parse webhook, Basic-Auth + per-tenant sender allowlist, CSV attachments routed through the existing CSV ingest path, claim-then-act idempotent audit trail. Built and unit-tested; **not enabled in production** and has no admin/self-service provisioning UI — see [docs/engineering/EMAIL_INGESTION.md](docs/engineering/EMAIL_INGESTION.md) | [services/ingestion/app/email_ingest/](services/ingestion/app/email_ingest/) |
+| Inbound email ingestion: Postmark inbound-parse webhook, Basic-Auth + per-tenant sender allowlist, CSV attachments routed through the existing CSV ingest path, claim-then-act idempotent audit trail. Implemented with unit tests; production enablement must be verified separately, and there is no admin/self-service provisioning UI — see [docs/engineering/EMAIL_INGESTION.md](docs/engineering/EMAIL_INGESTION.md) | [services/ingestion/app/email_ingest/](services/ingestion/app/email_ingest/) |
 
 ## Production Spine
 
@@ -104,7 +104,7 @@ Verified from checked-in config and code:
 - PostgreSQL is required. Production connection is supplied through `DATABASE_URL`.
 - Local development stack in [docker-compose.dev.yml](docker-compose.dev.yml) starts PostgreSQL and Redis (Redis backs the subscription gate, rate limiting, and idempotency caching — without it authenticated ingest fails closed with 503).
 - Redis is used by rate limiting, queues, session/subscription checks, and other runtime paths when configured.
-- Neo4j code and health checks exist, but the default local development stack does not start Neo4j. The deploy-gating `/readiness` probe contacts Neo4j only when the graph subsystem is enabled; with `NEO4J_URI` set but graph routers disabled (the production default) Neo4j is reported `not_probed` and never contacted. Only PostgreSQL failure returns 503 from `/readiness`; Redis/Neo4j errors degrade the payload but still return 200 ([server/main.py](server/main.py)).
+- Neo4j code and health checks exist, but the default local development stack does not start Neo4j. `/readiness` probes Neo4j only when the graph subsystem is enabled; its error alone is informational. The probe returns 503 for PostgreSQL failure, Redis failure in strict deployed runtimes, an essential worker failure, or an enabled embedded scheduler failure; probe saturation or timeout also returns 503. See [server/main.py](server/main.py).
 - The frontend is a separate Next.js application with its own package lock and CI workflow.
 
 ## Data And Schema
@@ -173,7 +173,7 @@ Known authentication caveat: two login/session code paths (passwordless cookie s
 Prerequisites:
 
 - Python 3.11 or 3.12. `pyproject.toml` declares `>=3.11,<3.13`.
-- Node/npm for the frontend.
+- Node and npm for the frontend; supported Node versions are specified in [frontend/package.json](frontend/package.json).
 - Docker for local PostgreSQL.
 
 Backend setup:
@@ -284,9 +284,17 @@ Frontend setup:
 
 ```bash
 cd frontend
-npm install
+npm ci
+# Point the server-side service URLs at the local consolidated backend.
+export ADMIN_SERVICE_URL=http://localhost:8000
+export INGESTION_SERVICE_URL=http://localhost:8000
+export COMPLIANCE_SERVICE_URL=http://localhost:8000
+export GRAPH_SERVICE_URL=http://localhost:8000
+export NLP_SERVICE_URL=http://localhost:8000
 npm run dev
 ```
+
+Setting these URLs does not enable routers excluded by the applicable runtime policy.
 
 ## Testing
 
@@ -423,7 +431,7 @@ These are current repo facts, not speculation:
 
 ## License
 
-RegEngine is proprietary, source-visible software — all rights reserved by RegEngine LLC ([LICENSE](LICENSE)). **This repository is private.** Transparency and audit are served by the public proof surface above, which requires no source access; where source is shared it is shared under licence, not as an open-source project: viewing the source is welcome, but no rights to use, modify, or redistribute are granted. External pull requests are not accepted ([CONTRIBUTING.md](CONTRIBUTING.md)). Licensing inquiries: legal@regengine.co.
+RegEngine is proprietary, source-visible software — all rights reserved by RegEngine LLC ([LICENSE](LICENSE)). **This repository is private.** The verifier linked above is intended to support independent checking without source access; where source is shared it is shared under licence, not as an open-source project: viewing the source is welcome, but no rights to use, modify, or redistribute are granted. External pull requests are not accepted ([CONTRIBUTING.md](CONTRIBUTING.md)). Licensing inquiries: legal@regengine.co.
 
 > **Before changing this repository's visibility**, work through [docs/security/PRE_PUBLIC_CHECKLIST.md](docs/security/PRE_PUBLIC_CHECKLIST.md). Confidential business material is currently tracked in-tree, and `git rm` removes it from `HEAD` only — every prior revision stays readable.
 

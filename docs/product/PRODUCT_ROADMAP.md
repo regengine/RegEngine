@@ -1,5 +1,7 @@
 # RegEngine Product Roadmap (FSMA-First)
 
+> **Historical roadmap:** This April 2026 plan and baseline are superseded for product scope by the [October 2026 PRD](PRODUCT_PRD_2026-10.md). The listed paths, planned work, and status are historical; verify current code, tests and deployment before using them.
+
 Last updated: April 30, 2026
 Planning horizon: May 2026 through July 2026 (90 days)
 

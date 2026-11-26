@@ -1,16 +1,18 @@
 # RegEngine Audit Events Integration
 
+> **Historical integration guide:** The Kafka and phase-specific paths described below have not been revalidated against the current consolidated application. Refer to the [current architecture](../../ARCHITECTURE.md) and [admin audit code](../../services/admin/app/audit.py) before using this as an implementation guide.
+
 **Version**: 1.0
 **Last Updated**: 2025-11-22
-**Status**: Integrated
+**Status**: Historical / unverified
 
 ## Overview
 
-RegEngine now emits **Kafka audit events** for all control and mapping operations in the Content Graph Overlay system. This provides a complete audit trail for compliance tracking and operational monitoring.
+This historical guide described Kafka audit events for control and mapping operations in the Content Graph Overlay system. It does not establish that the flow is enabled or complete in any deployment. The checked-in graph publisher can skip events when Kafka is unavailable and logs send failures; see [graph_event_publisher.py](../../services/graph/app/graph_event_publisher.py). The separate admin audit logger persists hash-chained records; see [audit.py](../../services/admin/app/audit.py).
 
 ## Architecture
 
-### Event Flow
+### Historical Event Flow
 
 ```
 API Request (POST /overlay/controls)
@@ -90,7 +92,7 @@ Default: `kafka:9092`
 
 ### Topic
 
-Audit events are published to: `graph.audit`
+The historical design names `graph.audit` as the topic; the checked-in publisher uses that topic when available.
 
 **Topic Configuration** (recommended):
 - Partitions: 3

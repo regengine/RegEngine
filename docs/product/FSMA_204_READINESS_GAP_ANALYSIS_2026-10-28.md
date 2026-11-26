@@ -1,9 +1,11 @@
 # FSMA 204 Readiness PRD (external, 2026-10-28): gap analysis and reconciliation with PRODUCT_PRD_2026-10
 
+> **Historical snapshot:** This analysis describes repository and planning evidence as checked on 2026-10-28, not current deployment or issue status. Recheck the current code, tests, issue state, deployed revision and configuration before relying on an item. `PROD` below means a router was in the checked-in production allowlist at that snapshot; it does not prove that code was deployed or available to customers. Copy-registry labels such as `live` are product labels, not deployment verification.
+
 Date: 2026-10-28. Status: proposal for founder review; this document decides nothing. Owner: founder / product.
 Relation: subordinate to `docs/product/PRODUCT_PRD_2026-10.md` (2026-10-27). Where the two conflict, the 2026-10-27 decisions of record (its section 9, Q1 to Q6) and non-goals (its section 7) stand, and the conflicting item is marked "deferred, conflicts with 2026-10-27 decision". Supersedes nothing.
 Basis: the summary of the external "RegEngine FSMA 204 Readiness PRD" (about 6,500 words, produced 2026-10-28 by an external assistant from a competitor-checklist research memo). The full text is not in this repository, so every statement about that PRD below is a statement about its summary.
-Verification basis: repo state checked against the files cited inline on 2026-10-28 at commit 28e10bd (main 8548c09 merged in). The first pass used af5beee; of the files cited here, `services/ingestion/app/webhook_models.py`, `services/ingestion/app/csv_templates.py` and `docs/product/PRODUCT_PRD_2026-10.md` changed between the two commits and their claims were rechecked at 28e10bd. Production status comes from `PRODUCTION_ENABLED_ROUTERS` in `server/router_policy.py`, `PRODUCTION_SURFACE.md` and the copy registry `frontend/src/lib/capabilities.ts` (live: CSV upload, JSON events API; preview: EPCIS intake, EPCIS export; off: EDI, SFTP). Test mappings name files that exist; whether a test asserts the whole gate is stated per row. Jev answers (TypeSafe jev-1.14.0, request req_01a18223290f7a5d9b3824b5a17703a6) are planning inputs, not verified facts. Anything else is marked "not verified".
+Verification basis: repo state checked against the files cited inline on 2026-10-28 at commit 28e10bd (main 8548c09 merged in). The first pass used af5beee; of the files cited here, `services/ingestion/app/webhook_models.py`, `services/ingestion/app/csv_templates.py` and `docs/product/PRODUCT_PRD_2026-10.md` changed between the two commits and their claims were rechecked at 28e10bd. The historical production-policy classification comes from `PRODUCTION_ENABLED_ROUTERS` in `server/router_policy.py`, `PRODUCTION_SURFACE.md` and the copy registry `frontend/src/lib/capabilities.ts` (live: CSV upload, JSON events API; preview: EPCIS intake, EPCIS export; off: EDI, SFTP). Test mappings name files that exist; whether a test asserts the whole gate is stated per row. Jev answers (TypeSafe jev-1.14.0, request req_01a18223290f7a5d9b3824b5a17703a6) are planning inputs, not verified facts. Anything else is marked "not verified".
 
 ## Summary
 
@@ -37,7 +39,7 @@ The external summary lists its ingestion channels in one bullet. It is split her
 
 Disposition vocabulary: `already covered` (the 2026-10-27 PRD already carries the work), `fold into` a named SEL issue or feature, `propose new story` (section 9), `deferred, conflicts with 2026-10-27 decision`, `out of scope`.
 
-Production status vocabulary: PROD means the router is in `PRODUCTION_ENABLED_ROUTERS`; NON-PROD means the code exists but production does not mount it; registry means the label in `frontend/src/lib/capabilities.ts`.
+Historical policy vocabulary: PROD means the router was in `PRODUCTION_ENABLED_ROUTERS` at the snapshot; NON-PROD means code existed outside that allowlist; registry means the label in `frontend/src/lib/capabilities.ts`. These are not observations of deployment or service availability.
 
 | # | External P0 capability | Repo state | Production status | Evidence | Relation to 2026-10-27 PRD | Disposition |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -186,7 +188,7 @@ Open question for the founder: should the tenant exit export (row 18) move from 
 - `docs/compliance/RTM.md` line 24 titles a row "24-Hour Recall Response"; it is audit evidence under the link gate and should change in its own PR.
 - `docs/specs/FSMA_204_MVP_SPEC.md` line 28 still lists "Creation" and "Depletion" as future CTEs; it is marked a legacy planning spec but is also listed as source of truth in `AGENTS.md`. Candidate for the Q5 signoff.
 - `docs/PRODUCT_DESCRIPTION.md` capability matrix does not mention that the EPCIS export is capped at 2,000 rows (story S3).
-- `docs/product/PRODUCT_PRD_2026-10.md` names two paths the link checker cannot resolve: the git-ignored sales/local directory and a shorthand for `services/ingestion/app/stripe_billing/routes.py` that omits the leading directories. No workflow runs `scripts/check_docs_links.py`; its unit test `tests/scripts/test_check_docs_links.py` covers only the default scope, which excludes `docs/product/`, so this is informational; fix the shorthand when the PRD is next edited.
+- `docs/product/PRODUCT_PRD_2026-10.md` names two paths the link checker cannot resolve: the git-ignored sales/local directory and a shorthand for `services/ingestion/app/stripe_billing/routes.py` that omits the leading directories. At the snapshot, no workflow ran `scripts/check_docs_links.py`; its unit test `tests/scripts/test_check_docs_links.py` covers only the default scope, which excludes `docs/product/`, so this was informational. The PRD shorthand was expanded during the 2026-11-04 documentation cleanup.
 
 ## Appendix A. Commands used for section 5
 

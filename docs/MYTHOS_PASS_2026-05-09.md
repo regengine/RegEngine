@@ -1,5 +1,7 @@
 # Mythos Pass — 2026-05-09 (Revised)
 
+> **Historical snapshot:** Paths, priorities, and implementation claims below describe the May 2026 review and may no longer exist or apply. See [current architecture](../ARCHITECTURE.md) for the checked-in runtime.
+
 **Supersedes:** the conversational mythos report delivered 2026-05-09. That version was never committed and contained one major error (the `kernel/` orphaning claim). This document is the corrected, code-grounded version. All findings are mapped to PRs so any reader can verify on `main`.
 
 **Audience:** Christopher (founder); future hires who need to reconcile what RegEngine *says* with what the code *does*.
