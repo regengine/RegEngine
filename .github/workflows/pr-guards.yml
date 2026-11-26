@@ -4,7 +4,7 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
   pull_request_review:
-    types: [submitted, dismissed]
+    types: [submitted, edited, dismissed]
   pull_request_review_comment:
     types: [created, edited, deleted]
   issue_comment:
@@ -23,7 +23,7 @@ jobs:
     if: (github.event_name == 'pull_request' || github.event_name == 'pull_request_review' || github.event_name == 'pull_request_review_comment' || (github.event_name == 'issue_comment' && github.event.issue.pull_request))
     concurrency:
       group: ${{ github.workflow }}-pr-blocker-checklist-${{ github.event.pull_request.number || github.event.issue.number }}
-      cancel-in-progress: true
+      cancel-in-progress: false
     permissions:
       contents: read
       pull-requests: write
@@ -748,7 +748,7 @@ jobs:
     if: (github.event_name == 'pull_request' && github.event.action != 'ready_for_review') || github.event_name == 'check_suite' || github.event_name == 'workflow_run'
     concurrency:
       group: ${{ github.workflow }}-head-sha-check-guard-${{ github.event.pull_request.number || github.event.workflow_run.pull_requests[0].number || github.event.check_suite.pull_requests[0].number || github.sha }}
-      cancel-in-progress: true
+      cancel-in-progress: false
     permissions:
       contents: read
       checks: read
@@ -1162,17 +1162,20 @@ jobs:
             }
 
   # All engines post through one shared GitHub account, so this is an audit trail and not a cryptographic gate.
+  # A REVIEW: marker counts only in a pull request review. A comment is not read:
+  # a comment run has no job under this name on the PR head, so nothing there
+  # could show a blocking verdict that failed to post.
   engine-review-pass:
     name: "Engine Review Pass"
-    if: (github.event_name == 'pull_request' && github.event.action != 'ready_for_review') || github.event_name == 'pull_request_review' || github.event_name == 'issue_comment'
+    if: (github.event_name == 'pull_request' && github.event.action != 'ready_for_review') || github.event_name == 'pull_request_review'
     # Review bursts must not cancel in-progress runs.
     concurrency:
-      group: ${{ github.workflow }}-engine-review-pass-${{ github.event.pull_request.number || github.event.issue.number }}
+      group: ${{ github.workflow }}-engine-review-pass-${{ github.event.pull_request.number }}
       cancel-in-progress: false
     permissions:
+      actions: write
       statuses: write
       pull-requests: read
-      issues: read
       contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -1180,24 +1183,14 @@ jobs:
       - name: Verify engine review pass
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
+          retries: 3
           script: |
             const owner = context.repo.owner;
             const repo = context.repo.repo;
-            let pr = context.payload.pull_request;
 
-            if (!pr) {
-              if (!context.payload.issue?.pull_request) {
-                core.info('Issue comment is not on a pull request. Skipping.');
-                return;
-              }
-              const prResponse = await github.rest.pulls.get({
-                owner,
-                repo,
-                pull_number: context.payload.issue.number,
-              });
-              pr = prResponse.data;
-            }
-
+            // Every event this job runs for carries the pull request, and its job
+            // lands on the PR head. A failed job therefore blocks the PR by itself.
+            const pr = context.payload.pull_request;
             if (!pr) {
               core.setFailed('Could not determine pull request from event payload.');
               return;
@@ -1212,6 +1205,7 @@ jobs:
             const ALLOWED_ENGINES = new Set([
               'claude',
               'codex',
+              'cursor',
               'gemini',
               'grok',
               'muse',
@@ -1245,7 +1239,60 @@ jobs:
                 });
                 core.info(`Created commit status '${state}' on ${headSha}: ${description}`);
               } catch (err) {
+                // The job's own result on the PR head still carries a failing verdict.
                 core.warning(`Failed to create commit status on ${headSha}: ${err.message}`);
+              }
+            }
+
+            // A failed or cancelled run of this job stays on the head SHA and blocks the
+            // PR even after a later run passes. Rerun the oldest one: it re-reads the
+            // reviews and, if it passes, reruns the next. One at a time, because a queued
+            // run is cancelled by the next one in the concurrency group. Best-effort: if
+            // this fails, the old result stands and the PR stays blocked until a rerun.
+            async function rerunStaleEvaluation() {
+              const stale = (conclusion) => ['failure', 'cancelled', 'timed_out'].includes(conclusion);
+              try {
+                // A rerun joins this job's concurrency group, where it would replace a
+                // queued evaluation of a newer head.
+                const { data: current } = await github.rest.pulls.get({ owner, repo, pull_number: pr.number });
+                if (current.head?.sha !== headSha) {
+                  core.info(`Not rerunning stale evaluations: PR head moved from ${headSha}`);
+                  return;
+                }
+
+                const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {
+                  owner,
+                  repo,
+                  head_sha: headSha,
+                  per_page: 100,
+                });
+                const candidates = runs
+                  .filter((r) => r.name === context.workflow && r.id !== context.runId && r.status === 'completed' && stale(r.conclusion))
+                  // Another PR at this SHA may not have passed, and its run shares this status.
+                  .filter((r) => r.pull_requests?.some((p) => p.number === pr.number))
+                  .sort((a, b) => a.id - b.id);
+                for (const run of candidates) {
+                  try {
+                    const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
+                      owner,
+                      repo,
+                      run_id: run.id,
+                      per_page: 100,
+                    });
+                    // Runs that are red for another job's sake would rerun forever.
+                    const staleJob = jobs.find((j) => j.name === 'Engine Review Pass' && stale(j.conclusion));
+                    if (staleJob) {
+                      await github.rest.actions.reRunJobForWorkflowRun({ owner, repo, job_id: staleJob.id });
+                      core.info(`Reran stale evaluation in run ${run.id}`);
+                      return;
+                    }
+                  } catch (err) {
+                    // An expired run must not stop newer ones from being repaired.
+                    core.warning(`Could not rerun run ${run.id}: ${err.message}`);
+                  }
+                }
+              } catch (err) {
+                core.warning(`Could not rerun stale evaluations on ${headSha}: ${err.message}`);
               }
             }
 
@@ -1277,30 +1324,7 @@ jobs:
 
               core.info(`Total reviews retrieved: ${reviews.length}`);
 
-              core.info(`Fetching comments for pull request #${prNumber}...`);
-
-              const comments = await github.paginate(github.rest.issues.listComments, {
-                owner,
-                repo,
-                issue_number: prNumber,
-                per_page: 100,
-              });
-
-              core.info(`Total issue comments retrieved: ${comments.length}`);
-
-              const normalizedComments = comments.map((c) => ({
-                id: c.id,
-                body: c.body,
-                // Edits take effect at their edit time, so use updated_at.
-                submitted_at: c.updated_at || c.created_at,
-                author_association: c.author_association,
-                user: c.user,
-                state: 'COMMENTED',
-              }));
-
-              const allReviews = reviews.concat(normalizedComments);
-
-              const eligibleReviews = allReviews.filter((r) => {
+              const eligibleReviews = reviews.filter((r) => {
                 if (r.state === 'DISMISSED' || !r.submitted_at || !r.body) {
                   return false;
                 }
@@ -1375,9 +1399,29 @@ jobs:
                 return m.action === 'PASS' && m.engine.toLowerCase() !== authorEngineLower;
               });
 
-              if (blockedMarkers.length > 0) {
-                const blockedEngines = blockedMarkers.map((m) => m.engine).join(', ');
-                const msg = `Blocked by ${blockedEngines}`;
+              // Native reviews follow GitHub's rule: a member's latest decision stands, and
+              // a later comment does not clear it. These are read from the raw list because
+              // eligibleReviews drops reviews with an empty body.
+              const latestDecisions = new Map();
+              const decisions = reviews
+                .filter((r) => ['APPROVED', 'CHANGES_REQUESTED', 'DISMISSED'].includes(r.state) && r.user?.login)
+                .sort((a, b) => new Date(a.submitted_at).getTime() - new Date(b.submitted_at).getTime() || a.id - b.id);
+              for (const r of decisions) {
+                latestDecisions.set(r.user.login, r);
+              }
+              const changesRequestedBy = Array.from(latestDecisions.values())
+                .filter((r) => r.state === 'CHANGES_REQUESTED' && ALLOWED_ASSOCIATIONS.has((r.author_association || '').toUpperCase()))
+                .map((r) => r.user.login);
+
+              if (blockedMarkers.length > 0 || changesRequestedBy.length > 0) {
+                const reasons = [];
+                if (blockedMarkers.length > 0) {
+                  reasons.push(`Blocked by ${blockedMarkers.map((m) => m.engine).join(', ')}`);
+                }
+                if (changesRequestedBy.length > 0) {
+                  reasons.push(`Changes requested by ${changesRequestedBy.join(', ')}`);
+                }
+                const msg = reasons.join('; ');
                 await setCommitStatus('failure', msg);
                 core.setFailed(`Engine Review Pass blocked: ${msg}`);
                 return;
@@ -1386,7 +1430,7 @@ jobs:
               if (nonAuthorPassMarkers.length === 0) {
                 const msg = 'No passing review from a non-author engine for current head SHA';
                 await setCommitStatus('failure', msg);
-                core.setFailed(`Engine Review Pass failed: ${msg}`);
+                core.setFailed(`Engine Review Pass failed: ${msg}. A marker counts only in a pull request review, not in a comment.`);
                 return;
               }
 
@@ -1394,6 +1438,7 @@ jobs:
               const successMsg = `Passed by ${passEngines}`;
               await setCommitStatus('success', successMsg);
               core.info(`Engine Review Pass succeeded: ${successMsg}`);
+              await rerunStaleEvaluation();
             } catch (err) {
               core.error(`Unexpected error: ${err.message}`);
               await setCommitStatus('failure', `Error: ${err.message}`.slice(0, 140));

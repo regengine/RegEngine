@@ -13,12 +13,8 @@ in production, which silenced scraping and broke SLO dashboards (#1325).
 from __future__ import annotations
 
 import logging
-import os as _os
 
 from fastapi import APIRouter
-from shared.kafka_consumer_base import kafka_health_check
-
-from .config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -42,31 +38,18 @@ router = APIRouter(tags=["health-metrics"])
 def health() -> dict[str, object]:
     """Liveness / ingestion-posture endpoint.
 
-    Reports process liveness and optional Kafka posture only. A healthy
+    Reports process liveness and ingestion posture only. A healthy
     response does not attest PostgreSQL, Redis, or evidence availability.
 
     This is deliberately shallow: ``/readiness`` (server/main.py) is the
     dependency-gated probe Railway polls, and ``/health/deep`` verifies
     Postgres/Neo4j/Redis connectivity.
     """
-    # Kafka is optional — only check if explicitly configured
-    kafka_servers = _os.getenv("KAFKA_BOOTSTRAP_SERVERS", "")
-    if kafka_servers and kafka_servers not in ("redpanda:9092", "localhost:9092"):
-        settings = get_settings()
-        kafka_result = kafka_health_check(
-            bootstrap_servers=settings.kafka_bootstrap_servers,
-            timeout=3.0,
-        )
-        kafka_status = kafka_result["status"]
-        if kafka_status != "available":
-            logger.warning(
-                "ingestion_health_kafka_unavailable: %s",
-                kafka_result.get("error", "unknown"),
-            )
-        overall_status = "healthy" if kafka_status == "available" else "degraded"
-    else:
-        kafka_status = "not_configured"
-        overall_status = "healthy"
+    # The Kafka backbone was retired (WI-05, 2026-11-04). The key stays in
+    # the payload so dashboards that read it keep working; the value is
+    # constant.
+    kafka_status = "retired"
+    overall_status = "healthy"
 
     # F-5 / #3229: surface webhook HMAC config status so ops can alarm
     # when a closed gate (production or any strict/cloud runtime) has no

@@ -1,0 +1,2028 @@
+{
+  "status": "completed",
+  "model": "jev-1.13.0",
+  "endpoint": "https://api.typesafe.ai/v1/systemone",
+  "synthetic_only": true,
+  "started_at_utc": "2026-10-29T09:37:56.360Z",
+  "budget_cap_usd": "1.00",
+  "prior_spend_usd": "0.006837516",
+  "max_attempts": 100,
+  "reserved_per_attempt_usd": "0.009000000",
+  "maximum_cumulative_reservation_usd": "0.906837516",
+  "input_price_usd_per_million": "0.042",
+  "output_price_usd_per_million": "0",
+  "pricing_source": "https://docs.typesafe.ai/models",
+  "pricing_checked_date": "2026-10-29",
+  "queue_sha256": "8f30cd8f35f2e329e5c4597e6c2d2654ad3854c96696a24b2f7e968b18752eef",
+  "attempts": [
+    {
+      "case_id": "HV01",
+      "dataset": "heldout",
+      "variant": "combined",
+      "request_sha256": "311ef922a8e4df32ed3563aefd6ef416e68f04b73d8a5930756be46fc6b209cf",
+      "expected": "supported",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:37:56.380Z",
+      "http_status": 200,
+      "elapsed_ms": 193,
+      "usage": {
+        "input_tokens": 958,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 40236,
+      "cost_usd": "0.000040236",
+      "actual": "supported",
+      "reason": "direct_support",
+      "matches": true
+    },
+    {
+      "case_id": "HV01",
+      "dataset": "heldout",
+      "variant": "omission-aware",
+      "request_sha256": "b898a3a7c3a47bd080c7d90a9f33ba87e12673e4a303b085c04941b685df3778",
+      "expected": "supported",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:37:56.577Z",
+      "http_status": 200,
+      "elapsed_ms": 97,
+      "usage": {
+        "input_tokens": 1039,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 43638,
+      "cost_usd": "0.000043638",
+      "actual": "supported",
+      "reason": "direct_support",
+      "matches": true
+    },
+    {
+      "case_id": "HV02",
+      "dataset": "heldout",
+      "variant": "omission-aware",
+      "request_sha256": "16544f70b2cc8fc2c7735c1c5945e776d1ef971694c6a2e0ec6b91209378ab68",
+      "expected": "supported",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:37:56.675Z",
+      "http_status": 200,
+      "elapsed_ms": 131,
+      "usage": {
+        "input_tokens": 1059,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 44478,
+      "cost_usd": "0.000044478",
+      "actual": "supported",
+      "reason": "direct_support",
+      "matches": true
+    },
+    {
+      "case_id": "HV02",
+      "dataset": "heldout",
+      "variant": "combined",
+      "request_sha256": "fb8fe1ea26954a4111b33d7dfd3defe7e72d4666d2ad9d2d9f55b267899eeffd",
+      "expected": "supported",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:37:56.823Z",
+      "http_status": 200,
+      "elapsed_ms": 96,
+      "usage": {
+        "input_tokens": 978,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 41076,
+      "cost_usd": "0.000041076",
+      "actual": "supported",
+      "reason": "direct_support",
+      "matches": true
+    },
+    {
+      "case_id": "HV03",
+      "dataset": "heldout",
+      "variant": "combined",
+      "request_sha256": "a0847187c0297f528f071006d8e0261194aa712027a48ac5d037dbc8894f0473",
+      "expected": "supported",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:37:56.923Z",
+      "http_status": 200,
+      "elapsed_ms": 81,
+      "usage": {
+        "input_tokens": 1053,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 44226,
+      "cost_usd": "0.000044226",
+      "actual": "supported",
+      "reason": "direct_support",
+      "matches": true
+    },
+    {
+      "case_id": "HV03",
+      "dataset": "heldout",
+      "variant": "omission-aware",
+      "request_sha256": "9a105ffbc694727edb797f633398c7fc8416ab8c977aeef8e9b7f1c23baf3f2b",
+      "expected": "supported",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:37:57.007Z",
+      "http_status": 200,
+      "elapsed_ms": 97,
+      "usage": {
+        "input_tokens": 1134,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 47628,
+      "cost_usd": "0.000047628",
+      "actual": "supported",
+      "reason": "direct_support",
+      "matches": true
+    },
+    {
+      "case_id": "HV04",
+      "dataset": "heldout",
+      "variant": "omission-aware",
+      "request_sha256": "093b4e08d8b002a5062270fdd52c81e55ec1817d87d201a13857c27c19c992ce",
+      "expected": "supported",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:37:57.105Z",
+      "http_status": 200,
+      "elapsed_ms": 90,
+      "usage": {
+        "input_tokens": 1147,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 48174,
+      "cost_usd": "0.000048174",
+      "actual": "supported",
+      "reason": "direct_support",
+      "matches": true
+    },
+    {
+      "case_id": "HV04",
+      "dataset": "heldout",
+      "variant": "combined",
+      "request_sha256": "9ea47cb530a094ec188bf89acfad6a70000f1b6bf592d99f413777b8ae3f8f11",
+      "expected": "supported",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:37:57.196Z",
+      "http_status": 200,
+      "elapsed_ms": 101,
+      "usage": {
+        "input_tokens": 1066,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 44772,
+      "cost_usd": "0.000044772",
+      "actual": "supported",
+      "reason": "direct_support",
+      "matches": true
+    },
+    {
+      "case_id": "HV05",
+      "dataset": "heldout",
+      "variant": "combined",
+      "request_sha256": "46d862148be70e0443bd870b7d44d1186e7f38a40c112a088f00b04d4979d82c",
+      "expected": "contradicted",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:37:57.301Z",
+      "http_status": 200,
+      "elapsed_ms": 90,
+      "usage": {
+        "input_tokens": 944,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 39648,
+      "cost_usd": "0.000039648",
+      "actual": "contradicted",
+      "reason": "explicit_incompatible_fact",
+      "matches": true
+    },
+    {
+      "case_id": "HV05",
+      "dataset": "heldout",
+      "variant": "omission-aware",
+      "request_sha256": "aed31f13d4f635875c1cdb103889db451849b1d77e9ed7ac24f4975a4a39a77f",
+      "expected": "contradicted",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:37:57.392Z",
+      "http_status": 200,
+      "elapsed_ms": 163,
+      "usage": {
+        "input_tokens": 1025,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 43050,
+      "cost_usd": "0.000043050",
+      "actual": "contradicted",
+      "reason": "explicit_incompatible_fact",
+      "matches": true
+    },
+    {
+      "case_id": "HV06",
+      "dataset": "heldout",
+      "variant": "omission-aware",
+      "request_sha256": "7a7fafc0e01851d3a1f7ffd61e24603644f8b8877ff2199583dd3486e5d0f5f5",
+      "expected": "contradicted",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:37:57.557Z",
+      "http_status": 200,
+      "elapsed_ms": 318,
+      "usage": {
+        "input_tokens": 983,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 41286,
+      "cost_usd": "0.000041286",
+      "actual": "contradicted",
+      "reason": "explicit_incompatible_fact",
+      "matches": true
+    },
+    {
+      "case_id": "HV06",
+      "dataset": "heldout",
+      "variant": "combined",
+      "request_sha256": "2aaad64be2c42a9053ec23768ceb0d4abb83d334cd8fabf7bd452c76f8272adf",
+      "expected": "contradicted",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:37:57.876Z",
+      "http_status": 200,
+      "elapsed_ms": 91,
+      "usage": {
+        "input_tokens": 902,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 37884,
+      "cost_usd": "0.000037884",
+      "actual": "contradicted",
+      "reason": "explicit_incompatible_fact",
+      "matches": true
+    },
+    {
+      "case_id": "HV07",
+      "dataset": "heldout",
+      "variant": "combined",
+      "request_sha256": "d9f2156004546bf9b85666d3f37dddf116cef6652896ec78653b6168793f1640",
+      "expected": "contradicted",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:37:57.970Z",
+      "http_status": 200,
+      "elapsed_ms": 101,
+      "usage": {
+        "input_tokens": 948,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 39816,
+      "cost_usd": "0.000039816",
+      "actual": "contradicted",
+      "reason": "explicit_incompatible_fact",
+      "matches": true
+    },
+    {
+      "case_id": "HV07",
+      "dataset": "heldout",
+      "variant": "omission-aware",
+      "request_sha256": "f69cda2f42f4db7fa59d90ac86b83ac6c9a515456ff0810b8c75b8c50420e0c5",
+      "expected": "contradicted",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:37:58.072Z",
+      "http_status": 200,
+      "elapsed_ms": 117,
+      "usage": {
+        "input_tokens": 1029,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 43218,
+      "cost_usd": "0.000043218",
+      "actual": "contradicted",
+      "reason": "explicit_incompatible_fact",
+      "matches": true
+    },
+    {
+      "case_id": "HV08",
+      "dataset": "heldout",
+      "variant": "omission-aware",
+      "request_sha256": "a6141b5a0907699a6e03d1fda86cefaaf3949dc974760c26685ea3788d80562e",
+      "expected": "contradicted",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:37:58.190Z",
+      "http_status": 200,
+      "elapsed_ms": 80,
+      "usage": {
+        "input_tokens": 1087,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 45654,
+      "cost_usd": "0.000045654",
+      "actual": "contradicted",
+      "reason": "explicit_incompatible_fact",
+      "matches": true
+    },
+    {
+      "case_id": "HV08",
+      "dataset": "heldout",
+      "variant": "combined",
+      "request_sha256": "8e018db03dd4ff1c25ec220ed449168ec8bc32b531c76fb4fcbc905d7f85f1a9",
+      "expected": "contradicted",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:37:58.272Z",
+      "http_status": 200,
+      "elapsed_ms": 86,
+      "usage": {
+        "input_tokens": 1006,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 42252,
+      "cost_usd": "0.000042252",
+      "actual": "contradicted",
+      "reason": "explicit_incompatible_fact",
+      "matches": true
+    },
+    {
+      "case_id": "HV09",
+      "dataset": "heldout",
+      "variant": "combined",
+      "request_sha256": "9d1749c2543c729ba41b92b98ee1107da9ddf3589fbcf4309e307de5c57b30be",
+      "expected": "insufficient",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:37:58.360Z",
+      "http_status": 200,
+      "elapsed_ms": 93,
+      "usage": {
+        "input_tokens": 956,
+        "output_tokens": 110
+      },
+      "cost_nano_usd": 40152,
+      "cost_usd": "0.000040152",
+      "actual": "insufficient",
+      "reason": "only_partial_support",
+      "matches": true
+    },
+    {
+      "case_id": "HV09",
+      "dataset": "heldout",
+      "variant": "omission-aware",
+      "request_sha256": "c1425c74dc2aa08630714dcb02d17cc60c4cff773b2d781593dccebaf0491079",
+      "expected": "insufficient",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:37:58.454Z",
+      "http_status": 200,
+      "elapsed_ms": 108,
+      "usage": {
+        "input_tokens": 1037,
+        "output_tokens": 110
+      },
+      "cost_nano_usd": 43554,
+      "cost_usd": "0.000043554",
+      "actual": "insufficient",
+      "reason": "only_partial_support",
+      "matches": true
+    },
+    {
+      "case_id": "HV10",
+      "dataset": "heldout",
+      "variant": "omission-aware",
+      "request_sha256": "2a96807e75f48d7e681e0a7a941f7f1fbcc4522f1a1fb8010f818f1327115c6e",
+      "expected": "insufficient",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:37:58.563Z",
+      "http_status": 200,
+      "elapsed_ms": 97,
+      "usage": {
+        "input_tokens": 1018,
+        "output_tokens": 110
+      },
+      "cost_nano_usd": 42756,
+      "cost_usd": "0.000042756",
+      "actual": "insufficient",
+      "reason": "claim_coverage_not_established",
+      "matches": true
+    },
+    {
+      "case_id": "HV10",
+      "dataset": "heldout",
+      "variant": "combined",
+      "request_sha256": "0bbc53d77fc3fcb91cdd14a9ad2421c61c90c4618693e7fa761dbb5e54e41151",
+      "expected": "insufficient",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:37:58.661Z",
+      "http_status": 200,
+      "elapsed_ms": 97,
+      "usage": {
+        "input_tokens": 937,
+        "output_tokens": 110
+      },
+      "cost_nano_usd": 39354,
+      "cost_usd": "0.000039354",
+      "actual": "insufficient",
+      "reason": "claim_coverage_not_established",
+      "matches": true
+    },
+    {
+      "case_id": "HV11",
+      "dataset": "heldout",
+      "variant": "combined",
+      "request_sha256": "48e99af31d7445f79b0705ce9e550e6e93e3f6e5ae238fb632e31723ad963773",
+      "expected": "insufficient",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:37:58.760Z",
+      "http_status": 200,
+      "elapsed_ms": 78,
+      "usage": {
+        "input_tokens": 962,
+        "output_tokens": 116
+      },
+      "cost_nano_usd": 40404,
+      "cost_usd": "0.000040404",
+      "actual": "insufficient",
+      "reason": "claim_not_resolved",
+      "matches": true
+    },
+    {
+      "case_id": "HV11",
+      "dataset": "heldout",
+      "variant": "omission-aware",
+      "request_sha256": "f176d72d1ac53ab3ab9abfa7b9dd34b746cedd78c10452d5788207d8a57fa88c",
+      "expected": "insufficient",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:37:58.839Z",
+      "http_status": 200,
+      "elapsed_ms": 112,
+      "usage": {
+        "input_tokens": 1043,
+        "output_tokens": 116
+      },
+      "cost_nano_usd": 43806,
+      "cost_usd": "0.000043806",
+      "actual": "insufficient",
+      "reason": "claim_not_resolved",
+      "matches": true
+    },
+    {
+      "case_id": "HV12",
+      "dataset": "heldout",
+      "variant": "omission-aware",
+      "request_sha256": "f98da3069e0273c3d5df616bf60939c47dd39b3cc0c18e3970854c036609ce12",
+      "expected": "insufficient",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:37:58.952Z",
+      "http_status": 200,
+      "elapsed_ms": 130,
+      "usage": {
+        "input_tokens": 1097,
+        "output_tokens": 110
+      },
+      "cost_nano_usd": 46074,
+      "cost_usd": "0.000046074",
+      "actual": "insufficient",
+      "reason": "only_partial_support",
+      "matches": true
+    },
+    {
+      "case_id": "HV12",
+      "dataset": "heldout",
+      "variant": "combined",
+      "request_sha256": "d0ab9d07c1f25e06e5a59fe5d1fb7efa22d87d096f2c7c99468138b21cfeb51d",
+      "expected": "insufficient",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:37:59.084Z",
+      "http_status": 200,
+      "elapsed_ms": 82,
+      "usage": {
+        "input_tokens": 1016,
+        "output_tokens": 110
+      },
+      "cost_nano_usd": 42672,
+      "cost_usd": "0.000042672",
+      "actual": "insufficient",
+      "reason": "only_partial_support",
+      "matches": true
+    },
+    {
+      "case_id": "HV13",
+      "dataset": "heldout",
+      "variant": "combined",
+      "request_sha256": "aeaf6a8ea40b100c7bde57e61bdce0da8a8d12af539c8a132bf10afbd76c77d5",
+      "expected": "conflicting",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:37:59.167Z",
+      "http_status": 200,
+      "elapsed_ms": 94,
+      "usage": {
+        "input_tokens": 1018,
+        "output_tokens": 116
+      },
+      "cost_nano_usd": 42756,
+      "cost_usd": "0.000042756",
+      "actual": "conflicting",
+      "reason": "incompatible_same_scope_evidence",
+      "matches": true
+    },
+    {
+      "case_id": "HV13",
+      "dataset": "heldout",
+      "variant": "omission-aware",
+      "request_sha256": "2dd7f2d0fca40f60e368a126d1679f5d788fa6ac06cbcca6bfa8d53920be9f4d",
+      "expected": "conflicting",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:37:59.262Z",
+      "http_status": 200,
+      "elapsed_ms": 91,
+      "usage": {
+        "input_tokens": 1099,
+        "output_tokens": 116
+      },
+      "cost_nano_usd": 46158,
+      "cost_usd": "0.000046158",
+      "actual": "conflicting",
+      "reason": "incompatible_same_scope_evidence",
+      "matches": true
+    },
+    {
+      "case_id": "HV14",
+      "dataset": "heldout",
+      "variant": "omission-aware",
+      "request_sha256": "9389030e808b17cd21f03abb74304ddcb9b19ab8b8cae248cbb6a78311f719dc",
+      "expected": "conflicting",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:37:59.354Z",
+      "http_status": 200,
+      "elapsed_ms": 98,
+      "usage": {
+        "input_tokens": 1086,
+        "output_tokens": 116
+      },
+      "cost_nano_usd": 45612,
+      "cost_usd": "0.000045612",
+      "actual": "conflicting",
+      "reason": "incompatible_same_scope_evidence",
+      "matches": true
+    },
+    {
+      "case_id": "HV14",
+      "dataset": "heldout",
+      "variant": "combined",
+      "request_sha256": "1ab1d6a9672ac3b232893f29798b421d1a703cc65d1caa239d3a24ed54131ed1",
+      "expected": "conflicting",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:37:59.454Z",
+      "http_status": 200,
+      "elapsed_ms": 106,
+      "usage": {
+        "input_tokens": 1005,
+        "output_tokens": 116
+      },
+      "cost_nano_usd": 42210,
+      "cost_usd": "0.000042210",
+      "actual": "conflicting",
+      "reason": "incompatible_same_scope_evidence",
+      "matches": true
+    },
+    {
+      "case_id": "HV15",
+      "dataset": "heldout",
+      "variant": "combined",
+      "request_sha256": "5b34f19b93769244515163067f9ad94414d651c8102fc083672cacb300045e94",
+      "expected": "conflicting",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:37:59.561Z",
+      "http_status": 200,
+      "elapsed_ms": 144,
+      "usage": {
+        "input_tokens": 1022,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 42924,
+      "cost_usd": "0.000042924",
+      "actual": "conflicting",
+      "reason": "incompatible_same_scope_evidence",
+      "matches": true
+    },
+    {
+      "case_id": "HV15",
+      "dataset": "heldout",
+      "variant": "omission-aware",
+      "request_sha256": "2390902ae330d1635c41ae93f6303d6260e1d6832456e6b89e34838c573dcd3e",
+      "expected": "conflicting",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:37:59.717Z",
+      "http_status": 200,
+      "elapsed_ms": 99,
+      "usage": {
+        "input_tokens": 1103,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 46326,
+      "cost_usd": "0.000046326",
+      "actual": "conflicting",
+      "reason": "incompatible_same_scope_evidence",
+      "matches": true
+    },
+    {
+      "case_id": "HV16",
+      "dataset": "heldout",
+      "variant": "omission-aware",
+      "request_sha256": "0e53a83de689d7cb20e1583a6b7b14732931d62bdaf3ed69cd458b5bc1e0e0a2",
+      "expected": "conflicting",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:37:59.821Z",
+      "http_status": 200,
+      "elapsed_ms": 235,
+      "usage": {
+        "input_tokens": 1174,
+        "output_tokens": 116
+      },
+      "cost_nano_usd": 49308,
+      "cost_usd": "0.000049308",
+      "actual": "conflicting",
+      "reason": "incompatible_same_scope_evidence",
+      "matches": true
+    },
+    {
+      "case_id": "HV16",
+      "dataset": "heldout",
+      "variant": "combined",
+      "request_sha256": "4b7a7631a564b5a5879804efe66d2d5f0f022e1f23ab9f6392d90c236ed2652c",
+      "expected": "conflicting",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:00.057Z",
+      "http_status": 200,
+      "elapsed_ms": 91,
+      "usage": {
+        "input_tokens": 1093,
+        "output_tokens": 116
+      },
+      "cost_nano_usd": 45906,
+      "cost_usd": "0.000045906",
+      "actual": "conflicting",
+      "reason": "incompatible_same_scope_evidence",
+      "matches": true
+    },
+    {
+      "case_id": "HC01",
+      "dataset": "regression",
+      "variant": "combined",
+      "request_sha256": "e40a085e962d4ff9b6adefee10d5fd6d2da52c44ea70ec3dbaadebda57392ddf",
+      "expected": "supported",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:00.153Z",
+      "http_status": 200,
+      "elapsed_ms": 93,
+      "usage": {
+        "input_tokens": 981,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 41202,
+      "cost_usd": "0.000041202",
+      "actual": "supported",
+      "reason": "direct_support",
+      "matches": true
+    },
+    {
+      "case_id": "HC01",
+      "dataset": "regression",
+      "variant": "omission-aware",
+      "request_sha256": "9e996ac30cfede0904b48445e0c8dfa125a2d39cb68f1f8cfb880a310b93e738",
+      "expected": "supported",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:00.272Z",
+      "http_status": 200,
+      "elapsed_ms": 92,
+      "usage": {
+        "input_tokens": 1062,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 44604,
+      "cost_usd": "0.000044604",
+      "actual": "supported",
+      "reason": "direct_support",
+      "matches": true
+    },
+    {
+      "case_id": "HC02",
+      "dataset": "regression",
+      "variant": "omission-aware",
+      "request_sha256": "5f33e62aad02b0dced7c62b1fc6ddc348e1439e6fd8db7e1bac7d21c58ffa9bc",
+      "expected": "conflicting",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:00.374Z",
+      "http_status": 200,
+      "elapsed_ms": 183,
+      "usage": {
+        "input_tokens": 1069,
+        "output_tokens": 116
+      },
+      "cost_nano_usd": 44898,
+      "cost_usd": "0.000044898",
+      "actual": "conflicting",
+      "reason": "incompatible_same_scope_evidence",
+      "matches": true
+    },
+    {
+      "case_id": "HC02",
+      "dataset": "regression",
+      "variant": "combined",
+      "request_sha256": "f109a835199b81698ed22437a845293dd0b824d86aa91a2ca605966c159284f4",
+      "expected": "conflicting",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:00.558Z",
+      "http_status": 200,
+      "elapsed_ms": 105,
+      "usage": {
+        "input_tokens": 988,
+        "output_tokens": 116
+      },
+      "cost_nano_usd": 41496,
+      "cost_usd": "0.000041496",
+      "actual": "conflicting",
+      "reason": "incompatible_same_scope_evidence",
+      "matches": true
+    },
+    {
+      "case_id": "HC03",
+      "dataset": "regression",
+      "variant": "combined",
+      "request_sha256": "e965a174fc5c226434c5b1651fd7e32a622baa33e64a1f445d11d922ee984781",
+      "expected": "contradicted",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:00.665Z",
+      "http_status": 200,
+      "elapsed_ms": 82,
+      "usage": {
+        "input_tokens": 1029,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 43218,
+      "cost_usd": "0.000043218",
+      "actual": "contradicted",
+      "reason": "explicit_incompatible_fact",
+      "matches": true
+    },
+    {
+      "case_id": "HC03",
+      "dataset": "regression",
+      "variant": "omission-aware",
+      "request_sha256": "6131d4b42136a363aad2eea44a0a85e6ea92eb6c8083c23395420301b651e03d",
+      "expected": "contradicted",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:00.747Z",
+      "http_status": 200,
+      "elapsed_ms": 94,
+      "usage": {
+        "input_tokens": 1110,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 46620,
+      "cost_usd": "0.000046620",
+      "actual": "contradicted",
+      "reason": "explicit_incompatible_fact",
+      "matches": true
+    },
+    {
+      "case_id": "HC04",
+      "dataset": "regression",
+      "variant": "omission-aware",
+      "request_sha256": "5f4a57641015004b84371ac3b621abc8088cbcbe9cd48708c43e3c09f01a6100",
+      "expected": "insufficient",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:00.848Z",
+      "http_status": 200,
+      "elapsed_ms": 94,
+      "usage": {
+        "input_tokens": 1125,
+        "output_tokens": 116
+      },
+      "cost_nano_usd": 47250,
+      "cost_usd": "0.000047250",
+      "actual": "insufficient",
+      "reason": "claim_coverage_not_established",
+      "matches": true
+    },
+    {
+      "case_id": "HC04",
+      "dataset": "regression",
+      "variant": "combined",
+      "request_sha256": "e73a8f0bb3269d14a15972bf98574b6f59e5f0daea65c90315e26348a69372fb",
+      "expected": "insufficient",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:00.946Z",
+      "http_status": 200,
+      "elapsed_ms": 104,
+      "usage": {
+        "input_tokens": 1044,
+        "output_tokens": 116
+      },
+      "cost_nano_usd": 43848,
+      "cost_usd": "0.000043848",
+      "actual": "insufficient",
+      "reason": "claim_coverage_not_established",
+      "matches": true
+    },
+    {
+      "case_id": "HC05",
+      "dataset": "regression",
+      "variant": "combined",
+      "request_sha256": "0bf441bfb8380ad04a031bc4c9e248f7665646b1232d1ba7deb05c688c6174e4",
+      "expected": "conflicting",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:01.051Z",
+      "http_status": 200,
+      "elapsed_ms": 90,
+      "usage": {
+        "input_tokens": 977,
+        "output_tokens": 116
+      },
+      "cost_nano_usd": 41034,
+      "cost_usd": "0.000041034",
+      "actual": "conflicting",
+      "reason": "incompatible_same_scope_evidence",
+      "matches": true
+    },
+    {
+      "case_id": "HC05",
+      "dataset": "regression",
+      "variant": "omission-aware",
+      "request_sha256": "93682a4dfcf4146c178dcf028916012b88539887bb667355cd65d3e649310eca",
+      "expected": "conflicting",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:01.143Z",
+      "http_status": 200,
+      "elapsed_ms": 97,
+      "usage": {
+        "input_tokens": 1058,
+        "output_tokens": 116
+      },
+      "cost_nano_usd": 44436,
+      "cost_usd": "0.000044436",
+      "actual": "conflicting",
+      "reason": "incompatible_same_scope_evidence",
+      "matches": true
+    },
+    {
+      "case_id": "HC06",
+      "dataset": "regression",
+      "variant": "omission-aware",
+      "request_sha256": "1bd23289cc5118dfba4d1ad5d0bb5127cde347d1d7e1512cff7dc9bee80ece14",
+      "expected": "supported",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:01.241Z",
+      "http_status": 200,
+      "elapsed_ms": 90,
+      "usage": {
+        "input_tokens": 1080,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 45360,
+      "cost_usd": "0.000045360",
+      "actual": "supported",
+      "reason": "direct_support",
+      "matches": true
+    },
+    {
+      "case_id": "HC06",
+      "dataset": "regression",
+      "variant": "combined",
+      "request_sha256": "504c83c881c58892f5f8c53a441d5e4e2cd6a8077b510265d839aabce621518f",
+      "expected": "supported",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:01.333Z",
+      "http_status": 200,
+      "elapsed_ms": 115,
+      "usage": {
+        "input_tokens": 999,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 41958,
+      "cost_usd": "0.000041958",
+      "actual": "supported",
+      "reason": "direct_support",
+      "matches": true
+    },
+    {
+      "case_id": "HC07",
+      "dataset": "regression",
+      "variant": "combined",
+      "request_sha256": "fe3609d17ebe9c040026e54e6ae6401336b46dca1fb388fe6252f8aa238e9906",
+      "expected": "contradicted",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:01.449Z",
+      "http_status": 200,
+      "elapsed_ms": 85,
+      "usage": {
+        "input_tokens": 1025,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 43050,
+      "cost_usd": "0.000043050",
+      "actual": "contradicted",
+      "reason": "explicit_incompatible_fact",
+      "matches": true
+    },
+    {
+      "case_id": "HC07",
+      "dataset": "regression",
+      "variant": "omission-aware",
+      "request_sha256": "720790be453f1177080a8378c94a7ad38901718ca974d33028d7bae7dbe34460",
+      "expected": "contradicted",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:01.536Z",
+      "http_status": 200,
+      "elapsed_ms": 92,
+      "usage": {
+        "input_tokens": 1106,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 46452,
+      "cost_usd": "0.000046452",
+      "actual": "contradicted",
+      "reason": "explicit_incompatible_fact",
+      "matches": true
+    },
+    {
+      "case_id": "HC08",
+      "dataset": "regression",
+      "variant": "omission-aware",
+      "request_sha256": "602d54ae67c8938be2b63d54904667fa7cda8662978139493d94db816717ed0d",
+      "expected": "insufficient",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:01.638Z",
+      "http_status": 200,
+      "elapsed_ms": 95,
+      "usage": {
+        "input_tokens": 1106,
+        "output_tokens": 116
+      },
+      "cost_nano_usd": 46452,
+      "cost_usd": "0.000046452",
+      "actual": "insufficient",
+      "reason": "polarity_uncertain",
+      "matches": true
+    },
+    {
+      "case_id": "HC08",
+      "dataset": "regression",
+      "variant": "combined",
+      "request_sha256": "07a004d5fb205f0241a688ca351212ab63d43a276cf023902f49acbacb88621c",
+      "expected": "insufficient",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:01.735Z",
+      "http_status": 200,
+      "elapsed_ms": 114,
+      "usage": {
+        "input_tokens": 1025,
+        "output_tokens": 116
+      },
+      "cost_nano_usd": 43050,
+      "cost_usd": "0.000043050",
+      "actual": "insufficient",
+      "reason": "polarity_uncertain",
+      "matches": true
+    },
+    {
+      "case_id": "HS01",
+      "dataset": "regression",
+      "variant": "combined",
+      "request_sha256": "da700642398aba0b2e40f34677540e00600290f4a1fddd3168c34cd5ea91f6d8",
+      "expected": "supported",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:01.850Z",
+      "http_status": 200,
+      "elapsed_ms": 107,
+      "usage": {
+        "input_tokens": 1206,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 50652,
+      "cost_usd": "0.000050652",
+      "actual": "supported",
+      "reason": "direct_support",
+      "matches": true
+    },
+    {
+      "case_id": "HS01",
+      "dataset": "regression",
+      "variant": "omission-aware",
+      "request_sha256": "c39ef12c8acda4c2751cd966f9b78517ed6135ce1630fd75affe6521745b0e87",
+      "expected": "supported",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:01.959Z",
+      "http_status": 200,
+      "elapsed_ms": 144,
+      "usage": {
+        "input_tokens": 1287,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 54054,
+      "cost_usd": "0.000054054",
+      "actual": "supported",
+      "reason": "direct_support",
+      "matches": true
+    },
+    {
+      "case_id": "HS02",
+      "dataset": "regression",
+      "variant": "omission-aware",
+      "request_sha256": "df2cb48fe6c537bb0d41404e4aeab9f0367820395419dc16220d9ed1d159d4bb",
+      "expected": "insufficient",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:02.104Z",
+      "http_status": 200,
+      "elapsed_ms": 133,
+      "usage": {
+        "input_tokens": 1287,
+        "output_tokens": 110
+      },
+      "cost_nano_usd": 54054,
+      "cost_usd": "0.000054054",
+      "actual": "insufficient",
+      "reason": "polarity_uncertain",
+      "matches": true
+    },
+    {
+      "case_id": "HS02",
+      "dataset": "regression",
+      "variant": "combined",
+      "request_sha256": "b50fcc800a35aab9c6105b0048712c2c2dd389f79351de94b159fe63535d6332",
+      "expected": "insufficient",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:02.241Z",
+      "http_status": 200,
+      "elapsed_ms": 113,
+      "usage": {
+        "input_tokens": 1206,
+        "output_tokens": 110
+      },
+      "cost_nano_usd": 50652,
+      "cost_usd": "0.000050652",
+      "actual": "insufficient",
+      "reason": "only_partial_support",
+      "matches": true
+    },
+    {
+      "case_id": "HS03",
+      "dataset": "regression",
+      "variant": "combined",
+      "request_sha256": "0a849d0a2bc9dc11b42021bc4b3c62f6cd040ce38d8df4a66e1a40c8f25932a4",
+      "expected": "supported",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:02.356Z",
+      "http_status": 200,
+      "elapsed_ms": 116,
+      "usage": {
+        "input_tokens": 1153,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 48426,
+      "cost_usd": "0.000048426",
+      "actual": "supported",
+      "reason": "direct_support",
+      "matches": true
+    },
+    {
+      "case_id": "HS03",
+      "dataset": "regression",
+      "variant": "omission-aware",
+      "request_sha256": "0ae601c6b03e1d4dcbd892f373806c03debcd7b1804423c8027e6fc570205584",
+      "expected": "supported",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:02.473Z",
+      "http_status": 200,
+      "elapsed_ms": 117,
+      "usage": {
+        "input_tokens": 1234,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 51828,
+      "cost_usd": "0.000051828",
+      "actual": "supported",
+      "reason": "direct_support",
+      "matches": true
+    },
+    {
+      "case_id": "HS04",
+      "dataset": "regression",
+      "variant": "omission-aware",
+      "request_sha256": "da1130898c1bc0ae76690828cfa62704b12c52c40e11cef6665de00def3c280a",
+      "expected": "insufficient",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:02.591Z",
+      "http_status": 200,
+      "elapsed_ms": 118,
+      "usage": {
+        "input_tokens": 1210,
+        "output_tokens": 110
+      },
+      "cost_nano_usd": 50820,
+      "cost_usd": "0.000050820",
+      "actual": "insufficient",
+      "reason": "polarity_uncertain",
+      "matches": true
+    },
+    {
+      "case_id": "HS04",
+      "dataset": "regression",
+      "variant": "combined",
+      "request_sha256": "440e5726a6ac20d4e22c5b268bb2b70e9ec5c0d0a0e418416fc05585b02af3ad",
+      "expected": "insufficient",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:02.710Z",
+      "http_status": 200,
+      "elapsed_ms": 85,
+      "usage": {
+        "input_tokens": 1129,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 47418,
+      "cost_usd": "0.000047418",
+      "actual": "contradicted",
+      "reason": "explicit_incompatible_fact",
+      "matches": false
+    },
+    {
+      "case_id": "HS05",
+      "dataset": "regression",
+      "variant": "combined",
+      "request_sha256": "ad32953fb1a3d617d33ddbab18b9798e6bd862672950198948c6fadf00963576",
+      "expected": "contradicted",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:02.796Z",
+      "http_status": 200,
+      "elapsed_ms": 112,
+      "usage": {
+        "input_tokens": 1047,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 43974,
+      "cost_usd": "0.000043974",
+      "actual": "contradicted",
+      "reason": "explicit_incompatible_fact",
+      "matches": true
+    },
+    {
+      "case_id": "HS05",
+      "dataset": "regression",
+      "variant": "omission-aware",
+      "request_sha256": "06b2e1e45fcbe20014d7b50cafbfac14c7c93e3856e7f8f7cced40f584809275",
+      "expected": "contradicted",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:02.911Z",
+      "http_status": 200,
+      "elapsed_ms": 98,
+      "usage": {
+        "input_tokens": 1128,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 47376,
+      "cost_usd": "0.000047376",
+      "actual": "contradicted",
+      "reason": "explicit_incompatible_fact",
+      "matches": true
+    },
+    {
+      "case_id": "HS06",
+      "dataset": "regression",
+      "variant": "omission-aware",
+      "request_sha256": "e609f016319140c42cf595b85b7245a1250ebbfd37e707e7130b0ab54f125a4b",
+      "expected": "contradicted",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:03.010Z",
+      "http_status": 200,
+      "elapsed_ms": 84,
+      "usage": {
+        "input_tokens": 1131,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 47502,
+      "cost_usd": "0.000047502",
+      "actual": "contradicted",
+      "reason": "explicit_incompatible_fact",
+      "matches": true
+    },
+    {
+      "case_id": "HS06",
+      "dataset": "regression",
+      "variant": "combined",
+      "request_sha256": "093503937dbde4a8c278bc87a0f0befa79961d10bb7971359239265d324ad821",
+      "expected": "contradicted",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:03.095Z",
+      "http_status": 200,
+      "elapsed_ms": 79,
+      "usage": {
+        "input_tokens": 1050,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 44100,
+      "cost_usd": "0.000044100",
+      "actual": "contradicted",
+      "reason": "explicit_incompatible_fact",
+      "matches": true
+    },
+    {
+      "case_id": "HS07",
+      "dataset": "regression",
+      "variant": "combined",
+      "request_sha256": "4d3655efcc2fe037b73379bdfe08f2ea5fb18590523974b94c63c42d4e48d301",
+      "expected": "conflicting",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:03.176Z",
+      "http_status": 200,
+      "elapsed_ms": 119,
+      "usage": {
+        "input_tokens": 1240,
+        "output_tokens": 116
+      },
+      "cost_nano_usd": 52080,
+      "cost_usd": "0.000052080",
+      "actual": "conflicting",
+      "reason": "incompatible_same_scope_evidence",
+      "matches": true
+    },
+    {
+      "case_id": "HS07",
+      "dataset": "regression",
+      "variant": "omission-aware",
+      "request_sha256": "3d552bbe5cc456836f8dbff6e338c55155f06df1237ba310b72b0f2f41c2cd19",
+      "expected": "conflicting",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:03.300Z",
+      "http_status": 200,
+      "elapsed_ms": 167,
+      "usage": {
+        "input_tokens": 1321,
+        "output_tokens": 116
+      },
+      "cost_nano_usd": 55482,
+      "cost_usd": "0.000055482",
+      "actual": "conflicting",
+      "reason": "incompatible_same_scope_evidence",
+      "matches": true
+    },
+    {
+      "case_id": "HS08",
+      "dataset": "regression",
+      "variant": "omission-aware",
+      "request_sha256": "927d56b129d8e54abdcdfda9c200bc1a375b5573a0979f604f85fb725f5302b1",
+      "expected": "conflicting",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:03.469Z",
+      "http_status": 200,
+      "elapsed_ms": 105,
+      "usage": {
+        "input_tokens": 1298,
+        "output_tokens": 116
+      },
+      "cost_nano_usd": 54516,
+      "cost_usd": "0.000054516",
+      "actual": "conflicting",
+      "reason": "incompatible_same_scope_evidence",
+      "matches": true
+    },
+    {
+      "case_id": "HS08",
+      "dataset": "regression",
+      "variant": "combined",
+      "request_sha256": "683ed0097130404565e474b4d6aea13030c1a40cdab497b2f636d2466cf7c9cc",
+      "expected": "conflicting",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:03.576Z",
+      "http_status": 200,
+      "elapsed_ms": 98,
+      "usage": {
+        "input_tokens": 1217,
+        "output_tokens": 116
+      },
+      "cost_nano_usd": 51114,
+      "cost_usd": "0.000051114",
+      "actual": "conflicting",
+      "reason": "incompatible_same_scope_evidence",
+      "matches": true
+    },
+    {
+      "case_id": "B02",
+      "dataset": "regression",
+      "variant": "combined",
+      "request_sha256": "d4ddb8c2e3b84e2a3a646e8bfb3484e8f3fdf28c0364748c46cac529ecbc4d48",
+      "expected": "contradicted",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:03.675Z",
+      "http_status": 200,
+      "elapsed_ms": 84,
+      "usage": {
+        "input_tokens": 941,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 39522,
+      "cost_usd": "0.000039522",
+      "actual": "contradicted",
+      "reason": "explicit_incompatible_fact",
+      "matches": true
+    },
+    {
+      "case_id": "B02",
+      "dataset": "regression",
+      "variant": "omission-aware",
+      "request_sha256": "14d2221f9b5d7ed118023e110ae2a0ab6f3c3bb313e356759fdf569156a8586f",
+      "expected": "contradicted",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:03.762Z",
+      "http_status": 200,
+      "elapsed_ms": 99,
+      "usage": {
+        "input_tokens": 1022,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 42924,
+      "cost_usd": "0.000042924",
+      "actual": "contradicted",
+      "reason": "explicit_incompatible_fact",
+      "matches": true
+    },
+    {
+      "case_id": "B08",
+      "dataset": "regression",
+      "variant": "omission-aware",
+      "request_sha256": "1b5fdff6263f0adef5c138dfbb197a7cdcf10f28de520dfaf4461c0baee74628",
+      "expected": "supported",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:03.862Z",
+      "http_status": 200,
+      "elapsed_ms": 126,
+      "usage": {
+        "input_tokens": 1107,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 46494,
+      "cost_usd": "0.000046494",
+      "actual": "supported",
+      "reason": "direct_support",
+      "matches": true
+    },
+    {
+      "case_id": "B08",
+      "dataset": "regression",
+      "variant": "combined",
+      "request_sha256": "6f7badb1b89cae00284cf72971e53e3b4d3e3f4e3b05640e35fe20594c3132cf",
+      "expected": "supported",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:03.990Z",
+      "http_status": 200,
+      "elapsed_ms": 96,
+      "usage": {
+        "input_tokens": 1026,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 43092,
+      "cost_usd": "0.000043092",
+      "actual": "supported",
+      "reason": "direct_support",
+      "matches": true
+    },
+    {
+      "case_id": "HP01",
+      "dataset": "regression",
+      "variant": "combined",
+      "request_sha256": "f95182d3cfb5d163e4d0b8a0d6964a81c1b0d6ee6b01a5ef165a991c11aace07",
+      "expected": "supported",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:04.088Z",
+      "http_status": 200,
+      "elapsed_ms": 104,
+      "usage": {
+        "input_tokens": 949,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 39858,
+      "cost_usd": "0.000039858",
+      "actual": "supported",
+      "reason": "direct_support",
+      "matches": true
+    },
+    {
+      "case_id": "HP01",
+      "dataset": "regression",
+      "variant": "omission-aware",
+      "request_sha256": "ed5dd69e301777cd69bf0aa4a9ddb1cbf9ddf6060ff772ed171411b9b99a2110",
+      "expected": "supported",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:04.194Z",
+      "http_status": 200,
+      "elapsed_ms": 159,
+      "usage": {
+        "input_tokens": 1030,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 43260,
+      "cost_usd": "0.000043260",
+      "actual": "supported",
+      "reason": "direct_support",
+      "matches": true
+    },
+    {
+      "case_id": "HP02",
+      "dataset": "regression",
+      "variant": "omission-aware",
+      "request_sha256": "13c4dd4af0f18573a0b687406c924ffae0d00fb0afe29cacf779eee586e879e4",
+      "expected": "contradicted",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:04.354Z",
+      "http_status": 200,
+      "elapsed_ms": 113,
+      "usage": {
+        "input_tokens": 1036,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 43512,
+      "cost_usd": "0.000043512",
+      "actual": "contradicted",
+      "reason": "explicit_incompatible_fact",
+      "matches": true
+    },
+    {
+      "case_id": "HP02",
+      "dataset": "regression",
+      "variant": "combined",
+      "request_sha256": "c450236304a7370b8b52c1e0d7164f26272468d6d0199f95b5ed591cd694631a",
+      "expected": "contradicted",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:04.469Z",
+      "http_status": 200,
+      "elapsed_ms": 97,
+      "usage": {
+        "input_tokens": 955,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 40110,
+      "cost_usd": "0.000040110",
+      "actual": "contradicted",
+      "reason": "explicit_incompatible_fact",
+      "matches": true
+    },
+    {
+      "case_id": "HP03",
+      "dataset": "regression",
+      "variant": "combined",
+      "request_sha256": "8fb1098965223de9685d948215d3e0cf299bd832e382b57bd79494e276728a41",
+      "expected": "insufficient",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:04.568Z",
+      "http_status": 200,
+      "elapsed_ms": 87,
+      "usage": {
+        "input_tokens": 956,
+        "output_tokens": 110
+      },
+      "cost_nano_usd": 40152,
+      "cost_usd": "0.000040152",
+      "actual": "insufficient",
+      "reason": "polarity_uncertain",
+      "matches": true
+    },
+    {
+      "case_id": "HP03",
+      "dataset": "regression",
+      "variant": "omission-aware",
+      "request_sha256": "e576482fd98ea99dc08d8cc5115635b98a2f0865719ec64a332f34e1cdd19b3a",
+      "expected": "insufficient",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:04.656Z",
+      "http_status": 200,
+      "elapsed_ms": 94,
+      "usage": {
+        "input_tokens": 1037,
+        "output_tokens": 110
+      },
+      "cost_nano_usd": 43554,
+      "cost_usd": "0.000043554",
+      "actual": "insufficient",
+      "reason": "polarity_uncertain",
+      "matches": true
+    },
+    {
+      "case_id": "HP04",
+      "dataset": "regression",
+      "variant": "omission-aware",
+      "request_sha256": "4c66ff3a2c8f9fc48cb51e433fca706312e6f42685cf37692a6b1b6d37ae5cf6",
+      "expected": "supported",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:04.751Z",
+      "http_status": 200,
+      "elapsed_ms": 82,
+      "usage": {
+        "input_tokens": 1033,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 43386,
+      "cost_usd": "0.000043386",
+      "actual": "supported",
+      "reason": "direct_support",
+      "matches": true
+    },
+    {
+      "case_id": "HP04",
+      "dataset": "regression",
+      "variant": "combined",
+      "request_sha256": "695e11929b16dc499214194ab7c3b438e82164317c5b5ae03c8ed6f14fc5b87e",
+      "expected": "supported",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:04.834Z",
+      "http_status": 200,
+      "elapsed_ms": 99,
+      "usage": {
+        "input_tokens": 952,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 39984,
+      "cost_usd": "0.000039984",
+      "actual": "supported",
+      "reason": "direct_support",
+      "matches": true
+    },
+    {
+      "case_id": "HP05",
+      "dataset": "regression",
+      "variant": "combined",
+      "request_sha256": "480485ea7534bef7cae74a7bbb496eb2cacdeb6a65ace6c9ef45c24d57d6325a",
+      "expected": "contradicted",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:04.935Z",
+      "http_status": 200,
+      "elapsed_ms": 128,
+      "usage": {
+        "input_tokens": 902,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 37884,
+      "cost_usd": "0.000037884",
+      "actual": "contradicted",
+      "reason": "explicit_incompatible_fact",
+      "matches": true
+    },
+    {
+      "case_id": "HP05",
+      "dataset": "regression",
+      "variant": "omission-aware",
+      "request_sha256": "1fb9e485aa995139566dd39ca99ab3673e612c121623e55deaffbdfb0612966a",
+      "expected": "contradicted",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:05.065Z",
+      "http_status": 200,
+      "elapsed_ms": 104,
+      "usage": {
+        "input_tokens": 983,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 41286,
+      "cost_usd": "0.000041286",
+      "actual": "contradicted",
+      "reason": "explicit_incompatible_fact",
+      "matches": true
+    },
+    {
+      "case_id": "HP06",
+      "dataset": "regression",
+      "variant": "omission-aware",
+      "request_sha256": "b8d2bad0842a7ce35460686e4b8fa39f8ab5f8f2ce54d0149d6fd5ad2867492e",
+      "expected": "insufficient",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:05.170Z",
+      "http_status": 200,
+      "elapsed_ms": 86,
+      "usage": {
+        "input_tokens": 1036,
+        "output_tokens": 116
+      },
+      "cost_nano_usd": 43512,
+      "cost_usd": "0.000043512",
+      "actual": "insufficient",
+      "reason": "claim_not_resolved",
+      "matches": true
+    },
+    {
+      "case_id": "HP06",
+      "dataset": "regression",
+      "variant": "combined",
+      "request_sha256": "fa7ec7e829070d0cb243883a72d7424322e910aa3c173042e8ee8da653185f94",
+      "expected": "insufficient",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:05.257Z",
+      "http_status": 200,
+      "elapsed_ms": 100,
+      "usage": {
+        "input_tokens": 955,
+        "output_tokens": 116
+      },
+      "cost_nano_usd": 40110,
+      "cost_usd": "0.000040110",
+      "actual": "insufficient",
+      "reason": "claim_not_resolved",
+      "matches": true
+    },
+    {
+      "case_id": "HP07",
+      "dataset": "regression",
+      "variant": "combined",
+      "request_sha256": "db35fd44a7fe456cb3d16411d73accfda588813fa5f1865c3563b92155b414a9",
+      "expected": "supported",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:05.359Z",
+      "http_status": 200,
+      "elapsed_ms": 128,
+      "usage": {
+        "input_tokens": 897,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 37674,
+      "cost_usd": "0.000037674",
+      "actual": "supported",
+      "reason": "direct_support",
+      "matches": true
+    },
+    {
+      "case_id": "HP07",
+      "dataset": "regression",
+      "variant": "omission-aware",
+      "request_sha256": "b9144e939dbf5a40f7eec1e23f2fa494d000ff0a44464bd676cd56557c05fce6",
+      "expected": "supported",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:05.488Z",
+      "http_status": 200,
+      "elapsed_ms": 107,
+      "usage": {
+        "input_tokens": 978,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 41076,
+      "cost_usd": "0.000041076",
+      "actual": "supported",
+      "reason": "direct_support",
+      "matches": true
+    },
+    {
+      "case_id": "HP08",
+      "dataset": "regression",
+      "variant": "omission-aware",
+      "request_sha256": "9debee4765dffce38fa75a2819e7b42ae91230cb6c7aa2209f8783944d8cef7e",
+      "expected": "contradicted",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:05.597Z",
+      "http_status": 200,
+      "elapsed_ms": 115,
+      "usage": {
+        "input_tokens": 1040,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 43680,
+      "cost_usd": "0.000043680",
+      "actual": "contradicted",
+      "reason": "explicit_incompatible_fact",
+      "matches": true
+    },
+    {
+      "case_id": "HP08",
+      "dataset": "regression",
+      "variant": "combined",
+      "request_sha256": "9c67864b415a5bc87e7a4cd9cf17cee41fce88d13c6fa24ee8fead35e953d8d1",
+      "expected": "contradicted",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:05.713Z",
+      "http_status": 200,
+      "elapsed_ms": 157,
+      "usage": {
+        "input_tokens": 959,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 40278,
+      "cost_usd": "0.000040278",
+      "actual": "contradicted",
+      "reason": "explicit_incompatible_fact",
+      "matches": true
+    },
+    {
+      "case_id": "HP09",
+      "dataset": "regression",
+      "variant": "combined",
+      "request_sha256": "6b55543ae7a6d29e44c71f61aa652b2f7fb2643773e92799f254e56df97b937c",
+      "expected": "insufficient",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:05.871Z",
+      "http_status": 200,
+      "elapsed_ms": 85,
+      "usage": {
+        "input_tokens": 901,
+        "output_tokens": 110
+      },
+      "cost_nano_usd": 37842,
+      "cost_usd": "0.000037842",
+      "actual": "insufficient",
+      "reason": "only_partial_support",
+      "matches": true
+    },
+    {
+      "case_id": "HP09",
+      "dataset": "regression",
+      "variant": "omission-aware",
+      "request_sha256": "a845587a16203601fff735808a80e54754454f27ad23fb1685c378d3e8438995",
+      "expected": "insufficient",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:05.958Z",
+      "http_status": 200,
+      "elapsed_ms": 90,
+      "usage": {
+        "input_tokens": 982,
+        "output_tokens": 110
+      },
+      "cost_nano_usd": 41244,
+      "cost_usd": "0.000041244",
+      "actual": "insufficient",
+      "reason": "only_partial_support",
+      "matches": true
+    },
+    {
+      "case_id": "HP10",
+      "dataset": "regression",
+      "variant": "omission-aware",
+      "request_sha256": "8045fef3a1ee68210857f7498818dd2b33ba14d64fbcca5ebcef5108acae521b",
+      "expected": "supported",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:06.049Z",
+      "http_status": 200,
+      "elapsed_ms": 97,
+      "usage": {
+        "input_tokens": 981,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 41202,
+      "cost_usd": "0.000041202",
+      "actual": "supported",
+      "reason": "direct_support",
+      "matches": true
+    },
+    {
+      "case_id": "HP10",
+      "dataset": "regression",
+      "variant": "combined",
+      "request_sha256": "a55572537df018fac1b36f6a027d62591577fa5d966a8f02a35e6cd8125c84f3",
+      "expected": "supported",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:06.150Z",
+      "http_status": 200,
+      "elapsed_ms": 90,
+      "usage": {
+        "input_tokens": 900,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 37800,
+      "cost_usd": "0.000037800",
+      "actual": "supported",
+      "reason": "direct_support",
+      "matches": true
+    },
+    {
+      "case_id": "HP11",
+      "dataset": "regression",
+      "variant": "combined",
+      "request_sha256": "9a19c090a0f22d8d99c121e78c35e33bb0d9951c056563114c01aca825fb16c6",
+      "expected": "contradicted",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:06.241Z",
+      "http_status": 200,
+      "elapsed_ms": 87,
+      "usage": {
+        "input_tokens": 1018,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 42756,
+      "cost_usd": "0.000042756",
+      "actual": "contradicted",
+      "reason": "explicit_incompatible_fact",
+      "matches": true
+    },
+    {
+      "case_id": "HP11",
+      "dataset": "regression",
+      "variant": "omission-aware",
+      "request_sha256": "1142b31bcea5b10c1733c7bcbdd205bffc098574354e0abc1218543ed074eece",
+      "expected": "contradicted",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:06.329Z",
+      "http_status": 200,
+      "elapsed_ms": 123,
+      "usage": {
+        "input_tokens": 1099,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 46158,
+      "cost_usd": "0.000046158",
+      "actual": "contradicted",
+      "reason": "explicit_incompatible_fact",
+      "matches": true
+    },
+    {
+      "case_id": "HP12",
+      "dataset": "regression",
+      "variant": "omission-aware",
+      "request_sha256": "f507fae83a7996f8b9ffbd1efdb22a7a802ee280add32913d619fc2382120ed3",
+      "expected": "insufficient",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:06.453Z",
+      "http_status": 200,
+      "elapsed_ms": 251,
+      "usage": {
+        "input_tokens": 1050,
+        "output_tokens": 116
+      },
+      "cost_nano_usd": 44100,
+      "cost_usd": "0.000044100",
+      "actual": "insufficient",
+      "reason": "claim_not_resolved",
+      "matches": true
+    },
+    {
+      "case_id": "HP12",
+      "dataset": "regression",
+      "variant": "combined",
+      "request_sha256": "121a477bcac5e419c2a9aa07f618c5c2596d14aa93749ccec2b33c17e3ecc863",
+      "expected": "insufficient",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:06.705Z",
+      "http_status": 200,
+      "elapsed_ms": 238,
+      "usage": {
+        "input_tokens": 969,
+        "output_tokens": 116
+      },
+      "cost_nano_usd": 40698,
+      "cost_usd": "0.000040698",
+      "actual": "insufficient",
+      "reason": "claim_not_resolved",
+      "matches": true
+    },
+    {
+      "case_id": "HP13",
+      "dataset": "regression",
+      "variant": "combined",
+      "request_sha256": "69b3ed7097a3c82a07ee64fdb3eca8842b52f659377e2dc05284aa949794b720",
+      "expected": "conflicting",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:06.944Z",
+      "http_status": 200,
+      "elapsed_ms": 124,
+      "usage": {
+        "input_tokens": 1053,
+        "output_tokens": 116
+      },
+      "cost_nano_usd": 44226,
+      "cost_usd": "0.000044226",
+      "actual": "conflicting",
+      "reason": "incompatible_same_scope_evidence",
+      "matches": true
+    },
+    {
+      "case_id": "HP13",
+      "dataset": "regression",
+      "variant": "omission-aware",
+      "request_sha256": "a7abaf9b231d8efed9c6f7938ed4e59f8474ca3567164af63d01f23167a0c135",
+      "expected": "conflicting",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:07.069Z",
+      "http_status": 200,
+      "elapsed_ms": 96,
+      "usage": {
+        "input_tokens": 1134,
+        "output_tokens": 116
+      },
+      "cost_nano_usd": 47628,
+      "cost_usd": "0.000047628",
+      "actual": "conflicting",
+      "reason": "incompatible_same_scope_evidence",
+      "matches": true
+    },
+    {
+      "case_id": "HP14",
+      "dataset": "regression",
+      "variant": "omission-aware",
+      "request_sha256": "b69c2a570779b7d74d88e782cb15336588254e921eaa50975a61b59beacf16d7",
+      "expected": "conflicting",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:07.166Z",
+      "http_status": 200,
+      "elapsed_ms": 90,
+      "usage": {
+        "input_tokens": 1067,
+        "output_tokens": 113
+      },
+      "cost_nano_usd": 44814,
+      "cost_usd": "0.000044814",
+      "actual": "conflicting",
+      "reason": "incompatible_same_scope_evidence",
+      "matches": true
+    },
+    {
+      "case_id": "HP14",
+      "dataset": "regression",
+      "variant": "combined",
+      "request_sha256": "c5354b103e20217694c162186a3342e460878cabbdd67507503e32d5bb5bfb0d",
+      "expected": "conflicting",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:07.258Z",
+      "http_status": 200,
+      "elapsed_ms": 82,
+      "usage": {
+        "input_tokens": 986,
+        "output_tokens": 116
+      },
+      "cost_nano_usd": 41412,
+      "cost_usd": "0.000041412",
+      "actual": "conflicting",
+      "reason": "incompatible_same_scope_evidence",
+      "matches": true
+    },
+    {
+      "case_id": "HP15",
+      "dataset": "regression",
+      "variant": "combined",
+      "request_sha256": "c2ead7a396f02713de68aca678d46d6081d66c63b08734b07a128e18f28ab7a7",
+      "expected": "conflicting",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:07.341Z",
+      "http_status": 200,
+      "elapsed_ms": 96,
+      "usage": {
+        "input_tokens": 979,
+        "output_tokens": 116
+      },
+      "cost_nano_usd": 41118,
+      "cost_usd": "0.000041118",
+      "actual": "conflicting",
+      "reason": "incompatible_same_scope_evidence",
+      "matches": true
+    },
+    {
+      "case_id": "HP15",
+      "dataset": "regression",
+      "variant": "omission-aware",
+      "request_sha256": "f9c40f68db0a8501092cdd651bfa409566214d77e11e2079de9a3f9dd770b42e",
+      "expected": "conflicting",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:07.439Z",
+      "http_status": 200,
+      "elapsed_ms": 88,
+      "usage": {
+        "input_tokens": 1060,
+        "output_tokens": 116
+      },
+      "cost_nano_usd": 44520,
+      "cost_usd": "0.000044520",
+      "actual": "conflicting",
+      "reason": "incompatible_same_scope_evidence",
+      "matches": true
+    },
+    {
+      "case_id": "HP16",
+      "dataset": "regression",
+      "variant": "omission-aware",
+      "request_sha256": "da40a16998c84d27af6e04900932942bda07d0631d3a9c469307e5c61c548b51",
+      "expected": "conflicting",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:07.528Z",
+      "http_status": 200,
+      "elapsed_ms": 157,
+      "usage": {
+        "input_tokens": 1128,
+        "output_tokens": 116
+      },
+      "cost_nano_usd": 47376,
+      "cost_usd": "0.000047376",
+      "actual": "conflicting",
+      "reason": "incompatible_same_scope_evidence",
+      "matches": true
+    },
+    {
+      "case_id": "HP16",
+      "dataset": "regression",
+      "variant": "combined",
+      "request_sha256": "1c2ff6466feefa3989541e06d83da5c5b7c13f75ad78d3fdc85fda5fc425bc36",
+      "expected": "conflicting",
+      "status": "completed",
+      "started_at_utc": "2026-10-29T09:38:07.686Z",
+      "http_status": 200,
+      "elapsed_ms": 100,
+      "usage": {
+        "input_tokens": 1047,
+        "output_tokens": 116
+      },
+      "cost_nano_usd": 43974,
+      "cost_usd": "0.000043974",
+      "actual": "conflicting",
+      "reason": "incompatible_same_scope_evidence",
+      "matches": true
+    }
+  ],
+  "input_tokens": 105100,
+  "output_tokens": 11354,
+  "unmetered_attempts": 0,
+  "cost_usd": "0.004414200",
+  "cumulative_cost_usd": "0.011251716",
+  "remaining_budget_usd": "0.988748284",
+  "conservative_cumulative_cost_bound_usd": "0.011251716",
+  "invoice_debit_verified": false,
+  "finished_at_utc": "2026-10-29T09:38:07.788Z"
+}

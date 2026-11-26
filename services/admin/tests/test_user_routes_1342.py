@@ -99,15 +99,19 @@ class TestListUsersHappyPath:
         db = MagicMock()
         call_count = [0]
 
-        def _execute_side_effect(stmt):
+        def _execute_side_effect(*args, **kwargs):
             call_count[0] += 1
             result = MagicMock()
             if call_count[0] == 1:
+                # arm_global_admin_context (SET LOCAL is_sysadmin)
+                return result
+            if call_count[0] == 2:
                 # Count query
                 result.scalar.return_value = 1
-            else:
+            elif call_count[0] == 3:
                 # Rows query
                 result.all.return_value = [(user, membership, role)]
+            # call 4: disarm_global_admin_context in finally
             return result
 
         db.execute.side_effect = _execute_side_effect
@@ -137,12 +141,14 @@ class TestListUsersHappyPath:
         db = MagicMock()
         call_count = [0]
 
-        def _execute_side_effect(stmt):
+        def _execute_side_effect(*args, **kwargs):
             call_count[0] += 1
             result = MagicMock()
             if call_count[0] == 1:
+                return result
+            if call_count[0] == 2:
                 result.scalar.return_value = 1
-            else:
+            elif call_count[0] == 3:
                 result.all.return_value = [(user, membership, role)]
             return result
 
@@ -165,12 +171,14 @@ class TestListUsersHappyPath:
         db = MagicMock()
         call_count = [0]
 
-        def _execute_side_effect(stmt):
+        def _execute_side_effect(*args, **kwargs):
             call_count[0] += 1
             result = MagicMock()
             if call_count[0] == 1:
+                return result
+            if call_count[0] == 2:
                 result.scalar.return_value = 0
-            else:
+            elif call_count[0] == 3:
                 result.all.return_value = []
             return result
 
@@ -204,7 +212,7 @@ class TestListRolesHappyPath:
         db = MagicMock()
         call_count = [0]
 
-        def _execute_side_effect(stmt):
+        def _execute_side_effect(*args, **kwargs):
             call_count[0] += 1
             result = MagicMock()
             if call_count[0] == 1:
@@ -237,7 +245,7 @@ class TestListRolesHappyPath:
         db = MagicMock()
         call_count = [0]
 
-        def _execute_side_effect(stmt):
+        def _execute_side_effect(*args, **kwargs):
             call_count[0] += 1
             result = MagicMock()
             if call_count[0] == 1:
@@ -265,7 +273,7 @@ class TestListRolesHappyPath:
         db = MagicMock()
         call_count = [0]
 
-        def _execute_side_effect(stmt):
+        def _execute_side_effect(*args, **kwargs):
             call_count[0] += 1
             result = MagicMock()
             if call_count[0] == 1:

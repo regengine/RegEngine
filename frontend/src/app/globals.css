@@ -124,8 +124,33 @@ body[data-inflow-lab="true"] {
     background: #fff;
     color: #0f172a;
 }
-[data-inflow-lab-app] button.bg-emerald-700,
-[data-inflow-lab-app] button.bg-emerald-600,
+/* Emerald/primary actions need an explicit background: the generic button
+   rule above paints background:#fff, and color:#fff here alone is white-on-white. */
+[data-inflow-lab-app] button.bg-emerald-700 {
+    background: #047857;
+    border-color: transparent;
+    color: #fff;
+}
+[data-inflow-lab-app] button.bg-emerald-700:hover {
+    background: #065f46;
+    border-color: transparent;
+    color: #fff;
+}
+[data-inflow-lab-app] button.bg-emerald-600 {
+    background: #059669;
+    border-color: transparent;
+    color: #fff;
+}
+[data-inflow-lab-app] button.bg-emerald-600:hover {
+    background: #047857;
+    border-color: transparent;
+    color: #fff;
+}
+[data-inflow-lab-app] button.bg-emerald-800 {
+    background: #065f46;
+    border-color: transparent;
+    color: #fff;
+}
 [data-inflow-lab-app] button.bg-slate-950 {
     border-color: transparent;
     color: #fff;

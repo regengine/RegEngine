@@ -584,7 +584,9 @@ async def _handle_checkout_completed(
     # (or one we could not verify) entitles nothing.
     subscription_status = "incomplete"
     current_period_end = None
-    subscription: Any = None
+    facility_quantity: Optional[int] = _helpers_mod._coerce_optional_int(
+        metadata.get("facility_quantity")
+    )
     payment_status = str(session.get("payment_status") or "")
     if subscription_id:
         try:
@@ -609,6 +611,10 @@ async def _handle_checkout_completed(
         # puts it — it lives on the subscription items now, not the
         # subscription — so the first mapping write no longer stores "".
         current_period_end = _helpers_mod._extract_subscription_period_end(subscription)
+        # Prefer the billed Stripe item quantity over checkout metadata.
+        stripe_qty = _helpers_mod._extract_subscription_facility_quantity(subscription)
+        if stripe_qty:
+            facility_quantity = stripe_qty
 
         # H2: ``metadata.plan_id`` is a client-supplied claim. The plan that
         # gets persisted — and that plan-feature gates later read — must be
@@ -682,12 +688,6 @@ async def _handle_checkout_completed(
         )
         subscription_status = "incomplete"
 
-    # A-2155: persist the per-facility billing quantity so the dashboard and
-    # future proration/credit logic can reconcile subscription quantity with
-    # the tenant's facility inventory. Item quantity wins over the claimed
-    # checkout metadata; both fall back to 1.
-    facility_quantity = _extract_facility_quantity(subscription, metadata)
-
     # #1196: the checkout event itself is the first write that establishes
     # a tenant ↔ subscription mapping. Stamp its ``event_created`` as the
     # watermark so subsequent reordered updates with older timestamps are
@@ -706,8 +706,11 @@ async def _handle_checkout_completed(
             or str(metadata.get("customer_email", ""))
         ),
         "current_period_end": current_period_end or "",
-        "facility_quantity": facility_quantity,
     }
+    # Item quantity on a list/founding Price wins over checkout metadata.
+    # Unknown quantity stays unset; do not invent a default of 1.
+    if facility_quantity is not None:
+        initial_mapping["facility_quantity"] = str(int(facility_quantity))
     if event_created is not None:
         initial_mapping["last_event_created"] = str(int(event_created))
 
@@ -731,6 +734,7 @@ async def _handle_checkout_completed(
                     existing["status"] = pending_status
                 for key in (
                     "current_period_end",
+                    "facility_quantity",
                     "last_invoice_id",
                     "last_payment_at",
                     "last_payment_failure_at",
@@ -775,6 +779,7 @@ def _update_subscription_status(
     status: str,
     *,
     current_period_end: Optional[str] = None,
+    facility_quantity: Optional[int] = None,
     last_invoice_id: Optional[str] = None,
     last_payment_at: Optional[str] = None,
     last_payment_failure_at: Optional[str] = None,
@@ -811,6 +816,9 @@ def _update_subscription_status(
                     "status": status,
                     "event_created": int(event_created or 0),
                     "current_period_end": current_period_end,
+                    "facility_quantity": (
+                        str(int(facility_quantity)) if facility_quantity is not None else None
+                    ),
                     "last_invoice_id": last_invoice_id,
                     "last_payment_at": last_payment_at,
                     "last_payment_failure_at": last_payment_failure_at,
@@ -889,6 +897,8 @@ def _update_subscription_status(
     existing.update(updated_fields)
     if current_period_end is not None:
         existing["current_period_end"] = current_period_end
+    if facility_quantity is not None:
+        existing["facility_quantity"] = str(int(facility_quantity))
     if last_invoice_id is not None:
         existing["last_invoice_id"] = last_invoice_id
     if last_payment_at is not None:
@@ -1141,11 +1151,13 @@ async def _handle_stripe_event(event: dict[str, Any]) -> None:
     if event_type in {"customer.subscription.deleted", "customer.subscription.updated"}:
         sub_status = data_object.get("status")
         status = "canceled" if event_type == "customer.subscription.deleted" else (sub_status or "active")
+        updated_qty = _helpers_mod._extract_subscription_facility_quantity(data_object)
 
         _update_subscription_status(
             subscription_id=data_object.get("id"),
             customer_id=data_object.get("customer"),
             status=status,
+            facility_quantity=updated_qty,
             event_created=event_created,
         )
 
@@ -1161,29 +1173,17 @@ async def _handle_stripe_event(event: dict[str, Any]) -> None:
             except (ValueError, TypeError):
                 last_seen = 0
             if event_created is None or int(event_created) >= last_seen:
-                mapping_changed = False
-
                 # #2951: same relocated field on the event's subscription
                 # payload. Persist only a value we actually resolved — a
                 # missing period end means "unknown", not "cleared", and
                 # blanking it here would destroy the renewal date the
                 # ``invoice.paid`` handler derived from the invoice.
+                # Facility quantity is already applied inside
+                # ``_update_subscription_status`` from the list/founding
+                # item (or subscription metadata). Do not overwrite it here.
                 event_period_end = _helpers_mod._extract_subscription_period_end(data_object)
                 if event_period_end:
                     existing["current_period_end"] = event_period_end
-                    mapping_changed = True
-
-                # A-2155: refresh the per-facility quantity when the event
-                # carries a known-catalog item quantity (e.g. a facility
-                # count change made through the Stripe customer portal).
-                # Missing quantity means "unknown", so keep the stored value.
-                if event_type == "customer.subscription.updated":
-                    item_quantity = _extract_subscription_item_quantity(data_object)
-                    if item_quantity:
-                        existing["facility_quantity"] = item_quantity
-                        mapping_changed = True
-
-                if mapping_changed:
                     _state_mod._store_subscription_mapping(tenant_id, existing)
         return
 

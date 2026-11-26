@@ -465,6 +465,7 @@ def test_checked_in_manifest_adapters_have_explicit_runtime_obligations():
         },
         "tenant_api_key_ingestion_postgres_filter": {"cross-tenant-read", "unauthenticated"},
         "tenant_api_key_mixed_storage": {"cross-tenant-read", "cross-tenant-write", "unauthenticated"},
+        "tenant_api_key_no_persistence": {"cross-tenant-write", "unauthenticated"},
         "tenant_api_key_postgres_rls": {"cross-tenant-read", "cross-tenant-write", "unauthenticated"},
         "tenant_api_key_redis_job_owner": {"cross-tenant-read", "unauthenticated"},
         "tenant_dual_session_csrf": {"cross-tenant-read", "cross-tenant-write", "csrf", "unauthenticated"},
@@ -751,9 +752,7 @@ def test_identity_mutator_observation_is_prerendered_before_network(
 ):
     identity_manifest, identity_plan = _with_identity_isolation(manifest, plan)
     identity_plan["variables"]["MUTATOR_PREFLIGHT_NONCE"] = "STAGING_MUTATOR_PREFLIGHT_NONCE"
-    _identity_probe(identity_plan)["mutator_observe"]["request"] = {
-        "query": {"nonce": "{{MUTATOR_PREFLIGHT_NONCE}}"}
-    }
+    _identity_probe(identity_plan)["mutator_observe"]["request"] = {"query": {"nonce": "{{MUTATOR_PREFLIGHT_NONCE}}"}}
     _validate(identity_manifest, identity_plan)
     identity_environment = dict(environment)
     identity_environment["STAGING_MUTATOR_PREFLIGHT_NONCE"] = "{{MALFORMED_AT_RUNTIME}}"

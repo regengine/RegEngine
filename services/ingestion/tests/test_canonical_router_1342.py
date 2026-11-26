@@ -21,6 +21,7 @@ from __future__ import annotations
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Dict, List, Optional
 from unittest.mock import MagicMock
 
@@ -556,29 +557,49 @@ class TestAmendmentChainForwardWalk:
 
 class _TraceStoreStub:
     """Callable stub for ``CanonicalEventStore(...)`` used by trace
-    endpoints. ``trace_forward`` and ``trace_backward`` return
-    ``(list_of_links, truncated_bool)`` in the current store contract."""
+    endpoints. The router calls ``trace_walk`` and reads ``links``,
+    ``truncated``, ``depth_exhausted`` and ``max_depth`` off the result;
+    ``trace_forward`` / ``trace_backward`` keep the older
+    ``(list_of_links, truncated_bool)`` contract for other callers."""
 
     def __init__(
         self,
         forward_result: Optional[tuple] = None,
         backward_result: Optional[tuple] = None,
+        depth_exhausted: bool = False,
     ) -> None:
         self._forward = forward_result or ([], False)
         self._backward = backward_result or ([], False)
+        self._depth_exhausted = depth_exhausted
         self.forward_calls: List[tuple] = []
         self.backward_calls: List[tuple] = []
 
     def __call__(self, session: Any, dual_write: bool = False) -> "_TraceStoreStub":
         return self
 
+    def trace_walk(
+        self, tenant_id: str, tlc: str, direction: str, max_depth: int = 5, max_results: int = 10000
+    ) -> SimpleNamespace:
+        links, truncated = self._forward if direction == "forward" else self._backward
+        (self.forward_calls if direction == "forward" else self.backward_calls).append(
+            (tenant_id, tlc, max_depth, max_results)
+        )
+        return SimpleNamespace(
+            links=links,
+            truncated=truncated,
+            depth_exhausted=self._depth_exhausted,
+            direction=direction,
+            max_depth=max_depth,
+            max_results=max_results,
+        )
+
     def trace_forward(self, tenant_id: str, tlc: str, max_depth: int = 5, max_results: int = 10000) -> tuple:
-        self.forward_calls.append((tenant_id, tlc, max_depth, max_results))
-        return self._forward
+        walk = self.trace_walk(tenant_id, tlc, "forward", max_depth, max_results)
+        return walk.links, walk.truncated
 
     def trace_backward(self, tenant_id: str, tlc: str, max_depth: int = 5, max_results: int = 10000) -> tuple:
-        self.backward_calls.append((tenant_id, tlc, max_depth, max_results))
-        return self._backward
+        walk = self.trace_walk(tenant_id, tlc, "backward", max_depth, max_results)
+        return walk.links, walk.truncated
 
 
 def _patch_trace_store(monkeypatch: pytest.MonkeyPatch, stub: _TraceStoreStub) -> None:
@@ -611,12 +632,40 @@ class TestTraceForward:
         assert body["links"] == []
         assert body["total_hops"] == 0
         assert body["truncated"] is False
+        assert body["depth_exhausted"] is False
+        assert body["max_depth"] == 5
         # SET LOCAL pragma was issued.
         sql, params = session.calls[0]
         assert "app.tenant_id" in sql
         assert params == {"tid": TENANT_ID}
         # Store was called with the resolved tenant.
         assert stub.forward_calls == [(TENANT_ID, "TLC-EMPTY", 5, 10000)]
+
+    def test_depth_exhausted_is_surfaced_separately_from_truncated(
+        self, principal: IngestionPrincipal, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """S2 of the 2026-10-28 gap analysis: reaching ``max_depth`` must
+        not read as a complete trace. The flag is independent of the
+        result-cap flag and the response echoes the depth it ran with."""
+        raw_links = [
+            {"input_tlc": "TLC-A", "output_tlc": "TLC-B", "transformation_event_id": "evt-1", "depth": 1},
+            {"input_tlc": "TLC-B", "output_tlc": "TLC-C", "transformation_event_id": "evt-2", "depth": 2},
+        ]
+        stub = _TraceStoreStub(forward_result=(raw_links, False), depth_exhausted=True)
+        _patch_trace_store(monkeypatch, stub)
+        session = _FakeSession([_Result()])
+        c = _client(principal, session)
+        resp = c.get(
+            self.ENDPOINT_TEMPLATE.format(tlc="TLC-A"),
+            params={"tenant_id": TENANT_ID, "max_depth": 2},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["truncated"] is False
+        assert body["depth_exhausted"] is True
+        assert body["max_depth"] == 2
+        assert body["total_hops"] == 2
+        assert stub.forward_calls == [(TENANT_ID, "TLC-A", 2, 10000)]
 
     def test_populated_links_compute_max_depth(
         self, principal: IngestionPrincipal, monkeypatch: pytest.MonkeyPatch
@@ -695,6 +744,7 @@ class TestTraceBackward:
         assert body["links"] == []
         assert body["total_hops"] == 0
         assert body["truncated"] is False
+        assert body["depth_exhausted"] is False
         # Pragma issued.
         sql, _ = session.calls[0]
         assert "app.tenant_id" in sql

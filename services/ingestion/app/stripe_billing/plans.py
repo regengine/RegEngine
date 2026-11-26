@@ -240,13 +240,16 @@ def _plan_for_stripe_price(price_id: str) -> Optional[tuple[str, str]]:
     the price matches no configured catalog entry. Never raises — the
     webhook path must fail closed on catalog gaps, not 500.
 
-    The deprecated growth monthly env still maps to list during the alias
-    period. Old annual growth/scale envs are intentionally *not* mapped:
-    annual pricing is OPEN, so we must not invent an annual entitlement.
+    The deprecated growth and scale monthly envs still map to list during the
+    alias period so in-flight checkouts on those Prices keep verifying. Old
+    annual growth/scale envs stay unmapped: annual pricing is OPEN, and
+    reverse-mapping them would invent an annual entitlement that
+    ``_resolve_price_id`` refuses to sell.
 
     Pilot Price IDs map to ``("pilot", "one_time")`` even though pilot has
-    no recurring ``PLANS`` entry. The webhook PR decides whether that grants
-    any status; this helper only identifies the Price.
+    no recurring ``PLANS`` entry. ``checkout.session.completed`` routes those
+    Prices to the pilot handler before any entitling subscription status is
+    stored. This helper only identifies the Price.
     """
     if not price_id:
         return None
@@ -258,8 +261,9 @@ def _plan_for_stripe_price(price_id: str) -> Optional[tuple[str, str]]:
             if env_var:
                 configured.append((env_var, plan_id, period))
 
-    # Alias period only — deprecated monthly list price.
+    # Alias period only: deprecated monthly list prices (growth + scale).
     configured.append((DEPRECATED_LIST_PRICE_ENV_MONTHLY, "list", "monthly"))
+    configured.append(("STRIPE_PRICE_SCALE_MONTHLY", "list", "monthly"))
 
     # One-time pilot prices (not recurring plans).
     configured.append((PILOT_PRICE_ENV_STANDARD, "pilot", "one_time"))

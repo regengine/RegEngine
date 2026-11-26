@@ -266,12 +266,10 @@ def _extract_856_fields(segments: list[list[str]]) -> dict[str, Any]:
                     data["reference_document_number"] = data["reference_document_number"] or segment[2]
 
         elif seg_id == "TD5":
-            # Favor carrier name/code if present in routing details.
-            for candidate in segment[2:]:
-                if candidate:
-                    data["carrier"] = data["carrier"] or candidate
-                    if data["carrier"]:
-                        break
+            # TD503 is the carrier's identification code and TD505 is routing
+            # text. TD502 and TD504 are qualifier and transport-method codes.
+            carrier = _segment_value(segment, 3) or _segment_value(segment, 5)
+            data["carrier"] = data["carrier"] or carrier
 
     data["line_items"] = items.lines
 

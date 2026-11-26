@@ -61,6 +61,19 @@ if (!externalBaseURL) {
     // per email domain), so the suites' combined traffic exceeds the 100/min
     // per-tenant production default.
     process.env.TENANT_RATE_LIMIT_RPM = process.env.TENANT_RATE_LIMIT_RPM || '100000';
+    // authenticated-core-journeys creates 55 products; raise the product
+    // mutation budget only when this dedicated env var is set (server hook
+    // stays at 30/minute when unset).
+    process.env.REGENGINE_E2E_RELAX_PRODUCT_MUTATION_LIMIT =
+        process.env.REGENGINE_E2E_RELAX_PRODUCT_MUTATION_LIMIT || 'true';
+    // Admin API-key store needs regengine_sysadmin (setup_e2e_postgres.py).
+    // CI sets ADMIN_DATABASE_URL; for local Playwright Postgres default it.
+    if (!process.env.ADMIN_DATABASE_URL && localSharedDatabaseUrl.includes('playwright_shared')) {
+        process.env.ADMIN_DATABASE_URL =
+            'postgresql://regengine_sysadmin:ci-e2e-only-sysadmin-not-a-real-secret@127.0.0.1:5432/playwright_shared'; // pragma: allowlist secret — CI-only fake password for E2E NOSUPERUSER role
+    } else if (!process.env.ADMIN_DATABASE_URL) {
+        process.env.ADMIN_DATABASE_URL = localSharedDatabaseUrl;
+    }
     process.env.NEXT_PUBLIC_ENABLE_EXPERIMENTAL_FEATURES =
         process.env.NEXT_PUBLIC_ENABLE_EXPERIMENTAL_FEATURES || 'true';
 }
@@ -128,6 +141,12 @@ export default defineConfig({
                     REGENGINE_E2E_EMAIL_OUTBOX:
                         process.env.REGENGINE_E2E_EMAIL_OUTBOX || localEmailOutboxPath,
                     DATABASE_URL: process.env.DATABASE_URL || localSharedDatabaseUrl,
+                    ADMIN_DATABASE_URL:
+                        process.env.ADMIN_DATABASE_URL ||
+                        process.env.DATABASE_URL ||
+                        localSharedDatabaseUrl,
+                    REGENGINE_E2E_RELAX_PRODUCT_MUTATION_LIMIT:
+                        process.env.REGENGINE_E2E_RELAX_PRODUCT_MUTATION_LIMIT || 'true',
                     ADMIN_FALLBACK_SQLITE:
                         process.env.ADMIN_FALLBACK_SQLITE || localAdminDatabaseUrl,
                     WEBAUTHN_EXPECTED_ORIGIN:
