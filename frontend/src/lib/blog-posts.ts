@@ -12,12 +12,12 @@ export const BLOG_POST_TITLES = {
     'fsma-204-compliance-guide': 'FSMA 204 Compliance: The Complete Guide for Food Businesses (2026)',
     'fsma-204-mid-market-guide': 'FSMA 204 for Mid-Market: Compliance Strategies for Growing Food Companies',
     'fda-food-traceability-requirements': 'FDA Food Traceability Requirements: Complete Guide to FSMA 204 Rules',
-    'fsma-204-compliance-checklist-2026': 'FSMA 204 Compliance Checklist for 2026: Actionable Steps for July 2028',
+    'fsma-204-compliance-checklist-2026': 'FSMA 204 Compliance Checklist for July 20, 2028: What to Do Now',
     'regengine-vs-spreadsheets-traceability': 'RegEngine vs Spreadsheets: Why Food Companies Outgrow Excel for Traceability',
     'food-traceability-software': 'Food Traceability Software: How to Choose the Right Platform',
     'fsma-204-cte-kde-guide': 'CTEs and KDEs Explained: A Practical Guide to FSMA 204 Data Requirements',
     'fsma-204-traceability-lot-codes': 'FSMA 204 Traceability Lot Codes (TLCs): A Complete Guide',
-    '24-hour-rule': 'The FSMA 204 24-Hour Rule Explained',
+    '24-hour-rule': 'The FSMA 204 24 Hour Rule: What It Means Before July 20, 2028',
 } as const;
 
 /**
@@ -29,12 +29,12 @@ export const BLOG_POST_PUBLISHED = {
     'fsma-204-compliance-guide': '2026-04-01',
     'fsma-204-mid-market-guide': '2026-04-01',
     'fda-food-traceability-requirements': '2026-04-01',
-    'fsma-204-compliance-checklist-2026': '2026-04-01',
+    'fsma-204-compliance-checklist-2026': '2026-11-03',
     'regengine-vs-spreadsheets-traceability': '2026-04-01',
     'food-traceability-software': '2026-04-01',
     'fsma-204-cte-kde-guide': '2026-04-01',
     'fsma-204-traceability-lot-codes': '2026-03-01',
-    '24-hour-rule': '2026-03-15',
+    '24-hour-rule': '2026-11-03',
 } as const;
 
 export const BLOG_POST_SLUGS = [

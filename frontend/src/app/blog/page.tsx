@@ -55,9 +55,9 @@ const BLOG_POSTS: BlogPost[] = [
   },
   {
     slug: 'fsma-204-compliance-checklist-2026',
-    excerpt: 'A step-by-step checklist to prepare for FSMA 204. What to do now before the July 2028 deadline.',
+    excerpt: 'A phased checklist to prepare your food business for FDA Food Traceability Rule enforcement that will not begin before July 20, 2028.',
     icon: CheckSquare,
-    date: 'April 2026',
+    date: 'November 2026',
     readTime: '9 min read',
   },
   {
@@ -90,10 +90,10 @@ const BLOG_POSTS: BlogPost[] = [
   },
   {
     slug: '24-hour-rule',
-    excerpt: 'The FDA can request your traceability records within 24 hours of a recall or outbreak. Learn what records you need, how to organize them, and how to respond in time.',
+    excerpt: 'When FDA requests Food Traceability Rule records, the clock is short. Here is what 21 CFR 1.1455 means in practice while enforcement will not begin before July 20, 2028.',
     icon: Clock,
-    date: 'March 2026',
-    readTime: '6 min read',
+    date: 'November 2026',
+    readTime: '7 min read',
   },
 ];
 
