@@ -1,3 +1,5 @@
+// Hand-rolled on purpose (WI-11, 2026-11-04): reads and writes the HTTP-only
+// session cookies itself; the cookie logic is the endpoint, not a proxy.
 /**
  * Server-side session endpoint — HTTP-only cookie auth (CRITICAL #2 fix).
  *

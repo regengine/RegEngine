@@ -1,3 +1,5 @@
+// Stays hand-rolled (WI-11, 2026-11-04): endpoint contracts, boundary modes,
+// Basic-auth injection and streaming rules are local logic, not a plain proxy.
 import { NextRequest, NextResponse } from "next/server";
 import {
     isUsableCallerCredential,

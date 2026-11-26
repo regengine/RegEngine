@@ -44,6 +44,8 @@ source venv/bin/activate
 pip install --quiet --upgrade pip
 echo "  [py] installing requirements.lock"
 pip install --quiet --require-hashes -r requirements.lock
+echo "  [py] installing requirements-dev.lock (pytest and plugins; WI-06 keeps them out of the production lock)"
+pip install --quiet --require-hashes -r requirements-dev.lock
 
 # --- Frontend ---
 if [ -d "frontend" ] && [ -f "frontend/package-lock.json" ]; then

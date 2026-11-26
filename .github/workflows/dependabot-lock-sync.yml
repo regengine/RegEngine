@@ -20,6 +20,8 @@ on:
     branches: [main]
     paths:
       - 'requirements.in'
+      - 'requirements-dev.in'
+      - 'requirements-experimental.in'
 
 permissions:
   contents: write
@@ -89,6 +91,12 @@ jobs:
           CUSTOM_COMPILE_COMMAND="pip-compile --allow-unsafe --generate-hashes --output-file=requirements.lock requirements.in" \
             pip-compile --allow-unsafe --generate-hashes --output-file=requirements.lock requirements.in
           diff -u /tmp/lock.expected requirements.lock
+          # The dev and experimental locks are constrained by requirements.lock
+          # (WI-06), so recompile them after it whether or not their .in changed.
+          for name in dev experimental; do
+            CUSTOM_COMPILE_COMMAND="pip-compile --allow-unsafe --generate-hashes --output-file=requirements-${name}.lock requirements-${name}.in" \
+              pip-compile --allow-unsafe --generate-hashes --output-file="requirements-${name}.lock" "requirements-${name}.in"
+          done
 
       - name: Commit and push
         id: push
@@ -98,15 +106,15 @@ jobs:
           BRANCH: ${{ github.head_ref }}
         run: |
           set -euo pipefail
-          if git diff --quiet -- requirements.lock; then
+          if git diff --quiet -- requirements.lock requirements-dev.lock requirements-experimental.lock; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "requirements.lock already fresh"
+            echo "requirements.lock, requirements-dev.lock and requirements-experimental.lock already fresh"
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add requirements.lock
-          git commit -m "chore(deps): regenerate requirements.lock for this Dependabot bump"
+          git add requirements.lock requirements-dev.lock requirements-experimental.lock
+          git commit -m "chore(deps): regenerate the requirements locks for this Dependabot bump"
           git push origin "HEAD:${BRANCH}"
           echo "changed=true" >> "$GITHUB_OUTPUT"
 
