@@ -27,6 +27,9 @@ APPROVED_GLOBAL_ADMIN_ARMS = {
         1,
     ),
     ("services/admin/app/auth_routes.py", "get_me"): ("auth-bootstrap", 1),
+    # A usable invite proves mailbox control before either scoped arm:
+    # global user lookup/create, then passwordless identity provisioning.
+    ("services/admin/app/invite_routes.py", "accept_invite"): ("auth-bootstrap", 2),
     ("services/admin/app/dependencies.py", "get_current_user"): (
         "auth-bootstrap",
         2,
