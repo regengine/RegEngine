@@ -12,7 +12,6 @@ required) rejects the event with a field-level error.
 from __future__ import annotations
 
 import pytest
-
 from services.shared.external_connectors.base import ConnectorConfig, NormalizedCTEEvent, _optional_float
 from services.shared.external_connectors.csv_sftp import CSVSFTPConnector
 from services.shared.external_connectors.food_safety import FoodDocsConnector, FoodReadyConnector

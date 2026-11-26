@@ -57,7 +57,7 @@
 
 ## API Reference
 - [OpenAPI Specs](openapi/)
-- [Schemas](schemas/)
+- [Schemas](schema/)
 
 ## Other
 - [Runbooks](runbooks/)

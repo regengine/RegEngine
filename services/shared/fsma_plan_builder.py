@@ -871,7 +871,7 @@ def export_plan_markdown(plan: TraceabilityPlan) -> str:
 
 """
 
-    md += f"""---
+    md += """---
 
 ## Record Storage
 

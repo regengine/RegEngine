@@ -103,14 +103,15 @@ class TestListUsersHappyPath:
             call_count[0] += 1
             result = MagicMock()
             if call_count[0] == 1:
-                # set_admin_context arm (users FORCE RLS peer visibility)
+                # arm_global_admin_context (SET LOCAL is_sysadmin)
                 return result
             if call_count[0] == 2:
                 # Count query
                 result.scalar.return_value = 1
-            else:
+            elif call_count[0] == 3:
                 # Rows query
                 result.all.return_value = [(user, membership, role)]
+            # call 4: disarm_global_admin_context in finally
             return result
 
         db.execute.side_effect = _execute_side_effect
@@ -147,7 +148,7 @@ class TestListUsersHappyPath:
                 return result
             if call_count[0] == 2:
                 result.scalar.return_value = 1
-            else:
+            elif call_count[0] == 3:
                 result.all.return_value = [(user, membership, role)]
             return result
 
@@ -177,7 +178,7 @@ class TestListUsersHappyPath:
                 return result
             if call_count[0] == 2:
                 result.scalar.return_value = 0
-            else:
+            elif call_count[0] == 3:
                 result.all.return_value = []
             return result
 

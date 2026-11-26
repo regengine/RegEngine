@@ -14,6 +14,7 @@ import { StatTile } from "@/components/ui/stat-tile"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { useAuth } from "@/lib/auth-context"
 import { getServiceURL } from "@/lib/api-config"
+import { rawFetch } from "@/lib/api-client"
 
 interface ServiceInfo {
     name: string;
@@ -86,16 +87,17 @@ export default function SysAdminDashboard() {
             // credential from HTTP-only cookies server-side. No explicit
             // Authorization header here — accessToken is routinely the
             // "cookie-managed" placeholder, which must never be sent.
+            // rawFetch keeps this request header-free by construction (WI-11).
             const adminBase = getServiceURL('admin')
 
             // Fetch Status
-            const statusRes = await fetch(`${adminBase}/v1/system/status`)
+            const statusRes = await rawFetch(`${adminBase}/v1/system/status`)
             if (!statusRes.ok) throw new Error("Failed to fetch system status")
             const statusData = await statusRes.json()
             setStatus(statusData)
 
             // Fetch Metrics
-            const metricsRes = await fetch(`${adminBase}/v1/system/metrics`)
+            const metricsRes = await rawFetch(`${adminBase}/v1/system/metrics`)
             if (!metricsRes.ok) throw new Error("Failed to fetch system metrics")
             const metricsData = await metricsRes.json()
             setMetrics(metricsData)

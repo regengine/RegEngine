@@ -24,11 +24,10 @@ import os
 import uuid
 
 import pytest
+from services.shared.funnel_events import emit_funnel_event
 from shared.db_url import sync_postgres_url
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
-
-from services.shared.funnel_events import emit_funnel_event
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 
