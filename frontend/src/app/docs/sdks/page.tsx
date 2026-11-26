@@ -21,7 +21,7 @@ const SDKS = [
     { title: 'Python SDK', badge: 'Planned', planned: true },
     { title: 'Node.js SDK', badge: 'Planned', planned: true },
     { title: 'Go SDK', badge: 'Planned', planned: true },
-    { title: 'REST Client', badge: 'Available now (OpenAPI 3.0 spec)', planned: false },
+    { title: 'REST Client', badge: 'Available now: OpenAPI 3.0 spec (Preview)', planned: false },
 ];
 
 const CHROME_LINK =
@@ -77,7 +77,7 @@ export default function SDKsDocsPage() {
                     <CardContent className="space-y-4">
                         <h3 className="text-subheading text-re-text-primary">What to Use Now</h3>
                         <p className="text-ui text-re-text-secondary">
-                            Until SDKs are released, use our REST API directly or import the public OpenAPI 3.0 spec into your client generator.
+                            Until SDKs are released, use our REST API directly or import the public OpenAPI 3.0 spec (Preview) into your client generator.
                         </p>
                         <div className="flex flex-wrap gap-5">
                             <Link href="/docs/api" className={CHROME_LINK}>
