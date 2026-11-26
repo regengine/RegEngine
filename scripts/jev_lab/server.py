@@ -29,7 +29,7 @@ from collections.abc import AsyncIterator, Callable, Mapping
 from pathlib import Path
 from typing import Any
 
-from app import csv_templates as route
+from services.ingestion.app import csv_templates as route
 from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from shared.jev import JevUnavailable, header_mapping as hm

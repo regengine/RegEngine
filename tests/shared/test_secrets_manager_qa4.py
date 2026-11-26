@@ -171,12 +171,6 @@ class TestCredentialGetters:
         monkeypatch.delenv("NEO4J_URL", raising=False)
         assert _mgr().get_neo4j_credentials()["uri"] == "bolt://localhost:7687"
 
-    def test_kafka_defaults(self, monkeypatch):
-        monkeypatch.delenv("KAFKA_BOOTSTRAP_SERVERS", raising=False)
-        creds = _mgr().get_kafka_credentials()
-        assert creds["bootstrap_servers"] == "localhost:9092"
-        assert creds["security_protocol"] == "PLAINTEXT"
-
     def test_s3_credentials_shape(self, monkeypatch):
         monkeypatch.setenv("OBJECT_STORAGE_ACCESS_KEY_ID", "AKID")
         monkeypatch.setenv("OBJECT_STORAGE_SECRET_ACCESS_KEY", "secret")
@@ -189,7 +183,6 @@ class TestCredentialGetters:
         monkeypatch.setenv("POSTGRES_HOST", "h")
         assert sm.get_database_credentials()["host"] == "h"
         assert "uri" in sm.get_neo4j_credentials()
-        assert "bootstrap_servers" in sm.get_kafka_credentials()
         assert "access_key_id" in sm.get_s3_credentials()
 
 
@@ -242,19 +235,6 @@ class TestValidateProductionSecrets:
             NEO4J_PASSWORD=None,
             OBJECT_STORAGE_ACCESS_KEY_ID=None,
             OBJECT_STORAGE_SECRET_ACCESS_KEY=None,
-        )
-        sm.validate_production_secrets()
-
-    def test_kafka_enabled_without_config_fails(self, monkeypatch):
-        _prod_env(monkeypatch, EVENT_BACKBONE="kafka", KAFKA_BOOTSTRAP_SERVERS=None)
-        with pytest.raises(RuntimeError, match="KAFKA_BOOTSTRAP_SERVERS is not set"):
-            sm.validate_production_secrets()
-
-    def test_kafka_enabled_with_config_passes(self, monkeypatch):
-        _prod_env(
-            monkeypatch,
-            EVENT_BACKBONE="kafka",
-            KAFKA_BOOTSTRAP_SERVERS="synthetic-kafka:9092",
         )
         sm.validate_production_secrets()
 

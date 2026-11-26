@@ -1,3 +1,5 @@
+-- alembic-revision: a5e7c9b2d341
+-- rendered-from: alembic/versions/20261016_a5e7c9b2d341_v128_fsma_rls_policy_repair.py (precheck)
 -- Read-only object inventory for apply_v128_fsma_rls.sql.
 -- Check the public.get_tenant_context() function used by APPLY.
 -- PUBLIC is a pseudo-role.

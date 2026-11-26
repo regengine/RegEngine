@@ -1,3 +1,6 @@
+// Stays hand-rolled (WI-11, 2026-11-04): it clears the re_tool_access cookie
+// on redirects and failed verifications, which src/lib/proxy-factory.ts
+// cannot express.
 /**
  * Verified check for tool access cookie.
  * Called by EmailGate on mount to decide whether to show the gate or the tool.
