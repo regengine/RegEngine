@@ -9,6 +9,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/lib/auth-context";
 import { getServiceURL } from "@/lib/api-config";
+import { rawFetch } from "@/lib/api-client";
 
 interface RecentEvent {
   event_id: string;
@@ -50,7 +51,8 @@ export function ScanHistoryWidget() {
     const load = async () => {
       const search = new URLSearchParams({ tenant_id: tenantId, limit: "8" });
       try {
-        const res = await fetch(
+        // Tenant travels as a query parameter by contract; no X-Tenant-ID header.
+        const res = await rawFetch(
           `${getServiceURL("ingestion")}/api/v1/webhooks/recent?${search}`,
           {
             credentials: "include",

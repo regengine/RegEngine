@@ -26,7 +26,6 @@ from .pipeline import ScraperPipeline
 from .routes_ingest import (  # noqa: F401
     ALLOWED_PORTS,
     ALLOWED_SCHEMES,
-    KAFKA_COUNTER,
     MAX_FILE_SIZE,
     MAX_PAYLOAD_BYTES,
     PARSER_REGISTRY,

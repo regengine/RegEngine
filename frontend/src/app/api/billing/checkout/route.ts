@@ -5,7 +5,7 @@
  * attaches authenticated source-IP metadata for the shared abuse budget.
  *
  * POST /api/billing/checkout
- * Body: { plan_id, billing_period, customer_email?, tenant_id?, tenant_name? }
+ * Body: { plan_id, billing_period, customer_email?, tenant_id?, tenant_name?, facility_count? }
  * Returns: { checkout_url, session_id, plan, billing_period, amount, currency }
  */
 import { NextRequest, NextResponse } from 'next/server';
@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
         if (retiredCredentialError) return retiredCredentialError;
 
         const body = await request.json();
-        const { plan_id, billing_period, customer_email, tenant_id, tenant_name } = body;
+        const { plan_id, billing_period, customer_email, tenant_id, tenant_name, facility_count } = body;
 
         if (!plan_id) {
             return NextResponse.json({ error: 'plan_id is required' }, { status: 400 });
@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
         const encodedPlanId = encodeURIComponent(String(plan_id));
 
         // Build the request to the backend billing service
-        const checkoutPayload = {
+        const checkoutPayload: Record<string, unknown> = {
             plan_id,
             billing_period: billing_period || 'monthly',
             customer_email: customer_email || undefined,
@@ -83,6 +83,9 @@ export async function POST(request: NextRequest) {
             success_url: `${siteUrl}/signup?checkout=success&plan=${encodedPlanId}`,
             cancel_url: `${siteUrl}/pricing?checkout=cancelled`,
         };
+        if (facility_count !== undefined && facility_count !== null && facility_count !== '') {
+            checkoutPayload.facility_count = facility_count;
+        }
 
         const headers = new Headers({ 'Content-Type': 'application/json' });
         if (hasCallerCredential && authenticatedTenantId) {

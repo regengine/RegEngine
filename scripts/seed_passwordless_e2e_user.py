@@ -15,7 +15,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 SERVICES_DIR = ROOT_DIR / "services"
@@ -51,29 +51,26 @@ def _session_auth_method() -> str | None:
     return value
 
 
+def _is_local_postgres(url) -> bool:
+    return url.get_backend_name() == "postgresql" and url.host in {"localhost", "127.0.0.1"}
+
+
 async def _seed_api_key(tenant_id: str, email: str) -> None:
-    """Create a scoped key in the explicitly named local PostgreSQL fixture."""
+    """Create a scoped key in the explicitly named local PostgreSQL fixture.
+
+    Uses the regengine_sysadmin control-plane store (the same path the admin
+    key-management API uses). The runtime ``regengine`` role on DATABASE_URL
+    only has SELECT on api_keys, and main() has already created the tenant.
+    """
     from shared.api_key_store import DatabaseAPIKeyStore
     from sqlalchemy.engine import make_url
 
-    database_url = os.environ["DATABASE_URL"]
+    database_url = os.environ["ADMIN_DATABASE_URL"]
     target = make_url(database_url)
-    if (
-        target.get_backend_name() != "postgresql"
-        or target.host not in {"localhost", "127.0.0.1"}
-        or target.database != "playwright_shared"
-    ):
+    if not _is_local_postgres(target) or target.database != "playwright_shared":
         raise SystemExit("E2E API key seeding requires local PostgreSQL database playwright_shared")
-    store = DatabaseAPIKeyStore(database_url=database_url)
+    store = DatabaseAPIKeyStore(database_url=database_url, arm_sysadmin_rls=True)
     try:
-        from sqlalchemy import text
-
-        async with store._engine.begin() as connection:
-            await connection.execute(
-                text("""INSERT INTO public.tenants (id, name, slug, status)
-                VALUES (:id, 'Playwright fixture', :slug, 'active') ON CONFLICT (id) DO NOTHING"""),
-                {"id": uuid.UUID(tenant_id), "slug": f"playwright-{tenant_id}"},
-            )
         key = await store.create_key(
             "Playwright tenant key",
             tenant_id=tenant_id,
@@ -91,21 +88,60 @@ async def _seed_api_key(tenant_id: str, email: str) -> None:
         await store.close()
 
 
+def _bootstrap_owner_role(tenant_id: uuid.UUID) -> None:
+    """Insert the tenant Owner role through a separate local bootstrap login.
+
+    ``public.roles`` is reference data: no least-privilege role may write it
+    (regengine_sysadmin has SELECT only, the runtime role has nothing). Only
+    this one row goes through the bootstrap login; every identity row is
+    written as regengine_sysadmin under RLS.
+    """
+    from sqlalchemy import create_engine, text
+    from sqlalchemy.engine import make_url
+
+    raw_url = (os.getenv("REGENGINE_E2E_ROLE_BOOTSTRAP_URL") or os.getenv("DATABASE_URL") or "").strip()
+    if not raw_url:
+        raise SystemExit("No Owner role exists; set REGENGINE_E2E_ROLE_BOOTSTRAP_URL to seed one")
+    target = make_url(raw_url)
+    if not _is_local_postgres(target):
+        raise SystemExit("REGENGINE_E2E_ROLE_BOOTSTRAP_URL must point at a localhost PostgreSQL database")
+    engine = create_engine(target.set(drivername="postgresql+psycopg"))
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO public.roles (id, tenant_id, name, permissions) "
+                    "VALUES (:id, :tenant_id, 'Owner', CAST(:permissions AS jsonb))"
+                ),
+                {"id": uuid.uuid4(), "tenant_id": tenant_id, "permissions": json.dumps(["*"])},
+            )
+    except Exception as exc:  # noqa: BLE001 - turn a grant error into guidance
+        raise SystemExit(
+            "Could not create the Owner role: no least-privilege role can write public.roles. "
+            "Set REGENGINE_E2E_ROLE_BOOTSTRAP_URL to the local bootstrap login "
+            f"(see README). Cause: {type(exc).__name__}"
+        ) from exc
+    finally:
+        engine.dispose()
+
+
 def main() -> int:
     _require_e2e_mode()
 
-    # Admin SessionLocal reads ADMIN_DATABASE_URL. CI points that at the
-    # NOSUPERUSER regengine_sysadmin role for the running app (api-key RLS).
-    # Fixture seeding must insert orgs/users as the postgres superuser on
-    # DATABASE_URL so RLS does not block bootstrap rows. Mutating env here
-    # only affects this seed process (Playwright execFileSync), not the app.
-    database_url = os.environ.get("DATABASE_URL", "").strip()
-    if not database_url:
-        raise SystemExit("DATABASE_URL is required to seed passwordless E2E users")
-    os.environ["ADMIN_DATABASE_URL"] = database_url
+    # Admin SessionLocal reads ADMIN_DATABASE_URL. Seed as the same
+    # NOSUPERUSER/NOBYPASSRLS regengine_sysadmin role the running app uses and
+    # arm the global control-plane RLS branch per transaction, instead of
+    # borrowing a superuser. A missing ADMIN_DATABASE_URL falls back to
+    # DATABASE_URL (the SQLite local Playwright mode); against PostgreSQL set
+    # ADMIN_DATABASE_URL to the regengine_sysadmin login.
+    if not os.environ.get("ADMIN_DATABASE_URL", "").strip():
+        database_url = os.environ.get("DATABASE_URL", "").strip()
+        if not database_url:
+            raise SystemExit("ADMIN_DATABASE_URL (or DATABASE_URL for SQLite) is required to seed E2E users")
+        os.environ["ADMIN_DATABASE_URL"] = database_url
 
     from services.admin.app.auth_crypto import AuthCryptoService
-    from services.admin.app.database import SessionLocal, init_db
+    from services.admin.app.database import SessionLocal, arm_global_admin_context, init_db
     from services.admin.app.sqlalchemy_models import (
         MembershipModel,
         OrganizationMembershipModel,
@@ -128,6 +164,8 @@ def main() -> int:
     session_auth_method = _session_auth_method()
 
     with SessionLocal() as db:
+        # set_config(..., true) is transaction-local: re-arm after each commit.
+        arm_global_admin_context(db)
         organization = db.execute(
             select(OrganizationModel).where(OrganizationModel.domain_name == domain).limit(1)
         ).scalar_one_or_none()
@@ -215,10 +253,20 @@ def main() -> int:
             db.add(tenant)
             db.flush()
 
-        owner_role = db.execute(
-            select(RoleModel).where(RoleModel.tenant_id == tenant.id, RoleModel.name == "Owner").limit(1)
-        ).scalar_one_or_none()
-        if owner_role is None:
+        def _find_owner_role():
+            # Prefer the tenant's own Owner, else a canonical global one.
+            return db.execute(
+                select(RoleModel)
+                .where(
+                    RoleModel.name == "Owner",
+                    or_(RoleModel.tenant_id == tenant.id, RoleModel.tenant_id.is_(None)),
+                )
+                .order_by(RoleModel.tenant_id.is_(None))
+                .limit(1)
+            ).scalar_one_or_none()
+
+        owner_role = _find_owner_role()
+        if owner_role is None and db.get_bind().dialect.name == "sqlite":
             owner_role = RoleModel(
                 id=uuid.uuid4(),
                 tenant_id=tenant.id,
@@ -227,6 +275,14 @@ def main() -> int:
             )
             db.add(owner_role)
             db.flush()
+        elif owner_role is None:
+            # The bootstrap insert needs the tenant row committed (FK).
+            db.commit()
+            _bootstrap_owner_role(tenant.id)
+            arm_global_admin_context(db)
+            owner_role = _find_owner_role()
+            if owner_role is None:
+                raise SystemExit("Owner role was created but is not visible to regengine_sysadmin")
 
         legacy_membership = db.execute(
             select(MembershipModel)
@@ -251,6 +307,7 @@ def main() -> int:
         db.commit()
 
         if session_auth_method is not None:
+            arm_global_admin_context(db)
             now = datetime.now(timezone.utc)
             active_session = db.execute(
                 select(SessionModel)
