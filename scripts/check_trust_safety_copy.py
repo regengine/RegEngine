@@ -38,6 +38,9 @@ SKIPPED_PREFIXES = [
     ROOT / "frontend" / "tests",
     ROOT / "docs" / "archive",
     ROOT / "docs" / "_archive",
+    # Retired-topology runbooks (LEGACY banner, reference only; WI-07 moved
+    # them under docs/ from the former repo-root runbooks/ directory).
+    ROOT / "docs" / "runbooks" / "legacy",
     ROOT / "docs" / "internal",
     ROOT / "docs" / "superpowers",
     ROOT / "sales" / "local",

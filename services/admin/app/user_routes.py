@@ -11,7 +11,7 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
 from .audit import AuditLogger
-from .database import get_session
+from .database import arm_global_admin_context, disarm_global_admin_context, get_session
 from .dependencies import PermissionChecker, get_current_user
 from .models import TenantContext
 from .sqlalchemy_models import MembershipModel, RoleModel, UserModel
@@ -120,45 +120,48 @@ async def list_users(
     # drops every co-member and the directory returns only the caller. Permission
     # Checker("users.read") already authorized this request; keep the query
     # scoped by MembershipModel.tenant_id so the arm does not widen tenants.
-    # set_admin_context(true) is a no-op under SQLite.
-    TenantContext.set_admin_context(db, True)
+    # Use transaction-local SET LOCAL (arm/disarm) so the GUC cannot leak past
+    # this handler if the pooled connection is reused before checkout reset.
+    arm_global_admin_context(db)
+    try:
+        # Count total
+        count_stmt = (
+            select(func.count())
+            .select_from(UserModel)
+            .join(MembershipModel, UserModel.id == MembershipModel.user_id)
+            .where(MembershipModel.tenant_id == tenant_id)
+        )
+        total = db.execute(count_stmt).scalar()
 
-    # Count total
-    count_stmt = (
-        select(func.count())
-        .select_from(UserModel)
-        .join(MembershipModel, UserModel.id == MembershipModel.user_id)
-        .where(MembershipModel.tenant_id == tenant_id)
-    )
-    total = db.execute(count_stmt).scalar()
-
-    # helper for explicit join
-    stmt = (
-        select(UserModel, MembershipModel, RoleModel)
-        .join(MembershipModel, UserModel.id == MembershipModel.user_id)
-        .join(RoleModel, MembershipModel.role_id == RoleModel.id)
-        .where(MembershipModel.tenant_id == tenant_id)
-        .offset(pagination.skip)
-        .limit(pagination.limit)
-    )
-
-    rows = db.execute(stmt).all()
-
-    results = []
-    for user, membership, role in rows:
-        results.append(
-            UserResponse(
-                id=user.id,
-                email=user.email,
-                status="inactive" if not membership.is_active else user.status,
-                is_sysadmin=user.is_sysadmin,
-                role_id=role.id,
-                role_name=role.name,
-                created_at=user.created_at,
-            )
+        # helper for explicit join
+        stmt = (
+            select(UserModel, MembershipModel, RoleModel)
+            .join(MembershipModel, UserModel.id == MembershipModel.user_id)
+            .join(RoleModel, MembershipModel.role_id == RoleModel.id)
+            .where(MembershipModel.tenant_id == tenant_id)
+            .offset(pagination.skip)
+            .limit(pagination.limit)
         )
 
-    return PaginatedResponse(items=results, total=total, skip=pagination.skip, limit=pagination.limit)
+        rows = db.execute(stmt).all()
+
+        results = []
+        for user, membership, role in rows:
+            results.append(
+                UserResponse(
+                    id=user.id,
+                    email=user.email,
+                    status="inactive" if not membership.is_active else user.status,
+                    is_sysadmin=user.is_sysadmin,
+                    role_id=role.id,
+                    role_name=role.name,
+                    created_at=user.created_at,
+                )
+            )
+
+        return PaginatedResponse(items=results, total=total, skip=pagination.skip, limit=pagination.limit)
+    finally:
+        disarm_global_admin_context(db)
 
 
 @router.patch(

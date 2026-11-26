@@ -244,8 +244,10 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
             if is_internal:
                 try:
                     return uuid.UUID(tenant_header)
-                except ValueError:
-                    raise HTTPException(status_code=400, detail=f"Invalid tenant ID format in header: {tenant_header}")
+                except ValueError as exc:
+                    raise HTTPException(
+                        status_code=400, detail=f"Invalid tenant ID format in header: {tenant_header}"
+                    ) from exc
             else:
                 # Defense-in-depth: reject and track spoofing attempts.
                 # The nginx gateway should strip this header from external

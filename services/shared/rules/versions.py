@@ -26,7 +26,9 @@ logger = logging.getLogger("rules-versions")
 # ``fsma.rule_definitions`` is a shared catalog with no tenant rows (see
 # ``global_sql_tables`` in .semgrep/tenant-scope-allowlist.yml), so the
 # catalog read carries no tenant predicate on purpose.
-_CATALOG_SQL = text("SELECT rule_id, rule_version, title, severity, category FROM fsma.rule_definitions ORDER BY rule_id")
+_CATALOG_SQL = text(
+    "SELECT rule_id, rule_version, title, severity, category FROM fsma.rule_definitions ORDER BY rule_id"
+)
 
 # Which (rule, version) pairs actually judged the given events. Tenant
 # scoped: ``fsma.rule_evaluations`` holds tenant rows.

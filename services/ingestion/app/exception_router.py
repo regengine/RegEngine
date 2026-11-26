@@ -88,8 +88,13 @@ class ResolveRequest(BaseModel):
 
 
 class WaiveRequest(BaseModel):
+    """Waiver body. The approver is the authenticated principal, never a body field.
+
+    A client-supplied ``waiver_approved_by`` is ignored (pydantic drops
+    unknown fields) so a caller cannot sign a waiver in someone else's name.
+    """
+
     waiver_reason: str
-    waiver_approved_by: str
 
 
 class AddCommentRequest(BaseModel):
@@ -237,9 +242,23 @@ async def resolve_exception(
     return {"case_id": case_id, "status": "resolved"}
 
 
+def _actor_from_principal(principal: IngestionPrincipal) -> str:
+    """Identity string recorded as the actor of a signoff.
+
+    Mirrors ``_audit_identity`` in the FDA export router: identity fields
+    resolve from the authenticated principal, never from the request body.
+    ``key_id`` is ``session:<user id>`` for browser sessions and the API key
+    id for scoped keys. An empty principal cannot approve anything.
+    """
+    actor = (getattr(principal, "key_id", None) or "").strip()
+    if not actor:
+        raise HTTPException(status_code=401, detail="Authenticated principal required to approve a waiver")
+    return actor
+
+
 @router.patch(
     "/{case_id}/waive",
-    summary="Waive exception (requires reason + approver)",
+    summary="Waive exception (requires reason; approver is the authenticated principal)",
 )
 async def waive_exception(
     case_id: str,
@@ -250,7 +269,7 @@ async def waive_exception(
 ):
     tid = resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
-    svc.waive_exception(tid, case_id, body.waiver_reason, body.waiver_approved_by)
+    svc.waive_exception(tid, case_id, body.waiver_reason, _actor_from_principal(principal))
     return {"case_id": case_id, "status": "waived"}
 
 

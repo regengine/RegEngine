@@ -42,7 +42,6 @@ from __future__ import annotations
 
 import dataclasses
 import json
-import logging
 from collections import Counter
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -202,7 +201,10 @@ CANONICAL_FIELDS: dict[str, dict[str, Any]] = {
         "examples": ["Receiving GLN"],
     },
     "reference_document": {
-        "what": "Reference document type and number for the event (bill of lading, invoice, purchase order, harvest record).",
+        "what": (
+            "Reference document type and number for the event (bill of lading, invoice, purchase order, "
+            "harvest record)."
+        ),
         "not_for": "Lot codes, internal row ids.",
         "examples": ["BOL", "Bill of Lading", "Invoice #", "PO Number", "Ref Doc", "Reference"],
     },
@@ -242,7 +244,10 @@ CANONICAL_FIELDS: dict[str, dict[str, Any]] = {
         "examples": ["Input UOM", "Ingredient Units"],
     },
     "cte_type": {
-        "what": "The critical tracking event type of the row (harvesting, cooling, initial packing, shipping, receiving, transformation, first land-based receiving).",
+        "what": (
+            "The critical tracking event type of the row (harvesting, cooling, initial packing, shipping, "
+            "receiving, transformation, first land-based receiving)."
+        ),
         "not_for": "Product types, document types.",
         "examples": ["Event Type", "CTE", "Activity", "Transaction Type"],
     },
@@ -252,7 +257,10 @@ CANONICAL_FIELDS: dict[str, dict[str, Any]] = {
         "examples": ["Carrier", "Trucking Co", "Transport", "Hauler"],
     },
     NO_MATCH: {
-        "what": "The column is none of the fields above: internal ids, notes, prices, temperatures, weights of packaging, or anything RegEngine does not model.",
+        "what": (
+            "The column is none of the fields above: internal ids, notes, prices, temperatures, weights of "
+            "packaging, or anything RegEngine does not model."
+        ),
         "examples": ["Row ID", "Notes", "Price", "Temp C", "Pallet Weight", "Approved By"],
     },
 }
@@ -692,7 +700,7 @@ def suggest_header_mappings(
             truncated_columns=truncated,
             file_cte_type=file_cte_type,
         )
-    except Exception:  # noqa: BLE001 - the upload must not fail because a suggestion did.
+    except Exception:  # noqa: BLE001 -- the upload must not fail because a suggestion did.
         logger.exception("jev.header_mapping.error", column_count=len(columns))
         return HeaderMappingResult(
             status="error",
@@ -728,7 +736,7 @@ def suggest_header_mappings(
                     evidences.append(batch.evidence)
             except JevUnavailable:
                 reversed_answers = None  # every candidate reports order_check_unavailable
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001 -- fail-safe path: this operation must not propagate a failure
                 logger.exception("jev.header_mapping.order_check_error", column_count=len(to_check))
                 reversed_answers = None
 

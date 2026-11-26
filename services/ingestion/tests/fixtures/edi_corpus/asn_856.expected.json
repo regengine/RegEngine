@@ -1,6 +1,6 @@
 {
   "asn_number": "ASN-12345",
-  "carrier": "2",
+  "carrier": "ColdExpress",
   "control_number": "0001",
   "envelope_mismatch": false,
   "gs_control_number": "1",

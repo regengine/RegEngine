@@ -109,6 +109,13 @@ const nextConfig = {
     },
     async redirects() {
         return [
+            // Config-level so crawlers get a real 308. A page-level redirect under
+            // app/tools/loading.tsx can stream as HTTP 200 with a meta refresh.
+            {
+                source: '/tools/checklist',
+                destination: '/tools/self-reported-checklist',
+                permanent: true,
+            },
             // Existing redirects
             {
                 source: '/ftl-checker',
