@@ -1,3 +1,5 @@
+-- alembic-revision: b8c1e4f2a901
+-- rendered-from: alembic/versions/20261028_b8c1e4f2a901_v140_partner_file_storage_retention.py (upgrade)
 -- Partner file storage metadata + 30-day retention clock (SEL-549 / first-file).
 --
 -- Metadata only. Partner file bytes live in the private Supabase Storage bucket

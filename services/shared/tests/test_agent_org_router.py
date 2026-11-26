@@ -20,10 +20,9 @@ from unittest.mock import AsyncMock
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from services.ingestion.app.authz import IngestionPrincipal, get_ingestion_principal
 from shared.agent_org import router as agent_org_router_mod
 from shared.agent_org.onboarding import OnboardingResult
-
-from services.ingestion.app.authz import IngestionPrincipal, get_ingestion_principal
 
 router = agent_org_router_mod.router
 _get_db_session = agent_org_router_mod._get_db_session

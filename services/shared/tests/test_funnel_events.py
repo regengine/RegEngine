@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import pytest
+from services.shared.funnel_events import emit_funnel_event, get_funnel_stage_metrics
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
-
-from services.shared.funnel_events import emit_funnel_event, get_funnel_stage_metrics
 
 
 def _session():

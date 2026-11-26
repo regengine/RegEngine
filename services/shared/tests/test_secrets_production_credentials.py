@@ -6,9 +6,9 @@ only checked 3 variables, so a production deploy missing its secret wiring
 would boot against localhost fallbacks. Now the getters raise in production
 (central ``shared.env`` detection, explicit ``environment`` argument wins)
 while local development keeps its localhost defaults, and the startup
-validator requires ``DATABASE_URL`` plus only the credentials of enabled
-subsystems (Kafka iff ``EVENT_BACKBONE=kafka``), while still rejecting insecure placeholders
-whenever they are set (#3243).
+validator requires ``DATABASE_URL`` only (the Kafka credential left with the
+backbone in WI-05), while still rejecting insecure placeholders whenever they
+are set (#3243).
 
 All key material below is synthetic. Every test scrubs the credential and
 environment-detection variables first so the host environment cannot make a
@@ -29,6 +29,7 @@ from shared.secrets_manager import (
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SERVER_MAIN = REPO_ROOT / "server" / "main.py"
+STARTUP_CHECKS = REPO_ROOT / "server" / "startup_checks.py"
 
 _CRED_VARS = (
     "REGENGINE_ENV",
@@ -140,22 +141,6 @@ class TestNeo4jCredentials:
             manager.get_neo4j_credentials(environment="production")
 
 
-class TestKafkaCredentials:
-    def test_dev_falls_back_to_localhost(self, clean_env, manager):
-        creds = manager.get_kafka_credentials()
-        assert creds["bootstrap_servers"] == "localhost:9092"
-
-    def test_production_missing_raises(self, production, manager):
-        with pytest.raises(RuntimeError) as exc_info:
-            manager.get_kafka_credentials()
-        assert "KAFKA_BOOTSTRAP_SERVERS" in str(exc_info.value)
-
-    def test_production_explicit_values_pass_through(self, production, manager):
-        production.setenv("KAFKA_BOOTSTRAP_SERVERS", "synthetic-kafka:9092")
-        creds = manager.get_kafka_credentials()
-        assert creds["bootstrap_servers"] == "synthetic-kafka:9092"
-
-
 class TestS3Credentials:
     def test_dev_allows_empty_keys(self, clean_env, manager):
         creds = manager.get_s3_credentials()
@@ -218,56 +203,36 @@ class TestValidateProductionSecrets:
         with pytest.raises(RuntimeError, match="release-approved set"):
             RouterPolicy.from_environment(production=True)
 
-    def test_production_kafka_enabled_without_config_rejected(self, production):
-        production.setenv("DATABASE_URL", _SECURE_CREDS["DATABASE_URL"])
-        production.setenv("EVENT_BACKBONE", "kafka")
-        with pytest.raises(RuntimeError) as exc_info:
-            validate_production_secrets()
-        message = str(exc_info.value)
-        assert "KAFKA_BOOTSTRAP_SERVERS is not set" in message
-        assert "DATABASE_URL is not set" not in message
-        assert "NEO4J_PASSWORD is not set" not in message
-        assert "OBJECT_STORAGE_ACCESS_KEY_ID is not set" not in message
-
-    def test_production_kafka_enabled_with_config_passes(self, production):
-        production.setenv("DATABASE_URL", _SECURE_CREDS["DATABASE_URL"])
-        production.setenv("EVENT_BACKBONE", "kafka")
-        production.setenv("KAFKA_BOOTSTRAP_SERVERS", "synthetic-kafka:9092")
-        validate_production_secrets()
-
     def test_production_detected_via_env_fallback(self, clean_env):
         """Central detection: ENV=production counts when REGENGINE_ENV is unset."""
         clean_env.setenv("ENV", "production")
         with pytest.raises(RuntimeError):
             validate_production_secrets()
 
-    def test_production_detected_via_database_url_heuristic(self, clean_env):
+    def test_production_detected_via_database_url_heuristic(self, clean_env, monkeypatch):
         """Central detection: the Supabase pooler heuristic counts as production.
 
-        DATABASE_URL itself satisfies the always-required slot, so Kafka
-        is enabled to prove the heuristic flips the gate on.
+        DATABASE_URL itself satisfies the always-required slot, so a second
+        required credential is injected to prove the heuristic flips the
+        gate on.
         """
+        from shared import secrets_manager
+
         clean_env.setenv("DATABASE_URL", "postgresql://u:p@db.pooler.supabase.com:6543/d")
-        clean_env.setenv("EVENT_BACKBONE", "kafka")
+        monkeypatch.setattr(
+            secrets_manager,
+            "REQUIRED_PRODUCTION_CREDENTIALS",
+            (("DATABASE_URL",), ("SYNTHETIC_REQUIRED_CREDENTIAL",)),
+        )
         with pytest.raises(RuntimeError) as exc_info:
             validate_production_secrets()
-        assert "KAFKA_BOOTSTRAP_SERVERS is not set" in str(exc_info.value)
+        assert "SYNTHETIC_REQUIRED_CREDENTIAL is not set" in str(exc_info.value)
 
     def test_each_required_credential_is_checked(self, production):
         """Every required credential is individually load-bearing."""
         for var, value in _SECURE_CREDS.items():
             production.setenv(var, value)
         required = list(REQUIRED_PRODUCTION_CREDENTIALS)
-        # The validator adds the Kafka credential only when the kafka
-        # backbone is enabled; cover that branch the same way so an empty
-        # always-on tuple cannot pass vacuously.
-        production.setenv("EVENT_BACKBONE", "kafka")
-        from shared.event_backbone import kafka_enabled
-
-        if kafka_enabled():
-            from shared.secrets_manager import KAFKA_PRODUCTION_CREDENTIALS
-
-            required.extend(KAFKA_PRODUCTION_CREDENTIALS)
         assert required, "no required credentials to check"
         for alternatives in required:
             for var in alternatives:
@@ -337,7 +302,11 @@ class TestValidateProductionSecrets:
 
 class TestStartupWiring:
     def test_server_main_fails_closed_on_secrets(self):
-        source = SERVER_MAIN.read_text(encoding="utf-8")
-        assert "from shared.secrets_manager import" in source
-        assert re.search(r"^require_secure_secrets_in_production\(\)", source, re.MULTILINE)
-        assert re.search(r"^validate_production_secrets\(\)", source, re.MULTILINE)
+        # WI-14: the import-time gates live in server/startup_checks.py;
+        # server/main.py runs them at import through run_import_time_checks().
+        checks = STARTUP_CHECKS.read_text(encoding="utf-8")
+        assert "from shared.secrets_manager import" in checks
+        assert re.search(r"^    require_secure_secrets_in_production\(\)", checks, re.MULTILINE)
+        assert re.search(r"^    validate_production_secrets\(\)", checks, re.MULTILINE)
+        main = SERVER_MAIN.read_text(encoding="utf-8")
+        assert re.search(r"^startup_checks\.run_import_time_checks\(\)", main, re.MULTILINE)
