@@ -7,10 +7,10 @@ to ensure proper multi-tenant data isolation.
 
 import uuid
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock
 
 import pytest
-from fastapi import HTTPException, Request
+from fastapi import HTTPException
 
 
 @pytest.mark.security

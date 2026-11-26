@@ -21,7 +21,6 @@ from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
 import pytest
-
 import services.shared.canonical_persistence.writer as writer_mod
 from services.shared.canonical_persistence.writer import CanonicalEventStore
 

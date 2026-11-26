@@ -39,7 +39,7 @@ import pathlib
 
 import pytest
 
-from tests.migrations.rls_db import guarded_live_database_url
+from tests.migrations.rls_db import guarded_live_database_url, skip_or_fail_without_db
 
 psycopg = pytest.importorskip("psycopg")
 
@@ -156,7 +156,7 @@ def test_obligation_cte_rules_is_readable_under_tenant_context():
             """
         ).fetchone()
         if owning_tenant is None:
-            pytest.skip("no obligation_cte_rules rows seeded in this database")
+            skip_or_fail_without_db("no obligation_cte_rules rows seeded in this database")
 
         total = conn.execute("SELECT count(*) FROM obligation_cte_rules").fetchone()[0]
 

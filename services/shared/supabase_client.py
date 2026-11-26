@@ -27,7 +27,10 @@ class SupabaseManager:
         if not url or not key:
             logger.warning(
                 "supabase_credentials_missing",
-                detail="SUPABASE_URL and one of SUPABASE_SERVICE_ROLE_KEY/SUPABASE_SERVICE_KEY/SUPABASE_ANON_KEY must be set",
+                detail=(
+                    "SUPABASE_URL and one of SUPABASE_SERVICE_ROLE_KEY/SUPABASE_SERVICE_KEY/SUPABASE_ANON_KEY "
+                    "must be set"
+                ),
             )
             # Return None or raise? For now, return None to handle gracefully if not configured
             return None

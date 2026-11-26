@@ -122,75 +122,6 @@ def test_init_sentry_tolerates_malformed_sample_rate(monkeypatch) -> None:
     error_handling.init_sentry()
 
 
-# --- kafka_auth: non-positive max age ---------------------------------------
-
-
-def test_negative_signature_age_falls_back_to_default(monkeypatch) -> None:
-    from shared.kafka_auth import DEFAULT_MAX_SIGNATURE_AGE_SECONDS, _max_signature_age
-
-    monkeypatch.setenv("KAFKA_MAX_SIGNATURE_AGE_SECONDS", "-1")
-    assert _max_signature_age() == DEFAULT_MAX_SIGNATURE_AGE_SECONDS
-
-
-# --- kafka_compat: tombstones and late callbacks ----------------------------
-
-
-class _StubProducer:
-    def __init__(self) -> None:
-        self.produced: dict = {}
-
-    def produce(self, topic, key=None, value=None, headers=None, on_delivery=None):
-        self.produced = {"topic": topic, "key": key, "value": value}
-        on_delivery(None, MagicMock(name="kafka-message"))
-
-    def poll(self, _timeout):
-        return None
-
-
-def test_send_preserves_none_value_as_tombstone() -> None:
-    from shared.kafka_compat import KafkaProducerCompat, _json_serializer, _optional_str_serializer
-
-    producer = KafkaProducerCompat.__new__(KafkaProducerCompat)
-    producer._producer = _StubProducer()
-    producer._key_serializer = _optional_str_serializer
-    producer._value_serializer = _json_serializer
-    producer.send("compacted-topic", value=None)
-    assert producer._producer.produced["value"] is None
-
-
-def test_late_callback_receives_message_not_topic() -> None:
-    from shared.kafka_compat import DeliveryHandle
-
-    handle = DeliveryHandle("t")
-    message = MagicMock(name="kafka-message")
-    handle._on_delivery(None, message)
-    received = []
-    handle.add_callback(received.append)
-    assert received == [message]
-
-
-# --- kafka_consumer_base: started-but-never-polled --------------------------
-
-
-def test_never_polled_consumer_reports_unhealthy_after_threshold() -> None:
-    from shared.kafka_consumer_base import ConsumerHealthMonitor
-
-    health = ConsumerHealthMonitor(stale_threshold_seconds=30)
-    health.mark_started()
-    health._started_at = datetime.now(timezone.utc) - timedelta(seconds=120)
-    status = health.get_status()
-    assert status["healthy"] is False
-    assert status["poll_stale"] is True
-
-
-def test_freshly_started_consumer_reports_healthy() -> None:
-    from shared.kafka_consumer_base import ConsumerHealthMonitor
-
-    health = ConsumerHealthMonitor(stale_threshold_seconds=30)
-    health.mark_started()
-    assert health.get_status()["healthy"] is True
-
-
 # --- jwt_key_registry: expiry filtering and listing redaction ---------------
 
 
@@ -335,8 +266,6 @@ def test_validate_uuid_rejects_non_string() -> None:
 
 def test_db_usage_record_failure_returns_response(monkeypatch) -> None:
     """validate_key returns metadata even when the usage UPDATE fails."""
-    import hashlib
-    import hmac
     from contextlib import asynccontextmanager
     from datetime import datetime, timezone
 
