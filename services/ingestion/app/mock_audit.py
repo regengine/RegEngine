@@ -52,7 +52,11 @@ def _get_real_tlc(tenant_id: str) -> str | None:
 
 
 def _get_product_for_tlc(tenant_id: str, tlc: str) -> str | None:
-    """Return the recorded product description for a tenant's TLC, or None."""
+    """Return the recorded product description for a tenant's TLC, or None.
+
+    None means the query succeeded and found no description. A failed lookup
+    is logged and raised as HTTP 503 so callers do not label it "Not recorded".
+    """
     try:
         from shared.database import SessionLocal
         from sqlalchemy import text
@@ -73,7 +77,7 @@ def _get_product_for_tlc(tenant_id: str, tlc: str) -> str | None:
             db.close()
     except Exception:
         logger.warning("Mock audit product lookup failed", exc_info=True)
-        return None
+        raise HTTPException(status_code=503, detail="Product lookup is unavailable") from None
 
 
 def _persist_drill(drill_id: str, drill: dict) -> None:
@@ -308,6 +312,7 @@ async def start_drill(
             ),
         )
     scenario["target_tlc"] = real_tlc
+    # None is a successful lookup with no description. Failures raise 503.
     scenario["target_product"] = _get_product_for_tlc(tenant_id, real_tlc) or "Not recorded"
     scenario["demo_mode"] = False
 
