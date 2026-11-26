@@ -71,7 +71,7 @@ export default function ExportJobsPage() {
         {
             title: 'Connect source data',
             detail: 'Use the import tools to build the record set export jobs will package once scheduling ships.',
-            href: '/ingest',
+            href: '/onboarding/bulk-upload',
             action: 'Import records',
             icon: Database,
         },
@@ -101,7 +101,7 @@ export default function ExportJobsPage() {
                 />
                 <Callout tone="warning" icon={Link2Off} title="Scheduled export jobs aren't available on this workspace yet.">
                     <p>Recurring archive scheduling is still in development. This workspace cannot create an export job here today.</p>
-                    <p className="mt-2">To prepare traceability records now, use <Link href="/ingest" className="underline">CSV upload</Link> or the <Link href="/developers" className="underline">JSON events API</Link>.</p>
+                    <p className="mt-2">To prepare traceability records now, use <Link href="/onboarding/bulk-upload" className="underline">CSV upload</Link> or the <Link href="/docs/quickstart" className="underline">JSON events API</Link>.</p>
                 </Callout>
             </PageContainer>
         );
@@ -254,12 +254,12 @@ export default function ExportJobsPage() {
                                 description="Export jobs package accepted traceability records into FDA sortable spreadsheets as your primary compliance export, with EPCIS (Preview) available for partner exchange. Start by sending records: upload a CSV or post to the JSON events API."
                                 action={
                                     <Button asChild size="sm">
-                                        <Link href="/ingest">Upload a CSV</Link>
+                                        <Link href="/onboarding/bulk-upload">Upload a CSV</Link>
                                     </Button>
                                 }
                                 secondaryAction={
                                     <Button asChild variant="secondary" size="sm">
-                                        <Link href="/docs/api">JSON events API docs</Link>
+                                        <Link href="/docs/quickstart">Send your first JSON event</Link>
                                     </Button>
                                 }
                             />
