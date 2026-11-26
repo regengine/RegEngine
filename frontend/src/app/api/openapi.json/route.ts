@@ -1,3 +1,5 @@
+// Hand-rolled on purpose (WI-11, 2026-11-04): serves the committed public
+// OpenAPI document from memory; there is no upstream to proxy.
 import { NextResponse } from 'next/server';
 
 import { publicOpenApiSpec } from '@/lib/public-openapi';

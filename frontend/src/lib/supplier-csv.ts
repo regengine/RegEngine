@@ -59,10 +59,10 @@ export function parseCSVRecords(text: string): string[][] {
   return rows;
 }
 
-const REQUIRED_COLUMNS = [
+export const REQUIRED_COLUMNS = [
   'event_type', 'product_name', 'lot_number',
 ];
-const RECOMMENDED_COLUMNS = [
+export const RECOMMENDED_COLUMNS = [
   'event_datetime', 'product_code', 'quantity', 'unit',
   'origin_facility_code', 'origin_facility_name',
   'destination_facility_code', 'destination_facility_name',

@@ -130,9 +130,9 @@ def _find_header_row(rows: list[list[str]]) -> list[str]:
 def regengine_tabs(events: list[dict] | None = None) -> dict[str, list[str]]:
     """Tabs RegEngine emits for ``events``. The export is a single CSV with no tab name."""
     repo = Path(__file__).resolve().parents[1]
-    sys.path.insert(0, str(repo / "services"))
-    sys.path.insert(0, str(repo / "services" / "compliance"))
-    from app.fsma_spreadsheet import generate_fda_csv
+    sys.path.insert(0, str(repo / "services"))  # shared.*
+    sys.path.insert(0, str(repo))  # services.compliance.app.*
+    from services.compliance.app.fsma_spreadsheet import generate_fda_csv
 
     rows = list(csv.reader(io.StringIO(generate_fda_csv(events or []))))
     return {"(single CSV, no tab)": _find_header_row(rows)}

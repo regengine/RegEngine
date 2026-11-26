@@ -84,7 +84,10 @@ export function Tutorial({ steps, isOpen, onClose, onComplete, storageKey }: Tut
       window.removeEventListener('scroll', scheduleMeasure, { capture: true });
       window.removeEventListener('resize', scheduleMeasure);
     };
-  }, [isOpen, step]);
+    // Keyed on target selector + step index, not `step` object identity —
+    // parents often rebuild the steps array each render without meaning to re-scroll.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- step.target + currentStep are the stable keys
+  }, [isOpen, currentStep, step?.target]);
 
   // The tooltip's real size feeds the positioning math; the old hardcoded
   // 320×200 estimate put long steps off-screen.

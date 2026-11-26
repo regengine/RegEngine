@@ -122,7 +122,7 @@ def _get_redis():
         return _redis_client
     try:
         import redis as redis_lib
-        from app.config import get_settings
+        from ..config import get_settings
 
         settings = get_settings()
         _redis_client = redis_lib.from_url(

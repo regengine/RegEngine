@@ -16,7 +16,6 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
-
 from services.shared.canonical_persistence.writer import CanonicalEventStore
 
 TENANT_ID = "00000000-0000-0000-0000-00000000c0de"
