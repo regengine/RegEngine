@@ -8,6 +8,7 @@ import { Callout } from '@/components/ui/callout';
 import { Card } from '@/components/ui/card';
 import { JSONLD } from '@/components/seo/json-ld';
 import { blogPostingJsonLd } from '@/lib/blog-jsonld';
+import { RelatedLinks } from "@/components/seo/related-links";
 
 export const metadata: Metadata = {
   title: 'FSMA 204 Compliance: The Complete Guide for Food Businesses (2026)',
@@ -333,7 +334,15 @@ export default function FSMA204ComplianceGuide() {
             </div>
           </Card>
         </div>
-      </Container>
+      
+      <RelatedLinks
+        width="prose"
+        links={[
+            { href: "/tools", label: "Free FSMA 204 tools" },
+            { href: "/fsma-204/harvesting", label: "Harvesting CTE" }
+        ]}
+      />
+</Container>
     </div>
   );
 }

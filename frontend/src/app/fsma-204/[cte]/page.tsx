@@ -30,6 +30,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { RelatedLinks } from "@/components/seo/related-links";
 
 /* ------------------------------------------------------------------ */
 /*  CTE DATA                                                           */
@@ -473,6 +474,17 @@ export default async function CTELandingPage({
           </div>
         </div>
       </Section>
+
+      {/* - RELATED (SEO edge links; keep body intact) - */}
+      <RelatedLinks
+        width="marketing"
+        links={[
+          { href: "/tools", label: "Free FSMA 204 tools" },
+          { href: "/tools/kde-checker", label: "KDE Field Checklist" },
+          { href: "/tools/cte-mapper", label: "CTE Mapper" },
+          { href: "/proof", label: "Verify proof exports on /proof" },
+        ]}
+      />
 
       {/* - OTHER CTEs NAV - */}
       <Section width="marketing" className="py-12 sm:py-12">

@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
 import { Card } from "@/components/ui/card";
 import { capabilities } from "@/lib/capabilities";
+import { RelatedLinks } from "@/components/seo/related-links";
 
 export const metadata: Metadata = {
   title: "FSMA 204 Recordkeeping Software | RegEngine",
@@ -291,6 +292,15 @@ export default function HomePage() {
           ))}
         </div>
       </Section>
+
+      <RelatedLinks
+        width="marketing"
+        links={[
+          { href: "/tools", label: "Free FSMA 204 tools" },
+          { href: "/fsma-204/harvesting", label: "Harvesting CTE" },
+          { href: "/proof", label: "Verify proof exports yourself" },
+        ]}
+      />
 
       <footer className="border-t border-re-border-subtle py-8">
         <Container width="marketing">
