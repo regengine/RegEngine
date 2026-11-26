@@ -117,9 +117,12 @@ def test_fsma_rejection_logs_omit_private_values(ingest, warning, monkeypatch, c
     monkeypatch.setattr(pmod, "_fsma_strict_mode", lambda: True)
     monkeypatch.setattr(pmod, "_epcis_store", {})
     monkeypatch.setattr(pmod, "_epcis_idempotency_index", {})
+    # TLC production-pattern misses are warnings now, so a valid-length TLC alone
+    # no longer triggers fsma_validation_failed. Blank eventTime still hard-fails
+    # FSMAEvent while keeping TLC in the audited payload for cleartext checks.
     event = {
         "type": "ObjectEvent",
-        "eventTime": datetime.now(timezone.utc).isoformat(),
+        "eventTime": "   ",
         "action": "OBSERVE",
         "bizStep": "receiving",
         "ilmd": {"fsma:traceabilityLotCode": TLC},
@@ -133,7 +136,7 @@ def test_fsma_rejection_logs_omit_private_values(ingest, warning, monkeypatch, c
     assert warning in [record.getMessage() for record in caplog.records]
     assert audited[0][1] == TENANT
     assert audited[0][2]["tlc"] == TLC
-    assert any(error["loc"] == ("tlc",) for error in audited[0][0])
+    assert any(error["loc"] == ("event_time",) for error in audited[0][0])
     _assert_clean(caplog)
 
 
@@ -161,10 +164,12 @@ def test_batch_rollback_logs_error_type_not_private_exception(monkeypatch, caplo
 def test_pydantic_validation_failure_log_omits_private_values(monkeypatch, caplog):
     audited = []
     monkeypatch.setattr(vmod, "_audit_log_validation_failure", lambda e, t, n: audited.append((e, t, n)))
+    # Valid-length TLC is accepted with a production-pattern warning; blank
+    # event_time still hard-fails while keeping TLC in the audited payload.
     normalized = {
         "event_type": "receiving",
         "tlc": TLC,
-        "event_time": datetime.now(timezone.utc).isoformat(),
+        "event_time": "   ",
     }
     with caplog.at_level(logging.WARNING):
         result = vmod._validate_as_fsma_event(normalized, tenant_id=TENANT)
@@ -172,5 +177,7 @@ def test_pydantic_validation_failure_log_omits_private_values(monkeypatch, caplo
     assert result is None
     assert "fsma_event_validation_failed" in _log_text(caplog)
     assert audited[0][1:] == (TENANT, normalized)
-    assert any(error["loc"] == ("tlc",) and error["type"] == "value_error" for error in audited[0][0])
+    assert any(
+        error["loc"] == ("event_time",) and error["type"] == "value_error" for error in audited[0][0]
+    )
     _assert_clean(caplog)

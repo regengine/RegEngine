@@ -12,7 +12,6 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 import pytest
-
 from services.shared.external_connectors import registry as reg
 from services.shared.external_connectors.base import (
     ConnectionStatus,

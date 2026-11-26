@@ -10,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
+from tests.migrations.rls_db import skip_or_fail_without_db
 
 RUNBOOK = Path(__file__).resolve().parents[2] / "runbooks/supabase-assessment-lead-abuse-guard.sql"
 OLDER_RUNBOOK = Path(__file__).resolve().parents[2] / "runbooks/supabase-anon-lead-capture-lockdown.sql"
@@ -43,7 +44,7 @@ def _run(args: list[str], *, check: bool = True) -> subprocess.CompletedProcess[
 @pytest.fixture(scope="module")
 def postgres():
     if not all(shutil.which(binary) for binary in ("initdb", "pg_ctl", "psql")):
-        pytest.skip("local PostgreSQL binaries are unavailable")
+        skip_or_fail_without_db("local PostgreSQL binaries are unavailable")
 
     with tempfile.TemporaryDirectory(prefix="regengine-supabase-test-") as temp:
         root = Path(temp)

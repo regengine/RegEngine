@@ -142,6 +142,9 @@ async def _handle_checkout_completed(
     # (or one we could not verify) entitles nothing.
     subscription_status = "incomplete"
     current_period_end = None
+    facility_quantity: Optional[int] = _helpers_mod._coerce_optional_int(
+        metadata.get("facility_quantity")
+    )
     payment_status = str(session.get("payment_status") or "")
     if subscription_id:
         try:
@@ -166,6 +169,10 @@ async def _handle_checkout_completed(
         # puts it — it lives on the subscription items now, not the
         # subscription — so the first mapping write no longer stores "".
         current_period_end = _helpers_mod._extract_subscription_period_end(subscription)
+        # Prefer the billed Stripe item quantity over checkout metadata.
+        stripe_qty = _helpers_mod._extract_subscription_facility_quantity(subscription)
+        if stripe_qty:
+            facility_quantity = stripe_qty
 
         # H2: ``metadata.plan_id`` is a client-supplied claim. The plan that
         # gets persisted — and that plan-feature gates later read — must be
@@ -244,6 +251,8 @@ async def _handle_checkout_completed(
         ),
         "current_period_end": current_period_end or "",
     }
+    if facility_quantity is not None:
+        initial_mapping["facility_quantity"] = str(int(facility_quantity))
     if event_created is not None:
         initial_mapping["last_event_created"] = str(int(event_created))
 
@@ -267,6 +276,7 @@ async def _handle_checkout_completed(
                     existing["status"] = pending_status
                 for key in (
                     "current_period_end",
+                    "facility_quantity",
                     "last_invoice_id",
                     "last_payment_at",
                     "last_payment_failure_at",
@@ -300,6 +310,7 @@ def _update_subscription_status(
     status: str,
     *,
     current_period_end: Optional[str] = None,
+    facility_quantity: Optional[int] = None,
     last_invoice_id: Optional[str] = None,
     last_payment_at: Optional[str] = None,
     last_payment_failure_at: Optional[str] = None,
@@ -336,6 +347,9 @@ def _update_subscription_status(
                     "status": status,
                     "event_created": int(event_created or 0),
                     "current_period_end": current_period_end,
+                    "facility_quantity": (
+                        str(int(facility_quantity)) if facility_quantity is not None else None
+                    ),
                     "last_invoice_id": last_invoice_id,
                     "last_payment_at": last_payment_at,
                     "last_payment_failure_at": last_payment_failure_at,
@@ -414,6 +428,8 @@ def _update_subscription_status(
     existing.update(updated_fields)
     if current_period_end is not None:
         existing["current_period_end"] = current_period_end
+    if facility_quantity is not None:
+        existing["facility_quantity"] = str(int(facility_quantity))
     if last_invoice_id is not None:
         existing["last_invoice_id"] = last_invoice_id
     if last_payment_at is not None:
@@ -666,11 +682,13 @@ async def _handle_stripe_event(event: dict[str, Any]) -> None:
     if event_type in {"customer.subscription.deleted", "customer.subscription.updated"}:
         sub_status = data_object.get("status")
         status = "canceled" if event_type == "customer.subscription.deleted" else (sub_status or "active")
+        updated_qty = _helpers_mod._extract_subscription_facility_quantity(data_object)
 
         _update_subscription_status(
             subscription_id=data_object.get("id"),
             customer_id=data_object.get("customer"),
             status=status,
+            facility_quantity=updated_qty,
             event_created=event_created,
         )
 

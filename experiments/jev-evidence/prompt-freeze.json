@@ -1,0 +1,25 @@
+{
+  "model": "jev-1.13.0",
+  "thresholds": {
+    "yes": 0.7,
+    "no": 0.3,
+    "choice": 0.7
+  },
+  "frozen_at_utc": "2026-10-29T09:34:26.221131+00:00",
+  "heldout_case_text_seen_before_freeze": false,
+  "revision": "v2: append-only omission clarification; all combined criteria preserved",
+  "frozen_source_hashes": {
+    "contract.ts": "80c5fb6fe57adcd698115bdb5be1edfdcef155612f20eaf8bae6e8e554349b92",
+    "evidence.ts": "5195aebaa04213f8655a1e91768d9e4d43951b574bf6c13d35ecbabe674e18ee"
+  },
+  "variants": {
+    "combined": {
+      "path": "prompts/combined.questions.json",
+      "sha256": "c7eb570e2bd46102c02bd9c6ca928c320e32b3ccec67823208b2fe1368a7fb17"
+    },
+    "omission-aware": {
+      "path": "prompts/omission-aware.questions.json",
+      "sha256": "ebc174a2787e4fa6e7438ae176cc91a0cfe1f3d52a60213073d61a31105376e7"
+    }
+  }
+}

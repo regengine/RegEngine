@@ -4,7 +4,18 @@
   "cases": [
     {
       "id": "erp-shipping-log",
-      "headers": ["Ship Dte", "Sales Order", "Cust Name", "Ship-To City", "Item Desc", "Lot No.", "Cases Shipped", "UOM", "BOL No", "Freight Co."],
+      "headers": [
+        "Ship Dte",
+        "Sales Order",
+        "Cust Name",
+        "Ship-To City",
+        "Item Desc",
+        "Lot No.",
+        "Cases Shipped",
+        "UOM",
+        "BOL No",
+        "Freight Co."
+      ],
       "cte": "shipping",
       "mappings": {
         "Ship Dte": "ship_date",
@@ -26,7 +37,17 @@
     },
     {
       "id": "distributor-outbound",
-      "headers": ["Dispatch Dt", "Consignee Name", "Deliver-To GLN", "SKU Description", "Batch #", "Pallets", "Sell Unit", "Invoice Number", "Origin Facility"],
+      "headers": [
+        "Dispatch Dt",
+        "Consignee Name",
+        "Deliver-To GLN",
+        "SKU Description",
+        "Batch #",
+        "Pallets",
+        "Sell Unit",
+        "Invoice Number",
+        "Origin Facility"
+      ],
       "cte": "shipping",
       "mappings": {
         "Dispatch Dt": "ship_date",
@@ -45,7 +66,16 @@
     },
     {
       "id": "shipping-with-order-date",
-      "headers": ["Order Date", "Ship Date", "Customer PO", "ShipTo Name", "Product", "TLC", "Qty", "UOM"],
+      "headers": [
+        "Order Date",
+        "Ship Date",
+        "Customer PO",
+        "ShipTo Name",
+        "Product",
+        "TLC",
+        "Qty",
+        "UOM"
+      ],
       "cte": "shipping",
       "mappings": {
         "Order Date": "no_match",
@@ -55,7 +85,17 @@
     },
     {
       "id": "dc-receiving-log",
-      "headers": ["Date Received", "Rec'd From", "PO #", "Product Name", "Supplier Lot", "Qty Rcvd", "Rcv Unit", "Dock Door", "Temp at Receipt (F)"],
+      "headers": [
+        "Date Received",
+        "Rec'd From",
+        "PO #",
+        "Product Name",
+        "Supplier Lot",
+        "Qty Rcvd",
+        "Rcv Unit",
+        "Dock Door",
+        "Temp at Receipt (F)"
+      ],
       "cte": "receiving",
       "mappings": {
         "Date Received": "receive_date",
@@ -74,7 +114,15 @@
     },
     {
       "id": "restaurant-receiving",
-      "headers": ["Delivered On", "Vendor Name", "Invoice #", "Item Name", "Lot/Batch", "Case Count", "Store Location"],
+      "headers": [
+        "Delivered On",
+        "Vendor Name",
+        "Invoice #",
+        "Item Name",
+        "Lot/Batch",
+        "Case Count",
+        "Store Location"
+      ],
       "cte": "receiving",
       "mappings": {
         "Delivered On": "receive_date",
@@ -88,18 +136,34 @@
     },
     {
       "id": "receiving-with-supplier-ship-date",
-      "headers": ["Ship Date", "Received Date", "Shipper Name", "Item Descr.", "Lot Code", "Qty", "Recv Site"],
+      "headers": [
+        "Ship Date",
+        "Date Received",
+        "Shipper Name",
+        "Item Descr.",
+        "Lot Code",
+        "Qty",
+        "Recv Site"
+      ],
       "cte": "receiving",
       "mappings": {
-        "Received Date": "receive_date",
         "Shipper Name": "immediate_previous_source",
         "Item Descr.": "product_description",
-        "Recv Site": "receiving_location"
+        "Recv Site": "receiving_location",
+        "Date Received": "receive_date"
       }
     },
     {
       "id": "farm-harvest-log",
-      "headers": ["Pick Dt", "Ranch", "Block #", "Crop", "Harvest Lot", "Bins", "Crew Lead"],
+      "headers": [
+        "Pick Dt",
+        "Ranch",
+        "Block #",
+        "Crop",
+        "Harvest Lot",
+        "Bins",
+        "Crew Lead"
+      ],
       "cte": "harvesting",
       "mappings": {
         "Pick Dt": "harvest_date",
@@ -119,7 +183,16 @@
     },
     {
       "id": "harvest-template-variant",
-      "headers": ["TLC", "Crop Name", "Qty", "UOM", "Harvest Dt", "Farm Name", "Field #", "Harvest Company"],
+      "headers": [
+        "TLC",
+        "Crop Name",
+        "Qty",
+        "UOM",
+        "Harvest Dt",
+        "Farm Name",
+        "Field #",
+        "Harvest Company"
+      ],
       "cte": "harvesting",
       "mappings": {
         "Crop Name": "product_description",
@@ -134,7 +207,15 @@
     },
     {
       "id": "cooler-log",
-      "headers": ["Date Cooled", "Cooler ID", "Produce", "Lot Nbr", "Pallet Count", "Pulp Temp F", "Cooling Method"],
+      "headers": [
+        "Date Cooled",
+        "Cooler ID",
+        "Produce",
+        "Lot Nbr",
+        "Pallet Count",
+        "Pulp Temp F",
+        "Cooling Method"
+      ],
       "cte": "cooling",
       "mappings": {
         "Date Cooled": "cooling_date",
@@ -151,7 +232,16 @@
     },
     {
       "id": "packhouse-pack-out",
-      "headers": ["Packed Date", "Packinghouse", "Grower/Harvester", "Harvest Lot #", "Pack Lot", "Commodity Desc", "Cartons", "Pack Style"],
+      "headers": [
+        "Packed Date",
+        "Packinghouse",
+        "Grower/Harvester",
+        "Harvest Lot #",
+        "Pack Lot",
+        "Commodity Desc",
+        "Cartons",
+        "Pack Style"
+      ],
       "cte": "initial_packing",
       "mappings": {
         "Packed Date": "packing_date",
@@ -168,7 +258,17 @@
     },
     {
       "id": "fresh-cut-production",
-      "headers": ["Production Dt", "Work Order", "Finished Good", "Output Lot", "Output Qty", "Output UOM", "Component Lots", "Component Qtys", "Line"],
+      "headers": [
+        "Production Dt",
+        "Work Order",
+        "Finished Good",
+        "Output Lot",
+        "Output Qty",
+        "Output UOM",
+        "Component Lots",
+        "Component Qtys",
+        "Line"
+      ],
       "cte": "transformation",
       "mappings": {
         "Production Dt": "transformation_date",
@@ -187,7 +287,15 @@
     },
     {
       "id": "seafood-landing",
-      "headers": ["Offload Dt", "Vessel Name", "Dock", "Species", "Landing Lot", "Weight (lbs)", "Harvest Area"],
+      "headers": [
+        "Offload Dt",
+        "Vessel Name",
+        "Dock",
+        "Species",
+        "Landing Lot",
+        "Weight (lbs)",
+        "Harvest Area"
+      ],
       "cte": "first_land_based_receiving",
       "mappings": {
         "Offload Dt": "landing_date",
@@ -207,7 +315,15 @@
     },
     {
       "id": "mixed-transactions",
-      "headers": ["Trans Date", "Txn Type", "Material", "Lot ID", "Qty", "From", "To"],
+      "headers": [
+        "Trans Date",
+        "Txn Type",
+        "Material",
+        "Lot ID",
+        "Qty",
+        "From",
+        "To"
+      ],
       "cte": "mixed_or_unclear",
       "mappings": {
         "Trans Date": "event_date",
@@ -223,7 +339,15 @@
     },
     {
       "id": "inventory-snapshot",
-      "headers": ["As Of", "Warehouse", "SKU", "Description", "Lot Ref", "On Hand", "Bin"],
+      "headers": [
+        "As Of",
+        "Warehouse",
+        "SKU",
+        "Description",
+        "Lot Ref",
+        "On Hand",
+        "Bin"
+      ],
       "cte": "mixed_or_unclear",
       "mappings": {
         "As Of": [
@@ -242,7 +366,14 @@
     },
     {
       "id": "per-row-events",
-      "headers": ["Event Type", "Lot #", "Product", "Qty", "Date", "Site Name"],
+      "headers": [
+        "Event Type",
+        "Lot #",
+        "Product",
+        "Qty",
+        "Date",
+        "Site Name"
+      ],
       "cte": null,
       "mappings": {
         "Lot #": "traceability_lot_code",

@@ -36,6 +36,18 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
     ALTER ROLE regengine_sysadmin LOGIN PASSWORD '${pg_pw_literal}'
       NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION;
 
+    -- Dedicated schema owner for Alembic, matching CI (regengine_migrator_ci)
+    -- and production (regengine_migrator): NOSUPERUSER NOBYPASSRLS, no role
+    -- memberships. v111 refuses to run as an elevated migrator, so local
+    -- migrations must not use the container bootstrap superuser.
+    SELECT format(
+        'CREATE ROLE regengine_migrator LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION',
+        '${pg_pw_literal}'
+    )
+    WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'regengine_migrator')\gexec
+    ALTER ROLE regengine_migrator LOGIN PASSWORD '${pg_pw_literal}'
+      NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION;
+
     -- Admin API database
     SELECT 'CREATE DATABASE regengine_admin'
     WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'regengine_admin')\gexec
@@ -43,6 +55,14 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
     -- Energy vertical database
     SELECT 'CREATE DATABASE energy'
     WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'energy')\gexec
+
+    -- v111 requires the migrator to own the database (and, through
+    -- pg_database_owner, the public schema). Runtime logins only connect.
+    ALTER DATABASE regengine OWNER TO regengine_migrator;
+    ALTER DATABASE regengine_admin OWNER TO regengine_migrator;
+    ALTER DATABASE energy OWNER TO regengine_migrator;
+    GRANT CONNECT ON DATABASE regengine, regengine_admin, energy
+      TO regengine, regengine_sysadmin;
 
     -- Runtime object grants are migration-owned (v111), never bootstrapped
     -- with blanket database privileges here.
@@ -56,8 +76,9 @@ EOSQL
 # so ungated queries returned ZERO ROWS instead of erroring. STABLE is equally
 # load-bearing — a VOLATILE function cannot be used as an index-qual value, so
 # every tenant RLS predicate degrades to a per-row filter (measured 38x).
-# `alembic upgrade head` is unaffected: migrations run as a BYPASSRLS superuser,
-# so the function is never evaluated during the upgrade.
+# It is created here by the bootstrap superuser and then handed to
+# regengine_migrator: v111 GRANTs EXECUTE on it (owner-only) and refuses any
+# application function not owned by the migrator. CI does the same.
 # Seed it on every local DB so `alembic upgrade head` works from a clean
 # container. Reads `app.tenant_id` session variable (set via `SET LOCAL`).
 for db in regengine regengine_admin energy; do
@@ -74,6 +95,7 @@ for db in regengine regengine_admin energy; do
             RETURN tid::UUID;
         END;
         \$fn\$ LANGUAGE plpgsql STABLE;
+        ALTER FUNCTION public.get_tenant_context() OWNER TO regengine_migrator;
 EOSQL
 done
 

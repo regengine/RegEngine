@@ -20,11 +20,18 @@ def _enforce_kde_coverage_gate(
     identity: dict,
     tenant_id: str,
     export_scope: str,
-) -> None:
-    """Reject low-KDE exports unless the caller acknowledges the gap."""
+) -> bool:
+    """Reject low-KDE exports unless the caller acknowledges the gap.
+
+    Returns ``True`` when coverage was below the threshold and the caller
+    bypassed the gate with ``allow_incomplete``, ``False`` otherwise. The
+    bypass used to leave only a log line behind; callers now record the
+    returned flag in the package's known-gaps section so the evidence
+    itself says the gate was waived.
+    """
     kde_coverage = completeness_summary["required_kde_coverage_ratio"]
     if kde_coverage >= _KDE_COVERAGE_THRESHOLD:
-        return
+        return False
     if not allow_incomplete:
         raise HTTPException(
             status_code=409,
@@ -56,3 +63,4 @@ def _enforce_kde_coverage_gate(
             "events_with_missing_required_fields": completeness_summary["events_with_missing_required_fields"],
         },
     )
+    return True

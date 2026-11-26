@@ -8,7 +8,6 @@ anonymization to comply with GDPR and data retention policies.
 GitHub Issue #870: Data Retention Enforcement for PII
 """
 
-import asyncio
 import hashlib
 import json
 from dataclasses import asdict, dataclass, field
@@ -27,7 +26,7 @@ from shared.audit_logging import (
     AuditSeverity,
     AuditStorageError,
 )
-from shared.database import engine, get_db
+from shared.database import get_db
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -47,6 +46,10 @@ class RetentionPolicy(str, Enum):
     AUDIT_LOG = "audit_log"  # Keep for 24 months, then anonymize
     TRANSACTION_LOG = "transaction_log"  # Keep for 7 years per FDA requirements
     TEMPORARY_PII = "temporary_pii"  # Soft-delete after 0 days, hard-delete after 14 days
+    # v138 partner first-file storage (SEL-549): soft-delete column is real.
+    PARTNER_FILES = "partner_files"  # Soft-delete after 0 days, hard-delete after 30 days
+    PARTNER_FILE_DERIVED = "partner_file_derived"  # Soft-delete after 0 days, hard-delete after 30 days
+    PARTNER_FILE_DELETION_LOG = "partner_file_deletion_log"  # Append-only deletion audit; not swept
 
 
 @dataclass
@@ -107,6 +110,30 @@ RETENTION_CONFIGS: Dict[RetentionPolicy, RetentionConfig] = {
         audit_retention_months=12,
         pii_fields=["email", "phone", "name"],
     ),
+    RetentionPolicy.PARTNER_FILES: RetentionConfig(
+        policy=RetentionPolicy.PARTNER_FILES,
+        soft_delete_days=0,
+        hard_delete_days=30,
+        audit_retention_months=24,
+        pii_fields=[],
+    ),
+    RetentionPolicy.PARTNER_FILE_DERIVED: RetentionConfig(
+        policy=RetentionPolicy.PARTNER_FILE_DERIVED,
+        soft_delete_days=0,
+        hard_delete_days=30,
+        audit_retention_months=24,
+        pii_fields=[],
+    ),
+    # Append-only deletion audit (deleted_at is the event timestamp, not a
+    # soft-delete marker). Kept in RETENTION_CONFIGS so the policy is complete;
+    # cleanup_deleted_records_job skips it the same way it skips AUDIT_LOG.
+    RetentionPolicy.PARTNER_FILE_DELETION_LOG: RetentionConfig(
+        policy=RetentionPolicy.PARTNER_FILE_DELETION_LOG,
+        soft_delete_days=0,
+        hard_delete_days=0,
+        audit_retention_months=84,
+        pii_fields=[],
+    ),
 }
 
 
@@ -122,15 +149,15 @@ class RetentionSchemaError(RuntimeError):
 # Every retention resource name -> the relation that actually holds that data,
 # or ``None`` when no such relation exists in the alembic-managed schema.
 #
-# #2900: these names were interpolated straight into SQL as table names. On a
-# database at `alembic upgrade head`, `to_regclass()` resolves NONE of them,
-# and — decisively — the migrated schema contains ZERO columns named
-# `deleted_at`, the column this entire soft-delete layer reads and writes.
-# There is nothing to repoint to: this is not a rename, the schema these
-# statements were written for has never existed in this repository. The
-# nearest real relations are recorded below for whoever designs the migration
-# that fixes this properly; they are deliberately NOT wired up, because doing
-# so would change what erasure and retention actually delete.
+# #2900: historical RetentionPolicy values were interpolated straight into SQL
+# as table names. Most still have no backing relation with a ``deleted_at``
+# column (nearest candidates are documented inline and deliberately left
+# unwired so erasure does not suddenly target the wrong rows).
+#
+# v138 (partner first-file storage) introduced real ``deleted_at`` columns on
+# ``public.partner_files``, ``public.partner_file_derived``, and
+# ``public.partner_file_deletion_log``. Those are wired below; retention SQL
+# uses ``_sql_target`` so statements hit the schema-qualified relation.
 #
 # Keep every RetentionPolicy value present here. tests/shared/
 # test_retention_relations_live.py checks both directions of this map against
@@ -158,6 +185,11 @@ _RESOURCE_RELATIONS: Dict[str, Optional[str]] = {
     "transaction_log": None,
     # No relation and no candidate anywhere in the schema.
     "temporary_pii": None,
+    # v138 partner first-file storage + 30-day retention (SEL-549).
+    "partner_files": "public.partner_files",
+    "partner_file_derived": "public.partner_file_derived",
+    # Append-only deletion audit; deleted_at is the event timestamp.
+    "partner_file_deletion_log": "public.partner_file_deletion_log",
 }
 
 
@@ -165,6 +197,20 @@ _RESOURCE_RELATIONS: Dict[str, Optional[str]] = {
 # Derived from RetentionPolicy enum values — prevents SQL injection
 # if resource_type is ever populated from untrusted input.
 _ALLOWED_RESOURCE_TABLES: frozenset[str] = frozenset(policy.value.replace("-", "_") for policy in RetentionPolicy)
+
+
+def _sql_target(resource_type: str) -> str:
+    """Relation name used in retention SQL (#2900 / v138).
+
+    Prefer the schema-qualified entry from ``_RESOURCE_RELATIONS`` when a
+    real table is wired. Fall back to the bare resource name so historical
+    phantom policies still fail loudly at execute time as ``UndefinedTable``
+    (covered by ``test_data_retention_failure_modes_2900``).
+    """
+    relation = _RESOURCE_RELATIONS.get(resource_type)
+    if relation is not None:
+        return relation
+    return resource_type
 
 
 # Postgres SQLSTATEs for "you named something that does not exist": undefined
@@ -193,7 +239,7 @@ def _rollback_quietly(db: Session) -> None:
     """
     try:
         db.rollback()
-    except Exception as rollback_error:  # noqa: BLE001
+    except Exception as rollback_error:  # noqa: BLE001 -- fail-safe path: this operation must not propagate a failure
         logger.warning("retention_rollback_failed", error=str(rollback_error))
 
 
@@ -336,9 +382,9 @@ class PIIAnonymizer:
         """
         result = data.copy()
 
-        for field in pii_fields:
-            if field in result:
-                result[field] = cls.anonymize_value(field, result[field])
+        for pii_field in pii_fields:
+            if pii_field in result:
+                result[pii_field] = cls.anonymize_value(pii_field, result[pii_field])
 
         return result
 
@@ -421,9 +467,10 @@ class DataRetentionManager:
                 "deleted_at": deleted_at,
                 "record_id": record_id,
             }
+            target = _sql_target(resource_type)
             if tenant_scoped:
                 update_query = text(f"""
-                    UPDATE {resource_type}
+                    UPDATE {target}
                     SET deleted_at = :deleted_at
                     WHERE id = :record_id
                       AND tenant_id = :tenant_id
@@ -432,7 +479,7 @@ class DataRetentionManager:
                 params["tenant_id"] = str(tenant_id)
             else:
                 update_query = text(f"""
-                    UPDATE {resource_type}
+                    UPDATE {target}
                     SET deleted_at = :deleted_at
                     WHERE id = :record_id AND deleted_at IS NULL
                 """)
@@ -523,9 +570,10 @@ class DataRetentionManager:
         """
         _validate_resource_type(resource_type)
         try:
+            target = _sql_target(resource_type)
             # Verify record was soft-deleted
             check_query = text(f"""
-                SELECT deleted_at FROM {resource_type}
+                SELECT deleted_at FROM {target}
                 WHERE id = :record_id AND deleted_at IS NOT NULL
             """)
 
@@ -543,7 +591,7 @@ class DataRetentionManager:
 
             # Delete the record
             delete_query = text(f"""
-                DELETE FROM {resource_type}
+                DELETE FROM {target}
                 WHERE id = :record_id
             """)
 
@@ -768,7 +816,7 @@ class DataRetentionManager:
 
             results = db.execute(query, {"threshold": threshold}).fetchall()
 
-            for log_id, details_json, tags in results:
+            for log_id, details_json, _tags in results:
                 try:
                     details = json.loads(details_json) if details_json else {}
 
@@ -975,15 +1023,21 @@ async def cleanup_deleted_records_job():
 
             # Process hard-deletes for each retention policy
             for policy, config in RETENTION_CONFIGS.items():
-                if policy == RetentionPolicy.AUDIT_LOG:
-                    # Skip — handled separately
+                if policy in (
+                    RetentionPolicy.AUDIT_LOG,
+                    RetentionPolicy.PARTNER_FILE_DELETION_LOG,
+                ):
+                    # AUDIT_LOG anonymised separately; deletion_log is
+                    # append-only (deleted_at is the event timestamp).
                     continue
 
                 threshold = config.hard_delete_threshold()
+                resource_type = policy.value.replace("-", "_")
+                target = _sql_target(resource_type)
 
                 # Find soft-deleted records eligible for hard-delete
                 query = text(f"""
-                    SELECT id FROM {policy.value.replace("-", "_")}
+                    SELECT id FROM {target}
                     WHERE deleted_at IS NOT NULL AND deleted_at < :threshold
                     LIMIT 100
                 """)

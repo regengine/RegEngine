@@ -1,3 +1,5 @@
+-- alembic-revision: e7a1c9d2f4b0
+-- rendered-from: alembic/versions/20261028_e7a1c9d2f4b0_v139_tenants_status_select_grant.py (upgrade)
 -- v139 / SEL-616: column-level SELECT on public.tenants(status) for regengine.
 --
 -- Mirrors alembic/versions/20261028_e7a1c9d2f4b0_v139_tenants_status_select_grant.py.
