@@ -603,8 +603,8 @@ class DatabaseAPIKeyStore:
 
         try:
             uuid.UUID(uuid_str)
-        except (ValueError, AttributeError, TypeError):
-            raise ValueError(f"Invalid UUID: {uuid_str}")
+        except (ValueError, AttributeError, TypeError) as exc:
+            raise ValueError(f"Invalid UUID: {uuid_str}") from exc
 
     async def _set_context(self, session: AsyncSession, tenant_id: Optional[str]) -> None:
         """Set tenant context for RLS if provided.
@@ -629,7 +629,7 @@ class DatabaseAPIKeyStore:
         """
         if tenant_id:
             self._validate_uuid(tenant_id)
-            from shared.tenant_context import set_tenant_guc  # noqa: PLC0415
+            from shared.tenant_context import set_tenant_guc  # noqa: PLC0415 -- lazy import, avoids a module-load cycle
 
             result = set_tenant_guc(session, tenant_id)
             # Async session: ``execute()`` returns a coroutine; await it
@@ -1156,7 +1156,7 @@ class DatabaseAPIKeyStore:
                 query = query.where(APIKeyModel.tenant_id == tenant_id)
 
             if not include_disabled:
-                query = query.where(APIKeyModel.enabled == True)
+                query = query.where(APIKeyModel.enabled.is_(True))
 
             query = query.order_by(APIKeyModel.created_at.desc())
             query = query.limit(limit).offset(offset)

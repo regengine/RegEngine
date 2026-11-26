@@ -4,7 +4,6 @@ from contextvars import ContextVar
 import structlog
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from starlette.responses import Response
 
 # ContextVar to store request ID for access outside of request context (e.g. deep in service logic)
 request_id_ctx: ContextVar[str] = ContextVar("request_id", default=" unknown")

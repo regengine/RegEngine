@@ -30,6 +30,7 @@ from .formatters import (
 from .queries import (
     AuditLogWriteError,
     _verify_chain_for_export,
+    attach_open_gaps,
     build_recall_where_clause,
     build_recall_where_clause_canonical,
     export_v1_reads_canonical,
@@ -176,6 +177,7 @@ async def export_recall_filtered_handler(
         # Convert to FDA export format
         events = rows_to_event_dicts(rows)
 
+        generated_at = attach_open_gaps(db_session, tenant_id, events)
         csv_content, export_hash = generate_csv_and_hash(events, include_pii=include_pii)
         chain_verification = _verify_chain_for_export(persistence, db_session, tenant_id)
         completeness_summary = _build_completeness_summary(events)
@@ -212,6 +214,7 @@ async def export_recall_filtered_handler(
             location=location,
             event_type=event_type,
             include_pii=include_pii,
+            generated_at=generated_at,
         )
 
         timestamp = make_timestamp()
