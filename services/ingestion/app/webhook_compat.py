@@ -67,21 +67,26 @@ def _batch_dedup_key(event: IngestEvent) -> str:
     return key
 
 
+# Path prefixes where a verified workspace session may stand in for an API key.
+_SESSION_CAPABLE_PREFIXES = ("/api/v1/epcis/", "/api/v1/onboarding/")
+
+
 async def _verify_api_key(
     request: Request,
     x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
 ) -> Union[APIKey, APIKeyResponse, IngestionPrincipal]:
-    """Auth gate for API keys and EPCIS workspace sessions.
+    """Auth gate for API keys and EPCIS/onboarding workspace sessions.
 
     This is the stable import surface for ingestion sub-routers.
     API-key logic lives in ``shared/auth.py``. The accepted key or session
     principal is stored on ``request.state`` and resolved through the shared
     tenant context so legacy routers cannot use caller tenant claims to pivot.
     """
-    # EPCIS is an app import surface as well as a key-backed integration.
+    # EPCIS is an app import surface as well as a key-backed integration, and
+    # onboarding progress/steps are driven from the signed-in app (SEL-620).
     # Keep other webhook callers on their established API-key path.
     if (
-        getattr(request, "scope", {}).get("path", "").startswith("/api/v1/epcis/")
+        getattr(request, "scope", {}).get("path", "").startswith(_SESSION_CAPABLE_PREFIXES)
         and not x_regengine_api_key
         and (
             request.cookies.get("__Host-regengine_session")

@@ -487,3 +487,91 @@ class TestRouterSurface:
         assert "/api/v1/onboarding/steps" in paths
         assert "/api/v1/onboarding/{tenant_id}/progress" in paths
         assert "/api/v1/onboarding/{tenant_id}/step/{step_id}" in paths
+
+
+# ---------------------------------------------------------------------------
+# SEL-620: onboarding accepts a verified workspace session
+# ---------------------------------------------------------------------------
+
+
+class _FakeRequest:
+    def __init__(self, path, cookies=None):
+        self.scope = {"path": path}
+        self.cookies = cookies or {}
+        self.headers = {}
+
+        class _State:
+            pass
+
+        self.state = _State()
+
+
+def _session_principal(scopes):
+    from app.authz import IngestionPrincipal
+
+    return IngestionPrincipal(key_id="session:u1", scopes=scopes, tenant_id="tenant-1", auth_mode="session")
+
+
+@pytest.mark.asyncio
+async def test_onboarding_path_accepts_workspace_session(monkeypatch):
+    from app import webhook_compat as wc
+
+    principal = _session_principal(["webhooks.ingest"])
+
+    async def _principal(**_kw):
+        return principal
+
+    async def _ctx(_request):
+        return "ctx"
+
+    async def _no_key(**_kw):
+        raise AssertionError("session request must not fall back to API-key auth")
+
+    monkeypatch.setattr(wc, "get_ingestion_principal", _principal)
+    monkeypatch.setattr(wc, "resolve_tenant_context", _ctx)
+    monkeypatch.setattr(wc, "require_api_key", _no_key)
+
+    req = _FakeRequest("/api/v1/onboarding/tenant-1/progress", {"__Host-regengine_session": "opaque"})
+    assert await wc._verify_api_key(req, x_regengine_api_key=None) is principal
+    assert req.state.principal is principal
+    assert req.state.api_key is None
+    assert req.state.tenant_context == "ctx"
+
+
+@pytest.mark.asyncio
+async def test_onboarding_session_without_ingest_permission_is_denied(monkeypatch):
+    from app import webhook_compat as wc
+    from fastapi import HTTPException
+
+    async def _principal(**_kw):
+        return _session_principal(["read"])
+
+    monkeypatch.setattr(wc, "get_ingestion_principal", _principal)
+
+    req = _FakeRequest("/api/v1/onboarding/tenant-1/step/company_profile", {"__Host-regengine_session": "opaque"})
+    with pytest.raises(HTTPException) as exc:
+        await wc._verify_api_key(req, x_regengine_api_key=None)
+    assert exc.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_non_session_path_still_requires_api_key(monkeypatch):
+    from app import webhook_compat as wc
+
+    sentinel = object()
+
+    async def _key(**_kw):
+        return sentinel
+
+    async def _ctx(_request):
+        return "ctx"
+
+    async def _no_session(**_kw):
+        raise AssertionError("non-allowlisted path must not use session auth")
+
+    monkeypatch.setattr(wc, "require_api_key", _key)
+    monkeypatch.setattr(wc, "resolve_tenant_context", _ctx)
+    monkeypatch.setattr(wc, "get_ingestion_principal", _no_session)
+
+    req = _FakeRequest("/api/v1/alerts/tenant-1", {"__Host-regengine_session": "opaque"})
+    assert await wc._verify_api_key(req, x_regengine_api_key=None) is sentinel

@@ -9,6 +9,8 @@ describe('SEL-409 ingestion proxy route policy', () => {
     'api/v1/exceptions',
     'api/v1/requests',
     'api/v1/epcis/events',
+    'api/v1/onboarding/tenant-1/progress',
+    'api/v1/onboarding/tenant-1/step/company_profile',
     'v1/ingest/url',
     'ingest/csv',
   ])('accepts a verified session on %s', (path) => {
