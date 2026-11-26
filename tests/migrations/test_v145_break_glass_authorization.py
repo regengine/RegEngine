@@ -104,7 +104,12 @@ def test_helpers_are_scoped_and_granted_narrowly() -> None:
     assert "'fsma.cte_events'::regclass" in mod._ARM_FN_SQL
     assert "FORCE ROW LEVEL SECURITY" in mod._ARM_TABLE_SQL
     assert f"DROP CONSTRAINT IF EXISTS {mod.ARM_FLOOR_CHECK}" in mod._ARM_TABLE_SQL
-    assert f"CHECK (min_age >= {mod.RETENTION_FLOOR})" in mod._ARM_TABLE_SQL
+    whole_days = mod.WHOLE_DAYS_CHECK.format(x="min_age")
+    assert f"CHECK (min_age >= {mod.RETENTION_FLOOR} AND {whole_days})" in mod._ARM_TABLE_SQL
+    # Month components are refused by the arm and the floor is applied to the
+    # cutoff itself, so interval ordering and calendar arithmetic cannot disagree.
+    assert mod.WHOLE_DAYS_CHECK.format(x="p_min_age") in mod._ARM_FN_SQL
+    assert f"LEAST(now() - arm.min_age, now() - {mod.RETENTION_FLOOR})" in mod._PERMITS_FN_SQL
     assert "tenant_id = get_tenant_context()" in mod._ARM_TABLE_SQL
     for fn in (mod.AUTHORIZED_FN, mod.PERMITS_FN, mod.ARM_FN):
         assert f"REVOKE ALL ON FUNCTION {fn}" in mod._AUTHORIZED_FN_SQL + mod._PERMITS_FN_SQL + mod._ARM_FN_SQL
@@ -529,19 +534,78 @@ def test_guc_does_not_authorize_a_role_with_dml_grants(probe_role) -> None:
     _rejected(engine, guc_only, "TRUNCATE fsma.correction_patches", {}, message="append-only")
 
 
+_DIRECT_ARM_INSERT = (
+    "INSERT INTO fsma.break_glass_arms (txid, relid, tenant_id, purpose, min_age, armed_by)"
+    " VALUES (txid_current(), 'fsma.cte_events'::regclass, CAST(:tid AS uuid), 'retention_purge',"
+    " CAST(:min_age AS interval), current_user)"
+)
+
+# Each compares as >= 730 days (interval ordering counts a month as 30 days)
+# but ``now() - value`` applies calendar months: the first moves the cutoff
+# about 12 years into the future, the second makes ~725-day-old rows eligible.
+MONTH_BASED_AGES = ("-12000 months 360730 days", "-12 months 1090 days", "25 months")
+
+
 def test_arm_table_floor_check_holds_for_direct_inserts(seeded) -> None:
-    """The arm function refuses a short min_age; the CHECK covers any other path."""
+    """The arm function refuses a short or month-based min_age; the CHECK covers any other path."""
+    engine, _, _, _ = seeded
+    for min_age in ("1 day", *MONTH_BASED_AGES):
+        exc = _rejected(
+            engine,
+            lambda conn: None,
+            _DIRECT_ARM_INSERT,
+            {"tid": TENANT, "min_age": min_age},
+            message="break_glass_arms_min_age_floor",
+        )
+        assert exc.orig.sqlstate == "23514", min_age
+
+
+@pytest.mark.parametrize("min_age", MONTH_BASED_AGES)
+def test_arm_refuses_month_based_intervals(seeded, min_age: str) -> None:
     engine, _, _, _ = seeded
     exc = _rejected(
         engine,
-        lambda conn: None,
-        "INSERT INTO fsma.break_glass_arms (txid, relid, tenant_id, purpose, min_age, armed_by)"
-        " VALUES (txid_current(), 'fsma.cte_events'::regclass, CAST(:tid AS uuid), 'retention_purge',"
-        " interval '1 day', current_user)",
-        {"tid": TENANT},
-        message="break_glass_arms_min_age_floor",
+        _as_runtime_role,
+        "SELECT fsma.arm_retention_purge(CAST(:tid AS uuid), CAST(:min_age AS interval))",
+        {"tid": TENANT, "min_age": min_age},
+        message="without a month or year component",
     )
-    assert exc.orig.sqlstate == "23514"
+    assert exc.orig.sqlstate == "22023"
+
+
+def test_trigger_applies_the_floor_to_the_cutoff(seeded) -> None:
+    """Defence in depth: even a stored month-based min_age cannot open a fresh row.
+
+    The CHECK is dropped inside the transaction (rolled back with it) to plant
+    the arm row the function and the CHECK refuse.
+    """
+    engine, _, old_id, fresh_id = seeded
+
+    def planted(conn):
+        conn.execute(text("ALTER TABLE fsma.break_glass_arms DROP CONSTRAINT break_glass_arms_min_age_floor"))
+        conn.execute(text("SELECT set_config('app.tenant_id', :tid, true)"), {"tid": TENANT})
+        conn.execute(text(_DIRECT_ARM_INSERT), {"tid": TENANT, "min_age": MONTH_BASED_AGES[0]})
+
+    _rejected(
+        engine,
+        planted,
+        "DELETE FROM fsma.cte_events WHERE id = CAST(:id AS uuid)",
+        {"id": fresh_id},
+        message="CTE records are append-only",
+    )
+    # Positive control: the planted arm is live and still lets an expired row go.
+    with engine.begin() as conn:
+        planted(conn)
+        deleted = conn.execute(
+            text("DELETE FROM fsma.cte_events WHERE id = CAST(:id AS uuid) RETURNING id"), {"id": old_id}
+        ).fetchall()
+        assert [str(r[0]) for r in deleted] == [old_id]
+        conn.rollback()
+    with engine.connect() as conn:
+        restored = conn.execute(
+            text("SELECT 1 FROM pg_constraint WHERE conname = 'break_glass_arms_min_age_floor'")
+        ).scalar()
+    assert restored == 1
 
 
 def test_arm_table_is_owner_only(seeded) -> None:

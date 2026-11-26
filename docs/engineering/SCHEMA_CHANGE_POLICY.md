@@ -113,8 +113,10 @@ member of the guarded table's owner (the migration role). The runtime roles `reg
 cannot arm the break-glass even with raw SQL. The one runtime mutation that needs it, the CTE
 retention purge in `services/scheduler/service.py`, calls `fsma.arm_retention_purge(tenant_id,
 min_age)` (SECURITY DEFINER) instead: the arm is scoped to the current transaction, one tenant,
-`fsma.cte_events` and rows older than `min_age` (floor 730 days), and permits DELETE only; it
-cannot widen into an UPDATE, another table or a younger row. Adding a column to the allowlist is a
+`fsma.cte_events` and rows older than `min_age`, and permits DELETE only; it cannot widen into an
+UPDATE, another table or a younger row. `min_age` must be whole days (no month or year component,
+because interval ordering and calendar arithmetic disagree on months) and at least 730 days; the
+trigger also applies the 730-day floor to the cutoff itself. Adding a column to the allowlist is a
 schema change under this policy: update the trigger in a new migration, this table, and
 `tests/migrations/test_v141_traceability_events_append_only.py` together; changing who may
 break glass is a change to v145's helpers and

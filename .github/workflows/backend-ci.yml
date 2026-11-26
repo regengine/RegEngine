@@ -1083,6 +1083,29 @@ jobs:
             tests/migrations/test_v120_rule_citations.py \
             -v --no-cov -o "testpaths=tests"
 
+      - name: Append-only evidence guards and break-glass authorization (v141, v145)
+        env:
+          MIGRATIONS_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rls_migrated
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rls_migrated
+          ADMIN_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rls_migrated
+        run: |
+          set -o pipefail
+          repo_root="$(pwd)"
+          export PYTHONPATH="${repo_root}:${repo_root}/services:${PYTHONPATH}"
+          # Behavioural proof that the runtime role cannot rewrite evidence:
+          # the fsma.traceability_events column allowlist (v141) and the
+          # role-gated fsma.allow_mutation break-glass plus the narrow
+          # retention-purge arm (v145). Order matters: the v141 suite
+          # restores v141's own trigger bodies when it finishes, and the
+          # v145 suite re-applies v145's, so head behaviour is what remains.
+          pytest tests/migrations/test_v141_traceability_events_append_only.py \
+            tests/migrations/test_v145_break_glass_authorization.py \
+            -v -rs --no-cov -o "testpaths=tests" | tee /tmp/append-only-guards.log
+          if grep -qE '[0-9]+ skipped' /tmp/append-only-guards.log; then
+            echo "::error::append-only guard suites skipped; they must run against rls_migrated"
+            exit 1
+          fi
+
       - name: RLS enforcement e2e (live Postgres — #2461 fail-closed proof)
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rls_migrated

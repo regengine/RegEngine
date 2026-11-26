@@ -67,6 +67,11 @@ PERMITS_FN = "fsma.retention_purge_permits"
 ARM_FN = "fsma.arm_retention_purge"
 RETENTION_FLOOR = "interval '730 days'"
 ARM_FLOOR_CHECK = "break_glass_arms_min_age_floor"
+# Interval comparison counts a month as 30 days, but ``now() - interval``
+# applies months as calendar months, so a value such as
+# ``-12000 months 360730 days`` compares as 730 days while moving the cutoff
+# years into the future. min_age must therefore be whole days and time only.
+WHOLE_DAYS_CHECK = "extract(year FROM {x}) = 0 AND extract(month FROM {x}) = 0"
 
 # The exact GUC test every guarded trigger function carried, and what
 # replaces it. The replacement is applied by string substitution on the
@@ -117,10 +122,12 @@ CREATE TABLE IF NOT EXISTS {ARM_TABLE} (
 );
 COMMENT ON TABLE {ARM_TABLE} IS
     'v145: transaction-scoped break-glass arms written only by SECURITY DEFINER helpers; read by the append-only triggers';
--- The arm function already refuses a shorter min_age; the CHECK keeps the
--- floor true for any row that reaches the table by another path.
+-- The arm function already refuses a shorter or month-based min_age; the
+-- CHECK keeps that true for any row that reaches the table by another path,
+-- and retention_purge_permits applies the floor again on the cutoff itself.
 ALTER TABLE {ARM_TABLE} DROP CONSTRAINT IF EXISTS {ARM_FLOOR_CHECK};
-ALTER TABLE {ARM_TABLE} ADD CONSTRAINT {ARM_FLOOR_CHECK} CHECK (min_age >= {RETENTION_FLOOR});
+ALTER TABLE {ARM_TABLE} ADD CONSTRAINT {ARM_FLOOR_CHECK}
+    CHECK (min_age >= {RETENTION_FLOOR} AND {WHOLE_DAYS_CHECK.format(x='min_age')});
 ALTER TABLE {ARM_TABLE} ENABLE ROW LEVEL SECURITY;
 ALTER TABLE {ARM_TABLE} FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS {ARM_POLICY} ON {ARM_TABLE};
@@ -178,7 +185,11 @@ AS $$
            AND arm.tenant_id = p_tenant_id
            AND arm.purpose = 'retention_purge'
            AND p_age_anchor IS NOT NULL
-           AND p_age_anchor < now() - arm.min_age
+           -- The floor is applied to the cutoff, not only to the stored
+           -- interval, so no stored min_age can make a younger row eligible.
+           -- For the scheduler's whole-day ages this is the same cutoff its
+           -- DELETE computes from now() in the same transaction.
+           AND p_age_anchor < LEAST(now() - arm.min_age, now() - {RETENTION_FLOOR})
     );
 $$;
 REVOKE ALL ON FUNCTION {PERMITS_FN}(oid, uuid, timestamptz) FROM PUBLIC;
@@ -199,6 +210,10 @@ BEGIN
     END IF;
     IF p_min_age IS NULL OR p_min_age < {RETENTION_FLOOR} THEN
         RAISE EXCEPTION 'arm_retention_purge: min_age % is below the FSMA 204 24-month retention floor', p_min_age
+            USING ERRCODE = 'invalid_parameter_value';
+    END IF;
+    IF NOT ({WHOLE_DAYS_CHECK.format(x='p_min_age')}) THEN
+        RAISE EXCEPTION 'arm_retention_purge: min_age % must be given in days, without a month or year component', p_min_age
             USING ERRCODE = 'invalid_parameter_value';
     END IF;
     IF p_tenant_id IS DISTINCT FROM get_tenant_context() THEN
@@ -224,8 +239,11 @@ GRANT EXECUTE ON FUNCTION {ARM_FN}(uuid, interval) TO regengine, regengine_sysad
 # The function is attached to fsma.cte_events and fsma.hash_chain; only
 # cte_events carries ingested_at (hash_chain has created_at), so the purge
 # check is nested under the table-name test: OLD.ingested_at is read only
-# when the row is a cte_events row. SQL does not promise that AND stops at
-# the first false operand, so a flat condition would not guarantee that.
+# when the row is a cte_events row. PL/pgSQL resolves OLD.<field> when it
+# prepares an expression, so any single expression that names
+# OLD.ingested_at (whatever the operand order, even inside CASE) raises
+# 'record "old" has no field "ingested_at"' for hash_chain rows. The
+# reference must stay in an inner IF that runs only for cte_events.
 _CTE_MUTATION_FN_V145 = f"""
 CREATE OR REPLACE FUNCTION fsma.prevent_cte_mutation()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
