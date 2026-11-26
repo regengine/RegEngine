@@ -1,4 +1,4 @@
-from opentelemetry import _logs as logs, baggage, trace
+from opentelemetry import _logs as logs, trace
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
 try:
@@ -24,7 +24,7 @@ import os
 
 import structlog
 from fastapi import FastAPI
-from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+from opentelemetry.sdk._logs import LoggerProvider
 from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 
 logger = structlog.get_logger("observability")
@@ -88,7 +88,7 @@ def _instrument_downstream_clients() -> None:
 
     Note on Kafka: the project uses confluent-kafka.  A stable
     opentelemetry-instrumentation-confluent-kafka package is not yet available at the
-    same version pin (1.45.1 / 0.66b1) used by the rest of the OTel stack, and
+    same version pin (1.45.2 / 0.66b2) used by the rest of the OTel stack, and
     Kafka is slated for removal as part of the monolith migration.  Correlation-ID
     propagation is already handled by ``shared.observability.kafka_propagation``.
     Kafka OTel instrumentation is therefore intentionally deferred — see #1327.

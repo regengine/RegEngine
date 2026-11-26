@@ -16,13 +16,6 @@ from pathlib import Path
 
 INGESTION_APP = Path(__file__).resolve().parent.parent / "app"
 
-# Absolute imports that open PRs already remove. Delete an entry once its fix
-# lands; never add one.
-PENDING_ELSEWHERE = {
-    ("webhook_compat.py", "app.tenant_validation"),  # PR #3774
-    ("edi_ingestion/routes.py", "app.edi_ingestion.rejection_log"),  # fix/csv-edi-ingest-monolith-imports
-}
-
 
 def _absolute_app_imports(path: Path) -> list[tuple[int, str]]:
     found: list[tuple[int, str]] = []
@@ -50,6 +43,5 @@ def test_ingestion_app_has_no_new_absolute_app_imports() -> None:
         f"{path.relative_to(INGESTION_APP).as_posix()}:{lineno} imports {module}"
         for path in sorted(INGESTION_APP.rglob("*.py"))
         for lineno, module in _absolute_app_imports(path)
-        if (path.relative_to(INGESTION_APP).as_posix(), module) not in PENDING_ELSEWHERE
     ]
     assert offenders == [], "use a relative import (from .x / from ..x):\n" + "\n".join(offenders)

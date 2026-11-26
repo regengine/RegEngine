@@ -26,7 +26,7 @@ import uuid
 import pytest
 from shared.db_url import sync_postgres_url
 
-from tests.migrations.rls_db import guarded_live_database_url
+from tests.migrations.rls_db import guarded_live_database_url, skip_or_fail_without_db
 
 DATABASE_URL = guarded_live_database_url()
 pytestmark = pytest.mark.skipif(
@@ -51,7 +51,7 @@ def test_sysadmin_reads_memberships_without_tenant_context() -> None:
             try:
                 role_exists = conn.execute(text("SELECT 1 FROM pg_roles WHERE rolname = 'regengine_sysadmin'")).scalar()
                 if not role_exists:
-                    pytest.skip("regengine_sysadmin role not present in this database")
+                    skip_or_fail_without_db("regengine_sysadmin role not present in this database")
 
                 policy_exists = conn.execute(
                     text(

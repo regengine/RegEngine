@@ -22,7 +22,7 @@ from shared.pagination import PaginationParams
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
-from tests.migrations.rls_db import guarded_live_database_url
+from tests.migrations.rls_db import guarded_live_database_url, skip_or_fail_without_db
 
 DATABASE_URL = guarded_live_database_url()
 pytestmark = pytest.mark.skipif(
@@ -90,7 +90,7 @@ def test_list_users_returns_only_caller_tenant_members() -> None:
                     text("SELECT 1 FROM pg_roles WHERE rolname = 'regengine_sysadmin'")
                 ).scalar()
                 if not role_exists:
-                    pytest.skip("regengine_sysadmin role not present in this database")
+                    skip_or_fail_without_db("regengine_sysadmin role not present in this database")
 
                 policy_exists = conn.execute(
                     text(

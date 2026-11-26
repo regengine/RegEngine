@@ -17,8 +17,6 @@ from __future__ import annotations
 from datetime import date, datetime, timezone
 from decimal import Decimal
 
-import pytest
-
 from services.shared.cte_persistence.hashing import (
     compute_chain_hash,
     compute_event_hash,

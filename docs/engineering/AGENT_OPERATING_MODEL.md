@@ -60,4 +60,4 @@ QA review is required before closing changes to ingestion, persistence, FDA expo
 
 ## Banned Drift
 
-Do not add new agent frameworks, role directories, autonomous chains, or broad cleanup missions without a specific issue and owner. The legacy `regengine.swarm` runtime is disabled by default and requires an explicit `REGENGINE_ENABLE_LEGACY_SWARM=1` opt-in for approved recovery or compatibility work. The `.github/workflows/agent-sweep.yml` audit workflow is manual-only; do not add scheduled or cron triggers. Keep the system small enough that a new engineer can understand it in one page.
+Do not add new agent frameworks, role directories, autonomous chains, or broad cleanup missions without a specific issue and owner. The legacy `regengine.swarm` runtime was archived under `docs/archive/retired-topology/swarm/` on 2026-10-30 and is not importable; restoring it needs an issue and an owner. The `.github/workflows/agent-sweep.yml` audit workflow is manual-only; do not add scheduled or cron triggers. Keep the system small enough that a new engineer can understand it in one page.

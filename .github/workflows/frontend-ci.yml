@@ -401,7 +401,10 @@ jobs:
 
       - name: Install backend dependencies
         run: |
-          pip install --require-hashes -r requirements.lock
+          # requirements-dev.lock supplies pytest, which
+          # scripts/setup_e2e_postgres.py imports through
+          # tests/migrations/test_seeded_mid_chain_upgrade.py (WI-06 split).
+          pip install --require-hashes -r requirements.lock -r requirements-dev.lock
 
       - name: Install dependencies
         run: |
