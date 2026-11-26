@@ -73,10 +73,18 @@ from .plans import (
     DEFAULT_PORTAL_RETURN_URL,
     DEFAULT_SUCCESS_URL,
     METERED_ADDONS,
+    PILOT_CONVERT_WINDOW_DAYS,
+    PILOT_DURATION_DAYS,
+    PILOT_FEE_CONVERT_30_CENTS,
+    PILOT_FEE_STANDARD_CENTS,
+    PILOT_PRICE_ENV_CONVERT_30,
+    PILOT_PRICE_ENV_STANDARD,
     PLAN_ALIASES,
     PLANS,
     _normalize_billing_period,
     _normalize_plan_id,
+    _plan_for_stripe_price,
+    _resolve_pilot_price_id,
     _resolve_price_id,
 )
 from .routes import (
@@ -153,6 +161,12 @@ __all__ = [
     "PLANS",
     "PLAN_ALIASES",
     "METERED_ADDONS",
+    "PILOT_FEE_STANDARD_CENTS",
+    "PILOT_FEE_CONVERT_30_CENTS",
+    "PILOT_DURATION_DAYS",
+    "PILOT_CONVERT_WINDOW_DAYS",
+    "PILOT_PRICE_ENV_STANDARD",
+    "PILOT_PRICE_ENV_CONVERT_30",
     # State
     "_buffer_pending_subscription_update",
     "_customer_lookup_key",
@@ -182,6 +196,8 @@ __all__ = [
     # Plans (functions)
     "_normalize_billing_period",
     "_normalize_plan_id",
+    "_plan_for_stripe_price",
+    "_resolve_pilot_price_id",
     "_resolve_price_id",
     # Customers
     "_create_customer_for_tenant",

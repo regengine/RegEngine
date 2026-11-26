@@ -16,10 +16,8 @@ that the ON CONFLICT clause is actually executed, not just pattern-matched.
 from __future__ import annotations
 
 import uuid
-from typing import Any, Dict, List
-from unittest.mock import MagicMock, call, patch
-
-import pytest
+from typing import List
+from unittest.mock import MagicMock, patch
 
 # ---------------------------------------------------------------------------
 # Unit tests — mock the DB session, verify SQL contains ON CONFLICT

@@ -1,19 +1,21 @@
 """
 Tests that the structured extractors (FSMAExtractor, LLMGenerativeExtractor)
-are actually wired into the Kafka consumer pipeline.
+stay wired into ``services.nlp.app.consumer``.
 
 Context (#1194):
 Before this wiring landed, both classes were imported by the package but
-never instantiated from the consumer loop — every document fell through
-to the regex-only path and bypassed the FSMA KDE-minimum gate entirely.
+never instantiated — every document fell through to the regex-only path and
+bypassed the FSMA KDE-minimum gate entirely.
 
-These tests use mocked Kafka + extractor classes to assert:
-  1. FSMAExtractor is invoked per document when the feature flag is on.
-  2. Its routing helper is called, and the event goes to the topic
-     it returned.
-  3. The flag defaults cover (on for FSMA, off for LLM).
-  4. LLM fallback only fires when high-confidence extractions were not
-     produced by the regex/FSMA pass AND the flag is on.
+These tests assert:
+  1. The flag defaults (on for FSMA, off for LLM) and that reloads honour env.
+  2. ``_run_llm_extractor`` forwards doc_id as correlation_id and swallows
+     extractor failures.
+  3. LLM results reach the review queue through the conversion bridge.
+
+The Kafka-side routing tests (``_run_fsma_extractor`` with a producer, the
+``_route_extraction`` topic choice, and the consumer-loop AST check) moved
+with the backbone to ``docs/archive/retired-topology/kafka/`` (WI-05).
 """
 
 from __future__ import annotations
@@ -29,7 +31,6 @@ import pytest
 @pytest.fixture(autouse=True)
 def _env_setup(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", "sqlite:///:memory:")
-    monkeypatch.setenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
     # Ensure repo root is on sys.path so `services.nlp.app.*` resolves.
     _repo_root = Path(__file__).resolve().parents[3]
     if str(_repo_root) not in sys.path:
@@ -72,97 +73,6 @@ class TestFlagDefaults:
         monkeypatch.setenv("NLP_ENABLE_LLM_EXTRACTOR", "true")
         consumer = _reload_consumer()
         assert consumer.NLP_ENABLE_LLM_EXTRACTOR is True
-
-
-class TestFSMAExtractorIsWired:
-    def test_run_fsma_extractor_invokes_extract_and_route(self):
-        """
-        _run_fsma_extractor must call FSMAExtractor.extract and
-        FSMAExtractor.route_extraction, and must forward the resulting
-        topic to the producer.
-        """
-        consumer = _reload_consumer()
-
-        mock_extractor = MagicMock()
-        result = MagicMock()
-        result.ctes = [MagicMock(), MagicMock()]
-        result.review_required = False
-        mock_extractor.extract.return_value = result
-        mock_extractor.route_extraction.return_value = {
-            "topic": "graph.update",
-            "payload": {"event_type": "fsma.extraction"},
-            "routed_at": "2026-04-17T00:00:00Z",
-        }
-
-        mock_producer = MagicMock()
-
-        with patch.object(consumer, "_get_fsma_extractor", return_value=mock_extractor):
-            summary = consumer._run_fsma_extractor(
-                text="sample document text",
-                doc_id="doc-1",
-                doc_hash="hash-1",
-                producer=mock_producer,
-                tenant_id="tenant-a",
-                kafka_headers=[],
-            )
-
-        mock_extractor.extract.assert_called_once_with("sample document text", "doc-1", tenant_id="tenant-a")
-        mock_extractor.route_extraction.assert_called_once_with(result)
-        mock_producer.send.assert_called_once()
-        send_kwargs = mock_producer.send.call_args
-        assert send_kwargs.args[0] == "graph.update"
-        assert summary["status"] == "ok"
-        assert summary["routed"] == "graph.update"
-        assert summary["cte_count"] == 2
-
-    def test_run_fsma_extractor_routes_low_confidence_to_review(self):
-        """Routing must respect FSMAExtractor's review_required flag."""
-        consumer = _reload_consumer()
-
-        mock_extractor = MagicMock()
-        result = MagicMock()
-        result.ctes = [MagicMock()]
-        result.review_required = True
-        mock_extractor.extract.return_value = result
-        mock_extractor.route_extraction.return_value = {
-            "topic": "nlp.needs_review",
-            "payload": {"event_type": "fsma.extraction"},
-            "routed_at": "2026-04-17T00:00:00Z",
-        }
-
-        mock_producer = MagicMock()
-
-        with patch.object(consumer, "_get_fsma_extractor", return_value=mock_extractor):
-            summary = consumer._run_fsma_extractor(
-                text="low confidence doc",
-                doc_id="doc-2",
-                doc_hash="hash-2",
-                producer=mock_producer,
-                tenant_id="tenant-a",
-                kafka_headers=[],
-            )
-        assert summary["routed"] == "nlp.needs_review"
-        assert summary["high_confidence"] is False
-
-    def test_run_fsma_extractor_swallows_errors(self):
-        """Extractor failures must not crash the consumer loop."""
-        consumer = _reload_consumer()
-
-        mock_extractor = MagicMock()
-        mock_extractor.extract.side_effect = RuntimeError("model exploded")
-
-        mock_producer = MagicMock()
-        with patch.object(consumer, "_get_fsma_extractor", return_value=mock_extractor):
-            summary = consumer._run_fsma_extractor(
-                text="boom",
-                doc_id="doc-3",
-                doc_hash="hash-3",
-                producer=mock_producer,
-                tenant_id="tenant-a",
-                kafka_headers=[],
-            )
-        assert summary["status"] == "error"
-        mock_producer.send.assert_not_called()
 
 
 class TestLLMExtractorIsWired:
@@ -291,31 +201,6 @@ class TestLLMResultsReachTheReviewQueue:
         assert extraction.confidence_score < medium
         assert extraction.attributes["llm_reported_confidence"] == 1.0
 
-    def test_needs_review_item_routes_to_review_not_graph(self):
-        from unittest.mock import MagicMock as _MagicMock
-
-        from services.nlp.app.consumer import (
-            TOPIC_GRAPH_UPDATE,
-            TOPIC_NEEDS_REVIEW,
-            _route_extraction,
-        )
-
-        extraction = _bridge(
-            [_llm_item(confidence=1.0, needs_review=True, review_reason="output_injection_marker")]
-        )[0]
-        producer = _MagicMock()
-        _route_extraction(
-            extraction,
-            doc_id="doc-llm",
-            doc_hash="hash-llm",
-            source_url="https://example.gov/rule.pdf",
-            producer=producer,
-            tenant_id="tenant-a",
-        )
-        producer.send.assert_called_once()
-        assert producer.send.call_args.args[0] == TOPIC_NEEDS_REVIEW
-        assert producer.send.call_args.args[0] != TOPIC_GRAPH_UPDATE
-
     def test_guardrail_flags_are_surfaced_to_the_reviewer(self):
         from services.nlp.app.consumer import _build_review_reasons
 
@@ -348,34 +233,3 @@ class TestLLMResultsReachTheReviewQueue:
             name for name in LLMExtraction.model_fields if name not in bridge_source
         ]
         assert not unread, f"LLMExtraction fields with no non-test reader: {unread}"
-
-
-class TestConsumerLoopDoesNotDiscardLLMResults:
-    def test_llm_results_is_consumed_not_just_counted(self):
-        """The defect in source form: `llm_results` used only by `len()`."""
-        import ast
-
-        consumer = _reload_consumer()
-        tree = ast.parse(Path(consumer.__file__).read_text())
-
-        counted = set()
-        for node in ast.walk(tree):
-            if (
-                isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Name)
-                and node.func.id == "len"
-            ):
-                counted.update(id(arg) for arg in node.args)
-
-        real_uses = [
-            node
-            for node in ast.walk(tree)
-            if isinstance(node, ast.Name)
-            and node.id == "llm_results"
-            and isinstance(node.ctx, ast.Load)
-            and id(node) not in counted
-        ]
-        assert real_uses, (
-            "llm_results is only counted into a log line — the paid LLM call "
-            "produces nothing any consumer reads (#2947)"
-        )
