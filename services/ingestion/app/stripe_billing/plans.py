@@ -240,16 +240,16 @@ def _plan_for_stripe_price(price_id: str) -> Optional[tuple[str, str]]:
     the price matches no configured catalog entry. Never raises — the
     webhook path must fail closed on catalog gaps, not 500.
 
-    The deprecated growth/scale *monthly* envs still map to list during the
+    The deprecated growth and scale monthly envs still map to list during the
     alias period so in-flight checkouts on those Prices keep verifying. Old
     annual growth/scale envs stay unmapped: annual pricing is OPEN, and
     reverse-mapping them would invent an annual entitlement that
     ``_resolve_price_id`` refuses to sell.
 
-    Pilot Price IDs are intentionally *not* reverse-mapped here. Mapping them
-    would let ``checkout.session.completed`` treat a one-time pilot Price as
-    Stripe-side truth and persist an entitling status. Pilot identification
-    and credit handling belong in the dedicated pilot webhook PR.
+    Pilot Price IDs map to ``("pilot", "one_time")`` even though pilot has
+    no recurring ``PLANS`` entry. ``checkout.session.completed`` routes those
+    Prices to the pilot handler before any entitling subscription status is
+    stored. This helper only identifies the Price.
     """
     if not price_id:
         return None
@@ -261,9 +261,13 @@ def _plan_for_stripe_price(price_id: str) -> Optional[tuple[str, str]]:
             if env_var:
                 configured.append((env_var, plan_id, period))
 
-    # Alias period only — deprecated monthly list prices (growth + scale).
+    # Alias period only: deprecated monthly list prices (growth + scale).
     configured.append((DEPRECATED_LIST_PRICE_ENV_MONTHLY, "list", "monthly"))
     configured.append(("STRIPE_PRICE_SCALE_MONTHLY", "list", "monthly"))
+
+    # One-time pilot prices (not recurring plans).
+    configured.append((PILOT_PRICE_ENV_STANDARD, "pilot", "one_time"))
+    configured.append((PILOT_PRICE_ENV_CONVERT_30, "pilot", "one_time"))
 
     for env_var, plan_id, period in configured:
         if os.getenv(env_var) == price_id:

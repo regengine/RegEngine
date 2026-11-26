@@ -154,6 +154,7 @@ drifts from the tree):
 | `services/shared/canonical_event.py` | 1466 | shared model | split schema, hashing, and conversion helpers |
 | `services/shared/canonical_persistence/writer.py` | 1378 | shared persistence | extract write-path helpers and transaction orchestration |
 | `services/ingestion/app/fda_export/router.py` | 1340 | export API | separate query, bundle assembly, and format writers |
+| `services/ingestion/app/stripe_billing/webhooks.py` | 1305 | billing webhooks | split pilot checkout and credit from subscription status updates |
 | `services/graph/app/routers/fsma/compliance.py` | 1284 | graph API | split query builders from response shaping |
 | `services/ingestion/app/inflow_workbench.py` | 1271 | ingestion preflight | split preflight, readiness scoring, fix queue, and commit gate |
 | `services/graph/app/fsma_audit.py` | 1249 | graph audit | separate traversal from audit-record assembly |

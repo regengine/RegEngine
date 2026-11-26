@@ -310,6 +310,8 @@ class TestPlanForStripePrice:
         [
             ("STRIPE_PRICE_LIST_MONTHLY", "price_list_m", ("list", "monthly")),
             ("STRIPE_PRICE_FOUNDING_MONTHLY", "price_founding_m", ("founding", "monthly")),
+            (PILOT_PRICE_ENV_STANDARD, "price_pilot_std", ("pilot", "one_time")),
+            (PILOT_PRICE_ENV_CONVERT_30, "price_pilot_conv", ("pilot", "one_time")),
             (DEPRECATED_LIST_PRICE_ENV_MONTHLY, "price_growth_legacy", ("list", "monthly")),
             ("STRIPE_PRICE_SCALE_MONTHLY", "price_scale_m", ("list", "monthly")),
         ],
@@ -324,13 +326,12 @@ class TestPlanForStripePrice:
         [
             "STRIPE_PRICE_GROWTH_ANNUAL",
             "STRIPE_PRICE_SCALE_ANNUAL",
-            PILOT_PRICE_ENV_STANDARD,
-            PILOT_PRICE_ENV_CONVERT_30,
         ],
     )
-    def test_old_annual_and_pilot_envs_do_not_invent_entitlements(self, monkeypatch, env_var):
-        # Scale monthly reverse-maps for in-flight checkouts; annual is OPEN and
-        # pilot is one-time — neither may invent a recurring entitlement here.
+    def test_old_annual_envs_do_not_invent_entitlements(self, monkeypatch, env_var):
+        # Scale monthly reverse-maps to list for in-flight checkouts. Annual
+        # pricing is OPEN. Pilot Prices reverse-map to ("pilot", "one_time")
+        # and are covered by test_reverse_maps_configured_prices.
         _clear_catalog_env(monkeypatch)
         monkeypatch.setenv(env_var, "price_legacy_only")
         assert _plan_for_stripe_price("price_legacy_only") is None
