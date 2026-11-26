@@ -296,7 +296,7 @@ class TestFormulaSafety:
         assert resp.status_code == 400
         detail = resp.json()["detail"]
         assert any("Log!D2" in warning and "quantity" in warning for warning in detail["kde_warnings"])
-        assert any("quantity is required" in error for error in detail["errors"])
+        assert any("Missing quantity: required by law (21 CFR 1.1325(a))" in error for error in detail["errors"])
         assert "payload" not in captured
 
     def test_formula_only_sheet_reports_warning_without_data_rows(self, client, captured):

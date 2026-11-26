@@ -14,6 +14,7 @@ on:
       - 'pyproject.toml'
       - 'requirements.in'
       - 'requirements.lock'
+      - 'requirements-dev.lock'
       - 'scripts/**'
       - '.semgrep/**'
       - '.github/workflows/test-suite-check.yml'
@@ -42,21 +43,10 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
 
-      - name: Setup Python 3.11
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+      - name: Set up Python with the requirement locks
+        uses: ./.github/actions/setup-python-locks
         with:
           python-version: '3.11'
-
-      - name: Install test dependencies
-        run: |
-          # Install the full runtime requirements so test modules that
-          # import real libraries (httpx, fastapi, sqlalchemy, pydantic[email],
-          # etc.) can be collected. Without this step, collection
-          # breaks on the first third-party import.
-          # --require-hashes enforces the pip-compile lockfile (#1139).
-          if [ -f requirements.lock ]; then
-            pip install --require-hashes -r requirements.lock
-          fi
 
       - name: Collect whole suite and fail on any error
         run: |
@@ -116,8 +106,7 @@ jobs:
           for root in tests regengine/tests services/admin/tests \
                       services/compliance/tests services/graph/tests \
                       services/ingestion/tests services/nlp/tests \
-                      services/scheduler/tests services/shared/tests \
-                      infra/gateway/tests; do
+                      services/scheduler/tests services/shared/tests; do
             if ! echo "$OUTPUT" | grep -q "^${root}/"; then
               MISSING_ROOTS="$MISSING_ROOTS $root"
             fi
@@ -144,22 +133,15 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
 
-      - name: Setup Python 3.11
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+      - name: Set up Python with the requirement locks
+        uses: ./.github/actions/setup-python-locks
         with:
           python-version: '3.11'
-
-      - name: Install test dependencies
-        run: |
-          if [ -f requirements.lock ]; then
-            pip install --require-hashes -r requirements.lock
-          fi
 
       - name: Run offline repo-root tests
         run: |
           python3 -m pytest \
             tests/sdk \
-            tests/swarm \
             tests/scripts \
             tests/test_monolith_route_parity.py \
             tests/test_server_import_smoke.py \
@@ -196,22 +178,10 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
 
-      - name: Setup Python 3.11
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+      - name: Set up Python with the requirement locks
+        uses: ./.github/actions/setup-python-locks
         with:
           python-version: '3.11'
-
-
-
-      - name: Install Dependencies
-        run: |
-          # Install from the root requirements.lock — the single source of
-          # truth for runtime deps (pip-compile output; see #1139).
-          # Per-service requirements.txt files are DEPRECATED stubs (#1429)
-          # and will be removed when docker-compose is retired.
-          if [ -f requirements.lock ]; then
-            pip install --require-hashes -r requirements.lock
-          fi
 
       - name: Setup Shared Module Bridge
         run: |

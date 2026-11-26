@@ -175,7 +175,7 @@ def install_metrics(
 
 def _expose_with_auth(
     app: FastAPI,
-    instrumentator: "Instrumentator",  # type: ignore[name-defined]  # noqa: F821
+    instrumentator: "Instrumentator",  # type: ignore[name-defined]  # noqa: F821 -- forward reference to a type imported only for annotations
     metrics_path: str,
 ) -> None:
     """Attach the instrumentator output to an auth-guarded route."""
@@ -188,7 +188,7 @@ def _expose_with_auth(
         include_in_schema=False,
         dependencies=[Depends(require_metrics_key)],
     )
-    def metrics() -> Response:  # noqa: D401 — FastAPI endpoint
+    def metrics() -> Response:  # noqa: D401 -- FastAPI endpoint
         """Prometheus exposition (guarded by X-Metrics-Key)."""
         return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 

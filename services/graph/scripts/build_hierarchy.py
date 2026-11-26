@@ -2,7 +2,7 @@
 import os
 import sys
 
-from app.hierarchy_builder import build_jurisdiction_hierarchy
+from services.graph.app.hierarchy_builder import build_jurisdiction_hierarchy
 from neo4j import GraphDatabase
 
 NEO4J_URI = os.getenv("NEO4J_URI", "bolt://localhost:7687")
