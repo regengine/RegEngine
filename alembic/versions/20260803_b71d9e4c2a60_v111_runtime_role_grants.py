@@ -1766,7 +1766,21 @@ CREATE POLICY roles_sysadmin_scoped ON public.roles
 ALTER TABLE public.tenants ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tenants FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenants_read_all ON public.tenants;
-DROP POLICY IF EXISTS tenants_write_own ON public.tenants;
+-- The supported runner reapplies v111 after upgrading to head. v144 reuses
+-- tenants_write_own for a backend-only fail-hard UUID policy; preserve that
+-- later policy when its companion SELECT policy marks the v144 catalog.
+-- The exact post-v144 tuples remain pinned by the startup catalog canary.
+DO $tenant_write_policy$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies
+        WHERE schemaname = 'public' AND tablename = 'tenants'
+          AND policyname = 'tenants_backend_context_read'
+    ) THEN
+        DROP POLICY IF EXISTS tenants_write_own ON public.tenants;
+    END IF;
+END
+$tenant_write_policy$;
 DROP POLICY IF EXISTS tenants_runtime_own ON public.tenants;
 DROP POLICY IF EXISTS tenants_sysadmin_select ON public.tenants;
 DROP POLICY IF EXISTS tenants_sysadmin_tenant_select ON public.tenants;
