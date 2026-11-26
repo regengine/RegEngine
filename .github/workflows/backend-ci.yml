@@ -1122,6 +1122,10 @@ jobs:
             echo "::error::live RLS tests SKIPPED — they must execute, not skip (see #2461)"
             exit 1
           fi
+          # SEL-612: real identity provisioning under the migrated RLS policies.
+          # Keep the admin collector separate from the shared-service tests.
+          pytest services/admin/tests/test_accept_invite_rls_2899.py::test_accept_invite_provisions_real_identity_under_postgres_rls \
+            -v --no-cov --require-db
 
       - name: Request-workflow e2e (deadline breach, #2625)
         env:
