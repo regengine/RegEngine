@@ -80,7 +80,6 @@ class TestJobRunListener:
         from services.scheduler import service as scheduler_service
 
         with (
-            patch.object(scheduler_service, "get_kafka_producer", return_value=MagicMock()),
             patch.object(scheduler_service, "WebhookNotifier", return_value=MagicMock()),
             patch.object(scheduler_service, "DistributedContext", return_value=MagicMock()),
             patch.object(scheduler_service, "StateManager", return_value=MagicMock()),

@@ -228,7 +228,6 @@ class TestSchedulerServiceContextPropagation:
             patch.object(scheduler_service, "get_settings") as mock_settings,
             patch.object(scheduler_service, "StateManager"),
             patch.object(scheduler_service, "WebhookNotifier"),
-            patch.object(scheduler_service, "get_kafka_producer"),
             patch.object(scheduler_service, "DistributedContext"),
             patch.object(scheduler_service, "circuit_registry"),
             patch.object(scheduler_service, "FDAWarningLettersScraper"),

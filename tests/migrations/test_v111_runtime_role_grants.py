@@ -296,12 +296,21 @@ def test_cutover_is_reapplicable_by_schema_owner(
     monkeypatch,
 ):
     with migration_owner_engine.begin() as connection:
+        tenant_policies = text(
+            "SELECT policyname, permissive, roles, cmd, qual, with_check "
+            "FROM pg_policies WHERE schemaname = 'public' AND tablename = 'tenants' "
+            "AND policyname IN ('tenants_backend_context_read', 'tenants_write_own') "
+            "ORDER BY policyname"
+        )
+        before = connection.execute(tenant_policies).all()
+        assert {row.policyname for row in before} == {"tenants_backend_context_read", "tenants_write_own"}
         # Seed a stale column ACL that a prior cutover/runbook could have left.
         # A table-level REVOKE alone does not remove pg_attribute.attacl.
         connection.execute(text("GRANT UPDATE (email) ON public.users TO regengine"))
 
         _apply_v111(connection, migration_module, monkeypatch)
         _apply_v111(connection, migration_module, monkeypatch)
+        assert connection.execute(tenant_policies).all() == before
         assert not connection.execute(
             text("SELECT has_column_privilege('regengine', 'public.users', 'email', 'UPDATE')")
         ).scalar_one()
@@ -1406,8 +1415,10 @@ def test_tenant_roots_and_roles_obey_actual_role_boundaries(tenant_control_rows)
             )
             assert connection.execute(text("SELECT id FROM public.tenants ORDER BY id")).scalars().all() == [tenant_a]
 
-        with runtime.connect() as connection:
-            assert connection.execute(text("SELECT id FROM public.tenants")).scalars().all() == []
+        with runtime.connect() as connection, pytest.raises(Exception, match="app.tenant_id not set"):
+            # v144 now fails hard via get_tenant_context() when no tenant has
+            # been selected, even alongside v111's historical SELECT policy.
+            connection.execute(text("SELECT id FROM public.tenants")).scalars().all()
         with (
             runtime.connect() as connection,
             pytest.raises(

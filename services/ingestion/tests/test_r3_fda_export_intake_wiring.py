@@ -85,7 +85,7 @@ def test_fda_export_router_registered_and_compliance_critical():
     includes = _main_includes()
     assert includes.get("fda_export_router") == "fda_export"
     src = (SERVICE / "main.py").read_text(encoding="utf-8")
-    assert "from app.fda_export.router import router as fda_export_router" in src
+    assert "from services.ingestion.app.fda_export.router import router as fda_export_router" in src
     tree = _tree("main.py")
     compliance = next(
         n.value

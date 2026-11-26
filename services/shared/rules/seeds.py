@@ -301,6 +301,7 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
                 "fields": [
                     "kdes.harvest_location_ref",
                     "kdes.harvest_location",
+                    "kdes.harvest_location_name",
                     "kdes.farm_reference",
                 ]
             },

@@ -375,7 +375,8 @@ class JevDecider:
             question_count=len(evidence.question_ids),
         )
         _ops_log.info(
-            "jev_answered purpose=%s model=%s request_id=%s latency_ms=%s questions=%d input_tokens=%s output_tokens=%s",
+            "jev_answered purpose=%s model=%s request_id=%s latency_ms=%s questions=%d "
+            "input_tokens=%s output_tokens=%s",
             purpose,
             evidence.model,
             evidence.request_id,

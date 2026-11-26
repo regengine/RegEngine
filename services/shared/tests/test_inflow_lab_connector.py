@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import pytest
-
 from services.shared.external_connectors.base import AuthType, ConnectorConfig
 from services.shared.external_connectors.inflow_lab import InflowLabConnector
 from services.shared.external_connectors.register_all import register_all_connectors
