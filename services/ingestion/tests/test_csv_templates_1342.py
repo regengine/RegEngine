@@ -1113,7 +1113,7 @@ class TestParseCsvRowsRequiredFields:
     def test_missing_date_rejects_row(self):
         events, errors, _ = self._parse("TLC1,Kale,10,lbs,,Farm A")
         assert events == []
-        assert errors == ["Row 2: date field was empty"]
+        assert errors == ["Row 2: Missing date: required by law (21 CFR 1.1325(a))"]
 
     def test_unparseable_date_rejects_row(self):
         events, errors, _ = self._parse("TLC1,Kale,10,lbs,2026-99-99,Farm A")
@@ -1124,12 +1124,12 @@ class TestParseCsvRowsRequiredFields:
     def test_missing_unit_rejects_row(self):
         events, errors, _ = self._parse("TLC1,Kale,10,,2026-04-17,Farm A")
         assert events == []
-        assert errors == ["Row 2: unit_of_measure is required"]
+        assert errors == ["Row 2: Missing unit of measure: required by law (21 CFR 1.1325(a))"]
 
     def test_missing_quantity_rejects_row(self):
         events, errors, _ = self._parse("TLC1,Kale,,lbs,2026-04-17,Farm A")
         assert events == []
-        assert errors == ["Row 2: quantity is required"]
+        assert errors == ["Row 2: Missing quantity: required by law (21 CFR 1.1325(a))"]
 
     def test_non_numeric_quantity_rejects_row(self):
         events, errors, _ = self._parse("TLC1,Kale,ten,lbs,2026-04-17,Farm A")
