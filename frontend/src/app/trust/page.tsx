@@ -50,7 +50,7 @@ const STATUS_SUMMARY = [
     },
     {
         label: 'Preview',
-        detail: 'Capability is usable for evaluation in supported workspaces, but has not reached general release. GS1 EPCIS 2.0 export and ingest stay Preview until separately promoted.',
+        detail: 'Capability is usable for evaluation in supported workspaces only and has not reached general release. GS1 EPCIS 2.0 export and ingest stay Preview until separately promoted.',
     },
     {
         label: 'Pilot',

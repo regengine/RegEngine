@@ -23,6 +23,6 @@ describe("ProductPage Inflow impact illustration", () => {
     expect(screen.getByRole("heading", { name: "Fix before evidence" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Persist and prove" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Tenant-scoped evidence" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Export-ready package" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Export package from stored records" })).toBeInTheDocument();
   });
 });
