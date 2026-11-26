@@ -78,6 +78,7 @@ remediation PRD). The 14 candidates stay in place until then; the move is
 | `orphan_migrations_allowlist.txt` | data | allowlist read by `scripts/check_orphan_migrations.py` (backend-ci) |
 | `phone_test_quickstart.sh` | manual | run the published quickstart curl against prod to catch docs/contract drift; companion to `scripts/smoke_test_ingest.sh` |
 | `qa_health_summary.py` | used | Build a redacted QA health dashboard artifact from CI test outputs. — invoked by `.github/workflows/qa-health.yml` |
+| `railway_deploy.sh` | manual | CLI production deploy that stamps `build-sha.txt` and polls `/health`. Run by hand; documented in AGENTS.md ("Deploying the backend by CLI"). Tested by `tests/scripts/test_railway_deploy_script.py` |
 | `render_ingestion_ignores.py` | used | Render ``--ignore=<path>`` flags for the ingestion suite-runs gate. — invoked by `.github/workflows/backend-ci.yml` |
 | `run-migrations.sh` | used | run-migrations.sh — Idempotent Alembic migration runner with distributed lock — invoked by `.github/workflows/backend-ci.yml`, `.github/workflows/security.yml` |
 | `run-performance-baseline.sh` | used | Performance Baseline Test Script — invoked by `docs/operations/performance-baseline.md` |

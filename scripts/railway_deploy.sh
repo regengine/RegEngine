@@ -2,11 +2,10 @@
 #
 # Deploy the RegEngine backend to Railway by CLI, carrying commit identity.
 #
-# Why this exists: the Railway service has no GitHub source and the GitHub
-# Actions deploy workflow (.github/workflows/deploy.yml) is disabled in the
-# Actions UI (its YAML still declares a push trigger, but a disabled workflow
-# never runs), so production is deployed by running `railway up` from a
-# checkout. A bare
+# Why this exists: the Railway service has no GitHub source, and
+# .github/workflows/deploy.yml deploys only on workflow_dispatch
+# (confirm=deploy-prod), so a merge to main does not deploy. A CLI deploy
+# runs `railway up` from a checkout. A bare
 # `railway up` ships an image that cannot say which commit it is: the upload
 # carries no RAILWAY_GIT_COMMIT_SHA, and build-sha.txt (the stamp that
 # services/shared/build_info.py reads) still holds its tracked placeholder.

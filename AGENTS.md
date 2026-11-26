@@ -95,11 +95,11 @@ and `npm run build` for type errors. Full script list is in
 
 Some integration tests require PostgreSQL, Redis, Neo4j, Docker, or live services. If a command is blocked by local infrastructure or secrets, say so explicitly.
 
-Backend deploys go through `scripts/railway_deploy.sh`, never a bare `railway up`, and a backend change is live only once `/health` reports its SHA in `.build.commit_sha` (see "Deploying the backend by CLI").
+A CLI backend deploy goes through `scripts/railway_deploy.sh`, never a bare `railway up`, and a backend change is live only once `/health` reports its SHA in `.build.commit_sha` (see "Deploying the backend by CLI"). The GitHub Actions path is the manual `workflow_dispatch` on `.github/workflows/deploy.yml`.
 
 ## Deploying the backend by CLI
 
-The Railway service has no GitHub source, and `.github/workflows/deploy.yml` is disabled in GitHub Actions (its YAML still declares a `push` trigger, but a disabled workflow never runs), so a merge to `main` does not deploy. Production is deployed from a checkout:
+The Railway service has no GitHub source. `.github/workflows/deploy.yml` deploys only on `workflow_dispatch` (the operator must pass confirm=deploy-prod), so a merge to `main` does not deploy. A CLI deploy from a checkout uses:
 
 ```bash
 scripts/railway_deploy.sh
