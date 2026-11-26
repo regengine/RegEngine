@@ -29,6 +29,8 @@ Checks:
   D. The workflow emitting each required context runs on EVERY pull
      request — a ``pull_request:`` trigger with no ``paths:`` /
      ``paths-ignore:`` filter.
+  E. Required-context emitters and the backend/frontend gates they mirror
+     have a ``merge_group:`` trigger, or the merge queue would deadlock.
 
 The inventory (``scripts/workflow_inventory.txt``) is the checked-in
 mirror of branch-protection settings. Changing branch protection is a
@@ -48,6 +50,9 @@ import yaml
 ROOT = Path(__file__).resolve().parent.parent
 WORKFLOW_DIR = ROOT / ".github" / "workflows"
 INVENTORY_FILE = Path(__file__).with_name("workflow_inventory.txt")
+
+# PR Gate mirrors these gates, so they must also post on merge-group SHAs.
+MIRRORED_GATE_WORKFLOWS = {"backend-ci.yml", "frontend-ci.yml"}
 
 RUNBOOK = "docs/runbooks/BRANCH_PROTECTION.md"
 
@@ -159,9 +164,11 @@ def main() -> int:
         )
 
     # Build the context -> emitting workflow map across every workflow on disk.
+    workflows: dict[str, dict] = {}
     emitters: dict[str, list[tuple[str, dict]]] = {}
     for path in sorted(WORKFLOW_DIR.glob("*.y*ml")):
         workflow = _load_workflow(path)
+        workflows[path.name] = workflow
         for job_name in _job_names(workflow):
             emitters.setdefault(job_name, []).append((path.name, workflow))
 
@@ -183,6 +190,17 @@ def main() -> int:
             failures.append(
                 f"UNREACHABLE required context '{context}' — emitted by {fname}, but "
                 f"{reason}, so PRs that miss the filter can never satisfy it."
+            )
+
+    # Check E: every emitter and mirrored gate must run for the merge queue.
+    queue_workflows = MIRRORED_GATE_WORKFLOWS & on_disk
+    for context in required_contexts:
+        queue_workflows.update(fname for fname, _ in emitters.get(context, []))
+    for fname in sorted(queue_workflows):
+        if "merge_group" not in _triggers(workflows[fname]):
+            failures.append(
+                f"MERGE QUEUE workflow '{fname}' has no `merge_group:` trigger — "
+                "the merge queue would deadlock waiting for its required or mirrored gate."
             )
 
     print(f"Scanned {len(on_disk)} workflow file(s) in .github/workflows/")
