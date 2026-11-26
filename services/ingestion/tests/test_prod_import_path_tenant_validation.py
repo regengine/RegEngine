@@ -423,3 +423,48 @@ def test_csv_and_edi_routes_call_ingest_events_under_prod_path(
     # exercised under the poisoned top-level ``app`` for CSV and EDI.
     assert "csv_upload" in seen, (csv_resp.status_code, csv_resp.text[:500], seen)
     assert "edi_856_inbound" in seen, (edi_resp.status_code, edi_resp.text[:500], seen)
+
+
+def test_edi_rejection_is_recorded_under_prod_path(prod_path_webhook_compat, monkeypatch: pytest.MonkeyPatch):
+    """A rejected EDI document returns its 4xx and leaves an audit record.
+
+    ``_record_edi_rejection`` resolves the rejection log lazily. With an
+    absolute ``app.edi_ingestion`` name that lookup raised under the prod
+    layout, so each rejection became a 500 and lost its audit record.
+    """
+    from fastapi import FastAPI  # noqa: PLC0415
+    from fastapi.testclient import TestClient  # noqa: PLC0415
+    from services.ingestion.app.authz import (  # noqa: PLC0415
+        IngestionPrincipal,
+        get_ingestion_principal,
+    )
+    from services.ingestion.app.edi_ingestion import router as edi_router  # noqa: PLC0415
+    import services.ingestion.app.edi_ingestion.rejection_log as rejection_log  # noqa: PLC0415
+
+    monkeypatch.delenv("EDI_REQUIRE_PARTNER_ID", raising=False)
+    monkeypatch.delenv("EDI_PARTNER_ALLOWLIST", raising=False)
+    rejection_log.reset_edi_rejections()
+    app = FastAPI()
+    app.include_router(edi_router)
+    app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
+        key_id="test-key", scopes=["*"], tenant_id=TENANT, auth_mode="test"
+    )
+
+    future_dated = _EDI_FIXTURE.read_text(encoding="utf-8").replace(
+        "BSN*00*ASN-12345*20260310*1200~", "BSN*00*ASN-12345*20991231*1200~"
+    )
+    assert "20991231" in future_dated
+
+    with TestClient(app, raise_server_exceptions=False) as client:
+        for route in ("", "/document"):
+            response = client.post(
+                f"/api/v1/ingest/edi{route}",
+                data={"traceability_lot_code": "00012345678901-LOT001", "tenant_id": TENANT},
+                files={"file": ("asn_856.edi", future_dated.encode(), "application/edi-x12")},
+            )
+            assert response.status_code == 400, response.text
+            assert response.json()["detail"]["error"] == "edi_date_in_future"
+
+    records = rejection_log.list_edi_rejections(TENANT)
+    assert len(records) == 2
+    assert {record["reason"] for record in records} == {"edi_date_in_future"}

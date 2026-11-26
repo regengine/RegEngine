@@ -428,6 +428,7 @@ APPLICATION_TABLES = {
         "cte_events",
         "cte_kdes",
         "cte_kdes_backfill_log_v059",
+        "edi_interchanges",
         "entity_aliases",
         "entity_merge_history",
         "evidence_attachments",
@@ -617,6 +618,7 @@ REGENGINE_TABLE_GRANTS.update(
         "fsma.compliance_evidence_snapshots": ("SELECT", "INSERT", "UPDATE"),
         "fsma.cte_events": ("SELECT", "INSERT", "DELETE"),
         "fsma.cte_kdes": ("SELECT", "INSERT"),
+        "fsma.edi_interchanges": ("SELECT", "INSERT"),
         "fsma.entity_aliases": ("SELECT",),
         "fsma.evidence_attachments": ("SELECT",),
         "fsma.exception_comments": ("SELECT", "INSERT"),
@@ -654,6 +656,8 @@ REGENGINE_TABLE_GRANTS.update(
 )
 
 REGENGINE_COLUMN_GRANTS = {
+    # v143: only expiry renewal may modify an EDI receipt; identity is fixed.
+    "fsma.edi_interchanges": {"UPDATE": ("stored_at", "expires_at")},
     # Successful pre-authentication may maintain only usage telemetry.  It
     # cannot change identity, tenant, scopes, status, expiry, limits, or hash.
     "public.api_keys": {"UPDATE": ("last_used_at", "total_requests")},
@@ -1762,7 +1766,21 @@ CREATE POLICY roles_sysadmin_scoped ON public.roles
 ALTER TABLE public.tenants ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tenants FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenants_read_all ON public.tenants;
-DROP POLICY IF EXISTS tenants_write_own ON public.tenants;
+-- The supported runner reapplies v111 after upgrading to head. v144 reuses
+-- tenants_write_own for a backend-only fail-hard UUID policy; preserve that
+-- later policy when its companion SELECT policy marks the v144 catalog.
+-- The exact post-v144 tuples remain pinned by the startup catalog canary.
+DO $tenant_write_policy$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies
+        WHERE schemaname = 'public' AND tablename = 'tenants'
+          AND policyname = 'tenants_backend_context_read'
+    ) THEN
+        DROP POLICY IF EXISTS tenants_write_own ON public.tenants;
+    END IF;
+END
+$tenant_write_policy$;
 DROP POLICY IF EXISTS tenants_runtime_own ON public.tenants;
 DROP POLICY IF EXISTS tenants_sysadmin_select ON public.tenants;
 DROP POLICY IF EXISTS tenants_sysadmin_tenant_select ON public.tenants;

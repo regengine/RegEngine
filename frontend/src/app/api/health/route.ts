@@ -1,3 +1,5 @@
+// Hand-rolled on purpose (WI-11, 2026-11-04): an edge-runtime liveness probe
+// that proxies nothing, so src/lib/proxy-factory.ts does not apply.
 import { NextResponse } from 'next/server';
 
 export const runtime = 'edge';

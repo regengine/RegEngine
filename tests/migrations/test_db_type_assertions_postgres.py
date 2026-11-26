@@ -7,6 +7,7 @@ audit hash-chain/hash-input columns must fail before the app serves traffic.
 from __future__ import annotations
 
 import pytest
+from tests.migrations.rls_db import skip_or_fail_without_db
 
 testcontainers = pytest.importorskip("testcontainers")  # noqa: F841
 pytest.importorskip("testcontainers.postgres")
@@ -40,7 +41,7 @@ def pg_engine():
             yield engine
             engine.dispose()
     except Exception as exc:
-        pytest.skip(f"Postgres testcontainer unavailable: {exc}")
+        skip_or_fail_without_db(f"Postgres testcontainer unavailable: {exc}")
 
 
 def test_live_tenant_id_text_vs_orm_uuid_fails(pg_engine):

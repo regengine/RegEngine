@@ -16,6 +16,7 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
+from tests.migrations.rls_db import skip_or_fail_without_db
 
 testcontainers = pytest.importorskip("testcontainers")  # noqa: F841
 pytest.importorskip("testcontainers.postgres")
@@ -45,7 +46,7 @@ def pg_engine() -> Engine:
         container = PostgresContainer("postgres:16")
         pg = container.start()
     except DockerException as exc:
-        pytest.skip(f"PostgresContainer unavailable: {exc}")
+        skip_or_fail_without_db(f"PostgresContainer unavailable: {exc}")
 
     engine = create_engine(pg.get_connection_url(driver="psycopg"), future=True)
     try:
