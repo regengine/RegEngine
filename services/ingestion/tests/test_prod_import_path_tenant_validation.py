@@ -173,6 +173,9 @@ def prod_path_webhook_compat(monkeypatch: pytest.MonkeyPatch):
         to_entity_reference = None
         kdes: dict = {}
 
+        def prepare_for_persistence(self) -> None:
+            return None
+
     monkeypatch.setattr(
         canonical_event, "normalize_webhook_event", lambda *a, **k: _FakeCanon()
     )

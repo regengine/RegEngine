@@ -87,6 +87,9 @@ class _Canonical:
     to_entity_reference = None
     kdes: dict[str, Any] = {}
 
+    def prepare_for_persistence(self) -> None:
+        return None
+
 
 @pytest.fixture()
 def harness(monkeypatch: pytest.MonkeyPatch) -> Iterator[dict[str, Any]]:
