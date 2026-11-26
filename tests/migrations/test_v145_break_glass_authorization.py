@@ -1,4 +1,4 @@
-"""v142 (17fc5f9d1e69): the fsma.allow_mutation break-glass is authorized by role.
+"""v145 (17fc5f9d1e69): the fsma.allow_mutation break-glass is authorized by role.
 
 Static checks read the migration, v111 and the scheduler source. Behavioural
 checks need a real PostgreSQL at alembic head (``REGENGINE_MIGRATION_TEST_DB``
@@ -39,7 +39,7 @@ from tests.migrations.rls_db import rls_postgres_or_skip, skip_or_fail_db
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 VERSIONS = REPO_ROOT / "alembic" / "versions"
-MIGRATION = VERSIONS / "20261030_17fc5f9d1e69_v142_break_glass_authorization.py"
+MIGRATION = VERSIONS / "20261126_17fc5f9d1e69_v145_break_glass_authorization.py"
 V111 = VERSIONS / "20260803_b71d9e4c2a60_v111_runtime_role_grants.py"
 SCHEDULER = REPO_ROOT / "services" / "scheduler" / "service.py"
 TENANT = "00000000-0000-4000-8000-0000000142aa"
@@ -47,7 +47,7 @@ OTHER_TENANT = "00000000-0000-4000-8000-0000000142bb"
 
 
 def _load_migration():
-    spec = importlib.util.spec_from_file_location("v142_break_glass_authorization", MIGRATION)
+    spec = importlib.util.spec_from_file_location("v145_break_glass_authorization", MIGRATION)
     assert spec is not None and spec.loader is not None
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -62,7 +62,7 @@ def _load_migration():
 def test_revision_chain_and_shape() -> None:
     mod = _load_migration()
     assert mod.revision == "17fc5f9d1e69"  # pragma: allowlist secret
-    assert mod.down_revision == "08c7cf36ddbe"  # pragma: allowlist secret
+    assert mod.down_revision == "d8f3a1c6b902"  # pragma: allowlist secret
     names = {n.name for n in ast.parse(MIGRATION.read_text()).body if isinstance(n, ast.FunctionDef)}
     assert {"upgrade", "downgrade"} <= names
 
@@ -71,9 +71,9 @@ def test_every_guarded_trigger_calls_the_authorization_helper() -> None:
     mod = _load_migration()
     v141 = mod._load_v141()
     for sql in (
-        mod._CTE_MUTATION_FN_V142,
-        mod._PATCH_MUTATION_FN_V142,
-        mod._PATCH_TRUNCATE_FN_V142,
+        mod._CTE_MUTATION_FN_V145,
+        mod._PATCH_MUTATION_FN_V145,
+        mod._PATCH_TRUNCATE_FN_V145,
         mod._with_authorization(v141._ROW_FUNCTION_SQL),
         mod._with_authorization(v141._TRUNCATE_FUNCTION_SQL),
     ):
@@ -82,8 +82,14 @@ def test_every_guarded_trigger_calls_the_authorization_helper() -> None:
     # The v141 allowlist logic is carried over untouched.
     assert "to_jsonb(NEW) - allowlist" in mod._with_authorization(v141._ROW_FUNCTION_SQL)
     assert "IS NOT TRUE" in mod._with_authorization(v141._ROW_FUNCTION_SQL)
-    # The retention path is limited to cte_events by name before OLD is read.
-    assert "TG_TABLE_NAME = 'cte_events'" in mod._CTE_MUTATION_FN_V142
+    # The retention path is limited to cte_events by name before OLD is read:
+    # the permits call sits in its own IF nested under the table-name test,
+    # so OLD.ingested_at is never evaluated for a fsma.hash_chain row (which
+    # has created_at, not ingested_at).
+    assert re.search(
+        r"TG_TABLE_NAME = 'cte_events' THEN\s+IF " + re.escape(mod.PERMITS_FN) + r"\(TG_RELID, OLD\.tenant_id, OLD\.ingested_at\) THEN",
+        mod._CTE_MUTATION_FN_V145,
+    )
     with pytest.raises(RuntimeError):
         mod._with_authorization("BEGIN RETURN NEW; END")
 
@@ -97,6 +103,8 @@ def test_helpers_are_scoped_and_granted_narrowly() -> None:
     assert mod.RETENTION_FLOOR in mod._ARM_FN_SQL
     assert "'fsma.cte_events'::regclass" in mod._ARM_FN_SQL
     assert "FORCE ROW LEVEL SECURITY" in mod._ARM_TABLE_SQL
+    assert f"DROP CONSTRAINT IF EXISTS {mod.ARM_FLOOR_CHECK}" in mod._ARM_TABLE_SQL
+    assert f"CHECK (min_age >= {mod.RETENTION_FLOOR})" in mod._ARM_TABLE_SQL
     assert "tenant_id = get_tenant_context()" in mod._ARM_TABLE_SQL
     for fn in (mod.AUTHORIZED_FN, mod.PERMITS_FN, mod.ARM_FN):
         assert f"REVOKE ALL ON FUNCTION {fn}" in mod._AUTHORIZED_FN_SQL + mod._PERMITS_FN_SQL + mod._ARM_FN_SQL
@@ -105,7 +113,7 @@ def test_helpers_are_scoped_and_granted_narrowly() -> None:
 
 def test_v111_inventory_carries_the_grants_behind_existence_guards() -> None:
     src = V111.read_text()
-    block = src[src.index("v142 (17fc5f9d1e69) break-glass authorization") :]
+    block = src[src.index("v145 (17fc5f9d1e69) break-glass authorization") :]
     block = block[: block.index("END LOOP;")]
     for signature in (
         "fsma.break_glass_authorized(oid)",
@@ -161,16 +169,16 @@ def live() -> Iterator[tuple[str, Engine]]:
             if conn.execute(text("SELECT to_regprocedure('fsma.arm_retention_purge(uuid, interval)')")).scalar() is None:
                 skip_or_fail_db("fsma.arm_retention_purge missing at alembic head")
             if conn.execute(text("SELECT 1 FROM pg_roles WHERE rolname = 'regengine'")).scalar() is None:
-                skip_or_fail_db("runtime role regengine missing; v092/v112/v142 create it")
+                skip_or_fail_db("runtime role regengine missing; v092/v112/v145 create it")
         yield plain_url, engine
 
 
 def _reapply(engine: Engine) -> None:
-    """Re-run v142's idempotent statements.
+    """Re-run v145's idempotent statements.
 
     ``alembic upgrade head`` is a no-op on a database already stamped at
     head, and the v141 idempotency test rewrites v141's trigger bodies
-    directly, so on a shared database the bodies at head may predate v142.
+    directly, so on a shared database the bodies at head may predate v145.
     """
     mod = _load_migration()
     with engine.begin() as conn:
@@ -184,7 +192,7 @@ def _seed(conn, tenant: str) -> tuple[str, str, str]:
     """One traceability event, one expired and one fresh CTE event for ``tenant``."""
     conn.execute(
         text("INSERT INTO tenants (id, name, slug) VALUES (CAST(:id AS uuid), :name, :slug) ON CONFLICT (id) DO NOTHING"),
-        {"id": tenant, "name": "v142 break-glass test", "slug": f"v142-{tenant[-4:]}"},
+        {"id": tenant, "name": "v145 break-glass test", "slug": f"v145-{tenant[-4:]}"},
     )
     event_id = str(uuid.uuid4())
     conn.execute(
@@ -195,7 +203,7 @@ def _seed(conn, tenant: str) -> tuple[str, str, str]:
                  traceability_lot_code, quantity, unit_of_measure, status)
             VALUES
                 (CAST(:eid AS uuid), CAST(:tid AS uuid), 'test', 'shipping', NOW(),
-                 'TLC-V142', 10.0, 'case', 'active')
+                 'TLC-V145', 10.0, 'case', 'active')
             """
         ),
         {"eid": event_id, "tid": tenant},
@@ -209,7 +217,7 @@ def _seed(conn, tenant: str) -> tuple[str, str, str]:
                     (id, tenant_id, event_type, traceability_lot_code, product_description,
                      quantity, unit_of_measure, event_timestamp, sha256_hash, chain_hash, ingested_at)
                 VALUES
-                    (CAST(:id AS uuid), CAST(:tid AS uuid), 'shipping', :lot, 'v142 test', 1.0, 'case',
+                    (CAST(:id AS uuid), CAST(:tid AS uuid), 'shipping', :lot, 'v145 test', 1.0, 'case',
                      NOW() - CAST(:age AS interval), :sha, :chain, NOW() - CAST(:age AS interval))
                 """
             ),
@@ -222,6 +230,7 @@ def _cleanup(engine: Engine, *tenants: str) -> None:
     with engine.begin() as conn:
         conn.execute(text("SET LOCAL fsma.allow_mutation = 'true'"))
         for tenant in tenants:
+            conn.execute(text("DELETE FROM fsma.hash_chain WHERE tenant_id = CAST(:tid AS uuid)"), {"tid": tenant})
             conn.execute(text("DELETE FROM fsma.cte_events WHERE tenant_id = CAST(:tid AS uuid)"), {"tid": tenant})
             conn.execute(text("DELETE FROM fsma.traceability_events WHERE tenant_id = CAST(:tid AS uuid)"), {"tid": tenant})
             conn.execute(text("DELETE FROM fsma.break_glass_arms WHERE tenant_id = CAST(:tid AS uuid)"), {"tid": tenant})
@@ -390,6 +399,151 @@ def test_arm_floor_and_tenant_context_are_enforced(seeded) -> None:
     assert exc.orig.sqlstate == "42501"
 
 
+def _armed_superuser(conn, tenant: str = TENANT) -> None:
+    """A BYPASSRLS session (superuser, no GUC) holding one tenant's retention arm."""
+    conn.execute(text("SELECT set_config('app.tenant_id', :tid, true)"), {"tid": tenant})
+    conn.execute(text("SELECT fsma.arm_retention_purge(CAST(:tid AS uuid), interval '1095 days')"), {"tid": tenant})
+
+
+def test_arm_does_not_cover_another_tenants_expired_rows(seeded) -> None:
+    """RLS does not hide other tenants from a BYPASSRLS session; the trigger must."""
+    engine, _, own_old_id, _ = seeded
+    with engine.begin() as conn:
+        _, other_old_id, _ = _seed(conn, OTHER_TENANT)
+    _rejected(
+        engine,
+        _armed_superuser,
+        "DELETE FROM fsma.cte_events WHERE id = CAST(:id AS uuid)",
+        {"id": other_old_id},
+        message="CTE records are append-only",
+    )
+    # One statement touching both tenants fails as a whole: nothing goes.
+    _rejected(
+        engine,
+        _armed_superuser,
+        "DELETE FROM fsma.cte_events WHERE id IN (CAST(:own AS uuid), CAST(:other AS uuid))",
+        {"own": own_old_id, "other": other_old_id},
+        message="CTE records are append-only",
+    )
+    with engine.connect() as conn:
+        survivors = conn.execute(
+            text("SELECT count(*) FROM fsma.cte_events WHERE id IN (CAST(:own AS uuid), CAST(:other AS uuid))"),
+            {"own": own_old_id, "other": other_old_id},
+        ).scalar()
+    assert survivors == 2
+
+
+def _seed_hash_chain(conn, tenant: str, cte_event_id: str) -> int:
+    return conn.execute(
+        text(
+            """
+            INSERT INTO fsma.hash_chain
+                (tenant_id, cte_event_id, sequence_num, event_hash, previous_chain_hash, chain_hash, created_at)
+            VALUES
+                (CAST(:tid AS uuid), CAST(:eid AS uuid), 1, 'v145-event-hash', NULL, 'v145-chain-hash',
+                 NOW() - interval '1100 days')
+            RETURNING id
+            """
+        ),
+        {"tid": tenant, "eid": cte_event_id},
+    ).scalar_one()
+
+
+def test_retention_arm_does_not_open_hash_chain(seeded) -> None:
+    """prevent_cte_mutation also guards fsma.hash_chain, which has no ingested_at.
+
+    The retention branch is nested under the table-name test, so the trigger
+    refuses with its append-only error instead of failing on OLD.ingested_at.
+    """
+    engine, _, old_id, _ = seeded
+    with engine.begin() as conn:
+        chain_id = _seed_hash_chain(conn, TENANT, old_id)
+    exc = _rejected(
+        engine,
+        _armed_superuser,
+        "DELETE FROM fsma.hash_chain WHERE id = :id",
+        {"id": chain_id},
+        message="append-only",
+    )
+    assert "ingested_at" not in str(exc)
+
+
+PROBE_ROLE = "regengine_v145_probe"
+
+
+@pytest.fixture
+def probe_role(seeded) -> Iterator[tuple[Engine, str, str]]:
+    """A runtime-like role that holds DML grants on the guarded tables but is
+    neither a superuser nor a member of their owner. The application's own
+    runtime role has no UPDATE/DELETE/TRUNCATE on these tables, so the grant
+    layer would refuse before the trigger runs; this role reaches the trigger.
+    """
+    engine, _, old_id, _ = seeded
+
+    def drop(conn) -> None:
+        if conn.execute(text("SELECT 1 FROM pg_roles WHERE rolname = :r"), {"r": PROBE_ROLE}).scalar():
+            conn.execute(text(f"DROP OWNED BY {PROBE_ROLE}"))
+            conn.execute(text(f"DROP ROLE {PROBE_ROLE}"))
+
+    with engine.begin() as conn:
+        drop(conn)
+        conn.execute(text(f"CREATE ROLE {PROBE_ROLE} NOLOGIN IN ROLE regengine"))
+        conn.execute(
+            text(f"GRANT UPDATE, DELETE ON fsma.hash_chain, fsma.correction_patches TO {PROBE_ROLE}")
+        )
+        conn.execute(text(f"GRANT TRUNCATE ON fsma.correction_patches TO {PROBE_ROLE}"))
+        owner_is_member = conn.execute(
+            text(
+                "SELECT pg_has_role(:r, c.relowner, 'MEMBER') FROM pg_class c"
+                " WHERE c.oid = 'fsma.hash_chain'::regclass"
+            ),
+            {"r": PROBE_ROLE},
+        ).scalar()
+        if owner_is_member:
+            skip_or_fail_db("the runtime role is a member of the fsma table owner; probe cannot isolate the trigger")
+        chain_id = _seed_hash_chain(conn, TENANT, old_id)
+    try:
+        yield engine, str(chain_id), old_id
+    finally:
+        with engine.begin() as conn:
+            drop(conn)
+
+
+def test_guc_does_not_authorize_a_role_with_dml_grants(probe_role) -> None:
+    engine, chain_id, _ = probe_role
+
+    def guc_only(conn):
+        conn.execute(text(f"SET LOCAL ROLE {PROBE_ROLE}"))
+        conn.execute(text("SELECT set_config('app.tenant_id', :tid, true)"), {"tid": TENANT})
+        conn.execute(text("SET LOCAL fsma.allow_mutation = 'true'"))
+
+    _rejected(engine, guc_only, "DELETE FROM fsma.hash_chain WHERE id = :id", {"id": int(chain_id)}, message="append-only")
+    _rejected(
+        engine,
+        guc_only,
+        "UPDATE fsma.hash_chain SET chain_hash = 'tampered' WHERE id = :id",
+        {"id": int(chain_id)},
+        message="append-only",
+    )
+    # TRUNCATE fires the statement trigger without needing a seeded patch row.
+    _rejected(engine, guc_only, "TRUNCATE fsma.correction_patches", {}, message="append-only")
+
+
+def test_arm_table_floor_check_holds_for_direct_inserts(seeded) -> None:
+    """The arm function refuses a short min_age; the CHECK covers any other path."""
+    engine, _, _, _ = seeded
+    exc = _rejected(
+        engine,
+        lambda conn: None,
+        "INSERT INTO fsma.break_glass_arms (txid, relid, tenant_id, purpose, min_age, armed_by)"
+        " VALUES (txid_current(), 'fsma.cte_events'::regclass, CAST(:tid AS uuid), 'retention_purge',"
+        " interval '1 day', current_user)",
+        {"tid": TENANT},
+        message="break_glass_arms_min_age_floor",
+    )
+    assert exc.orig.sqlstate == "23514"
+
+
 def test_arm_table_is_owner_only(seeded) -> None:
     engine, _, _, _ = seeded
     exc = _rejected(engine, _as_runtime_role, "SELECT count(*) FROM fsma.break_glass_arms", {}, message="permission denied")
@@ -402,11 +556,11 @@ def test_downgrade_restores_guc_only_contract_and_upgrade_reapplies(live) -> Non
     with engine.begin() as conn:
         _, old_id, _ = _seed(conn, TENANT)
     try:
-        _alembic(plain_url, "downgrade", "08c7cf36ddbe")  # pragma: allowlist secret
+        _alembic(plain_url, "downgrade", "d8f3a1c6b902")  # pragma: allowlist secret
         with engine.connect() as conn:
             assert conn.execute(text("SELECT to_regprocedure('fsma.break_glass_authorized(oid)')")).scalar() is None
             assert conn.execute(text("SELECT to_regclass('fsma.break_glass_arms')")).scalar() is None
-        # Pre-v142 contract: the runtime role could bypass with the GUC alone.
+        # Pre-v145 contract: the runtime role could bypass with the GUC alone.
         with engine.begin() as conn:
             _as_runtime_role(conn)
             conn.execute(text("SET LOCAL fsma.allow_mutation = 'true'"))

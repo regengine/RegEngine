@@ -1681,7 +1681,7 @@ def test_function_grants_are_explicit_and_set_admin_is_sysadmin_only(owner_engin
             ("fsma", "get_inbound_email_audit_by_message_id"),
             ("fsma", "claim_inbound_email_audit"),
             ("fsma", "finalize_inbound_email_audit"),
-            # v142: the guarded mutation triggers call the two read-only
+            # v145 (17fc5f9d1e69): the guarded mutation triggers call the two read-only
             # helpers as the invoking role, and the retention purge arms
             # itself through the SECURITY DEFINER arm function.
             ("fsma", "break_glass_authorized"),

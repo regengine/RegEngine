@@ -1,8 +1,8 @@
-"""v142 — authorize the fsma.allow_mutation break-glass by role, not by GUC alone.
+"""v145 — authorize the fsma.allow_mutation break-glass by role, not by GUC alone.
 
 Revision ID: 17fc5f9d1e69
-Revises: 08c7cf36ddbe
-Create Date: 2026-10-30
+Revises: d8f3a1c6b902
+Create Date: 2026-10-30 (rechained onto v144 on 2026-11-26)
 
 Three append-only guards (v078/v107 ``fsma.prevent_cte_mutation`` on
 ``fsma.cte_events`` and ``fsma.hash_chain``, v095 ``fsma.prevent_patch_*`` on
@@ -56,7 +56,7 @@ from pathlib import Path
 from alembic import op
 
 revision = "17fc5f9d1e69"  # pragma: allowlist secret
-down_revision = "08c7cf36ddbe"  # pragma: allowlist secret
+down_revision = "d8f3a1c6b902"  # pragma: allowlist secret
 branch_labels = None
 depends_on = None
 
@@ -66,6 +66,7 @@ AUTHORIZED_FN = "fsma.break_glass_authorized"
 PERMITS_FN = "fsma.retention_purge_permits"
 ARM_FN = "fsma.arm_retention_purge"
 RETENTION_FLOOR = "interval '730 days'"
+ARM_FLOOR_CHECK = "break_glass_arms_min_age_floor"
 
 # The exact GUC test every guarded trigger function carried, and what
 # replaces it. The replacement is applied by string substitution on the
@@ -115,7 +116,11 @@ CREATE TABLE IF NOT EXISTS {ARM_TABLE} (
     PRIMARY KEY (txid, relid, tenant_id)
 );
 COMMENT ON TABLE {ARM_TABLE} IS
-    'v142: transaction-scoped break-glass arms written only by SECURITY DEFINER helpers; read by the append-only triggers';
+    'v145: transaction-scoped break-glass arms written only by SECURITY DEFINER helpers; read by the append-only triggers';
+-- The arm function already refuses a shorter min_age; the CHECK keeps the
+-- floor true for any row that reaches the table by another path.
+ALTER TABLE {ARM_TABLE} DROP CONSTRAINT IF EXISTS {ARM_FLOOR_CHECK};
+ALTER TABLE {ARM_TABLE} ADD CONSTRAINT {ARM_FLOOR_CHECK} CHECK (min_age >= {RETENTION_FLOOR});
 ALTER TABLE {ARM_TABLE} ENABLE ROW LEVEL SECURITY;
 ALTER TABLE {ARM_TABLE} FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS {ARM_POLICY} ON {ARM_TABLE};
@@ -217,9 +222,11 @@ GRANT EXECUTE ON FUNCTION {ARM_FN}(uuid, interval) TO regengine, regengine_sysad
 
 # v078/v107 body with the authorization check and the retention-purge path.
 # The function is attached to fsma.cte_events and fsma.hash_chain; only
-# cte_events carries tenant_id and ingested_at, so the purge branch is
-# limited to it by name before OLD's fields are touched.
-_CTE_MUTATION_FN_V142 = f"""
+# cte_events carries ingested_at (hash_chain has created_at), so the purge
+# check is nested under the table-name test: OLD.ingested_at is read only
+# when the row is a cte_events row. SQL does not promise that AND stops at
+# the first false operand, so a flat condition would not guarantee that.
+_CTE_MUTATION_FN_V145 = f"""
 CREATE OR REPLACE FUNCTION fsma.prevent_cte_mutation()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN
@@ -229,10 +236,10 @@ BEGIN
         END IF;
         RETURN OLD;
     END IF;
-    IF TG_OP = 'DELETE'
-       AND TG_TABLE_SCHEMA = 'fsma' AND TG_TABLE_NAME = 'cte_events'
-       AND {PERMITS_FN}(TG_RELID, OLD.tenant_id, OLD.ingested_at) THEN
-        RETURN OLD;
+    IF TG_OP = 'DELETE' AND TG_TABLE_SCHEMA = 'fsma' AND TG_TABLE_NAME = 'cte_events' THEN
+        IF {PERMITS_FN}(TG_RELID, OLD.tenant_id, OLD.ingested_at) THEN
+            RETURN OLD;
+        END IF;
     END IF;
     RAISE EXCEPTION
         'CTE records are append-only (FDA 21 CFR 1.1455). Set fsma.allow_mutation=true for authorized corrections. Table: %, Operation: %',
@@ -259,7 +266,7 @@ END;
 $$;
 """
 
-# Exact v095 bodies, restored on downgrade; the v142 versions substitute the
+# Exact v095 bodies, restored on downgrade; the v145 versions substitute the
 # authorization check for the GUC test and change nothing else.
 _PATCH_MUTATION_FN_V095 = """
 CREATE OR REPLACE FUNCTION fsma.prevent_patch_mutation()
@@ -294,8 +301,8 @@ END;
 $$;
 """
 
-_PATCH_MUTATION_FN_V142 = _with_authorization(_PATCH_MUTATION_FN_V095)
-_PATCH_TRUNCATE_FN_V142 = _with_authorization(_PATCH_TRUNCATE_FN_V095)
+_PATCH_MUTATION_FN_V145 = _with_authorization(_PATCH_MUTATION_FN_V095)
+_PATCH_TRUNCATE_FN_V145 = _with_authorization(_PATCH_TRUNCATE_FN_V095)
 
 _DROP_SQL = f"""
 DROP FUNCTION IF EXISTS {ARM_FN}(uuid, interval);
@@ -323,9 +330,9 @@ def upgrade_statements() -> list[str]:
         # CREATE OR REPLACE keeps every existing trigger bound to the
         # function, so no trigger is dropped or re-created and no table
         # lock beyond the function replacement is taken.
-        _CTE_MUTATION_FN_V142,
-        _PATCH_MUTATION_FN_V142,
-        _PATCH_TRUNCATE_FN_V142,
+        _CTE_MUTATION_FN_V145,
+        _PATCH_MUTATION_FN_V145,
+        _PATCH_TRUNCATE_FN_V145,
         _with_authorization(v141._ROW_FUNCTION_SQL),
         _with_authorization(v141._TRUNCATE_FUNCTION_SQL),
     ]

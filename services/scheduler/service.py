@@ -80,7 +80,7 @@ _STALE_COVERAGE_ZERO_RUNS = 7
 
 # CTE retention policy (3 years) used by archive_expired_records for both the
 # fsma.arm_retention_purge call and the DELETE predicate, so the trigger's
-# armed minimum age and the sweep's cutoff cannot drift apart. The v142
+# armed minimum age and the sweep's cutoff cannot drift apart. The v145
 # helper refuses anything under the FSMA 204 24-month floor.
 _CTE_RETENTION_MIN_AGE = "1095 days"
 
@@ -1232,9 +1232,10 @@ class SchedulerService:
                 # fsma.cte_events is RLS-forced tenant DATA — it gets NO
                 # system arm, so the sweep iterates tenants and deletes
                 # under each tenant's own GUC (tenant_scope + begin-hook).
-                # Under today's BYPASSRLS role the first iteration deletes
-                # everything and the rest are no-ops; under the
-                # least-privilege role each pass is tenant-scoped.
+                # Each pass deletes only its own tenant's rows: the DELETE
+                # names the tenant explicitly and the arm below covers one
+                # tenant, so a BYPASSRLS session cannot sweep other tenants
+                # under the first tenant's arm (the trigger refuses them).
                 # Ages on ingested_at (record creation, NOT NULL DEFAULT
                 # NOW()) — cte_events has never had a created_at column;
                 # the original filter was UndefinedColumn, masked by the
@@ -1243,7 +1244,7 @@ class SchedulerService:
                 # their FSMA retention clock ran.
                 #
                 # cte_events carries the v078 append-only trigger
-                # (prevent_cte_mutation, FDA 21 CFR 1.1455). Since v142 the
+                # (prevent_cte_mutation, FDA 21 CFR 1.1455). Since v145 the
                 # fsma.allow_mutation GUC no longer authorizes the runtime
                 # role on its own, so each per-tenant transaction arms the
                 # narrow retention path instead: fsma.arm_retention_purge
@@ -1251,8 +1252,11 @@ class SchedulerService:
                 # minimum age, and the trigger then permits a DELETE only
                 # for that tenant's rows older than that age (floor: the
                 # FSMA 204 24-month retention). The arm cannot widen into
-                # an UPDATE, another table or a younger row. The 24-month
-                # floor is also guarded separately by enforce_kde_retention.
+                # an UPDATE, another table or a younger row. The floor is
+                # enforced by fsma.arm_retention_purge, which refuses a
+                # shorter minimum age, and by a CHECK on the arm table.
+                # enforce_kde_retention only counts recent rows afterwards
+                # and prevents nothing.
                 # Deletes cascade to cte_kdes and compliance_alerts (ON
                 # DELETE CASCADE, no append-only triggers there).
                 deleted_ctes = 0

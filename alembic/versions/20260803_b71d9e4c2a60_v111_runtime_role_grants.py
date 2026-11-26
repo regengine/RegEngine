@@ -1345,7 +1345,7 @@ BEGIN
         END IF;
     END LOOP;
 
-    -- v142 (17fc5f9d1e69) break-glass authorization. Absent on the first
+    -- v145 (17fc5f9d1e69) break-glass authorization. Absent on the first
     -- pass, present when the supported runner reapplies this cutover at
     -- head. The append-only triggers on fsma.cte_events, fsma.hash_chain,
     -- fsma.correction_patches and fsma.traceability_events call the two
