@@ -1,0 +1,16 @@
+# RegEngine — packages imported only by modules behind EXPERIMENTAL_ROUTERS
+# (server/router_policy.py), which never mount in production (WI-06, 2026-11-04).
+#
+# Determined by a static transitive import trace from server/main.py over the
+# repository (docs/plans/TECH_DEBT_REMEDIATION_PRD_2026-10-28.md, WI-06 status):
+# every other third-party distribution is also reached from an always-mounted
+# or production-allowlisted module and stays in requirements.in. langchain,
+# openai, llama-cloud, pytesseract and pdf2image are reached from
+# services/ingestion/app/regulation_parser.py, normalization.py,
+# regengine_ingestion/llm/client.py and services/shared/document_extract, so
+# they stay. Constrained by requirements.lock.
+-c requirements.lock
+
+# services/ingestion/app/qr_decoder.py (experimental router "qr_decoder");
+# imported lazily with a 503 fallback, so tests run without it.
+pyzbar>=0.1.9,<1

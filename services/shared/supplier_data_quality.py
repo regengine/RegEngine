@@ -72,6 +72,7 @@ WEBHOOK_REQUIRED_KDES: dict[str, tuple[str, ...]] = {
         "unit_of_measure",
         "harvest_date",
         "location_name",
+        "immediate_subsequent_recipient",
         "reference_document",
     ),
     "cooling": (
@@ -81,6 +82,8 @@ WEBHOOK_REQUIRED_KDES: dict[str, tuple[str, ...]] = {
         "unit_of_measure",
         "cooling_date",
         "location_name",
+        "immediate_subsequent_recipient",
+        "harvest_location_name",
         "reference_document",
     ),
     "initial_packing": (
@@ -93,6 +96,10 @@ WEBHOOK_REQUIRED_KDES: dict[str, tuple[str, ...]] = {
         "reference_document",
         "harvester_business_name",
         "harvester_business_phone",
+        "harvest_date",
+        "harvest_location_name",
+        "received_date",
+        "received_quantity",
     ),
     "first_receiver": (
         "traceability_lot_code",
@@ -133,6 +140,10 @@ WEBHOOK_REQUIRED_KDES: dict[str, tuple[str, ...]] = {
         "transformation_date",
         "location_name",
         "reference_document",
+        "input_lot_codes",
+        "input_quantities",
+        "input_units_of_measure",
+        "input_product_descriptions",
     ),
 }
 

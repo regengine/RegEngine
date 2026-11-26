@@ -332,8 +332,12 @@ async def test_accept_invite_existing_user_with_token_succeeds(monkeypatch):
     db = MagicMock()
     db.execute.side_effect = [
         _FakeResult(invite),  # invite lookup
+        _FakeResult(None),  # arm global user lookup
         _FakeResult(existing_user),  # user lookup
+        _FakeResult(None),  # disarm global user lookup
         _FakeResult(None),  # membership lookup — no existing
+        _FakeResult(None),  # arm passwordless identity provisioning
+        _FakeResult(None),  # disarm after identity flush
     ]
     # This test is about token / expiry handling, not the audit chain, so the
     # logger is stubbed out. It must return a truthy entry id: since #2857,
@@ -365,6 +369,9 @@ async def test_accept_invite_existing_user_with_token_succeeds(monkeypatch):
     assert ensure_identity.call_args.kwargs["user"] is existing_user
     assert ensure_identity.call_args.kwargs["email"] == invite.email
     assert ensure_identity.call_args.kwargs["organization_id"] == invite.tenant_id
+    assert db.execute.call_count == 7
+    db.flush.assert_called_once_with()
+    db.commit.assert_called_once_with()
 
 
 @pytest.mark.asyncio
@@ -380,9 +387,13 @@ async def test_accept_invite_existing_user_with_naive_expiry_succeeds(monkeypatc
     )
     db = MagicMock()
     db.execute.side_effect = [
-        _FakeResult(invite),
-        _FakeResult(existing_user),
-        _FakeResult(None),
+        _FakeResult(invite),  # invite lookup
+        _FakeResult(None),  # arm global user lookup
+        _FakeResult(existing_user),  # user lookup
+        _FakeResult(None),  # disarm global user lookup
+        _FakeResult(None),  # membership lookup — no existing
+        _FakeResult(None),  # arm passwordless identity provisioning
+        _FakeResult(None),  # disarm after identity flush
     ]
     # Truthy entry id required since #2857 — see the note above.
     monkeypatch.setattr(
@@ -403,6 +414,9 @@ async def test_accept_invite_existing_user_with_naive_expiry_succeeds(monkeypatc
     out = await accept_invite.__wrapped__(payload=req, request=http_req, db=db)
     assert out["status"] == "success"
     assert out["user_id"] == str(existing_user.id)
+    assert db.execute.call_count == 7
+    db.flush.assert_called_once_with()
+    db.commit.assert_called_once_with()
 
 
 @pytest.mark.asyncio
@@ -420,8 +434,10 @@ async def test_accept_invite_inactive_user_refused(monkeypatch):
     )
     db = MagicMock()
     db.execute.side_effect = [
-        _FakeResult(invite),
-        _FakeResult(inactive_user),
+        _FakeResult(invite),  # invite lookup
+        _FakeResult(None),  # arm global user lookup
+        _FakeResult(inactive_user),  # user lookup
+        _FakeResult(None),  # disarm even when the user is rejected
     ]
     req = AcceptInviteRequest(token="raw", name="x")
     http_req = _make_starlette_request()
@@ -429,6 +445,13 @@ async def test_accept_invite_inactive_user_refused(monkeypatch):
     with pytest.raises(HTTPException) as exc:
         await accept_invite.__wrapped__(payload=req, request=http_req, db=db)
     assert exc.value.status_code == 400
+    assert exc.value.detail == "Invite is not usable"
+    assert db.execute.call_count == 4
+    assert str(db.execute.call_args.args[0]) == "SELECT set_config('regengine.is_sysadmin', 'false', true)"
+    db.add.assert_not_called()
+    db.flush.assert_not_called()
+    db.commit.assert_not_called()
+    assert invite.accepted_at is None
 
 
 @pytest.mark.asyncio

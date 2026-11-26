@@ -26,8 +26,8 @@ import os
 from typing import Optional
 
 INTERNAL_TENANT_HEADER = "X-RegEngine-Tenant-ID"
-INTERNAL_SECRET_HEADER = "X-RegEngine-Internal-Secret"
-INTERNAL_SECRET_ENV = "REGENGINE_INTERNAL_SECRET"
+INTERNAL_SECRET_HEADER = "X-RegEngine-Internal-Secret"  # noqa: S105 -- header name, not a value
+INTERNAL_SECRET_ENV = "REGENGINE_INTERNAL_SECRET"  # noqa: S105 -- environment variable name, not a value
 
 
 def is_internal_caller(headers) -> bool:

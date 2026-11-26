@@ -10,8 +10,8 @@ describe('#3554 empty states and hidden sample artifacts', () => {
         for (const page of ['src/app/dashboard/export-jobs/page.tsx', 'src/app/integrations/page.tsx']) {
             const src = read(page);
             expect(src).toContain('title={NO_DATA_YET}');
-            expect(src).toMatch(/href="\/ingest"/);
-            expect(src).toMatch(/href="\/docs\/api"/);
+            expect(src).toMatch(/href="\/onboarding\/bulk-upload"/);
+            expect(src).toMatch(/href="\/docs\/quickstart"/);
         }
     });
 
@@ -61,6 +61,6 @@ describe('#3554 empty states and hidden sample artifacts', () => {
         expect(src).toContain('{cta.blurb}');
         expect(src).not.toContain('sandbox and get an instant');
         expect(src).not.toContain('data to the sandbox');
-        expect(src).toMatch(/data to\{" "\}\s*<Link href="\/ingest\?tab=file"[^>]*>RegEngine<\/Link>/);
+        expect(src).toMatch(/data to\{" "\}\s*<Link href="\/onboarding\/bulk-upload"[^>]*>RegEngine<\/Link>/);
     });
 });

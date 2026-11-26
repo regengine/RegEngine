@@ -33,17 +33,25 @@ async def test_legacy_entrypoint_fails_closed_when_rls_gate_is_enabled(monkeypat
 
     import services.admin.main as admin_main
 
-    database_module = importlib.import_module("app.database")
+    # main.py imports ``services.admin.app.database`` (the canonical name), so
+    # the patch must land on that module instance, not on the legacy ``app``
+    # alias. Patching the alias leaves the real ``init_db`` in place, and the
+    # test then passes only because SQLite raises a message that matches.
+    database_module = importlib.import_module("services.admin.app.database")
+    calls: list[str] = []
 
     def _inert_posture():
+        calls.append("init_db")
         raise RuntimeError("RLS enforcement required: inert role")
 
     monkeypatch.setenv("REGENGINE_REQUIRE_RLS_ENFORCEMENT", "1")
     monkeypatch.setattr(database_module, "init_db", _inert_posture)
 
-    with pytest.raises(RuntimeError, match="RLS enforcement required"):
+    with pytest.raises(RuntimeError, match="RLS enforcement required: inert role"):
         async with admin_main.lifespan(admin_main.app):
             pytest.fail("lifespan must not yield after a failed RLS posture gate")
+
+    assert calls == ["init_db"], "lifespan must call the patched canonical init_db"
 
 
 def test_reset_tenant_guc_listener_is_attached_on_postgres_engine():
@@ -623,9 +631,7 @@ def test_tenant_bound_ingestion_headers_rejects_cross_tenant_reuse(monkeypatch):
         "11111111-1111-4111-8111-111111111111",
     )
 
-    assert routes_mod._tenant_bound_ingestion_headers(
-        "22222222-2222-4222-8222-222222222222"
-    ) == {}
+    assert routes_mod._tenant_bound_ingestion_headers("22222222-2222-4222-8222-222222222222") == {}
 
 
 # =========================================================================
