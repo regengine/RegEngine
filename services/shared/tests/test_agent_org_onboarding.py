@@ -27,7 +27,6 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from sqlalchemy.exc import IntegrityError
 from shared.agent_org import onboarding as mod
 from shared.agent_org.onboarding import (
     DEFAULT_ONBOARDING_AGENT_CAPABILITIES,
@@ -40,6 +39,7 @@ from shared.agent_org.onboarding import (
     onboard_tenant_agent_org,
 )
 from shared.agent_org.providers import DevInboxProvider
+from sqlalchemy.exc import IntegrityError
 
 
 def _uuid() -> str:
@@ -166,7 +166,7 @@ class TestGetOrCreateAgent:
 
 class TestGetOrCreateInbox:
     def test_existing_inbox_returns_created_false_and_never_calls_provider(self):
-        email = "bot@agents.acme.regengine.dev"
+        email = "bot@agents.acme.regengine.co"
         db = _QueueSession([(email,)])
         provider = MagicMock()
         result_email, created = _get_or_create_inbox(
@@ -183,7 +183,7 @@ class TestGetOrCreateInbox:
         assert len(db.calls) == 1
 
     def test_no_existing_inbox_provisions_and_inserts(self):
-        db = _QueueSession([None, ("bot@agents.acme.regengine.dev",)])
+        db = _QueueSession([None, ("bot@agents.acme.regengine.co",)])
         provider = DevInboxProvider()
         result_email, created = _get_or_create_inbox(
             db,
@@ -193,7 +193,7 @@ class TestGetOrCreateInbox:
             agent_name="bot",
             inbox_provider=provider,
         )
-        assert result_email == "bot@agents.acme.regengine.dev"
+        assert result_email == "bot@agents.acme.regengine.co"
         assert created is True
         assert len(db.calls) == 2
 
@@ -213,7 +213,7 @@ class TestGetOrCreateInbox:
                 inbox_provider=provider,
             )
         assert "collision" in str(ei.value)
-        assert "bot@agents.acme.regengine.dev" in str(ei.value)
+        assert "bot@agents.acme.regengine.co" in str(ei.value)
 
 
 class TestExistingAgentKeyId:
@@ -331,7 +331,9 @@ def _install_fake_key_minting(monkeypatch, db: _RelationalFakeDB):
     """Deterministic key minting keyed by agent_id; records every call."""
     calls: list[dict] = []
 
-    async def _fake_mint(key_store, *, tenant_id, agent_id, name, capabilities, created_by=None, rate_limit_per_minute=30):
+    async def _fake_mint(
+        key_store, *, tenant_id, agent_id, name, capabilities, created_by=None, rate_limit_per_minute=30
+    ):
         calls.append(
             dict(
                 tenant_id=tenant_id,
@@ -372,8 +374,8 @@ class TestOnboardTenantAgentOrgFreshTenant:
         assert result.inboxes_created == 2
         assert result.keys_created == 2
         assert result.inbox_addresses == [
-            "outreach-pod-1-agent-1@agents.acme.regengine.dev",
-            "outreach-pod-1-agent-2@agents.acme.regengine.dev",
+            "outreach-pod-1-agent-1@agents.acme.regengine.co",
+            "outreach-pod-1-agent-2@agents.acme.regengine.co",
         ]
         assert len(result.key_ids) == 2
         assert len(set(result.key_ids)) == 2  # distinct keys per agent
@@ -408,7 +410,9 @@ class TestOnboardTenantAgentOrgFreshTenant:
         pods = [PodSpec(name="p", department="ops", agent_count=1)]
 
         with pytest.raises(ValueError):
-            await onboard_tenant_agent_org(db, tenant_id, pods, key_store=AsyncMock(), inbox_provider=DevInboxProvider())
+            await onboard_tenant_agent_org(
+                db, tenant_id, pods, key_store=AsyncMock(), inbox_provider=DevInboxProvider()
+            )
 
     @pytest.mark.asyncio
     async def test_multiple_pods_produce_independent_agents(self, monkeypatch, tenant_id):
@@ -419,13 +423,15 @@ class TestOnboardTenantAgentOrgFreshTenant:
             PodSpec(name="research-pod-1", department="research", agent_count=1),
         ]
 
-        result = await onboard_tenant_agent_org(db, tenant_id, pods, key_store=AsyncMock(), inbox_provider=DevInboxProvider())
+        result = await onboard_tenant_agent_org(
+            db, tenant_id, pods, key_store=AsyncMock(), inbox_provider=DevInboxProvider()
+        )
 
         assert result.pods_created == 2
         assert result.agents_created == 2
         assert result.inbox_addresses == [
-            "outreach-pod-1-agent-1@agents.acme.regengine.dev",
-            "research-pod-1-agent-1@agents.acme.regengine.dev",
+            "outreach-pod-1-agent-1@agents.acme.regengine.co",
+            "research-pod-1-agent-1@agents.acme.regengine.co",
         ]
 
 
@@ -436,8 +442,12 @@ class TestOnboardTenantAgentOrgIdempotency:
         _install_fake_key_minting(monkeypatch, db)
         pods = [PodSpec(name="outreach-pod-1", department="outreach", agent_count=2)]
 
-        first = await onboard_tenant_agent_org(db, tenant_id, pods, key_store=AsyncMock(), inbox_provider=DevInboxProvider())
-        second = await onboard_tenant_agent_org(db, tenant_id, pods, key_store=AsyncMock(), inbox_provider=DevInboxProvider())
+        first = await onboard_tenant_agent_org(
+            db, tenant_id, pods, key_store=AsyncMock(), inbox_provider=DevInboxProvider()
+        )
+        second = await onboard_tenant_agent_org(
+            db, tenant_id, pods, key_store=AsyncMock(), inbox_provider=DevInboxProvider()
+        )
 
         assert second.pods_created == 0
         assert second.agents_created == 0
@@ -453,7 +463,9 @@ class TestOnboardTenantAgentOrgIdempotency:
         _install_fake_key_minting(monkeypatch, db)
         pod = PodSpec(name="outreach-pod-1", department="outreach", agent_count=2)
 
-        first = await onboard_tenant_agent_org(db, tenant_id, [pod], key_store=AsyncMock(), inbox_provider=DevInboxProvider())
+        first = await onboard_tenant_agent_org(
+            db, tenant_id, [pod], key_store=AsyncMock(), inbox_provider=DevInboxProvider()
+        )
 
         grown_pod = PodSpec(name="outreach-pod-1", department="outreach", agent_count=3)
         second = await onboard_tenant_agent_org(
@@ -465,9 +477,9 @@ class TestOnboardTenantAgentOrgIdempotency:
         assert second.inboxes_created == 1
         assert second.keys_created == 1
         assert second.inbox_addresses == [
-            "outreach-pod-1-agent-1@agents.acme.regengine.dev",
-            "outreach-pod-1-agent-2@agents.acme.regengine.dev",
-            "outreach-pod-1-agent-3@agents.acme.regengine.dev",
+            "outreach-pod-1-agent-1@agents.acme.regengine.co",
+            "outreach-pod-1-agent-2@agents.acme.regengine.co",
+            "outreach-pod-1-agent-3@agents.acme.regengine.co",
         ]
         # The first two keys are carried over unchanged; only one new key.
         assert second.key_ids[:2] == first.key_ids
@@ -487,7 +499,7 @@ class TestOnboardTenantAgentOrgIdempotency:
         agent_id = _uuid()
         db.agents[(tenant_id, pod_id, "outreach-pod-1-agent-1")] = agent_id
         db.agent_roles[agent_id] = "outreach"
-        email = "outreach-pod-1-agent-1@agents.acme.regengine.dev"
+        email = "outreach-pod-1-agent-1@agents.acme.regengine.co"
         db.inbox_by_agent[agent_id] = email
         db.inbox_addresses_taken.add(email)
         # Deliberately no entry in db.keys_by_agent.
@@ -520,7 +532,9 @@ class TestOnboardTenantAgentOrgConcurrentKeyMint:
         db = _RelationalFakeDB({tenant_id: "acme"})
         pod = PodSpec(name="outreach-pod-1", department="outreach", agent_count=1)
 
-        async def _fake_mint_conflict(key_store, *, tenant_id, agent_id, name, capabilities, created_by=None, rate_limit_per_minute=30):
+        async def _fake_mint_conflict(
+            key_store, *, tenant_id, agent_id, name, capabilities, created_by=None, rate_limit_per_minute=30
+        ):
             # Simulate a concurrent onboarding call that won the race: it
             # already committed a key for this agent on its own
             # connection/engine, and this call's own INSERT just hit the
@@ -567,11 +581,13 @@ class TestOnboardTenantAgentOrgInboxCollision:
         # attribute it to a different agent — an unreachable-in-practice
         # state given the uniqueness of (tenant_slug, agent_slug), but the
         # code must refuse to mislabel it if it ever happens.
-        db.inbox_addresses_taken.add("outreach-pod-1-agent-1@agents.acme.regengine.dev")
+        db.inbox_addresses_taken.add("outreach-pod-1-agent-1@agents.acme.regengine.co")
         pod = PodSpec(name="outreach-pod-1", department="outreach", agent_count=1)
 
         with pytest.raises(RuntimeError):
-            await onboard_tenant_agent_org(db, tenant_id, [pod], key_store=AsyncMock(), inbox_provider=DevInboxProvider())
+            await onboard_tenant_agent_org(
+                db, tenant_id, [pod], key_store=AsyncMock(), inbox_provider=DevInboxProvider()
+            )
 
 
 class TestOnboardTenantAgentOrgCommitOrdering:

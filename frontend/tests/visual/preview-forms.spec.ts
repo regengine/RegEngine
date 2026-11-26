@@ -37,22 +37,22 @@ test.beforeEach(() => {
 
 test('blank submit on login shows validation', async ({ page }) => {
     await stabilize(page, '/login');
-    await page.getByRole('button', { name: /^continue/i }).first().click();
+    await page.getByRole('button', { name: /^continue$/i }).first().click({ timeout: 15_000 });
     await page.waitForTimeout(1000);
     // Blank submit must stay on the login page (nothing created, no navigation).
     await expect(page).toHaveURL(/\/login/);
-    await expect(page).toHaveScreenshot('form__login-blank', {
+    await expect(page).toHaveScreenshot('form__login-blank.png', {
         mask: screenshotMasks(page),
     });
 });
 
 test('blank submit on signup shows validation', async ({ page }) => {
     await stabilize(page, '/signup');
-    await page.getByRole('button', { name: /request access/i }).first().click();
+    await page.getByRole('button', { name: /request access/i }).first().click({ timeout: 15_000 });
     await page.waitForTimeout(1000);
     // Blank submit must stay on the signup page (nothing created, no navigation).
     await expect(page).toHaveURL(/\/signup/);
-    await expect(page).toHaveScreenshot('form__signup-blank', {
+    await expect(page).toHaveScreenshot('form__signup-blank.png', {
         mask: screenshotMasks(page),
     });
 });

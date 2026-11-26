@@ -35,6 +35,9 @@ combine-as-imports = true
 python_version = "3.11"
 warn_unused_configs = true
 ignore_missing_imports = true
+# frontend/public/sdk ships a copy of regengine/verify_chain.py for browser
+# download; two modules with one name stop mypy before it reports anything.
+exclude = ["^frontend/public/sdk/", "^docs/archive/"]
 # Non-blocking: mypy is available for local use but is not yet a CI gate.
 # Tighten incrementally (e.g. disallow_untyped_defs) per-module via overrides.
 
@@ -56,15 +59,13 @@ testpaths = [
     "services/ingestion/tests",
     "services/nlp/tests",
     "services/scheduler/tests",
-    "services/test_data/tests",
     # #2923: omitted until now, so the repo-root --collect-only import guard
     # in test-suite-check.yml — the check whose stated job is to stop "N test
     # files silently fail to import" — could not see these 53 files, and a
     # bare `pytest` from the repo root skipped them.
     "services/shared/tests",
-    # #3247: the nginx gateway tests never ran because this directory was not
-    # listed, so a bare `pytest` never collected infra/gateway/tests.
-    "infra/gateway/tests",
+    # The nginx gateway tests (#3247) moved with the reference-only config to
+    # docs/archive/retired-topology/gateway/ on 2026-10-30 (WI-09).
 ]
 asyncio_mode = "auto"
 python_files = "test_*.py"

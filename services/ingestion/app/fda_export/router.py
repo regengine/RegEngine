@@ -48,6 +48,7 @@ from ..fda_export_service import (
     _generate_csv,
     _generate_csv_v2,
     _generate_pdf,
+    _rule_versions_for_events,
     _safe_filename_token,
 )
 from ..subscription_gate import require_active_subscription
@@ -67,7 +68,9 @@ from .formatters import (
 from .merkle import get_merkle_proof_handler, get_merkle_root_handler
 from .queries import (
     AuditLogWriteError,
+    ExportOverflowError,
     _verify_chain_for_export,
+    attach_open_gaps,
     build_recall_where_clause,
     build_v2_where_clause,
     fetch_export_log_history,
@@ -77,7 +80,6 @@ from .queries import (
     format_export_log_rows,
     log_recall_export,
     log_v2_export,
-    ExportOverflowError,
     reconstruct_full_export_events,
     rows_to_event_dicts,
     v2_rows_to_event_dicts,
@@ -304,6 +306,7 @@ def export_fda_spreadsheet(
         # flag flows from the query string → authorization gate → CSV
         # generator; the generated hash covers the redacted (or full)
         # content exactly, so ``verify_export`` can reproduce it.
+        generated_at = attach_open_gaps(db_session, tenant_id, events)
         csv_content = _generate_csv(events, include_pii=include_pii)
         export_hash = hashlib.sha256(csv_content.encode("utf-8")).hexdigest()
         chain_verification = _verify_chain_for_export(persistence, db_session, tenant_id)
@@ -311,7 +314,7 @@ def export_fda_spreadsheet(
 
         # Enforce the KDE coverage gate (#1222). Callers may bypass by
         # passing ``allow_incomplete=true``; every bypass is logged.
-        _enforce_kde_coverage_gate(
+        coverage_gate_bypassed = _enforce_kde_coverage_gate(
             completeness_summary=completeness_summary,
             allow_incomplete=allow_incomplete,
             identity=identity,
@@ -338,6 +341,7 @@ def export_fda_spreadsheet(
                 generated_by=generated_by,
                 export_type="fda_spreadsheet_package" if format == "package" else "fda_spreadsheet",
                 include_pii=include_pii,
+                generated_at=generated_at,
             )
             db_session.commit()
         except Exception as exc:
@@ -433,6 +437,8 @@ def export_fda_spreadsheet(
                 query_start_date=start_date,
                 query_end_date=end_date,
                 include_pii=include_pii,
+                rule_versions=_rule_versions_for_events(db_session, tenant_id, events),
+                coverage_gate_bypassed=coverage_gate_bypassed,
             )
             filename = f"fda_traceability_package_{safe_tlc}_{timestamp}.zip"
             return StreamingResponse(
@@ -608,13 +614,14 @@ def export_all_events(
                 ),
             )
 
+        generated_at = attach_open_gaps(db_session, tenant_id, deduped)
         csv_content = _generate_csv(deduped, include_pii=include_pii)
         export_hash = hashlib.sha256(csv_content.encode("utf-8")).hexdigest()
         chain_verification = _verify_chain_for_export(persistence, db_session, tenant_id)
         completeness_summary = _build_completeness_summary(deduped)
 
         # KDE coverage gate (#1222).
-        _enforce_kde_coverage_gate(
+        coverage_gate_bypassed = _enforce_kde_coverage_gate(
             completeness_summary=completeness_summary,
             allow_incomplete=allow_incomplete,
             identity=identity,
@@ -636,6 +643,7 @@ def export_all_events(
                 export_type="fda_export_all_package" if format == "package" else "fda_export_all",
                 include_pii=include_pii,
                 query_event_type=event_type,
+                generated_at=generated_at,
             )
             db_session.commit()
         except Exception as exc:
@@ -720,6 +728,8 @@ def export_all_events(
                 query_start_date=start_date,
                 query_end_date=end_date,
                 include_pii=include_pii,
+                rule_versions=_rule_versions_for_events(db_session, tenant_id, deduped),
+                coverage_gate_bypassed=coverage_gate_bypassed,
             )
             filename = f"fda_export_all_{timestamp}.zip"
             return StreamingResponse(
@@ -1056,10 +1066,11 @@ def export_fda_spreadsheet_v2(
         events = v2_rows_to_event_dicts(rows)
 
         # ----- Generate CSV with compliance columns -----
+        generated_at = attach_open_gaps(db_session, tenant_id, events)
         csv_content, export_hash = generate_csv_v2_and_hash(events, include_pii=include_pii)
         chain_verification = _verify_chain_for_export(persistence, db_session, tenant_id)
         completeness_summary = _build_completeness_summary(events)
-        _enforce_kde_coverage_gate(
+        coverage_gate_bypassed = _enforce_kde_coverage_gate(
             completeness_summary=completeness_summary,
             allow_incomplete=allow_incomplete,
             identity=identity,
@@ -1106,6 +1117,7 @@ def export_fda_spreadsheet_v2(
             source_ip=identity["source_ip"],
             include_pii=include_pii,
             event_type=event_type,
+            generated_at=generated_at,
         )
 
         timestamp = make_timestamp()
@@ -1174,6 +1186,8 @@ def export_fda_spreadsheet_v2(
                 },
                 chain_payload_extras=chain_payload_extras,
                 include_pii=include_pii,
+                rule_versions=_rule_versions_for_events(db_session, tenant_id, events),
+                coverage_gate_bypassed=coverage_gate_bypassed,
             )
 
         # CSV-only response
@@ -1276,9 +1290,13 @@ async def get_merkle_proof(
     summary="Trace transformation graph for a TLC",
     description=(
         "Returns all TLCs reachable from the given lot code via "
-        "fsma.transformation_links — both upstream inputs and downstream outputs.  "
-        "Also returns the full CTE event count per linked lot so the UI can "
-        "show the trace tree without fetching the full FDA export."
+        "fsma.transformation_links. ``direction`` selects upstream inputs "
+        "(backward), downstream outputs (forward) or the union of both walks "
+        "(both, the default). ``depth_exhausted`` in the response is true when "
+        "a lot was reached at the depth limit and not expanded, so the graph "
+        "may continue past what is returned. Also returns the full CTE event "
+        "count per linked lot so the UI can show the trace tree without "
+        "fetching the full FDA export."
     ),
     tags=["Traceability"],
 )
@@ -1289,6 +1307,11 @@ def trace_transformation_graph(
     tlc: str,
     tenant_id: str = Query(..., description="Tenant identifier"),
     depth: int = Query(default=5, ge=1, le=10, description="Max traversal depth"),
+    direction: str = Query(
+        default="both",
+        pattern="^(forward|backward|both)$",
+        description="forward = downstream outputs, backward = upstream inputs, both = union of the two walks",
+    ),
     principal: IngestionPrincipal = Depends(require_permission("fda.read")),
     _subscription=Depends(require_active_subscription),
 ) -> dict:
@@ -1311,6 +1334,7 @@ def trace_transformation_graph(
             tenant_id=tenant_id,
             tlc=tlc,
             depth=depth,
+            direction=direction,
         )
 
     except HTTPException:

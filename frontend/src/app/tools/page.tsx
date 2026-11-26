@@ -5,10 +5,10 @@ import { JSONLD } from "@/components/seo/json-ld";
 
 export const metadata: Metadata = {
     title: "Free FSMA 204 Tools | RegEngine",
-    description: "Free FTL, Critical Tracking Event (CTE), Key Data Element (KDE), and TLC tools. Self reported checklists do not score readiness. FDA date: July 20, 2028.",
+    description: "Free FTL, CTE, KDE, and TLC tools. FDA has said it will not enforce the Food Traceability Rule before July 20, 2028, following a Congressional directive.",
     openGraph: {
         title: "Free FSMA 204 Tools | RegEngine",
-        description: "Free FTL, Critical Tracking Event (CTE), Key Data Element (KDE), and TLC tools. Self reported checklists do not score readiness. FDA date: July 20, 2028.",
+        description: "Free FTL, CTE, KDE, and TLC tools. FDA has said it will not enforce the Food Traceability Rule before July 20, 2028, following a Congressional directive.",
         type: "website",
         url: "https://regengine.co/tools",
     },

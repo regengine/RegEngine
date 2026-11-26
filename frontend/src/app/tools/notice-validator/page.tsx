@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, ArrowRight, CheckCircle2, ClipboardPaste, FileWarning, Info, RotateCcw, XCircle } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CheckCircle2, Info, RotateCcw, XCircle } from 'lucide-react';
 import { LeadGate } from '@/components/lead-gate/LeadGate';
 import { EmailGate } from '@/components/tools/EmailGate';
 import { Container } from '@/components/layout/container';
@@ -12,6 +12,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { fieldControlClasses } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { trackToolRunCompleted, trackToolRunStarted } from '@/lib/conversion-events';
+import { usePostHog } from '@/lib/posthog-provider';
 
 interface Requirement {
     id: string;
@@ -71,40 +72,8 @@ const REQUIREMENTS: Requirement[] = [
     },
 ];
 
-const SAMPLE_NOTICES = {
-    good: `FDA Request Response
-
-Traceability Lot Code: 00012345678901-LOT-2026-001
-Product Description: Romaine Lettuce
-
-Covered Critical Tracking Events:
-- Receiving at FreshLeaf Distribution Center on 2026-03-03
-- Transformation into packed case lots on 2026-03-04
-- Shipping to retailer DC on 2026-03-05
-
-Key Data Elements Included:
-- Quantity: 500 cases
-- Unit of Measure: cases
-- Ship From: Valley Fresh Farms
-- Ship To: FreshLeaf Distribution Center / Retailer DC-04
-- Event Dates and facility references
-
-Export Package:
-- Sortable spreadsheet CSV attached
-- Sortable spreadsheet prepared per §1.1455(c) 24 hour availability requirement
-- SHA256 and chain hash references included for record verification`,
-    bad: `Lot response attached.
-
-Product moved through the system last week.
-
-Please review the records.`,
-};
-
-// Note: the "good" sample above is illustrative only — passing this self-check on a draft
-// does not mean the draft satisfies §1.1455(c); the rule requires actual record content,
-// not keyword presence.
-
 export default function NoticeValidatorPage() {
+    const posthog = usePostHog();
     const [noticeText, setNoticeText] = useState('');
     const [hasAnalyzed, setHasAnalyzed] = useState(false);
 
@@ -143,6 +112,7 @@ export default function NoticeValidatorPage() {
     const runCheck = () => {
         if (!noticeText.trim()) return;
         trackToolRunStarted('notice-validator');
+        posthog?.capture('tool_started', { tool_id: 'notice-validator' });
         setHasAnalyzed(true);
         trackToolRunCompleted('notice-validator', 'success');
     };
@@ -162,22 +132,6 @@ export default function NoticeValidatorPage() {
                 </div>
 
                 <div className="mt-6 flex flex-wrap gap-2">
-                    <Button
-                        type="button"
-                        variant="secondary"
-                        onClick={() => { setNoticeText(SAMPLE_NOTICES.good); setHasAnalyzed(false); }}
-                        leadingIcon={<ClipboardPaste aria-hidden="true" strokeWidth={1.75} />}
-                    >
-                        Load strong sample
-                    </Button>
-                    <Button
-                        type="button"
-                        variant="secondary"
-                        onClick={() => { setNoticeText(SAMPLE_NOTICES.bad); setHasAnalyzed(false); }}
-                        leadingIcon={<FileWarning aria-hidden="true" strokeWidth={1.75} />}
-                    >
-                        Load weak sample
-                    </Button>
                     <Button
                         type="button"
                         variant="ghost"

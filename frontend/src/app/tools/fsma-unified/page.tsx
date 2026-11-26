@@ -67,7 +67,7 @@ export default function UnifiedDashboardPage() {
             <RelatedTools tools={filterExperimentalToolLinks([
                 { href: "/tools/knowledge-graph", title: "Knowledge Graph", description: "Build an interactive visual map of your FSMA 204 supply chain nodes and coverage gaps." },
                 { href: "/tools/ftl-checker", title: "FTL Checker", description: "Check if your food products are on the FDA Food Traceability List." },
-                { href: "/tools/drill-simulator", title: "24 Hour Drill Simulator", description: "Run a scenario-based FDA outbreak drill to test your record retrieval speed." },
+                { href: "/tools/drill-simulator", title: "Recall drill (Preview)", description: "Run a scenario-based FDA outbreak drill to test your record retrieval speed." },
             ])} />
         </>
     );

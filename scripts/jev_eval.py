@@ -51,7 +51,7 @@ from typing import Any
 import structlog
 
 ROOT = Path(__file__).resolve().parents[1]
-for _path in (ROOT / "services" / "ingestion", ROOT / "services"):
+for _path in (ROOT / "services", ROOT):  # repo root for services.*, services/ for shared.*
     _path_str = str(_path)
     if _path_str not in sys.path:
         sys.path.insert(0, _path_str)
@@ -84,7 +84,7 @@ def _configure_cli_logging() -> None:
 if __name__ == "__main__":  # before the imports below can log anything
     _configure_cli_logging()
 
-from app import csv_templates as route  # noqa: E402
+from services.ingestion.app import csv_templates as route  # noqa: E402
 from shared.agent_artifacts import HUMAN_REVIEW_CONFIDENCE_THRESHOLD  # noqa: E402
 from shared.jev import JevDecider, JevSettings  # noqa: E402
 from shared.jev.cte_classification import CTE_NAMES, MIXED_OR_UNCLEAR, suggest_file_cte_type  # noqa: E402
@@ -94,7 +94,6 @@ from shared.jev.header_mapping import (  # noqa: E402
     suggest_header_mappings,
     unrecognized_headers,
 )
-from shared.jev.settings import API_KEY_ENV, ENABLED_ENV  # noqa: E402
 
 EXIT_OK = 0
 EXIT_USAGE = 1
@@ -385,7 +384,7 @@ def _parser() -> _Parser:
     parser.add_argument(
         "--prompt-key",
         action="store_true",
-        help=f"read the API key from a hidden prompt for this run instead of {API_KEY_ENV}",
+        help="read the API key from a hidden prompt for this run instead of TYPESAFE_API_KEY",
     )
     return parser
 
@@ -415,8 +414,14 @@ def main(
     # Header rows only: the cases hold no row values to sample.
     settings = dataclasses.replace(settings, header_sample_values=0)
     if not settings.enabled:
-        reason = f"{API_KEY_ENV} is not set" if not settings.api_key else f"{ENABLED_ENV} switches Jev off"
-        print(f"{PROG}: not configured: {reason}. Nothing was sent.", file=sys.stderr)
+        # Constant-only messages: never interpolate API_KEY_ENV/api_key (CodeQL clear-text-logging).
+        if not settings.api_key:
+            print(f"{PROG}: not configured: TYPESAFE_API_KEY is not set. Nothing was sent.", file=sys.stderr)
+        else:
+            print(
+                f"{PROG}: not configured: REGENGINE_JEV_ENABLED switches Jev off. Nothing was sent.",
+                file=sys.stderr,
+            )
         return EXIT_NOT_CONFIGURED
 
     decider = JevDecider(settings, transport=transport)

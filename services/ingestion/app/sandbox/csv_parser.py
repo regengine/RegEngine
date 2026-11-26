@@ -157,9 +157,9 @@ _KDE_FIELD_ALIASES = {
     "date_shipped": "ship_date",
     "shipping_date": "ship_date",
     "ship_dt": "ship_date",
-    # Receive date
+    # Receive date (receiving CTE) vs received_date (initial_packing carry-in; contract v3)
     "receive_date": "receive_date",
-    "received_date": "receive_date",
+    "received_date": "received_date",
     "date_received": "receive_date",
     "receiving_date": "receive_date",
     "receipt_date": "receive_date",

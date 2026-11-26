@@ -1,3 +1,5 @@
+-- alembic-revision: 0a329588b824
+-- rendered-from: alembic/versions/20261016_0a329588b824_v131_tool_leads_utm.py (precheck)
 -- Read-only check before adding campaign attribution to public.tool_leads.
 -- Existing columns, if any, must be character varying(100).
 SELECT to_regclass('public.tool_leads') AS tool_leads_table;

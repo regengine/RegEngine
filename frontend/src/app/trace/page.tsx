@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 
 import { PageContainer } from '@/components/layout/page-container';
 import { PageHeader } from '@/components/layout/page-header';
@@ -49,11 +51,27 @@ interface TraceResult {
 
 export default function TracePage() {
   const { hasTenantSession } = useAuth();
+  // A scanned label QR (/01/{gtin}/10/{lot}/21/{serial}) lands here with
+  // ?tlc= so the lot is already in the box.
+  const searchParams = useSearchParams();
+  const tlcParam = searchParams.get('tlc') ?? '';
 
-  const [tlcInput, setTlcInput] = useState('');
+  const [tlcInput, setTlcInput] = useState(tlcParam);
+  // Client navigation can change ?tlc= while this page stays mounted:
+  // follow it, but never clear what the user typed. Adjusted during render
+  // (react.dev "storing information from previous renders"), not in an
+  // effect, so there is no extra commit.
+  const [seenTlcParam, setSeenTlcParam] = useState(tlcParam);
+  if (tlcParam !== seenTlcParam) {
+    // Record every change, including to no parameter, so coming back to
+    // ?tlc=A after it was removed prefills A again; only a non-empty
+    // value replaces what is in the box.
+    setSeenTlcParam(tlcParam);
+    if (tlcParam) setTlcInput(tlcParam);
+  }
   const [isLoading, setIsLoading] = useState(false);
   const [traceResult, setTraceResult] = useState<TraceResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<React.ReactNode | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [exportStatus, setExportStatus] = useState<string | null>(null);
 
@@ -69,6 +87,21 @@ export default function TracePage() {
 
     try {
       const { blob, filename, recordCount } = await apiClient.downloadSupplierFDARecords('xlsx', undefined, code);
+      
+      // Backend returns 200 with X-FDA-Record-Count: 0 for empty lot
+      if (recordCount === 0) {
+        setError(
+          <>
+            There are no records for lot code &quot;{code}&quot; yet, so there is nothing to export.{' '}
+            <Link href="/onboarding/bulk-upload" className="underline">
+              Upload a CSV
+            </Link>{' '}
+            that includes this lot.
+          </>
+        );
+        return;
+      }
+      
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -76,8 +109,34 @@ export default function TracePage() {
       a.click();
       URL.revokeObjectURL(url);
       setExportStatus(`Downloaded ${filename} with ${recordCount} record${recordCount !== 1 ? 's' : ''} for TLC "${code}".`);
-    } catch {
-      setError('FDA spreadsheet export failed. Please try again.');
+    } catch (err: unknown) {
+      // Branch on error type
+      const errObj = err as { response?: { status?: number } };
+      const status = errObj.response?.status;
+
+      if (status === 404 || (err instanceof Error && err.message.toLowerCase().includes('no records'))) {
+        setError(
+          <>
+            There are no records for lot code &quot;{code}&quot; yet, so there is nothing to export.{' '}
+            <Link href="/onboarding/bulk-upload" className="underline">
+              Upload a CSV
+            </Link>{' '}
+            that includes this lot.
+          </>
+        );
+      } else if (status === 401 || status === 403) {
+        setError(
+          <>
+            Your session ended.{' '}
+            <Link href="/login" className="underline">
+              Sign in again
+            </Link>
+            , then export.
+          </>
+        );
+      } else {
+        setError('We could not build the FDA spreadsheet. Try again in a moment. If it keeps failing, send us the lot code.');
+      }
     } finally {
       setIsExporting(false);
     }
@@ -107,7 +166,15 @@ export default function TracePage() {
       );
 
       if (!preview.rows || preview.rows.length === 0) {
-        setError(`No CTE events found for TLC "${code}". Check the lot code and try again.`);
+        setError(
+          <>
+            No records found for lot code &quot;{code}&quot;. Check the code, or{' '}
+            <Link href="/onboarding/bulk-upload" className="underline">
+              upload a CSV
+            </Link>{' '}
+            that includes this lot.
+          </>
+        );
         setIsLoading(false);
         return;
       }
@@ -153,8 +220,11 @@ export default function TracePage() {
         total_count: preview.total_count,
       });
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Trace query failed';
-      setError(message);
+      // Log technical error details for debugging
+      if (err instanceof Error) {
+        console.error('Trace query error:', err.message);
+      }
+      setError('We could not run this trace. Try again in a moment. If it keeps failing, send us the lot code you searched.');
     } finally {
       setIsLoading(false);
     }
@@ -174,7 +244,7 @@ export default function TracePage() {
   const summaryStats = traceResult
     ? [
       { label: 'Facilities', value: traceResult.facilities.length },
-      { label: 'CTE Events', value: traceResult.events.length },
+      { label: 'Events', value: traceResult.events.length },
       { label: 'Total Records', value: traceResult.total_count },
     ]
     : [];
@@ -182,8 +252,8 @@ export default function TracePage() {
   return (
     <PageContainer>
       <PageHeader
-        title="Traceability Query"
-        description="Trace products through the supply chain by Traceability Lot Code (TLC)"
+        title="Trace a lot"
+        description="Enter a lot code to see every step it went through: received, made, shipped."
       />
 
       <div className="space-y-6">
@@ -197,7 +267,7 @@ export default function TracePage() {
                 <label htmlFor="trace-tlc" className="sr-only">Trace Lot</label>
                 <Input
                   id="trace-tlc"
-                  placeholder="Enter TLC (e.g., TLC-2026-SAL-0001)"
+                  placeholder="Enter a lot code from your records"
                   value={tlcInput}
                   onChange={(e) => setTlcInput(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleTrace()}
@@ -278,7 +348,12 @@ export default function TracePage() {
         {!isLoading && !traceResult && !error && (
           <EmptyState
             icon={Search}
-            title="Enter a Traceability Lot Code (TLC) to view its CTE event chain"
+            title="Enter a lot code above to see its history. No records yet? Upload a CSV first."
+            action={
+              <Link href="/onboarding/bulk-upload" className="text-re-brand underline underline-offset-[3px]">
+                Upload a CSV
+              </Link>
+            }
           />
         )}
 
@@ -340,7 +415,7 @@ export default function TracePage() {
                 <div className="min-w-0">
                   <CardTitle>CTE Event Timeline</CardTitle>
                   <CardDescription className="mt-1">
-                    Each event is cryptographically hashed (SHA-256) for tamper-evident traceability
+                    Events are SHA-256 hashed where enabled. Hashing is a RegEngine feature, not an FDA requirement.
                   </CardDescription>
                 </div>
               </CardHeader>

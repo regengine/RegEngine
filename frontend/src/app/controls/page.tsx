@@ -282,7 +282,7 @@ export default function MyControlsPage() {
                 >
                   <option value="FSMA 204">FSMA 204</option>
                   <option value="FDA CTE">FDA CTE</option>
-                  <option value="EPCIS 2.0">EPCIS 2.0</option>
+                  <option value="EPCIS 2.0">EPCIS 2.0 (Preview)</option>
                   <option value="GS1">GS1</option>
                 </select>
               </Field>

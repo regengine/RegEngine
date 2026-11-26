@@ -236,13 +236,11 @@ def test_resolve_exception(client, mock_svc):
 # ---------------------------------------------------------------------------
 
 
-def test_waive_exception(client, mock_svc):
+def test_waive_exception_records_principal_as_approver(client, mock_svc):
+    """S5: the approver is the authenticated principal's key_id, not a body field."""
     resp = client.patch(
         "/api/v1/exceptions/exc-1/waive",
-        json={
-            "waiver_reason": "Low-risk supplier",
-            "waiver_approved_by": "admin-1",
-        },
+        json={"waiver_reason": "Low-risk supplier"},
     )
     assert resp.status_code == 200
     assert resp.json()["status"] == "waived"
@@ -250,8 +248,40 @@ def test_waive_exception(client, mock_svc):
         TENANT,
         "exc-1",
         "Low-risk supplier",
-        "admin-1",
+        "test-key",
     )
+
+
+def test_waive_exception_ignores_body_supplied_approver(client, mock_svc):
+    """A caller cannot sign a waiver in someone else's name."""
+    resp = client.patch(
+        "/api/v1/exceptions/exc-1/waive",
+        json={
+            "waiver_reason": "Low-risk supplier",
+            "waiver_approved_by": "someone-else",
+        },
+    )
+    assert resp.status_code == 200
+    assert mock_svc.waive_exception.call_args.args[3] == "test-key"
+
+
+def test_waive_exception_requires_reason(client, mock_svc):
+    resp = client.patch("/api/v1/exceptions/exc-1/waive", json={})
+    assert resp.status_code == 422
+    mock_svc.waive_exception.assert_not_called()
+
+
+def test_waive_exception_rejects_empty_principal_identity():
+    principal = _make_principal()
+    principal = principal.model_copy(update={"key_id": ""})
+    svc = MagicMock()
+    client = _build_client(principal, svc)
+    resp = client.patch(
+        "/api/v1/exceptions/exc-1/waive",
+        json={"waiver_reason": "Low-risk supplier"},
+    )
+    assert resp.status_code == 401
+    svc.waive_exception.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

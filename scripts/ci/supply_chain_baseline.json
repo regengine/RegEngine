@@ -4,6 +4,13 @@
   "entries": [
     {
       "rule": "image-digest",
+      "file": ".github/workflows/security.yml",
+      "match": "image: regengine:ci",
+      "reason": "Locally built CI image from the same job, not pulled from a registry, so it cannot be digest-pinned.",
+      "exact": true
+    },
+    {
+      "rule": "image-digest",
       "file": "Dockerfile",
       "match": "FROM python:3.11-slim AS builder",
       "reason": "Base image tag is fixed at python 3.11 slim. No digest recorded yet because digest resolution needs registry access. Record the digest the next time the base image is refreshed.",
@@ -42,55 +49,6 @@
       "file": "docker-compose.dev.yml",
       "match": "image: redis:7",
       "reason": "Local development compose file only, never shipped. Major version tag accepted for dev parity.",
-      "exact": true
-    },
-    {
-      "rule": "image-digest",
-      "file": "infra/k8s/base/admin/deployment.yaml",
-      "match": "image: regengine/admin-service:$(IMAGE_TAG)",
-      "reason": "First-party image built from this repo's own pinned Dockerfile. Tag is supplied at deploy time, not pulled from upstream.",
-      "exact": true
-    },
-    {
-      "rule": "image-digest",
-      "file": "infra/k8s/base/compliance/deployment.yaml",
-      "match": "image: regengine/compliance-service:$(IMAGE_TAG)",
-      "reason": "First-party image built from this repo's own pinned Dockerfile. Tag is supplied at deploy time, not pulled from upstream.",
-      "exact": true
-    },
-    {
-      "rule": "image-digest",
-      "file": "infra/k8s/base/graph/deployment.yaml",
-      "match": "image: regengine/graph-service:$(IMAGE_TAG)",
-      "reason": "First-party image built from this repo's own pinned Dockerfile. Tag is supplied at deploy time, not pulled from upstream.",
-      "exact": true
-    },
-    {
-      "rule": "image-digest",
-      "file": "infra/k8s/base/ingestion/deployment.yaml",
-      "match": "image: regengine/ingestion-service:$(IMAGE_TAG)",
-      "reason": "First-party image built from this repo's own pinned Dockerfile. Tag is supplied at deploy time, not pulled from upstream.",
-      "exact": true
-    },
-    {
-      "rule": "image-digest",
-      "file": "infra/k8s/base/nlp/deployment.yaml",
-      "match": "image: regengine/nlp-service:$(IMAGE_TAG)",
-      "reason": "First-party image built from this repo's own pinned Dockerfile. Tag is supplied at deploy time, not pulled from upstream.",
-      "exact": true
-    },
-    {
-      "rule": "image-digest",
-      "file": "infra/k8s/base/scheduler/deployment.yaml",
-      "match": "image: regengine/scheduler:$(IMAGE_TAG)",
-      "reason": "First-party image built from this repo's own pinned Dockerfile. Tag is supplied at deploy time, not pulled from upstream.",
-      "exact": true
-    },
-    {
-      "rule": "image-digest",
-      "file": "infra/k8s/base/monitoring/alertmanager.yaml",
-      "match": "image: quay.io/prometheus/alertmanager:v0.32.1",
-      "reason": "Third-party monitoring image with a fixed version tag. Digest not recorded yet because digest resolution needs registry access. Record it on the next refresh.",
       "exact": true
     },
     {
@@ -243,8 +201,8 @@
     {
       "rule": "pip-pin",
       "file": ".github/workflows/security.yml",
-      "match": "pip install pytest httpx pytest-json-report pytest-asyncio requests sqlalchemy \"psycopg[binary]\"",
-      "reason": "Test-only dependencies in a scanner job. This file is owned by in-flight work, so it is baselined, not edited here. Pin on the next touch.",
+      "match": "pip install pytest-json-report",
+      "reason": "Report plugin for the tenant-isolation job only; the locks cover everything else since WI-04/WI-06 (2026-11-04). Not digest-pinned; accepted debt matching the prior entry.",
       "exact": true
     },
     {

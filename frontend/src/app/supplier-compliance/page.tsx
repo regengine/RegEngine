@@ -70,11 +70,11 @@ const FAQ = [
     },
     {
         q: 'Is my data secure?',
-        a: 'Yes. Every submission is SHA-256 hashed and cryptographically chain-linked. Data is stored in tenant-isolated databases with row-level security. Your data is only visible to you and the buyer who generated your portal link.',
+        a: 'Submissions are SHA-256 hashed and cryptographically chain-linked where enabled. Hashing is a RegEngine feature, not an FDA requirement. Data is stored in tenant-isolated databases with row-level security. Your data is only visible to you and the buyer who generated your portal link.',
     },
     {
         q: 'What does this cost me?',
-        a: 'Submitting data through a portal link is free. Your buyer pays for RegEngine. If you want your own RegEngine account to manage traceability across all your buyers, plans start at $425/mo (billed annually) at the Founding rate.',
+        a: 'Submitting data through a portal link is free. Your buyer pays for RegEngine. If you want your own RegEngine account to manage traceability across all your buyers, list price is $999/mo per facility and founding design partner pricing is $499/mo per facility.',
     },
 ];
 
@@ -193,7 +193,7 @@ export default function SupplierCompliancePage() {
                             {
                                 icon: Clock,
                                 title: 'The deadline',
-                                body: 'Current public FDA posture points to July 20, 2028 as the earliest enforcement date under congressional direction. Many major retailers are signaling traceability expectations to suppliers ahead of that date. Specific retailer requirements vary by buyer and should be confirmed directly with your buyer.',
+                                body: 'FDA has said it will not enforce the Food Traceability Rule before July 20, 2028, following a Congressional directive. Many major retailers are signaling traceability expectations to suppliers ahead of that date. Specific retailer requirements vary by buyer and should be confirmed directly with your buyer.',
                             },
                             {
                                 icon: AlertTriangle,

@@ -2,6 +2,7 @@
 
 import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import { trackToolRunCompleted, trackToolRunStarted } from '@/lib/conversion-events';
+import { usePostHog } from '@/lib/posthog-provider';
 import { useState } from 'react';
 import { Zap, ArrowRight, AlertTriangle, Check, Database } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -209,6 +210,7 @@ export default function AskPage() {
 }
 
 function AskPageContent() {
+  const posthog = usePostHog();
   const [query, setQuery] = useState<string>('');
   const [result, setResult] = useState<QueryResult | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -220,6 +222,7 @@ function AskPageContent() {
     if (!finalQuery.trim()) return;
 
     trackToolRunStarted('ask');
+    posthog?.capture('tool_started', { tool_id: 'ask' });
     let outcome: 'success' | 'error' = 'error';
     setIsLoading(true);
     setNlpError(null);

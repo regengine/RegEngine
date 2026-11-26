@@ -39,6 +39,7 @@ from app.webhook_models import (
 )
 from app.webhook_router_v2.validation import _validate_event_kdes
 from fastapi import FastAPI
+from fastapi.routing import APIRoute, iter_route_contexts
 from fastapi.testclient import TestClient
 
 # ---------------------------------------------------------------------------
@@ -268,7 +269,11 @@ class TestValidateKdeCompleteness:
 
     def test_all_present(self):
         event = _make_event()
-        kdes = {"harvest_date": "2026-04-17", "reference_document": "REF-1"}
+        kdes = {
+            "harvest_date": "2026-04-17",
+            "reference_document": "REF-1",
+            "immediate_subsequent_recipient": "Packhouse A",
+        }
         missing = _validate_kde_completeness("harvesting", event, kdes)
         assert missing == []
 
@@ -1062,10 +1067,13 @@ class TestRouterSurface:
         assert "CSV Templates & Import" in router.tags
 
     def test_endpoints_registered(self):
-        paths = {route.path for route in router.routes}
+        app = FastAPI()
+        app.include_router(router)
+        paths = {context.path for context in iter_route_contexts(app.routes) if isinstance(context.route, APIRoute)}
         assert "/api/v1/templates/{cte_type}" in paths
         assert "/api/v1/templates" in paths
         assert "/api/v1/ingest/csv" in paths
+        assert "/api/v1/ingest/csv/diagnostic" in paths
 
     def test_alias_coverage(self):
         # Spot-check each canonical CTE has at least one alias mapping back to it
@@ -1105,7 +1113,7 @@ class TestParseCsvRowsRequiredFields:
     def test_missing_date_rejects_row(self):
         events, errors, _ = self._parse("TLC1,Kale,10,lbs,,Farm A")
         assert events == []
-        assert errors == ["Row 2: date field was empty"]
+        assert errors == ["Row 2: Missing date: required by law (21 CFR 1.1325(a))"]
 
     def test_unparseable_date_rejects_row(self):
         events, errors, _ = self._parse("TLC1,Kale,10,lbs,2026-99-99,Farm A")
@@ -1116,12 +1124,12 @@ class TestParseCsvRowsRequiredFields:
     def test_missing_unit_rejects_row(self):
         events, errors, _ = self._parse("TLC1,Kale,10,,2026-04-17,Farm A")
         assert events == []
-        assert errors == ["Row 2: unit_of_measure is required"]
+        assert errors == ["Row 2: Missing unit of measure: required by law (21 CFR 1.1325(a))"]
 
     def test_missing_quantity_rejects_row(self):
         events, errors, _ = self._parse("TLC1,Kale,,lbs,2026-04-17,Farm A")
         assert events == []
-        assert errors == ["Row 2: quantity is required"]
+        assert errors == ["Row 2: Missing quantity: required by law (21 CFR 1.1325(a))"]
 
     def test_non_numeric_quantity_rejects_row(self):
         events, errors, _ = self._parse("TLC1,Kale,ten,lbs,2026-04-17,Farm A")

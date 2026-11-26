@@ -17,10 +17,10 @@ from server.router_policy import PRODUCTION_ENABLED_ROUTERS, RouterPolicy
 from tests.migrations.rls_db import guarded_live_database_url
 
 PROHIBITED_TABLE_PRIVILEGES = {
-    # The enabled CSV upload route retains each file here through a v126
-    # column-scoped INSERT that excludes storage_url and created_at. No
-    # table-wide privilege exists: reading, re-pointing or deleting a
-    # retained manifest is remediation work and stays denied.
+    # The enabled CSV upload route retains each file here through a
+    # column-scoped INSERT (v126 columns + v138 storage_url). created_at stays
+    # excluded. No table-wide privilege exists: reading, re-pointing (UPDATE)
+    # or deleting a retained manifest is remediation work and stays denied.
     "fsma.manifest_blobs": ("SELECT", "INSERT", "UPDATE", "DELETE"),
     "fsma.manifest_records": ("SELECT", "INSERT", "UPDATE", "DELETE"),
     "fsma.remediation_cases": ("SELECT", "INSERT", "UPDATE", "DELETE"),

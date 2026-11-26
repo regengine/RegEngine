@@ -64,7 +64,7 @@ const PRINCIPLES = [
     Icon: Target,
     title: "Accessible by default",
     description:
-      "Mid-market food companies deserve modern compliance tooling. RegEngine starts at $425/mo (billed annually).",
+      "Mid-market food companies deserve modern compliance tooling. List price is $999/mo per facility; founding design partner pricing is $499/mo.",
   },
   {
     Icon: Shield,
@@ -207,9 +207,9 @@ export default function AboutPage() {
                 Faster iteration
               </p>
               <p className="mt-1 text-ui text-re-text-secondary">
-                No committee approvals. Early tester feedback is scoped to
-                ship within days, not quarters. Regulatory updates deploy
-                without waiting for quarterly release trains.
+                No committee approvals. Early tester feedback is scoped by
+                the founder and ships when the change is ready to verify,
+                without waiting on a large release committee.
               </p>
             </Card>
             <Card variant="inset" padding="compact">

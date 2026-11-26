@@ -29,11 +29,11 @@ describe('FTL tools accuracy against the FDA Food Traceability List', () => {
     it('says FDA will not enforce before July 20, 2028 on the tools hub', () => {
         render(<ToolsLandingClient />);
 
-        expect(screen.getByText(/FDA won't enforce before July 20, 2028/)).toBeInTheDocument();
+        expect(screen.getByText('FDA has said it will not enforce the Food Traceability Rule before July 20, 2028, following a Congressional directive.')).toBeInTheDocument();
         expect(screen.queryByText(/compliance date is July 20, 2028/i)).not.toBeInTheDocument();
     });
 
-    it('uses the same enforcement wording on the FTL checker', () => {
+    it('uses enforcement wording on the FTL checker', () => {
         render(<FTLCheckerClient />);
 
         expect(screen.getByText(ENFORCEMENT_LINE)).toBeInTheDocument();

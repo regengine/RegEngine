@@ -33,6 +33,15 @@ const STATUS_COPY: Record<QAHealthStatus, { label: string; state: ComplianceStat
 
 const UNKNOWN = { readyPercent: null, blockingCount: null, advisoryCount: null, passing: false };
 
+/** Shown when the QA fetch times out (AbortError/TimeoutError), in both the card and the attention panel. */
+export const QA_TIMEOUT_MESSAGE = 'The QA signal did not respond.';
+
+export function isQATimeoutError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const name = (error as { name?: unknown }).name;
+  return name === 'AbortError' || name === 'TimeoutError';
+}
+
 export function deriveQASignal(input: {
   enabled: boolean;
   isLoading: boolean;
@@ -47,6 +56,9 @@ export function deriveQASignal(input: {
   }
   const overall = input.data?.overall;
   if (input.error || !overall) {
+    if (input.error && isQATimeoutError(input.error)) {
+      return { status: 'failed', label: QA_TIMEOUT_MESSAGE, state: 'unknown', ...UNKNOWN };
+    }
     return { status: 'failed', label: 'QA signal failed', state: 'unknown', ...UNKNOWN };
   }
   // An unrecognised status is treated as failing, never as passing.

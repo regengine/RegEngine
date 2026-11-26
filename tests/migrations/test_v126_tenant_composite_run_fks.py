@@ -17,7 +17,7 @@ import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import DBAPIError, IntegrityError
 
-from tests.migrations.rls_db import _normalize_psycopg, guarded_live_database_url, skip_or_fail_db
+from tests.migrations.rls_db import _normalize_psycopg, guarded_live_database_url, skip_or_fail_db, skip_or_fail_without_db
 
 ROOT = Path(__file__).resolve().parents[2]
 MIGRATION = ROOT / "alembic/versions/20260927_2db4f1d7b4ca_v126_tenant_composite_ingestion_run_fks.py"
@@ -54,7 +54,7 @@ def migration():
 def db(migration, monkeypatch):
     url = guarded_live_database_url()
     if not url:
-        pytest.skip("needs an alembic-head Postgres: REGENGINE_MIGRATION_TEST_DB, or DATABASE_URL in CI")
+        skip_or_fail_without_db("needs an alembic-head Postgres: REGENGINE_MIGRATION_TEST_DB, or DATABASE_URL in CI")
     engine = create_engine(_normalize_psycopg(url), future=True)
     try:
         with engine.connect() as conn:

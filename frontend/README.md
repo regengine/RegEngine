@@ -15,7 +15,7 @@ See the [product description](../docs/PRODUCT_DESCRIPTION.md) for capability ava
 | Buyer manifest remediation and correction actions | [remediation](src/app/remediation/) — requires the remediation API, which is excluded from the production allowlist |
 | Recall reporting and audit views | [recall report](src/app/dashboard/recall-report/), [audit](src/app/audit/) |
 | Email-code/passkey login, invitations, and API keys | [login](src/app/login/), [invite acceptance](src/app/accept-invite/), [API keys](src/app/api-keys/) |
-| Public synthetic proof, bundle verification, and recall drill | [proof](src/app/proof/), [verify](src/app/verify/) |
+| Bundle verification and recall drill | [verify](src/app/verify/), [recall drills](src/app/dashboard/recall-drills/) |
 | Product documentation and developer portal | [docs](src/app/docs/), [developer portal](src/app/developer/portal/) |
 
 Jev assistance is optional. Suggestions are visible for review; automatic application defaults off. See the [Jev guide](../docs/engineering/JEV_HEADER_MAPPING.md) for configuration, evidence, and data-sharing defaults.

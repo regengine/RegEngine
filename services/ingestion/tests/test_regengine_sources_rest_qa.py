@@ -82,7 +82,7 @@ class TestRateLimiter:
         finally:
             time.sleep = original
         assert slept == []
-        assert "example.com" in limiter._last_request
+        assert limiter._last_request.get("example.com") is not None
 
     def test_second_immediate_call_sleeps(self):
         slept = []
@@ -207,8 +207,7 @@ class TestAuditLogger:
         logger.log_store("doc-1", "success", "documents/v/doc-1.bin")
         logger.log_skip("doc-2", "duplicate")
         records = [
-            json.loads(line)
-            for line in (tmp_path / "job_job-2.jsonl").read_text(encoding="utf-8").strip().split("\n")
+            json.loads(line) for line in (tmp_path / "job_job-2.jsonl").read_text(encoding="utf-8").strip().split("\n")
         ]
         assert [r["action"] for r in records] == ["fetch", "parse", "store", "skip"]
         assert records[0]["details"] == {"http_status": 200}
@@ -436,7 +435,9 @@ class TestIngestionEngine:
         from regengine_ingestion.models import SourceMetadata
 
         meta = SourceMetadata(
-            source_url="https://x", fetch_timestamp=datetime.now(timezone.utc), http_headers={"Content-Type": "text/plain"}
+            source_url="https://x",
+            fetch_timestamp=datetime.now(timezone.utc),
+            http_headers={"Content-Type": "text/plain"},
         )
         items = [
             (b"doc-one", meta, {"title": "One"}),

@@ -184,7 +184,7 @@ echo
         ;;
 esac
 
-read -p "Email From Address (e.g., hello@regengine.ai): " email_from
+read -p "Email From Address (e.g., sales@regengine.co): " email_from
 if [ ! -z "$email_from" ]; then
     set_env_var EMAIL_FROM_ADDRESS "$email_from" .env
 fi

@@ -49,6 +49,12 @@ class _FakeResult:
     def fetchall(self) -> list[Any]:
         return list(self._rows)
 
+    def __iter__(self):
+        return iter(self._rows)
+
+    def close(self):
+        pass
+
 
 class _FakeSession:
     def __init__(self, execute_queue: list[Any] | None = None) -> None:
@@ -75,8 +81,10 @@ class _FakeSession:
 
 
 def _event_row(**overrides: Any) -> _MappingRow:
+    digits = str(uuid4().int).zfill(13)[:13]
     mapping = {
-        "event_type": None,
+        "event_type": "receiving",
+        "epc_class": f"urn:epc:class:lgtin:{digits[:7]}.{digits[7:]}.{uuid4().hex}",
         "traceability_lot_code": None,
         "quantity": None,
         "unit_of_measure": None,
@@ -97,25 +105,60 @@ def _event_row(**overrides: Any) -> _MappingRow:
 
 
 class TestQueryTenantEvents:
+    @pytest.mark.parametrize("use_lot", [False, True])
+    @pytest.mark.parametrize("use_from", [False, True])
+    @pytest.mark.parametrize("use_to", [False, True])
+    def test_optional_filters_preserve_tenant_scope(
+        self, monkeypatch: pytest.MonkeyPatch, use_lot: bool, use_from: bool, use_to: bool
+    ) -> None:
+        session = _FakeSession(execute_queue=[[]])
+        monkeypatch.setattr(epcis_export, "get_db_safe", lambda: session)
+        tenant_id = str(uuid4())
+        lot_code = uuid4().hex if use_lot else None
+        date_from = datetime.now(timezone.utc).isoformat() if use_from else None
+        date_to = datetime.now(timezone.utc).isoformat() if use_to else None
+
+        assert _query_tenant_events(tenant_id, lot_code, date_from, date_to) == []
+
+        sql, params = session.calls[0][1]
+        expected_where = "WHERE e.tenant_id = :tenant_id"
+        expected_params = {"tenant_id": tenant_id}
+        if lot_code is None:
+            expected_params["row_limit"] = epcis_export._MAX_EXPORT_EVENTS + 1
+        if lot_code is not None:
+            # SEL-598 dual-read: bare and full-class-URI TLCs both match.
+            lot_predicate, lot_params = epcis_export._lot_code_filter(lot_code)
+            expected_where += f" AND {lot_predicate}"
+            expected_params.update(lot_params)
+        for name, value, predicate in (
+            ("date_from", date_from, "e.event_timestamp >= :date_from"),
+            ("date_to", date_to, "e.event_timestamp < :date_to"),
+        ):
+            if value is not None:
+                expected_where += f" AND {predicate}"
+                expected_params[name] = value
+        assert f"{expected_where} ORDER BY" in " ".join(sql.split())
+        assert params == expected_params
+
     def test_no_rows_returns_empty_list(self, monkeypatch: pytest.MonkeyPatch) -> None:
         session = _FakeSession(execute_queue=[[]])
         monkeypatch.setattr(epcis_export, "get_db_safe", lambda: session)
 
-        assert _query_tenant_events("t", None, None, None) == []
+        assert _query_tenant_events(str(uuid4()), None, None, None) == []
 
     def test_db_error_raises_instead_of_empty_list(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # SEL-508: a storage failure must never look like an empty tenant.
         session = _FakeSession(execute_queue=[RuntimeError("db down")])
         monkeypatch.setattr(epcis_export, "get_db_safe", lambda: session)
         with pytest.raises(epcis_export.ExportStorageUnavailable):
-            _query_tenant_events("t", None, None, None)
+            _query_tenant_events(str(uuid4()), None, None, None)
         assert session.closed
 
     def test_query_is_bounded_by_cap_plus_one_not_5000(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # SEL-506: the old LIMIT 5000 silently dropped the oldest events.
         session = _FakeSession(execute_queue=[[]])
         monkeypatch.setattr(epcis_export, "get_db_safe", lambda: session)
-        _query_tenant_events("t", None, None, None)
+        _query_tenant_events(str(uuid4()), None, None, None)
         sql, params = session.calls[0][1]
         assert "LIMIT 5000" not in sql
         assert params["row_limit"] == epcis_export._MAX_EXPORT_EVENTS + 1
@@ -141,7 +184,7 @@ def client() -> TestClient:
             if isinstance(body, dict):
                 tenant_id = body.get("tenant_id") or body.get("tenantId")
         return TenantContext(
-            tenant_id=tenant_id or "t",
+            tenant_id=tenant_id or str(uuid4()),
             principal_kind="test",
             principal_id=uuid4().hex,
         )
@@ -158,7 +201,7 @@ class TestExportEpcisEndpoint:
         monkeypatch.setattr(epcis_export, "_query_tenant_events", lambda *a, **k: [])
         response = client.post(
             "/api/v1/export/epcis",
-            json={"tenant_id": "t", "format": "epcis"},
+            json={"tenant_id": str(uuid4()), "format": "epcis"},
         )
         assert response.status_code == 200
         body = response.json()
@@ -182,14 +225,14 @@ class TestExportEpcisEndpoint:
         monkeypatch.setattr(epcis_export, "_query_tenant_events", lambda *a, **k: [row])
         response = client.post(
             "/api/v1/export/epcis",
-            json={"tenant_id": "t", "format": "epcis"},
+            json={"tenant_id": str(uuid4()), "format": "epcis"},
         )
         assert response.status_code == 200
         body = response.json()
         metadata = body["regengine:exportMetadata"]
         assert metadata["dataSource"] == "tenant"
-        assert metadata["integrityVerified"] is True
-        assert metadata["chainHashVerified"] is True
+        assert metadata["integrityVerified"] is False
+        assert metadata["chainHashVerified"] is False
         assert metadata["eventsCount"] == 1
         assert "regengine:disclaimer" not in metadata
         events = body["epcisBody"]["eventList"]
@@ -198,33 +241,69 @@ class TestExportEpcisEndpoint:
         event = events[0]
         for key in ("type", "action", "bizStep", "eventTime"):
             assert isinstance(event[key], str) and event[key]
+        assert event["quantityList"][0]["epcClass"] == row["epc_class"]
+        assert metadata["skippedEventsCount"] == 0
         assert response.headers["X-RegEngine-Data-Source"] == "tenant"
-        assert response.headers["X-RegEngine-Integrity-Verified"] == "true"
+        assert response.headers["X-RegEngine-Integrity-Verified"] == "false"
         assert response.headers["X-RegEngine-Events-Count"] == "1"
 
-    def test_fills_defaults_when_row_fields_are_null(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    @pytest.mark.parametrize("validate", [False, True])
+    def test_corrupted_stored_hash_remains_unverified(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch, validate: bool
+    ) -> None:
+        # A well-formed but wrong hash must not acquire a verification claim
+        # just because it was loaded from storage or passed structural checks.
+        corrupted_hash = "0" * 64
+        session = _FakeSession(execute_queue=[[_event_row(sha256_hash=corrupted_hash)]])
+        monkeypatch.setattr(epcis_export, "get_db_safe", lambda: session)
+
+        response = client.post(
+            "/api/v1/export/epcis",
+            params={"validate": str(validate).lower()},
+            json={"tenant_id": str(uuid4()), "format": "epcis"},
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        metadata = body["regengine:exportMetadata"]
+        assert metadata["dataSource"] == "tenant"
+        assert metadata["eventsCount"] == 1
+        assert body["epcisBody"]["eventList"][0]["regengine:sha256"] == corrupted_hash
+        assert metadata["integrityVerified"] is False
+        assert metadata["chainHashVerified"] is False
+        assert response.headers["X-RegEngine-Integrity-Verified"] == "false"
+        assert session.closed
+        if validate:
+            assert body["regengine:validation"]["valid"] is True
+            assert body["regengine:validation"]["errors"] == []
+            assert response.headers["X-RegEngine-Schema-Valid"] == "true"
+        else:
+            assert "regengine:validation" not in body
+            assert "X-RegEngine-Schema-Valid" not in response.headers
+
+    def test_null_timestamp_is_skipped_without_no_data_message(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         row = dict(_event_row(event_timestamp=None)._mapping)
         monkeypatch.setattr(epcis_export, "_query_tenant_events", lambda *a, **k: [row])
         response = client.post(
             "/api/v1/export/epcis",
-            json={"tenant_id": "t"},
+            json={"tenant_id": str(uuid4())},
         )
         assert response.status_code == 200
         body = response.json()
-        events = body["epcisBody"]["eventList"]
-        assert isinstance(events, list)
-        assert len(events) == 1
-        assert body["regengine:exportMetadata"]["eventsCount"] == 1
-        assert response.headers["X-RegEngine-Events-Count"] == "1"
-        event = events[0]
-        for key in ("type", "action", "bizStep", "eventTime"):
-            assert isinstance(event[key], str) and event[key]
-        assert isinstance(event["readPoint"]["id"], str)
-        quantities = event["extension"]["quantityList"]
-        assert isinstance(quantities, list)
-        assert len(quantities) == 1
-        assert {"epcClass", "quantity", "uom"} <= quantities[0].keys()
-        assert "regengine:sha256" in event
+        assert body["epcisBody"]["eventList"] == []
+        meta = body["regengine:exportMetadata"]
+        assert meta["eventsCount"] == 0
+        assert meta["skippedEventsCount"] == 1
+        assert meta["skippedEventsByReason"]["missing_timestamp"] == 1
+        assert meta["dataSource"] == "tenant"
+        assert meta["integrityVerified"] is False
+        assert meta["chainHashVerified"] is False
+        assert response.headers["X-RegEngine-Integrity-Verified"] == "false"
+        assert "regengine:message" not in meta
+        assert response.headers["X-RegEngine-Events-Count"] == "0"
+        assert response.headers["X-RegEngine-Skipped-Events-Count"] == "1"
 
     def test_validate_flag_emits_validation_block_and_header(
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
@@ -232,7 +311,7 @@ class TestExportEpcisEndpoint:
         monkeypatch.setattr(epcis_export, "_query_tenant_events", lambda *a, **k: [])
         response = client.post(
             "/api/v1/export/epcis?validate=true",
-            json={"tenant_id": "t"},
+            json={"tenant_id": str(uuid4())},
         )
         assert response.status_code == 200
         body = response.json()
@@ -248,7 +327,7 @@ class TestExportFdaEndpoint:
         monkeypatch.setattr(epcis_export, "_query_tenant_events", lambda *a, **k: [])
         response = client.post(
             "/api/v1/export/fda",
-            json={"tenant_id": "t"},
+            json={"tenant_id": str(uuid4())},
         )
         assert response.status_code == 200
         assert response.headers["content-type"].startswith("text/csv")
@@ -286,7 +365,7 @@ class TestExportFailsLoudly:
     ) -> None:
         session = _FakeSession(execute_queue=[RuntimeError("db down")])
         monkeypatch.setattr(epcis_export, "get_db_safe", lambda: session)
-        response = client.post(path, json={"tenant_id": "t"})
+        response = client.post(path, json={"tenant_id": str(uuid4())})
         assert response.status_code == 503
         assert "No data yet" not in response.text
         assert response.headers.get("X-RegEngine-Data-Source") != "empty"
@@ -295,7 +374,7 @@ class TestExportFailsLoudly:
         rows = [_event_row() for _ in range(5001)]
         session = _FakeSession(execute_queue=[rows])
         monkeypatch.setattr(epcis_export, "get_db_safe", lambda: session)
-        response = client.post("/api/v1/export/epcis", json={"tenant_id": "t"})
+        response = client.post("/api/v1/export/epcis", json={"tenant_id": str(uuid4())})
         assert response.status_code == 200
         assert len(response.json()["epcisBody"]["eventList"]) == 5001
         assert response.headers["X-RegEngine-Events-Count"] == "5001"
@@ -307,6 +386,26 @@ class TestExportFailsLoudly:
         monkeypatch.setattr(epcis_export, "_MAX_EXPORT_EVENTS", 3)
         session = _FakeSession(execute_queue=[[_event_row() for _ in range(4)]])
         monkeypatch.setattr(epcis_export, "get_db_safe", lambda: session)
-        response = client.post(path, json={"tenant_id": "t"})
+        response = client.post(path, json={"tenant_id": str(uuid4())})
         assert response.status_code == 413
         assert session.calls[0][1][1]["row_limit"] == 4
+
+
+@pytest.mark.parametrize("extra", [False, True])
+def test_lot_export_counts_exact_matches_before_cap(monkeypatch, extra):
+    monkeypatch.setattr(epcis_export, "_MAX_EXPORT_EVENTS", 2)
+    # More coarse candidates than the limit must not hide older exact matches.
+    collisions = [_event_row(traceability_lot_code="urn:epc:class:lgtin:0614141.123452.X.LOT/A") for _ in range(5)]
+    wanted = [_event_row(traceability_lot_code="https://id.gs1.org/01/00614141123452/10/LOT%2fA") for _ in range(3 if extra else 2)]
+    session = _FakeSession(execute_queue=[collisions + wanted])
+    monkeypatch.setattr(epcis_export, "get_db_safe", lambda: session)
+    request = epcis_export.ExportRequest(tenant_id=str(uuid4()), lot_code="LOT/A")
+    if extra:
+        with pytest.raises(epcis_export.HTTPException) as err:
+            epcis_export._load_export_rows(str(uuid4()), request)
+        assert err.value.status_code == 413
+    else:
+        rows = epcis_export._load_export_rows(str(uuid4()), request)
+        assert len(rows) == 2
+    assert "LIMIT" not in session.calls[0][1][0]
+    assert session.closed

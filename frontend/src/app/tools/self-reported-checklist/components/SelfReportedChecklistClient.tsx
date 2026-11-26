@@ -10,7 +10,7 @@ export function SelfReportedChecklistClient() {
         <FreeToolPageShell
             title="Self Reported Checklist"
             heading="Self Reported Checklist"
-            subtitle="You answer. It echoes what you reported. Topics include Critical Tracking Event (CTE) and Key Data Element (KDE) fields. We do not verify records, we do not score readiness, and we do not decide whether you can meet §1.1455. The federal Food Traceability Rule compliance date is July 20, 2028."
+            subtitle="You answer. It echoes what you reported. Topics include Critical Tracking Event (CTE) and Key Data Element (KDE) fields. We do not verify records, we do not score readiness, and we do not decide whether you can meet §1.1455. FDA has said it will not enforce the Food Traceability Rule before July 20, 2028, following a Congressional directive."
             relatedToolIds={['ftl-checker', 'kde-checker', 'cte-mapper']}
         >
             <LeadGate
@@ -27,7 +27,7 @@ export function SelfReportedChecklistClient() {
                             We do NOT ask "within 24 hours" and we do NOT claim you can meet §1.1455.
                         </p>
                         <p className="text-xs text-[var(--re-text-muted)] mt-4">
-                            The federal Food Traceability Rule compliance date is July 20, 2028.
+                            FDA has said it will not enforce the Food Traceability Rule before July 20, 2028, following a Congressional directive.
                         </p>
                     </div>
                 }

@@ -169,7 +169,7 @@ def _validate_as_fsma_event(normalized: dict, tenant_id: str | None = None) -> d
                     "type": "value_error",
                 }
             ]
-            logger.warning("fsma_event_validation_failed error_count=%d", len(errors))
+            logger.warning("fsma_event_validation_failed")  # count lives in the audit record
             _audit_log_validation_failure(errors, tenant_id, normalized)
             return None
 
@@ -201,7 +201,7 @@ def _validate_as_fsma_event(normalized: dict, tenant_id: str | None = None) -> d
             ).model_dump()
         except ValidationError as exc:
             errors = exc.errors()
-            logger.warning("fsma_event_validation_failed error_count=%d", len(errors))
+            logger.warning("fsma_event_validation_failed")  # count lives in the audit record
             _audit_log_validation_failure(errors, tenant_id, normalized)
             return None
     except ImportError:

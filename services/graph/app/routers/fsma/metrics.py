@@ -59,8 +59,8 @@ def fsma_metrics_endpoint():
 @router.get("/metrics/quality")
 async def get_data_quality_metrics(
     confidence_threshold: float = Query(0.85, ge=0.0, le=1.0, description="Low confidence threshold"),
-    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
     api_key=Depends(require_api_key),
+    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
 ):
     """
     Get data quality drift metrics across all event types.
@@ -116,8 +116,8 @@ async def get_data_quality_metrics(
 @router.get("/dashboard")
 async def fsma_dashboard(
     request: Request,
-    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
     api_key=Depends(require_api_key),
+    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
 ):
     """
     FSMA compliance dashboard with aggregated health metrics.

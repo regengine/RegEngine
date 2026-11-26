@@ -27,9 +27,19 @@ from services.graph.app.routers.fsma.compliance import _epcis_to_xml  # noqa: E4
 
 @pytest.mark.security
 class TestEpcisXmlEscaping:
+    def test_xml_declares_utf8_and_is_parseable(self):
+        xml = _epcis_to_xml({"epcisBody": {"eventList": []}})
+
+        declaration = xml.splitlines()[0]
+        assert declaration == "<?xml version='1.0' encoding='utf-8'?>"
+        assert "unicode" not in declaration
+        root = ET.fromstring(xml.encode("utf-8"))
+        assert root.tag == "{urn:epcglobal:epcis:xsd:2}EPCISDocument"
+        assert root.find("EPCISBody/EventList") is not None
+
     def test_attack_vector_in_epc_is_escaped(self):
         """A tenant Lot.tlc containing XML metacharacters must not break out."""
-        attack_epc = "urn:epc:id:sgtin:</epc><inject>x</inject><epc>"
+        attack_epc = "urn:epc:id:sgtin:</epc><inject>é & 茶</inject><epc>"
         doc = {
             "creationDate": "2026-05-09T00:00:00Z",
             "epcisBody": {
@@ -50,7 +60,7 @@ class TestEpcisXmlEscaping:
         xml = _epcis_to_xml(doc)
 
         # Output must parse as well-formed XML.
-        root = ET.fromstring(xml)
+        root = ET.fromstring(xml.encode("utf-8"))
 
         # The attack vector must NOT have introduced an <inject> element.
         assert root.find(".//inject") is None

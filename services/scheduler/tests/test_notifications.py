@@ -15,6 +15,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+from urllib.parse import urlparse
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 os.environ.setdefault("ENVIRONMENT", "test")
@@ -368,6 +369,7 @@ class TestParallelDelivery:
             results = n.notify([_make_item()])
         assert len(results) == 2
         urls = {r.url for r in results}
-        assert "https://hook1.example.com" in urls
-        assert "https://hook2.example.com" in urls
+        hosts = {urlparse(u).hostname for u in urls}
+        assert hosts == {"hook1.example.com", "hook2.example.com"}
+        assert all(urlparse(u).scheme == "https" for u in urls)
         n.close()

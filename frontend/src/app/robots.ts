@@ -55,6 +55,9 @@ export default function robots(): MetadataRoute.Robots {
                     '/rules',
                     '/trace',
                     '/design-system',
+                    // Label QR landing pages (/01/<gtin>/10/<lot>/21/<serial>):
+                    // one page per printed serial, nothing to rank.
+                    '/01/',
                     // Redirect stub (now to /contact); keep it out of the index:
                     '/alpha',
                 ],

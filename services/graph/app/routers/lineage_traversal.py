@@ -26,7 +26,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from shared.middleware import get_current_tenant_id
 from shared.rate_limit import limiter
 
-router = APIRouter(tags=["Lineage"])
+# Validate the API key before any endpoint parameter. The handlers below declare
+# ``Depends(get_current_tenant_id)`` ahead of ``Depends(require_api_key)``, so a key-only
+# caller got 401 on tenant resolution before the key was checked. Router-level
+# dependencies resolve first; the per-request cache still validates the key exactly once.
+router = APIRouter(tags=["Lineage"], dependencies=[Depends(require_api_key)])
 logger = structlog.get_logger("fact-lineage")
 
 

@@ -70,8 +70,8 @@ describe('disabled dashboard features', () => {
         renderPage(page);
 
         expect(await screen.findByText(/still in development/i)).toBeInTheDocument();
-        expect(screen.getByRole('link', { name: 'CSV upload' })).toHaveAttribute('href', '/ingest');
-        expect(screen.getByRole('link', { name: 'JSON events API' })).toHaveAttribute('href', '/developers');
+        expect(screen.getByRole('link', { name: 'CSV upload' })).toHaveAttribute('href', '/onboarding/bulk-upload');
+        expect(screen.getByRole('link', { name: 'JSON events API' })).toHaveAttribute('href', '/docs/quickstart');
         expect(screen.getByRole('button', { name: new RegExp(`${disabledAction} \\(coming soon\\)`, 'i') })).toBeDisabled();
         expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
     });

@@ -2,9 +2,9 @@
  * TC_PERF_001 - TC_PERF_002: Performance Tests
  * TC_SEC_001 - TC_SEC_002: Security Tests
  * TC_INT_001: Integration Resilience Tests
- * 
+ *
  * Tests for load handling, stress conditions, and security vulnerabilities.
- * 
+ *
  * Compliance: OWASP Top 10
  */
 
@@ -68,21 +68,34 @@ describe('API Security Tests', () => {
             '<script>alert("XSS")</script>',
             '<img src=x onerror=alert(1)>',
             'javascript:alert(1)',
+            'data:text/html,<script>alert(1)</script>',
+            'vbscript:msgbox(1)',
             '<svg onload=alert(1)>',
             '"><script>alert(String.fromCharCode(88,83,83))</script>',
+            'oononerror=alert(1)',
         ];
 
         it.each(xssPayloads)(
             'should sanitize XSS payload: %s',
             async (payload) => {
                 const sanitizeHTML = (input: string): string => {
-                    return input
+                    // Escape markup first so attribute injection cannot reopen tags.
+                    let out = input
+                        .replace(/&/g, '&amp;')
                         .replace(/</g, '&lt;')
                         .replace(/>/g, '&gt;')
                         .replace(/"/g, '&quot;')
-                        .replace(/'/g, '&#x27;')
-                        .replace(/javascript:/gi, '')
-                        .replace(/on\w+=/gi, '');
+                        .replace(/'/g, '&#x27;');
+                    // Neutralize dangerous URL schemes (javascript, data, vbscript).
+                    out = out.replace(/(?:javascript|data|vbscript):/gi, '');
+                    // Strip event-handler assignments; repeat until stable so
+                    // overlapping prefixes like "oononerror=" cannot survive.
+                    let prev = '';
+                    while (out !== prev) {
+                        prev = out;
+                        out = out.replace(/on\w+\s*=/gi, '');
+                    }
+                    return out;
                 };
 
                 const sanitized = sanitizeHTML(payload);
@@ -90,6 +103,8 @@ describe('API Security Tests', () => {
                 expect(sanitized).not.toContain('<script');
                 expect(sanitized).not.toContain('onerror');
                 expect(sanitized).not.toContain('javascript:');
+                expect(sanitized.toLowerCase()).not.toContain('data:');
+                expect(sanitized.toLowerCase()).not.toContain('vbscript:');
             }
         );
 

@@ -18,6 +18,7 @@ from ..fda_export_service import (
     _build_completeness_summary,
     _build_fda_package,
     _generate_csv,
+    _rule_versions_for_events,
 )
 from .coverage import _enforce_kde_coverage_gate
 from .formatters import (
@@ -29,6 +30,7 @@ from .formatters import (
 from .queries import (
     AuditLogWriteError,
     _verify_chain_for_export,
+    attach_open_gaps,
     build_recall_where_clause,
     build_recall_where_clause_canonical,
     export_v1_reads_canonical,
@@ -175,10 +177,11 @@ async def export_recall_filtered_handler(
         # Convert to FDA export format
         events = rows_to_event_dicts(rows)
 
+        generated_at = attach_open_gaps(db_session, tenant_id, events)
         csv_content, export_hash = generate_csv_and_hash(events, include_pii=include_pii)
         chain_verification = _verify_chain_for_export(persistence, db_session, tenant_id)
         completeness_summary = _build_completeness_summary(events)
-        _enforce_kde_coverage_gate(
+        coverage_gate_bypassed = _enforce_kde_coverage_gate(
             completeness_summary=completeness_summary,
             allow_incomplete=allow_incomplete,
             identity={
@@ -211,6 +214,7 @@ async def export_recall_filtered_handler(
             location=location,
             event_type=event_type,
             include_pii=include_pii,
+            generated_at=generated_at,
         )
 
         timestamp = make_timestamp()
@@ -232,6 +236,8 @@ async def export_recall_filtered_handler(
                     "X-KDE-Coverage": str(completeness_summary["required_kde_coverage_ratio"]),
                 },
                 include_pii=include_pii,
+                rule_versions=_rule_versions_for_events(db_session, tenant_id, events),
+                coverage_gate_bypassed=coverage_gate_bypassed,
             )
 
         filename = f"fda_recall_export_{timestamp}.csv"

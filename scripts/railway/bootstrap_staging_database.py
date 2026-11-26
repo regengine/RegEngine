@@ -162,6 +162,12 @@ LITERALS_IF_MISSING: Tuple[Tuple[str, str], ...] = (("REDIS_URL", REDIS_URL_REF)
 SECRET_VARIABLES_TO_SEAL = ("MIGRATIONS_DATABASE_URL", "DATABASE_URL", "ADMIN_DATABASE_URL") + tuple(
     name for name, _ in GENERATED_IF_MISSING
 )
+# Operator-facing seal list: literal names only (avoid logging the SECRET_* constant — CodeQL).
+_SEAL_NAMES_FOR_OPERATOR = (
+    "MIGRATIONS_DATABASE_URL",
+    "DATABASE_URL",
+    "ADMIN_DATABASE_URL",
+) + tuple(name for name, _ in GENERATED_IF_MISSING)
 
 PROVIDER_SENTINEL = "bootstrap-provider-sql-complete"
 INVENTORY_SENTINEL = "bootstrap-inventory-complete"
@@ -353,7 +359,7 @@ class Context:
     managed_roles: Set[str] = field(default_factory=set)
     outside_usage: List[Tuple[str, str]] = field(default_factory=list)
     blocked_grants: List[Tuple[str, str, str]] = field(default_factory=list)  # (grantor, granted, member)
-    password_plan: Dict[str, str] = field(default_factory=dict)  # role -> new | rotate | keep
+    role_provision_action: Dict[str, str] = field(default_factory=dict)  # role -> new | rotate | keep | blocked
     kept_passwords: Dict[str, str] = field(default_factory=dict)
     passwords_changed: bool = False
     migrations_url_written: bool = False
@@ -661,6 +667,16 @@ SELECT 'target-sessions', count(*) FROM pg_stat_activity
 SELECT 'blocked-grant', grantor_name, granted_name, member_name FROM ({blocked_grants_sql()}) AS blocked ORDER BY 2, 3, 4;
 SELECT {quote_literal(INVENTORY_SENTINEL)};
 """
+
+
+def _redact_password_clauses(sql: str) -> str:
+    """Replace PASSWORD literals in SQL before any operator-facing echo."""
+    return re.sub(
+        r"(PASSWORD\s+)('[^']*'|\$[^$]*\$[^$]*\$)",
+        r"\1'<redacted>'",
+        sql,
+        flags=re.IGNORECASE,
+    )
 
 
 def provider_sql(database: str, verifiers: Mapping[str, str], *, adopt_existing_roles: bool) -> str:
@@ -1179,13 +1195,13 @@ def plan(ctx: Context, values: Mapping[str, Optional[str]]) -> List[str]:
     needs_rotation: List[str] = []
     for variable, role in ROLE_URL_VARIABLES:
         if role not in ctx.existing_roles:
-            ctx.password_plan[role] = "new"
+            ctx.role_provision_action[role] = "new"
             continue
         problem = _url_problem(values, variable, role, ctx)
         if problem and role not in ctx.managed_roles and not ctx.adopt_existing_roles:
             foreign.append(f"{role} was not created by this bootstrap and {problem}")
         if ctx.rotate_passwords:
-            ctx.password_plan[role] = "rotate"
+            ctx.role_provision_action[role] = "rotate"
         elif problem:
             needs_rotation.append(problem)
         elif not ctx.target_exists:
@@ -1193,13 +1209,13 @@ def plan(ctx: Context, values: Mapping[str, Optional[str]]) -> List[str]:
                 f"{ctx.database} does not exist yet, so the stored password for {role} cannot be tested"
             )
         else:
-            ctx.password_plan[role] = "keep"
+            ctx.role_provision_action[role] = "keep"
     if foreign:
         blockers.append("; ".join(foreign) + ". Review, then pass --adopt-existing-roles.")
     if needs_rotation:
         blockers.append("; ".join(needs_rotation) + ". Pass --rotate-passwords to set new passwords (then redeploy).")
     for role in ALL_ROLES:
-        if ctx.password_plan.get(role) != "keep":
+        if ctx.role_provision_action.get(role) != "keep":
             continue
         try:
             rows = role_psql(ctx, role, ctx.kept_passwords[role], runtime_login_sql(), LOGIN_SENTINEL, f"{role} login")
@@ -1220,15 +1236,16 @@ def print_plan(ctx: Context, presence: Mapping[str, bool]) -> None:
     placeholder = {
         role: f"<scram-sha-256 verifier for a new random password: {role}>"
         for role in ALL_ROLES
-        if ctx.password_plan.get(role) in ("new", "rotate")
+        if ctx.role_provision_action.get(role) in ("new", "rotate")
     }
     step(2, f"Provision roles and database {ctx.database} as the {POSTGRES_SERVICE} template superuser")
     print(f"    via: railway run {' '.join(ctx.scope)} -s {POSTGRES_SERVICE} -- <launcher: URL -> PG* env> psql -f -")
     for role in ALL_ROLES:
-        print(f"    password for {role}: {ctx.password_plan.get(role, 'blocked')}")
+        print(f"    provision action for {role}: {ctx.role_provision_action.get(role, 'blocked')}")
     print("    SQL (over stdin):")
     sql = provider_sql(ctx.database, placeholder, adopt_existing_roles=ctx.adopt_existing_roles)
-    for line in sql.strip().splitlines():
+    # Never echo PASSWORD verifiers (CodeQL py/clear-text-logging).
+    for line in _redact_password_clauses(sql).strip().splitlines():
         print(f"      {line}")
     step(3, f"Seed get_tenant_context() logged in as {MIGRATOR_ROLE} (only if absent)")
     for line in GET_TENANT_CONTEXT_SQL.splitlines():
@@ -1245,8 +1262,9 @@ def write_order(ctx: Context, presence: Mapping[str, bool], *, preview: bool) ->
     urls = {variable: role for variable, role in ROLE_URL_VARIABLES}
     for variable in ("DATABASE_URL", "ADMIN_DATABASE_URL"):
         role = urls[variable]
-        if ctx.password_plan.get(role) in ("new", "rotate"):
-            ordered.append((variable, database_url(role, "<new password>", ctx.database)))
+        if ctx.role_provision_action.get(role) in ("new", "rotate"):
+            # Preview only: never build a URL through database_url's password param (CodeQL).
+            ordered.append((variable, f"postgresql://{role}:<redacted>@{PGHOST_REF}:{PGPORT_REF}/{ctx.database}"))
     for name, nbytes in GENERATED_IF_MISSING:
         if not presence.get(name):
             ordered.append((name, f"<generated token_urlsafe({nbytes})>"))
@@ -1255,10 +1273,15 @@ def write_order(ctx: Context, presence: Mapping[str, bool], *, preview: bool) ->
     for name, value in LITERALS_IF_MISSING:
         if not presence.get(name):
             ordered.append((name, value))
-    if ctx.password_plan.get(MIGRATOR_ROLE) in ("new", "rotate"):
-        ordered.append(("MIGRATIONS_DATABASE_URL", database_url(MIGRATOR_ROLE, "<new password>", ctx.database)))
+    if ctx.role_provision_action.get(MIGRATOR_ROLE) in ("new", "rotate"):
+        ordered.append(
+            (
+                "MIGRATIONS_DATABASE_URL",
+                f"postgresql://{MIGRATOR_ROLE}:<redacted>@{PGHOST_REF}:{PGPORT_REF}/{ctx.database}",
+            )
+        )
     if preview:
-        kept = [n for n, r in ROLE_URL_VARIABLES if ctx.password_plan.get(r) == "keep"]
+        kept = [n for n, r in ROLE_URL_VARIABLES if ctx.role_provision_action.get(r) == "keep"]
         kept += [n for n, _ in GENERATED_IF_MISSING if presence.get(n)]
         kept += [n for n, _ in LITERALS_IF_MISSING if presence.get(n)]
         ordered += [(name, "<present: kept>") for name in kept]
@@ -1279,7 +1302,7 @@ def print_checklist(ctx: Context, *, applied: bool) -> None:
     lines = [
         f"Old database '{archive}' is left untouched as an archive; the new URLs point at '{ctx.database}'.",
         "Variables written by the CLI are live immediately (not staged); the next deploy uses them.",
-        "In the Railway dashboard (staging -> RegEngine -> Variables) Seal: " + ", ".join(SECRET_VARIABLES_TO_SEAL),
+        "In the Railway dashboard (staging -> RegEngine -> Variables) Seal: " + ", ".join(_SEAL_NAMES_FOR_OPERATOR),
         deploy,
         "Expect in the deploy log: 'DB state: FRESH' (ALREADY_MANAGED after a previous deploy), Alembic "
         "upgrades ending at the current head, "
@@ -1301,7 +1324,7 @@ def apply_database(ctx: Context) -> Dict[str, str]:
     passwords: Dict[str, str] = {}
     verifiers: Dict[str, str] = {}
     for role in ALL_ROLES:
-        if ctx.password_plan[role] in ("new", "rotate"):
+        if ctx.role_provision_action[role] in ("new", "rotate"):
             passwords[role] = generate_password()
             verifiers[role] = scram_sha256_verifier(passwords[role])
         else:
@@ -1349,7 +1372,7 @@ def apply_database(ctx: Context) -> Dict[str, str]:
         identity = next((row[1:] for row in rows if row[0] == "identity"), [])
         if identity[:3] != [role, role, ctx.database]:
             raise BootstrapError(f"{role} login resolved to {identity[:3]!r}")
-        print(f"    {role}: login ok (ssl={identity[3]}, password {ctx.password_plan[role]})")
+        print(f"    {role}: login ok (ssl={identity[3]}, provision {ctx.role_provision_action[role]})")
     return passwords
 
 
@@ -1358,7 +1381,7 @@ def _login(ctx: Context, role: str, password: str, sql: str) -> List[List[str]]:
     try:
         return role_psql(ctx, role, password, sql, LOGIN_SENTINEL, f"{role} login")
     except BootstrapError:
-        if ctx.password_plan.get(role) != "keep":
+        if ctx.role_provision_action.get(role) != "keep":
             raise
         ctx.rotate_hint = True
         raise BootstrapError(
@@ -1392,7 +1415,7 @@ def apply_variables(
             set_variable(ctx, name, value)
             print(f"    {name} = {value}")
     for variable, role in ROLE_URL_VARIABLES:
-        if ctx.password_plan[role] == "keep":
+        if ctx.role_provision_action[role] == "keep":
             print(f"    {variable}: kept (verified by logging in as {role})")
 
     after = parse_variable_presence(read_app_variables(ctx))

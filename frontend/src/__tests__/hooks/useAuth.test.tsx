@@ -66,6 +66,7 @@ describe('useAuth Hook', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         localStorageMock.clear();
+        window.sessionStorage.clear();
         (isSupabaseConfigured as any).mockReturnValue(false);
         (createSupabaseBrowserClient as any).mockImplementation(() => {
             throw new Error('Supabase not configured');
@@ -102,10 +103,10 @@ describe('useAuth Hook', () => {
             expect(result.current.accessToken).toBeNull();
         });
 
-        it('hydrates from localStorage on mount', async () => {
+        it('hydrates authenticated email in memory without retaining it in storage', async () => {
             const mockUser = {
                 id: '123',
-                email: 'test@example.com',
+                email: `${crypto.randomUUID()}@example.test`,
                 name: 'Test User',
                 is_sysadmin: false,
                 tenant_id: 'tenant-123',
@@ -145,6 +146,10 @@ describe('useAuth Hook', () => {
             });
 
             expect(result.current.user).toEqual(mockUser);
+            expect(apiClient.setUser).toHaveBeenLastCalledWith(mockUser);
+            expect(JSON.parse(localStorageMock.getItem('regengine_user')!)).toEqual({ ...mockUser, email: '' });
+            expect(localStorageMock.getItem('regengine_user')).not.toContain(mockUser.email);
+            expect(window.sessionStorage.getItem('regengine_user')).toBeNull();
             // Access token is now a placeholder since actual token is in HTTP-only cookie
             expect(result.current.accessToken).toBe('cookie-managed');
         });
@@ -184,10 +189,10 @@ describe('useAuth Hook', () => {
             expect(result.current.accessToken).toBe('cookie-managed');
         });
 
-        it('persists user to localStorage on login', async () => {
+        it('keeps login email in memory and out of browser storage', async () => {
             const mockUser = {
                 id: '123',
-                email: 'test@example.com',
+                email: `${crypto.randomUUID()}@example.test`,
                 name: 'Test User',
                 is_sysadmin: false,
                 tenant_id: 'tenant-123',
@@ -204,8 +209,11 @@ describe('useAuth Hook', () => {
                 await result.current.login('test-token', mockUser, 'tenant-123');
             });
 
-            // User profile is still stored in localStorage (non-sensitive)
-            expect(localStorageMock.getItem('regengine_user')).toBe(JSON.stringify(mockUser));
+            expect(result.current.user).toEqual(mockUser);
+            expect(apiClient.setUser).toHaveBeenLastCalledWith(mockUser);
+            expect(JSON.parse(localStorageMock.getItem('regengine_user')!)).toEqual({ ...mockUser, email: '' });
+            expect(localStorageMock.getItem('regengine_user')).not.toContain(mockUser.email);
+            expect(window.sessionStorage.getItem('regengine_user')).toBeNull();
             // Tenant ID is still stored in localStorage (non-sensitive)
             expect(localStorageMock.getItem('regengine_tenant_id')).toBe('tenant-123');
         });
@@ -399,7 +407,7 @@ describe('useAuth Hook', () => {
         it('hydrates Supabase fallback sessions from /api/session instead of local browser auth state', async () => {
             const storedUser = {
                 id: 'stored-user',
-                email: 'stored@example.com',
+                email: `${crypto.randomUUID()}@example.test`,
                 is_sysadmin: false,
                 status: 'active',
                 role_name: 'owner',
@@ -407,7 +415,7 @@ describe('useAuth Hook', () => {
             };
             const supabaseUser = {
                 id: 'supabase-user',
-                email: 'stored@example.com',
+                email: `${crypto.randomUUID()}@example.test`,
                 tenant_id: 'tenant-123',
                 role_name: 'member',
                 is_sysadmin: false,
@@ -442,7 +450,7 @@ describe('useAuth Hook', () => {
             });
 
             expect(result.current.user?.permissions).toEqual(['inflow.write', 'reports.read']);
-            expect(localStorageMock.getItem('regengine_user')).toBe(JSON.stringify(supabaseUser));
+            expect(localStorageMock.getItem('regengine_user')).toBe(JSON.stringify({ ...supabaseUser, email: '' }));
             expect(createSupabaseBrowserClient).not.toHaveBeenCalled();
         });
 
@@ -808,7 +816,7 @@ describe('useAuth Hook', () => {
     describe('Stale session cleanup (hydration)', () => {
         const staleUser = {
             id: 'stale-user',
-            email: 'stale@example.com',
+            email: `${crypto.randomUUID()}@example.test`,
             is_sysadmin: false,
             status: 'active',
             role_name: 'member',
@@ -882,7 +890,10 @@ describe('useAuth Hook', () => {
             });
 
             expect(result.current.user?.id).toBe('stale-user');
-            expect(localStorageMock.getItem('regengine_user')).toBe(JSON.stringify(staleUser));
+            expect(result.current.user?.email).toBe(staleUser.email);
+            expect(apiClient.setUser).toHaveBeenLastCalledWith(expect.objectContaining({ email: staleUser.email }));
+            expect(localStorageMock.getItem('regengine_user')).toBe(JSON.stringify({ ...staleUser, email: '' }));
+            expect(window.sessionStorage.getItem('regengine_user')).toBeNull();
         });
 
         it('keeps the hydrated user when the session check returns a non-2xx response', async () => {
@@ -903,7 +914,41 @@ describe('useAuth Hook', () => {
             });
 
             expect(result.current.user?.id).toBe('stale-user');
-            expect(localStorageMock.getItem('regengine_user')).toBe(JSON.stringify(staleUser));
+            expect(result.current.user?.email).toBe(staleUser.email);
+            expect(apiClient.setUser).toHaveBeenLastCalledWith(expect.objectContaining({ email: staleUser.email }));
+            expect(localStorageMock.getItem('regengine_user')).toBe(JSON.stringify({ ...staleUser, email: '' }));
+            expect(window.sessionStorage.getItem('regengine_user')).toBeNull();
+        });
+
+        it('does not replace a completed login with the redacted cache after migration awaits', async () => {
+            const loginUser = {
+                id: crypto.randomUUID(),
+                email: `${crypto.randomUUID()}@example.test`,
+                is_sysadmin: false,
+                status: 'active',
+            };
+            localStorageMock.setItem('regengine_access_token', crypto.randomUUID());
+            const defaultFetch = mockFetch.getMockImplementation()!;
+            let resolveMigration: ((value: { ok: boolean }) => void) | undefined;
+            mockFetch.mockImplementation((url: string, options?: RequestInit) => {
+                if (options?.method === 'POST' && !resolveMigration) {
+                    return new Promise((resolve) => { resolveMigration = resolve; });
+                }
+                return defaultFetch(url, options);
+            });
+            const { result } = renderHook(() => useAuth(), { wrapper });
+            await waitFor(() => expect(resolveMigration).toBeDefined());
+
+            await act(async () => {
+                await result.current.login(crypto.randomUUID(), loginUser);
+                resolveMigration!({ ok: true });
+            });
+            await waitFor(() => expect(result.current.isHydrated).toBe(true));
+
+            expect(result.current.user).toEqual(loginUser);
+            expect(apiClient.setUser).toHaveBeenLastCalledWith(loginUser);
+            expect(JSON.parse(localStorageMock.getItem('regengine_user')!)).toEqual({ ...loginUser, email: '' });
+            expect(window.sessionStorage.getItem('regengine_user')).toBeNull();
         });
 
         it('does not wipe a login that completed while the hydrate session check was in flight', async () => {
@@ -968,7 +1013,9 @@ describe('useAuth Hook', () => {
             });
 
             expect(result.current.user?.id).toBe('fresh-user');
-            expect(localStorageMock.getItem('regengine_user')).toBe(JSON.stringify(mockUser));
+            expect(localStorageMock.getItem('regengine_user')).toBe(JSON.stringify({ ...mockUser, email: '' }));
+            expect(result.current.user?.email).toBe(mockUser.email);
+            expect(apiClient.setUser).toHaveBeenLastCalledWith(expect.objectContaining({ email: mockUser.email }));
 
             document.cookie = 're_csrf=; expires=Thu, 01 Jan 1970 00:00:00 GMT';
         });

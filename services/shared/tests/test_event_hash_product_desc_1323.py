@@ -16,8 +16,6 @@ the field back.
 
 from __future__ import annotations
 
-import pytest
-
 from services.shared.cte_persistence.hashing import compute_event_hash
 
 # ---------------------------------------------------------------------------

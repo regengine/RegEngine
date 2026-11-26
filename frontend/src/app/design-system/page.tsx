@@ -52,11 +52,7 @@ const STATES: ComplianceState[] = [
 
 type Row = { lot: string; supplier: string; state: ComplianceState; gaps: number; seen: string };
 
-const ROWS: Row[] = [
-    { lot: 'RVF-ROM-041426-F3-001', supplier: 'Rio Verde Farms', state: 'committed', gaps: 0, seen: '2026-09-14T14:02Z' },
-    { lot: 'VFP-SPIN5-041426-001', supplier: 'Valley Fresh Packhouse', state: 'needs-correction', gaps: 3, seen: '2026-09-14T11:40Z' },
-    { lot: 'FL-SHIP-041426-088', supplier: 'FreshLine Distribution', state: 'blocked', gaps: 7, seen: '2026-09-13T22:15Z' },
-];
+const ROWS: Row[] = [];
 
 const COLUMNS: DataTableColumn<Row>[] = [
     { key: 'lot', header: 'Lot code', mono: true, width: '18rem', sortable: true },
@@ -197,7 +193,7 @@ export default function DesignSystemPage() {
 
                 <Section spacing="app" title="Data table">
                     <DataTable
-                        caption="Example lots and their compliance state"
+                        caption="Lots and their compliance state"
                         columns={COLUMNS}
                         data={ROWS}
                         sort={sort}
@@ -207,7 +203,7 @@ export default function DesignSystemPage() {
                             search: { placeholder: 'Search lots…', value: search, onChange: setSearch },
                             actions: <Button variant="ghost" size="sm" leadingIcon={<Download />}>Export</Button>,
                         }}
-                        pagination={{ page: 1, pageSize: 10, total: 3, onPageChange: () => { } }}
+                        pagination={{ page: 1, pageSize: 10, total: 0, onPageChange: () => { } }}
                     />
                     <div className="mt-4 grid gap-4 lg:grid-cols-2">
                         <DataTable

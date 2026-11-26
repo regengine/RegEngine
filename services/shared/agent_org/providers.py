@@ -43,9 +43,7 @@ class InboxProvider(Protocol):
     does not.
     """
 
-    def provision(
-        self, *, tenant_slug: str, agent_slug: str, tenant_id: str, agent_id: str
-    ) -> ProvisionedInbox: ...
+    def provision(self, *, tenant_slug: str, agent_slug: str, tenant_id: str, agent_id: str) -> ProvisionedInbox: ...
 
 
 class DevInboxProvider:
@@ -55,7 +53,7 @@ class DevInboxProvider:
     mailbox. It does not talk to any external email service. No inbound
     mail sent to the address it returns will ever be received anywhere
     — there is no MX record, no mailbox, no webhook target behind
-    ``agents.<tenant-slug>.regengine.dev``. It exists so agent_org has a
+    ``agents.<tenant-slug>.regengine.co``. It exists so agent_org has a
     working, testable provisioning path in an environment with no live
     email-provider credentials. A real provider (e.g. a
     ``PostmarkInboxProvider`` using Postmark's server + inbound-message-
@@ -66,10 +64,8 @@ class DevInboxProvider:
 
     provider_name = "dev"
 
-    def provision(
-        self, *, tenant_slug: str, agent_slug: str, tenant_id: str, agent_id: str
-    ) -> ProvisionedInbox:
-        address = f"{agent_slug}@agents.{tenant_slug}.regengine.dev"
+    def provision(self, *, tenant_slug: str, agent_slug: str, tenant_id: str, agent_id: str) -> ProvisionedInbox:
+        address = f"{agent_slug}@agents.{tenant_slug}.regengine.co"
         return ProvisionedInbox(email_address=address, provider=self.provider_name, provider_ref=None)
 
 

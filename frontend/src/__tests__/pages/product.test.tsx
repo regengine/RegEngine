@@ -14,9 +14,9 @@ describe("ProductPage Inflow impact illustration", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Inflow affects RegEngine before evidence exists")).toBeInTheDocument();
     expect(screen.getByText("Raw supplier feed")).toBeInTheDocument();
-    expect(screen.getByText(/readiness score, fix queue, and commit gate state/i)).toBeInTheDocument();
+    expect(screen.getByText(/coverage and completeness checklist, fix queue, and commit gate state/i)).toBeInTheDocument();
 
-    for (const stage of ["Normalize", "Score", "Route", "Gate"]) {
+    for (const stage of ["Normalize", "Check", "Route", "Gate"]) {
       expect(screen.getByRole("heading", { name: stage })).toBeInTheDocument();
     }
 

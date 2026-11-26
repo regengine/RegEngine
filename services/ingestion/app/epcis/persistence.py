@@ -10,6 +10,7 @@ import json
 import logging
 import os
 from collections import OrderedDict
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Optional
 from uuid import uuid4
@@ -356,16 +357,56 @@ def _fetch_event_from_db(tenant_id: str, event_id: str) -> Optional[dict]:
         db_session.close()
 
 
+# Hard cap on events a single EPCIS export returns. The query reads one
+# more row than this so the response can state whether it was cut off
+# (``metadata.truncated``) instead of leaving the caller to guess from a
+# round count. Raising it means a bigger response body and one KDE
+# round-trip per event; paginate instead when a tenant outgrows it.
+EXPORT_EVENT_LIMIT = 2000
+
+
+@dataclass(frozen=True)
+class EpcisExportPage:
+    """One page of EPCIS export events plus the facts the caller must state.
+
+    ``truncated`` is decided before the Python-side ``product_id`` filter
+    runs, so it means "the tenant has more matching rows in this date
+    range than ``limit``", not "fewer events came back than the limit".
+    A short list can still be a truncated export when the product filter
+    dropped most of the first ``limit`` rows.
+    """
+
+    events: list[dict]
+    truncated: bool
+    limit: int
+
+
 def _list_events_from_db(
     tenant_id: str,
     start_date: Optional[str],
     end_date: Optional[str],
     product_id: Optional[str],
 ) -> list[dict]:
+    """List-returning wrapper kept for callers that only want the events."""
+    return _list_events_from_db_detailed(tenant_id, start_date, end_date, product_id).events
+
+
+def _list_events_from_db_detailed(
+    tenant_id: str,
+    start_date: Optional[str],
+    end_date: Optional[str],
+    product_id: Optional[str],
+    *,
+    limit: int = EXPORT_EVENT_LIMIT,
+) -> EpcisExportPage:
+    if limit < 1:
+        raise ValueError("limit must be >= 1")
     db_session = get_db_safe()
     try:
         where = ["tenant_id = :tenant_id"]
-        params: dict[str, Any] = {"tenant_id": tenant_id}
+        # Fetch limit + 1 rows: the extra row only tells us the export was
+        # cut off and is never returned.
+        params: dict[str, Any] = {"tenant_id": tenant_id, "row_limit": limit + 1}
 
         if start_date:
             where.append("event_timestamp >= :start_date")
@@ -392,11 +433,14 @@ def _list_events_from_db(
                 FROM fsma.cte_events
                 WHERE {" AND ".join(where)}
                 ORDER BY event_timestamp DESC
-                LIMIT 2000
+                LIMIT :row_limit
                 """
             ),
             params,
         ).fetchall()
+
+        truncated = len(rows) > limit
+        rows = rows[:limit]
 
         events: list[dict] = []
         for row in rows:
@@ -436,7 +480,7 @@ def _list_events_from_db(
 
             events.append(_parse_epcis_document(kde_map, normalized))
 
-        return events
+        return EpcisExportPage(events=events, truncated=truncated, limit=limit)
     finally:
         db_session.close()
 
@@ -493,12 +537,9 @@ def _ingest_single_event_fallback(tenant_id: str, event: dict) -> tuple[dict, in
         normalized["fsma_validation_status"] = "passed"
     else:
         if _fsma_strict_mode():
-            logger.warning(
-                "epcis_fsma_validation_rejected tenant=%s tlc=%s event=%s",
-                tenant_id,
-                normalized.get("tlc"),
-                normalized.get("event_time"),
-            )
+            # CodeQL py/clear-text-logging: tenant id, TLC and event time are
+            # not logged; the 422 detail and audit trail carry the context.
+            logger.warning("epcis_fsma_validation_rejected")
             raise HTTPException(
                 status_code=422,
                 detail={
@@ -628,11 +669,7 @@ def _prepare_event_for_persistence(tenant_id: str, event: dict) -> dict:
         kde_map["fsma_validation_status"] = "passed"
     else:
         if _fsma_strict_mode():
-            logger.warning(
-                "epcis_fsma_validation_rejected_db tenant=%s tlc=%s",
-                tenant_id,
-                normalized.get("tlc"),
-            )
+            logger.warning("epcis_fsma_validation_rejected_db")
             raise HTTPException(
                 status_code=422,
                 detail={
@@ -983,7 +1020,7 @@ def _ingest_single_event_db(tenant_id: str, event: dict) -> tuple[dict, int]:
     except HTTPException as exc:
         detail = exc.detail if isinstance(exc.detail, dict) else {}
         if exc.status_code == 422 and detail.get("error") == "fsma_validation_failed" and _fsma_strict_mode():
-            logger.warning("epcis_single_event_refused_unvalidated tenant=%s", tenant_id)
+            logger.warning("epcis_single_event_refused_unvalidated")
             raise ValueError("E_EPCIS_UNVALIDATED") from exc
         raise
 
@@ -995,11 +1032,7 @@ def _ingest_single_event_db(tenant_id: str, event: dict) -> tuple[dict, int]:
     kde_map = prepared.get("kde_map") or {}
     fsma_status = kde_map.get("fsma_validation_status")
     if fsma_status != "passed" and _fsma_strict_mode():
-        logger.warning(
-            "epcis_single_event_refused_unvalidated tenant=%s status=%r",
-            tenant_id,
-            fsma_status,
-        )
+        logger.warning("epcis_single_event_refused_unvalidated status_present=%s", fsma_status is not None)
         raise ValueError("E_EPCIS_UNVALIDATED")
 
     db_session = get_db_safe()
@@ -1063,11 +1096,10 @@ def _ingest_batch_events_db_atomic(tenant_id: str, events: list[dict]) -> list[t
     except Exception as exc:
         db_session.rollback()
         logger.warning(
-            "epcis_batch_rollback tenant=%s failed_index=%s batch_size=%s error=%s",
-            tenant_id,
+            "epcis_batch_rollback failed_index=%s batch_size=%s error_type=%s",
             failing_index,
             len(prepared_events),
-            str(exc),
+            type(exc).__name__,
         )
         raise HTTPException(
             status_code=400,
@@ -1100,7 +1132,7 @@ def _ingest_single_event(tenant_id: str, event: dict) -> tuple[dict, int]:
         # instead of silently falling back to in-memory (that's what
         # let malformed events into the graph pre-fix).
         if str(exc) == "E_EPCIS_UNVALIDATED":
-            logger.warning("epcis_ingest_refused_unvalidated tenant=%s", tenant_id)
+            logger.warning("epcis_ingest_refused_unvalidated")
             raise HTTPException(
                 status_code=422,
                 detail={
@@ -1126,9 +1158,8 @@ def _ingest_single_event(tenant_id: str, event: dict) -> tuple[dict, int]:
         # ``RULES_ENGINE_ENFORCE=off`` too, not only under enforcement.
         if type(exc).__name__ == "UnmappedBizStepError" or ("is not a recognized FSMA 204 CTE type" in str(exc)):
             logger.warning(
-                "epcis_ingest_refused_unsupported_cte_type tenant=%s error=%s",
-                tenant_id,
-                str(exc),
+                "epcis_ingest_refused_unsupported_cte_type error_type=%s",
+                type(exc).__name__,
             )
             raise HTTPException(
                 status_code=422,

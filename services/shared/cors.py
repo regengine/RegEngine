@@ -6,7 +6,7 @@ like wildcard origins with credentials enabled.
 
 import os
 from typing import List
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 DEFAULT_ALLOWED_HEADERS = [
     "Authorization",
@@ -54,6 +54,48 @@ def _current_environment() -> str:
     return os.getenv("REGENGINE_ENV", "").strip().lower() or os.getenv("ENV", "").strip().lower() or "development"
 
 
+def _hostname_is_pooler(host: str) -> bool:
+    host = host.strip().lower()
+    hostname, separator, port = host.rpartition(":")
+    if separator and (not port or port.isdecimal()):
+        host = hostname
+    return host == "pooler.supabase.com" or host.endswith(".pooler.supabase.com")
+
+
+def _is_supabase_pooler_database() -> bool:
+    """Detect a Supabase pooler DATABASE_URL by exact hostname / subdomain.
+
+    Parses the URL and compares the hostname instead of doing a substring
+    check, so a value like ``postgres://u:p@host/db?x=pooler.supabase.com``
+    cannot spoof the pooler host.
+
+    libpq honours a ``?host=`` query parameter, which overrides the URI
+    host (and may be a comma-separated list). SQLAlchemy also accepts
+    ``host:port`` query values, with an empty port selecting the default.
+    A pooler reached that way is a
+    real production connection, so we fail closed and treat it as the pooler
+    too, rather than trusting only the URI authority.
+    """
+    db_url = os.getenv("DATABASE_URL", "")
+    if not db_url:
+        return False
+    try:
+        parts = urlsplit(db_url)
+    except ValueError:
+        return False
+    if _hostname_is_pooler(parts.hostname or ""):
+        return True
+    try:
+        query = parse_qs(parts.query)
+    except ValueError:
+        return False
+    for raw_value in query.get("host", []):
+        for candidate in raw_value.split(","):
+            if _hostname_is_pooler(candidate):
+                return True
+    return False
+
+
 def _is_restricted_cors_environment() -> bool:
     """Return true outside explicit local/test environments or in cloud."""
     env = _current_environment()
@@ -61,7 +103,7 @@ def _is_restricted_cors_environment() -> bool:
         return True
     if any(os.getenv(var) for var in CLOUD_ENV_VARS):
         return True
-    return "pooler.supabase.com" in os.getenv("DATABASE_URL", "")
+    return _is_supabase_pooler_database()
 
 
 def _validate_exact_preview_origins(origins: List[str]) -> None:

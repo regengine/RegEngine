@@ -36,6 +36,11 @@ def mask_key(raw_key):
     return f"{key_id}.***" if key_id else "***"
 
 
+def mask_hash(key_hash):
+    """Return a log-safe form of a key hash (first 8 hex chars only)."""
+    return f"{key_hash[:8]}..." if key_hash else "***"
+
+
 def seed_key():
     if not SECRET:
         raise RuntimeError("Set PHASE2B_API_SECRET before running this script")
@@ -48,7 +53,9 @@ def seed_key():
     now = datetime.now(timezone.utc)
 
     print(f"Seeding API Key: {mask_key(RAW_KEY)}")
-    print(f"Hash: {key_hash}")
+    # The hash is unpeppered SHA-256 of the raw key, so printing it in full
+    # would allow offline guessing of the secret. Show a short prefix only.
+    print(f"Hash: {mask_hash(key_hash)}")
 
     tenant_id = "11111111-1111-1111-1111-111111111111"
 

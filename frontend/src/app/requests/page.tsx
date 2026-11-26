@@ -94,7 +94,7 @@ export default function RequestWorkflowPage() {
   const pageHeader = (
     <PageHeader
       title="Request-Response Workflow"
-      description="24-hour FDA response readiness — from request intake to sealed package submission"
+      description="24-hour FDA response readiness, from request intake to sealed package submission"
       primaryAction={!requests.error ? (
         <Button
           variant={showCreate ? 'secondary' : 'primary'}

@@ -35,6 +35,7 @@ import { StatusBadge } from '@/components/ui/status-badge';
 import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
 import { trackToolRunCompleted, trackToolRunStarted } from '@/lib/conversion-events';
+import { usePostHog } from '@/lib/posthog-provider';
 
 /* ────────────────────────────────────────────────────────────── */
 /*  Types                                                        */
@@ -99,6 +100,7 @@ export default function LabelScannerPage() {
 }
 
 function LabelScannerContent() {
+    const posthog = usePostHog();
     const [image, setImage] = useState<string | null>(null);
     const [imageFile, setImageFile] = useState<File | null>(null);
     const [analyzing, setAnalyzing] = useState(false);
@@ -140,6 +142,7 @@ function LabelScannerContent() {
     const analyze = useCallback(async () => {
         if (!imageFile) return;
         trackToolRunStarted('label-scanner');
+        posthog?.capture('tool_started', { tool_id: 'label-scanner' });
         setAnalyzing(true);
         setError(null);
         setResult(null);
@@ -166,7 +169,7 @@ function LabelScannerContent() {
         } finally {
             setAnalyzing(false);
         }
-    }, [imageFile]);
+    }, [imageFile, posthog]);
 
     const reset = useCallback(() => {
         setImage(null);

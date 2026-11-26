@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import type { SupplierDataQuality, SupplierQualityMetric, SupplierQualityRecordsResponse } from '@/types/api';
+import type {
+    SupplierDataQuality,
+    SupplierQualityMetric,
+    SupplierQualityRecordItem,
+    SupplierQualityRecordsResponse,
+} from '@/types/api';
 
 const mocks = vi.hoisted(() => ({
     getSupplierDataQualityRecords: vi.fn(),
@@ -67,6 +72,21 @@ const lateMeasured = summary(
     [metric({ key: 'late_cte', status: 'ok', ...LATE, share: LATE.numerator / LATE.denominator })],
     AGREED_HOURS,
 );
+
+const lateRecordItem = (recordId: string, agreedHours: number): SupplierQualityRecordItem => {
+    const eventTime = new Date();
+    const receivedTime = new Date(eventTime);
+    receivedTime.setUTCHours(receivedTime.getUTCHours() + agreedHours + 1);
+    return {
+        record_id: recordId,
+        lot_id: null,
+        lot_code: crypto.randomUUID(),
+        cte_type: 'shipping',
+        event_time: eventTime.toISOString(),
+        received_at: receivedTime.toISOString(),
+        missing_kdes: [],
+    };
+};
 
 function renderQuality(data: SupplierDataQuality | null = fourMetrics, unavailable = false) {
     return render(
@@ -258,17 +278,7 @@ describe('DataQuality', () => {
             page({
                 metric: 'late_cte',
                 total: [lateId].length,
-                items: [
-                    {
-                        record_id: lateId,
-                        lot_id: null,
-                        lot_code: crypto.randomUUID(),
-                        cte_type: 'shipping',
-                        event_time: null,
-                        received_at: null,
-                        missing_kdes: [],
-                    },
-                ],
+                items: [lateRecordItem(lateId, AGREED_HOURS)],
             }),
         );
         renderQuality(lateMeasured);
@@ -280,6 +290,35 @@ describe('DataQuality', () => {
         fireEvent.click(screen.getByRole('button', { name: 'View records' }));
         await waitFor(() => expect(screen.getByText(lateId)).toBeInTheDocument());
         expect(mocks.getSupplierDataQualityRecords).toHaveBeenCalledWith(FACILITY_ID, 'late_cte', expect.anything());
+    });
+
+    it('clears late records from the prior agreement when the hours change', async () => {
+        const [oldRecordId, updatedRecordId] = uuids(2);
+        const updatedHours = AGREED_HOURS + 1;
+        mocks.getSupplierDataQualityRecords
+            .mockResolvedValueOnce(page({ metric: 'late_cte', total: [oldRecordId].length, items: [lateRecordItem(oldRecordId, AGREED_HOURS)] }))
+            .mockResolvedValueOnce(page({ metric: 'late_cte', total: [updatedRecordId].length, items: [lateRecordItem(updatedRecordId, updatedHours)] }));
+
+        const { rerender } = renderQuality(lateMeasured);
+        fireEvent.click(screen.getByRole('button', { name: 'View records' }));
+        await waitFor(() => expect(screen.getByText(oldRecordId)).toBeInTheDocument());
+
+        rerender(
+            <DataQuality
+                facilityId={FACILITY_ID}
+                summary={summary(lateMeasured.metrics, updatedHours)}
+                unavailable={false}
+                windowDays={WINDOW_DAYS}
+                minRecords={MIN_RECORDS}
+                lateCteLabel={LATE_LABEL}
+            />,
+        );
+        expect(screen.queryByText(oldRecordId)).not.toBeInTheDocument();
+        expect(screen.getByText(`Agreed sending time: ${updatedHours} hours after the event`)).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: 'View records' }));
+        await waitFor(() => expect(screen.getByText(updatedRecordId)).toBeInTheDocument());
+        expect(mocks.getSupplierDataQualityRecords).toHaveBeenCalledTimes(2);
     });
 
     it('offers no late drill down without an agreed sending time', () => {

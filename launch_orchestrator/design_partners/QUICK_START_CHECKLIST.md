@@ -18,7 +18,7 @@ Use this checklist to get up and running in your first hour with RegEngine.
 ### Test API Connectivity
 
 ```bash
-curl -X GET "https://sandbox.regengine.ai/health" \
+curl -X GET "https://sandbox.regengine.co/health" \
   -H "X-RegEngine-API-Key: YOUR_API_KEY"
 ```
 
@@ -30,7 +30,7 @@ curl -X GET "https://sandbox.regengine.ai/health" \
 ### Check Rate Limits
 
 ```bash
-curl -I -X GET "https://sandbox.regengine.ai/health" \
+curl -I -X GET "https://sandbox.regengine.co/health" \
   -H "X-RegEngine-API-Key: YOUR_API_KEY"
 ```
 
@@ -48,11 +48,11 @@ Look for headers:
 
 ```bash
 # List available jurisdictions
-curl -X GET "https://sandbox.regengine.ai/jurisdictions" \
+curl -X GET "https://sandbox.regengine.co/jurisdictions" \
   -H "X-RegEngine-API-Key: YOUR_API_KEY"
 
 # Get obligations from US SEC
-curl -X GET "https://sandbox.regengine.ai/obligations?jurisdiction=United%20States&limit=5" \
+curl -X GET "https://sandbox.regengine.co/obligations?jurisdiction=United%20States&limit=5" \
   -H "X-RegEngine-API-Key: YOUR_API_KEY"
 ```
 
@@ -66,7 +66,7 @@ curl -X GET "https://sandbox.regengine.ai/obligations?jurisdiction=United%20Stat
 ### Ingest a Sample Document
 
 ```bash
-curl -X POST "https://sandbox.regengine.ai/ingest/url" \
+curl -X POST "https://sandbox.regengine.co/ingest/url" \
   -H "X-RegEngine-API-Key: YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -85,7 +85,7 @@ curl -X POST "https://sandbox.regengine.ai/ingest/url" \
 ### Wait for Processing (3-5 minutes)
 
 ```bash
-curl -X GET "https://sandbox.regengine.ai/documents/{DOCUMENT_ID}/status" \
+curl -X GET "https://sandbox.regengine.co/documents/{DOCUMENT_ID}/status" \
   -H "X-RegEngine-API-Key: YOUR_API_KEY"
 ```
 
@@ -94,7 +94,7 @@ curl -X GET "https://sandbox.regengine.ai/documents/{DOCUMENT_ID}/status" \
 ### Query Extracted Obligations
 
 ```bash
-curl -X GET "https://sandbox.regengine.ai/obligations?document_id={DOCUMENT_ID}" \
+curl -X GET "https://sandbox.regengine.co/obligations?document_id={DOCUMENT_ID}" \
   -H "X-RegEngine-API-Key: YOUR_API_KEY"
 ```
 
@@ -107,7 +107,7 @@ curl -X GET "https://sandbox.regengine.ai/obligations?document_id={DOCUMENT_ID}"
 ### Cross-Jurisdiction Comparison
 
 ```bash
-curl -X GET "https://sandbox.regengine.ai/opportunities/arbitrage?j1=United%20States&j2=United%20Kingdom&concept=capital_requirements" \
+curl -X GET "https://sandbox.regengine.co/opportunities/arbitrage?j1=United%20States&j2=United%20Kingdom&concept=capital_requirements" \
   -H "X-RegEngine-API-Key: YOUR_API_KEY"
 ```
 
@@ -117,7 +117,7 @@ curl -X GET "https://sandbox.regengine.ai/opportunities/arbitrage?j1=United%20St
 
 ```bash
 # Get an obligation ID from previous query, then:
-curl -X GET "https://sandbox.regengine.ai/provenance/{OBLIGATION_ID}" \
+curl -X GET "https://sandbox.regengine.co/provenance/{OBLIGATION_ID}" \
   -H "X-RegEngine-API-Key: YOUR_API_KEY"
 ```
 
@@ -127,7 +127,7 @@ curl -X GET "https://sandbox.regengine.ai/provenance/{OBLIGATION_ID}" \
 
 ## ☐ Post-Setup (5 minutes)
 
-- [ ] Bookmarked API documentation: https://docs.regengine.ai
+- [ ] Bookmarked API documentation: https://docs.regengine.co
 - [ ] Posted introduction in Slack channel
 - [ ] Identified primary use case to validate (change monitoring / gap analysis / multi-jurisdiction)
 - [ ] Scheduled 30-minute planning session with your team
@@ -185,17 +185,17 @@ Once you've completed this checklist:
 
 | Resource | URL |
 |----------|-----|
-| API Docs | https://docs.regengine.ai |
-| Sandbox API | https://sandbox.regengine.ai |
+| API Docs | https://docs.regengine.co |
+| Sandbox API | https://sandbox.regengine.co |
 | Support Slack | #regengine-design-partners |
-| Support Email | support@regengine.ai |
-| Status Page | https://status.regengine.ai |
+| Support Email | support@regengine.co |
+| Status Page | https://status.regengine.co |
 
 ---
 
 **Estimated time to complete**: 60 minutes
 
-**Questions?** Post in Slack or email support@regengine.ai
+**Questions?** Post in Slack or email support@regengine.co
 
 ---
 

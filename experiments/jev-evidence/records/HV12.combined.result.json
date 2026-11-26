@@ -1,0 +1,12 @@
+{
+  "expected": "insufficient",
+  "actual": {
+    "claim_id": "HV12",
+    "verdict": "insufficient",
+    "reason": "only_partial_support",
+    "policy_status": "uncalibrated",
+    "review_required": true,
+    "model": "jev-1.13.0"
+  },
+  "matches": true
+}

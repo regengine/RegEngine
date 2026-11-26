@@ -108,15 +108,18 @@ describe('client-side auth bypass attempts (adversarial, must hold)', () => {
         expect(result.current.user).toBeNull();
     });
 
-    it('XSS-shaped email text seeded client-side stays inert data, not markup', async () => {
+    it('XSS-shaped email text seeded client-side is never persisted', async () => {
         const { seedPasswordlessClientUser } = await import('@/lib/passwordless-auth');
-        seedPasswordlessClientUser('<img src=x onerror=alert(1)>@example.com');
+        const xssEmail = '<img src=x onerror=alert(1)>@example.com';
+        seedPasswordlessClientUser(xssEmail);
         const raw = localStorageMock.getItem('regengine_user');
-        expect(raw).toContain('<img src=x onerror=alert(1)>');
+        expect(raw).not.toBeNull();
+        expect(raw as string).not.toContain('<img src=x onerror=alert(1)>');
+        expect(raw as string).not.toContain(xssEmail);
         const parsed = JSON.parse(raw as string) as {
             email: string; is_sysadmin: boolean; permissions: string[];
         };
-        expect(typeof parsed.email).toBe('string');
+        expect(parsed.email).toBe('');
         expect(parsed.is_sysadmin).toBe(false);
         expect(parsed.permissions).toEqual([]);
     });

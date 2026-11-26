@@ -206,10 +206,11 @@ def test_not_configured_changes_nothing_and_sends_nothing(harness):
     resp = _post()
 
     assert resp.status_code == 400
-    assert resp.json()["detail"] == {
-        "message": "No valid rows found",
-        "errors": ["Row 2: No CTE type — add cte_type column or pass cte_type param"],
-    }
+    detail = resp.json()["detail"]
+    assert detail["message"] == "No valid rows found"
+    assert detail["errors"] == ["Row 2: No CTE type — add cte_type column or pass cte_type param"]
+    # SEL-549: the 400 also carries the per-row disposition log.
+    assert (2, "rejected") in [(e["row_number"], e["disposition"]) for e in detail["row_disposition_log"]]
     assert "bodies" not in seen
     assert harness["payloads"] == [] and harness["artifacts"] == []
 
@@ -459,7 +460,10 @@ def test_a_header_row_that_swallows_rows_is_never_sent(harness):
     resp = _post(b'Lot,"Qty\nTLC-1,5,Farm\n')
 
     assert resp.status_code == 400
-    assert resp.json()["detail"] == "CSV contained no data rows"
+    detail = resp.json()["detail"]
+    assert detail["message"] == "No valid rows found"
+    assert "quoted field is not closed" in detail["errors"][0]
+    assert detail["cte_type_suggestion"]["status"] == "malformed_header"
     assert "bodies" not in seen
 
 

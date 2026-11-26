@@ -1,21 +1,28 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import type posthog from 'posthog-js';
 import type { CaptureResult } from 'posthog-js';
 import { getStoredConsent } from './cookie-consent';
 import {
+  FIRST_TOUCH_UTM_KEYS,
+  cleanUtmValue,
+  clearFirstTouchUtm,
+  getFirstTouchUtm,
+} from './first-touch-utm';
+import {
   isInternalAnalyticsSession,
   safeMarketingPath,
   shouldTrackMarketingPageview,
 } from './marketing-analytics-routes';
 
-type CTAClickProps = { cta_label: string; page: string; destination?: string };
+type CTAClickProps = { cta_id: string };
 type SignupStartProps = { plan?: string; source?: string };
 type OnboardingCompleteProps = { step: string; tenant_id?: string };
 type ToolVisitProps = { tool: string; path: string };
+type SignupProps = { source?: string };
 type Capture = { event: string; properties: Record<string, unknown> };
 
 const posthogKey = process.env.NEXT_PUBLIC_POSTHOG_KEY;
@@ -23,10 +30,14 @@ const DEFAULT_POSTHOG_HOST = 'https://us.i.posthog.com';
 const SAFE_PROPERTY_KEYS = new Set([
   'tool_id', 'lead_captured', 'categories_selected', 'covered_count',
   'risk_level', 'status', 'total_events', 'non_compliant_events',
-  'compliant_events',
+  'compliant_events', 'tool', 'outcome', 'error_code', 'placement', 'form', 'step',
+  'grade', 'webinar', 'cta_id',
 ]);
+const PRODUCT = 'RegEngine';
+/** AN1 signup events carry only product, page, cta_id and first-touch utm_* (no SDK envelope). */
+const MINIMAL_EVENTS = new Set(['request_access', 'cta_clicked']);
+const EMAIL_SHAPE = /^[^\s@]{1,64}@[^\s@]{1,253}\.[^\s@]{2,63}$/;
 const SAFE_LABEL = /^[a-z0-9][a-z0-9_-]{0,79}$/i;
-const SAFE_SOURCE_LABEL = /^[a-z0-9][a-z0-9_.-]{0,79}$/i;
 const SAFE_SDK_STRING = /^[a-z0-9](?:[a-z0-9_. -]{0,78}[a-z0-9])?$/i;
 const HOST_LABEL = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/i;
 const SDK_SIMPLE_KEYS = [
@@ -36,9 +47,40 @@ const PHONE_SHAPE = /\d{3}[-_. ]\d{3}[-_. ]\d{4}/;
 const pendingCaptures: Capture[] = [];
 let client: typeof posthog | null = null;
 let initPromise: Promise<void> | null = null;
+let clientMode: TrackingMode | null = null;
+/** Pending or applied email; never sent until consent (C.Lee #3645 on A-2138/A-2139). */
+let identifiedEmail: string | null = null;
+let identifyApplied = false;
+
+/**
+ * Cookieless until consent (C.Lee, A-2138, Oct 27 2026): before Accept the SDK keeps its
+ * anonymous ID in memory only, so it writes no cookie or storage and nothing outlives the tab.
+ * After Accept it switches to normal persistence. Identify-by-email is consent-gated on top
+ * of that (C.Lee, #3645): pre-consent never identifies; post-consent may identify and switch
+ * person_profiles to identified_only; decline/revoke resets and returns to never/cookieless.
+ * Decline stops all capture, cookieless included (C.Lee, A-2139). The choice lives in the
+ * re_cookie_consent cookie, so it holds on later page loads.
+ */
+type TrackingMode = 'full' | 'cookieless';
+const FULL_PERSISTENCE = 'localStorage+cookie' as const;
+const COOKIELESS_PERSISTENCE = 'memory' as const;
+
+function normalizeEmail(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const email = value.trim().toLowerCase();
+  return email.length <= 254 && EMAIL_SHAPE.test(email) ? email : null;
+}
 
 function hasConsent(): boolean {
   return getStoredConsent() === 'accepted';
+}
+
+function hasDeclined(): boolean {
+  return getStoredConsent() === 'declined';
+}
+
+function trackingMode(): TrackingMode {
+  return hasConsent() ? 'full' : 'cookieless';
 }
 
 function isAllowedAnalyticsHost(): boolean {
@@ -65,6 +107,59 @@ function apiHost(): string {
     // A non-URL host setting must not create a broken capture endpoint.
   }
   return DEFAULT_POSTHOG_HOST;
+}
+
+function canTrack(): boolean {
+  return configuredKey() !== null && !hasDeclined()
+    && isAllowedAnalyticsHost() && !isInternalAnalyticsSession();
+}
+
+/** Remove what full tracking stored, for a visitor who declines after accepting. */
+function clearStoredIdentity(): void {
+  const key = configuredKey();
+  if (!key || typeof document === 'undefined') return;
+  const name = `ph_${key}_posthog`;
+  const hostname = window.location.hostname;
+  const parts = hostname.split('.');
+  const domains = ['', `; domain=${hostname}`];
+  if (parts.length > 1) domains.push(`; domain=.${parts.slice(-2).join('.')}`);
+  for (const domain of domains) document.cookie = `${name}=; max-age=0; path=/${domain}`;
+  clearFirstTouchUtm();
+  try {
+    window.localStorage.removeItem(name);
+  } catch {
+    // Storage can be unavailable; there is nothing to clear then.
+  }
+}
+
+/** Keep the SDK's persistence in step with the visitor's current consent. */
+function applyTrackingMode(): void {
+  if (!client) return;
+  const mode = trackingMode();
+  if (mode === clientMode) return;
+  client.set_config({ persistence: mode === 'full' ? FULL_PERSISTENCE : COOKIELESS_PERSISTENCE });
+  if (mode === 'full' && client.has_opted_out_capturing()) client.opt_in_capturing();
+  clientMode = mode;
+}
+
+/**
+ * Apply a pending email identify only after Accept. Switches person_profiles to
+ * identified_only for that person; pre-consent stays person_profiles never.
+ */
+function applyIdentify(): void {
+  if (!client || !identifiedEmail || identifyApplied || !hasConsent()) return;
+  identifyApplied = true;
+  client.set_config({ person_profiles: 'identified_only' });
+  client.identify(identifiedEmail, { email: identifiedEmail });
+}
+
+function clearIdentifyState(options: { resetClient: boolean }): void {
+  const hadAppliedIdentify = identifyApplied;
+  identifiedEmail = null;
+  identifyApplied = false;
+  if (!client) return;
+  if (options.resetClient && hadAppliedIdentify) client.reset();
+  client.set_config({ person_profiles: 'never' });
 }
 
 function isSafeString(value: unknown, pattern: RegExp = SAFE_LABEL): value is string {
@@ -94,6 +189,16 @@ function safeValue(value: unknown): string | number | boolean | string[] | undef
 function safeProperties(properties: Record<string, unknown> = {}): Record<string, unknown> {
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(properties)) {
+    if (key === 'product') {
+      if (value === PRODUCT) result.product = PRODUCT;
+      continue;
+    }
+    if (key === 'page') {
+      // Path only: safeMarketingPath rejects query strings and maps unknown segments to a section.
+      const page = safeMarketingPath(value);
+      if (page) result.page = page;
+      continue;
+    }
     if (!SAFE_PROPERTY_KEYS.has(key)) continue;
     const cleaned = safeValue(value);
     if (cleaned !== undefined) result[key] = cleaned;
@@ -103,15 +208,46 @@ function safeProperties(properties: Record<string, unknown> = {}): Record<string
 
 /** PostHog adds URL, referrer, title, and campaign data; only approved fields leave this callback. */
 function beforeSend(capture: CaptureResult | null): CaptureResult | null {
-  if (!capture || !hasConsent() || !isAllowedAnalyticsHost() || isInternalAnalyticsSession()) return null;
-  if (capture.event.startsWith('$') && capture.event !== '$pageview') return null;
+  if (!capture || hasDeclined() || !isAllowedAnalyticsHost() || isInternalAnalyticsSession()) return null;
+  const isIdentify = capture.event === '$identify';
+  // $identify is allowed only after consent with a matching identified email; no other $ events.
+  if (capture.event.startsWith('$') && capture.event !== '$pageview' && !isIdentify) return null;
+  if (isIdentify && !hasConsent()) return null;
   const token = capture.properties.token;
   const distinctId = capture.properties.distinct_id;
-  if (typeof token !== 'string' || typeof distinctId !== 'string' || !SAFE_LABEL.test(distinctId)) return null;
+  const isIdentified = hasConsent()
+    && identifiedEmail !== null
+    && distinctId === identifiedEmail;
+  if (typeof token !== 'string' || typeof distinctId !== 'string'
+    || (!SAFE_LABEL.test(distinctId) && !isIdentified)) return null;
+  if (isIdentify && !isIdentified) return null;
   const properties = safeProperties(capture.properties) as CaptureResult['properties'];
   properties.token = token;
   properties.distinct_id = distinctId;
-  properties.$process_person_profile = false;
+  if (isIdentify) {
+    const anonId = capture.properties.$anon_distinct_id;
+    if (typeof anonId === 'string' && SAFE_LABEL.test(anonId)) properties.$anon_distinct_id = anonId;
+    // Only the email reaches the person profile; no other $set keys are sent.
+    return {
+      ...capture,
+      properties,
+      $set: { email: identifiedEmail },
+      $set_once: undefined,
+      $unset: undefined,
+    };
+  }
+  // Anonymous / pre-identify events never create or enrich a person profile.
+  if (!isIdentified) properties.$process_person_profile = false;
+
+  for (const key of FIRST_TOUCH_UTM_KEYS) {
+    const value = cleanUtmValue(key, capture.properties[key]);
+    if (value) properties[key] = value;
+  }
+  // First touch for this tab wins over SDK or current-URL campaign values.
+  Object.assign(properties, getFirstTouchUtm());
+  if (MINIMAL_EVENTS.has(capture.event)) {
+    return { ...capture, properties, $set: undefined, $set_once: undefined, $unset: undefined };
+  }
 
   const host = safeHostname(capture.properties.$host, false);
   if (host) properties.$host = host;
@@ -121,22 +257,8 @@ function beforeSend(capture: CaptureResult | null): CaptureResult | null {
     const domain = safeHostname(referringDomain, true);
     if (domain) properties.$referring_domain = domain;
   }
-  for (const key of ['utm_source', 'utm_medium', 'utm_campaign'] as const) {
-    const value = capture.properties[key];
-    if (isSafeString(value, key === 'utm_source' ? SAFE_SOURCE_LABEL : SAFE_LABEL)) {
-      properties[key] = value;
-    }
-  }
-  // SDK campaign/referrer persistence is disabled; derive only safe pageview attribution.
+  // SDK campaign/referrer persistence is disabled; derive only a safe pageview referrer.
   if (capture.event === '$pageview') {
-    const params = new URLSearchParams(window.location.search);
-    for (const key of ['utm_source', 'utm_medium', 'utm_campaign'] as const) {
-      const value = params.get(key);
-      if (properties[key] === undefined
-        && isSafeString(value, key === 'utm_source' ? SAFE_SOURCE_LABEL : SAFE_LABEL)) {
-        properties[key] = value;
-      }
-    }
     if (properties.$referring_domain === undefined) {
       if (!document.referrer) properties.$referring_domain = '$direct';
       else {
@@ -166,30 +288,35 @@ function beforeSend(capture: CaptureResult | null): CaptureResult | null {
 
 async function initializePostHog(): Promise<void> {
   const key = configuredKey();
-  if (!key || !hasConsent() || !isAllowedAnalyticsHost() || isInternalAnalyticsSession() || client) return;
+  if (!key || !canTrack() || client) return;
   if (initPromise) return initPromise;
   initPromise = import('posthog-js').then(({ default: posthogClient }) => {
-    if (!hasConsent() || !isAllowedAnalyticsHost() || isInternalAnalyticsSession()) {
+    if (!canTrack()) {
       pendingCaptures.length = 0;
       return;
     }
+    const mode = trackingMode();
     posthogClient.init(key, {
       api_host: apiHost(),
       autocapture: false,
       capture_pageview: false,
       disable_session_recording: true,
-      persistence: 'localStorage+cookie',
+      persistence: mode === 'full' ? FULL_PERSISTENCE : COOKIELESS_PERSISTENCE,
       save_campaign_params: false,
       save_referrer: false,
       advanced_disable_flags: true,
       disable_surveys: true,
+      // Stay never until a consented identify; applyIdentify upgrades to identified_only.
       person_profiles: 'never',
       before_send: beforeSend,
     });
-    if (posthogClient.has_opted_out_capturing()) posthogClient.opt_in_capturing();
+    // Opting in writes a consent record, so only do it once the visitor has accepted.
+    if (mode === 'full' && posthogClient.has_opted_out_capturing()) posthogClient.opt_in_capturing();
     client = posthogClient;
+    clientMode = mode;
+    applyIdentify();
     for (const { event, properties } of pendingCaptures.splice(0)) {
-      if (!hasConsent() || !isAllowedAnalyticsHost() || isInternalAnalyticsSession()) break;
+      if (!canTrack()) break;
       client.capture(event, properties);
     }
   }).catch(() => {
@@ -201,7 +328,7 @@ async function initializePostHog(): Promise<void> {
 }
 
 export function captureEvent(event: string, properties?: Record<string, unknown>): void {
-  if (!configuredKey() || !hasConsent() || !isAllowedAnalyticsHost() || isInternalAnalyticsSession()) return;
+  if (!canTrack()) return;
   if (!/^[a-z0-9_$-]+$/i.test(event) || (event.startsWith('$') && event !== '$pageview')) return;
   const capture: Capture = { event, properties: safeProperties(properties) };
   if (event === '$pageview') {
@@ -210,7 +337,8 @@ export function captureEvent(event: string, properties?: Record<string, unknown>
     capture.properties.$pathname = pathname;
   }
   if (client) {
-    if (client.has_opted_out_capturing()) client.opt_in_capturing();
+    applyTrackingMode();
+    if (clientMode === 'full' && client.has_opted_out_capturing()) client.opt_in_capturing();
     client.capture(capture.event, capture.properties);
   } else {
     pendingCaptures.push(capture);
@@ -218,45 +346,90 @@ export function captureEvent(event: string, properties?: Record<string, unknown>
   }
 }
 
-const posthogClient = { capture: captureEvent };
+/**
+ * Stores the visitor's email and, only after Accept, ties events to that person.
+ * Pre-consent: email stays in-memory in this tab and never leaves the browser.
+ * Post-consent: identifies and switches person_profiles to identified_only.
+ * Login-before-consent is a no-op for the network; identify fires when consent arrives.
+ */
+export function identifyUser(email: unknown): void {
+  const normalized = normalizeEmail(email);
+  if (!normalized) return;
+  if (normalized !== identifiedEmail) {
+    identifiedEmail = normalized;
+    identifyApplied = false;
+  }
+  if (!hasConsent() || !canTrack()) return;
+  if (client) {
+    applyTrackingMode();
+    applyIdentify();
+  } else {
+    void initializePostHog();
+  }
+}
+
+/** Clears the identified email on sign-out so later events are anonymous again. */
+export function resetAnalyticsIdentity(): void {
+  clearIdentifyState({ resetClient: true });
+}
+
+const posthogClient = { capture: captureEvent, identify: identifyUser };
 
 export function usePostHog() {
   return posthogClient;
 }
 
+function currentPage(): string | undefined {
+  return typeof window === 'undefined'
+    ? undefined : safeMarketingPath(window.location.pathname) ?? undefined;
+}
+
 export const ph = {
-  ctaClick: (props: CTAClickProps) => captureEvent('cta_clicked', props),
+  ctaClick: ({ cta_id }: CTAClickProps) =>
+    captureEvent('cta_clicked', { product: PRODUCT, page: currentPage(), cta_id }),
+  /** Successful /contact request. No form fields are ever passed here. */
+  requestAccess: () => captureEvent('request_access', { product: PRODUCT, page: currentPage() }),
   signupStart: (props: SignupStartProps) => captureEvent('signup_started', props),
   onboardingComplete: (props: OnboardingCompleteProps) => captureEvent('onboarding_completed', props),
   toolVisit: (props: ToolVisitProps) => captureEvent('tool_visited', props),
+  signup: (props: SignupProps) => captureEvent('signup', props),
 };
 
-function PostHogPageviewTracker({ consentGranted }: { consentGranted: boolean }) {
+function PostHogPageviewTracker() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
   useEffect(() => {
-    if (consentGranted && shouldTrackMarketingPageview(pathname, window.location.href)) {
+    if (shouldTrackMarketingPageview(pathname, window.location.href)) {
       captureEvent('$pageview', { $pathname: pathname });
     }
-  }, [consentGranted, pathname, searchParams]);
+  }, [pathname, searchParams]);
 
   return null;
 }
 
 export function CSPostHogProvider({ children }: { children: ReactNode }) {
-  const [consentGranted, setConsentGranted] = useState(false);
-
   useEffect(() => {
     const refresh = () => {
-      const accepted = hasConsent();
-      setConsentGranted(accepted);
-      if (accepted && isAllowedAnalyticsHost() && !isInternalAnalyticsSession()) {
-        if (client?.has_opted_out_capturing()) client.opt_in_capturing();
+      if (canTrack()) {
+        // Record landing UTMs (memory only until Accept) before any SPA navigation drops them.
+        getFirstTouchUtm();
+        applyTrackingMode();
         void initializePostHog();
+        // Consent may have arrived after a login-time identifyUser; apply now.
+        applyIdentify();
       } else {
         pendingCaptures.length = 0;
         if (client && !client.has_opted_out_capturing()) client.opt_out_capturing();
+        if (hasDeclined()) {
+          clearIdentifyState({ resetClient: true });
+          clearStoredIdentity();
+          if (client) {
+            client.set_config({ persistence: COOKIELESS_PERSISTENCE });
+          }
+          // Re-accepting later goes through applyTrackingMode, which opts back in.
+          clientMode = null;
+        }
       }
     };
     refresh();
@@ -267,7 +440,7 @@ export function CSPostHogProvider({ children }: { children: ReactNode }) {
   return <>
     {children}
     <Suspense fallback={null}>
-      <PostHogPageviewTracker consentGranted={consentGranted} />
+      <PostHogPageviewTracker />
     </Suspense>
   </>;
 }

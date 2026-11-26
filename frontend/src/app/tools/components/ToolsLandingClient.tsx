@@ -64,7 +64,7 @@ export function ToolsLandingClient() {
                         These pages help you look at the Food Traceability List, Critical Tracking Event (CTE) and Key Data Element (KDE) fields, and a self reported records request checklist. They do not score readiness, they do not decide if you are a covered person, and they do not claim you can meet §1.1455's clock.
                     </p>
                     <p className="mt-4 max-w-[68ch] text-small text-re-text-muted">
-                        FDA won't enforce before July 20, 2028.
+                        FDA has said it will not enforce the Food Traceability Rule before July 20, 2028, following a Congressional directive.
                     </p>
                 </div>
                 <Card className="self-start overflow-hidden">
@@ -99,6 +99,14 @@ export function ToolsLandingClient() {
                     ))}
                 </div>
 
+                {filtered.length === 0 ? (
+                    <div role="status" className="rounded-lg border border-re-border bg-re-surface-card p-8 text-center">
+                        <p className="text-heading text-re-text-primary">No tools in this category yet.</p>
+                        <p className="mt-3 text-ui text-re-text-secondary">
+                            Try All or another category to browse every tool.
+                        </p>
+                    </div>
+                ) : (
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                     {filtered.map(([id, title, description, Icon, category]) => (
                         <Link
@@ -125,6 +133,7 @@ export function ToolsLandingClient() {
                         </Link>
                     ))}
                 </div>
+                )}
             </Container>
         </div>
     );

@@ -55,9 +55,12 @@ def repair_null_email_fingerprints(
                     "AUTH_OTP_HMAC_SECRET must be set in production to backfill "
                     "user_emails.email_fingerprint"
                 )
+            # Log the env var *name* as a literal; do not pass the
+            # secret-named constant through the logging data flow
+            # (py/clear-text-logging-sensitive-data).
             logger.warning(
-                "%s not set; skipping user_emails.email_fingerprint repair",
-                _HMAC_SECRET_ENV,
+                "AUTH_OTP_HMAC_SECRET not set; skipping "
+                "user_emails.email_fingerprint repair"
             )
             return 0
         crypto_service = AuthCryptoService(hmac_secret=secret)

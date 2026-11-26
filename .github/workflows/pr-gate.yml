@@ -76,9 +76,12 @@ jobs:
           # Mirror of backend-ci.yml `pull_request: paths:` — keep in sync.
           PATHS = [
               "frontend/src/lib/public-openapi.ts", "frontend/package-lock.json",
-              "alembic/**", "server/**", "services/**", "shared/**", "kernel/**",
+              "alembic/**", "supabase/migrations/**", "sql/prod-apply/**",
+              "server/**", "services/**", "shared/**", "kernel/**",
               "plugins/fsma/**", "Dockerfile", "railway.toml", "requirements.in",
-              "requirements.lock", "scripts/**", "tests/**",
+              "requirements.lock", "requirements-dev.in", "requirements-dev.lock",
+              "requirements-experimental.in", "requirements-experimental.lock",
+              "scripts/**", "tests/**",
               "docs/security/route-security-manifest.json",
               "docs/security/release-evidence/**",
               ".github/workflows/backend-ci.yml",
@@ -271,7 +274,13 @@ jobs:
       actions: read
     name: "PR Gate: Frontend"
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # Short bound: when the runner queue is backed up the Status Gate may not
+    # exist yet. pr-gate-frontend-rerun.yml re-runs this job when Frontend
+    # CI/CD completes, so a timeout here is recovered automatically.
+    timeout-minutes: 15
+    concurrency:
+      group: pr-gate-frontend-${{ github.event.pull_request.number }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
         with:
@@ -332,14 +341,16 @@ jobs:
           CHECK_NAME: "Frontend CI Status Gate"
         with:
           github-token: ${{ github.token }}
-          # See the backend job above: "Frontend CI Status Gate" is created
-          # only after earlier frontend jobs finish, so we poll up to 40 minutes
-          # for it to appear and complete.
+          # "Frontend CI Status Gate" is created only after earlier frontend
+          # jobs finish. A gate that is missing or still queued is pending, not
+          # failed: we poll up to 12 minutes, then fail with an explicit
+          # "still pending" message. pr-gate-frontend-rerun.yml re-runs this job
+          # once Frontend CI/CD completes, which then mirrors the real result.
           script: |
             const { owner, repo } = context.repo;
             const sha = process.env.HEAD_SHA;
             const CHECK_NAME = process.env.CHECK_NAME;
-            const deadline = Date.now() + 40 * 60 * 1000;
+            const deadline = Date.now() + 12 * 60 * 1000;
             const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
             const callWithRetry = async (fn) => {
@@ -443,7 +454,25 @@ jobs:
               delay = Math.min(Math.round(delay * 1.5), 120000);
             }
 
-            core.setFailed(`Timed out waiting for ${CHECK_NAME}`);
+            // Final poll: Frontend CI may have finished during the last sleep.
+            const finalRes = await github.rest.checks.listForRef({
+              owner, repo, ref: sha, check_name: CHECK_NAME, filter: 'latest', per_page: 20,
+            }).catch(() => null);
+            const finalRun = (finalRes?.data?.check_runs || []).find(r => r.status === 'completed');
+            if (finalRun) {
+              if (finalRun.conclusion === 'success') {
+                core.info(`Check ${CHECK_NAME} succeeded with conclusion: success`);
+                return;
+              }
+              core.setFailed(finalRun.conclusion);
+              return;
+            }
+
+            core.setFailed(
+              `${CHECK_NAME} is still pending (not created yet or queued) after 12 minutes; ` +
+              `this is a CI queue delay, not a frontend failure. This job is re-run ` +
+              `automatically when Frontend CI/CD completes (pr-gate-frontend-rerun.yml).`
+            );
       - name: No frontend-relevant changes
         if: steps.detect.outputs.changed != 'true'
         run: echo "No frontend-relevant paths changed; Frontend CI legitimately did not run. Gate vacuously green."
@@ -488,8 +517,35 @@ jobs:
         env:
           GITLEAKS_VERSION: v8.30.0
           GITLEAKS_SHA256: 79a3ab579b53f71efd634f3aaf7e04a0fa0cf206b7ed434638d1547a2470a66e  # pragma: allowlist secret
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
-          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION#v}_linux_x64.tar.gz" -o /tmp/gitleaks.tar.gz
+          # The release host answers 5xx in bursts (two PR Gate runs on
+          # 2026-11-08 died here with six straight 504s). Try the release
+          # download URL with a longer retry window, then the same asset
+          # through the release-asset API, which is served by a different
+          # GitHub edge. The sha256 check below makes the source immaterial.
+          ASSET="gitleaks_${GITLEAKS_VERSION#v}_linux_x64.tar.gz"
+          fetch_from_release_page() {
+            curl -sSfL --retry 8 --retry-delay 10 --retry-all-errors \
+              "https://github.com/gitleaks/gitleaks/releases/download/${GITLEAKS_VERSION}/${ASSET}" \
+              -o /tmp/gitleaks.tar.gz
+          }
+          fetch_from_release_api() {
+            local asset_id
+            asset_id="$(curl -sSf --retry 5 --retry-delay 10 --retry-all-errors \
+              -H "Authorization: Bearer ${GITHUB_TOKEN}" -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/gitleaks/gitleaks/releases/tags/${GITLEAKS_VERSION}" \
+              | jq -r --arg name "$ASSET" '.assets[] | select(.name == $name) | .id')"
+            test -n "$asset_id"
+            curl -sSfL --retry 5 --retry-delay 10 --retry-all-errors \
+              -H "Authorization: Bearer ${GITHUB_TOKEN}" -H "Accept: application/octet-stream" \
+              "https://api.github.com/repos/gitleaks/gitleaks/releases/assets/${asset_id}" \
+              -o /tmp/gitleaks.tar.gz
+          }
+          fetch_from_release_page || {
+            echo "::warning::gitleaks release download failed; retrying through the release-asset API"
+            fetch_from_release_api
+          }
           echo "${GITLEAKS_SHA256}  /tmp/gitleaks.tar.gz" | sha256sum -c -
           tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
           sudo install -m 0755 /tmp/gitleaks /usr/local/bin/gitleaks
@@ -522,7 +578,7 @@ jobs:
     name: "CI Status Gate"
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: [backend, frontend, workflow-contract, secrets]
+    needs: [backend, frontend, workflow-contract, secrets, jev-evidence]
     if: always()
     steps:
       - name: Verify all gate dependencies passed
@@ -531,16 +587,40 @@ jobs:
           FRONTEND: ${{ needs.frontend.result }}
           CONTRACT: ${{ needs.workflow-contract.result }}
           SECRETS: ${{ needs.secrets.result }}
+          JEV: ${{ needs.jev-evidence.result }}
         run: |
           echo "PR Gate: Backend           = $BACKEND"
           echo "PR Gate: Frontend          = $FRONTEND"
           echo "PR Gate: Workflow Contract = $CONTRACT"
           echo "PR Gate: Secrets          = $SECRETS"
-          if [ "$BACKEND" != "success" ] || [ "$FRONTEND" != "success" ] || [ "$CONTRACT" != "success" ] || [ "$SECRETS" != "success" ]; then
-            echo "::error::CI Status Gate failed — backend=$BACKEND frontend=$FRONTEND contract=$CONTRACT secrets=$SECRETS"
+          echo "PR Gate: Jev Evidence     = $JEV"
+          if [ "$BACKEND" != "success" ] || [ "$FRONTEND" != "success" ] || [ "$CONTRACT" != "success" ] || [ "$SECRETS" != "success" ] || [ "$JEV" != "success" ]; then
+            echo "::error::CI Status Gate failed — backend=$BACKEND frontend=$FRONTEND contract=$CONTRACT secrets=$SECRETS jev=$JEV"
             exit 1
           fi
           echo "All gate dependencies green."
+
+  # Orientation docs stay true to the tree (WI-07, 2026-11-04): every
+  # backticked path in the scoped documents exists, and the counts and lists
+  # docs/CODEBASE_MAP.md and ARCHITECTURE.md state match the code. Both
+  # scripts are stdlib-only. Not a CI Status Gate dependency: a docs drift
+  # should block the PR on its own name, not masquerade as a backend failure.
+  docs-guards:
+    permissions:
+      contents: read
+    name: "PR Gate: Docs"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.11"
+      - name: Documentation links resolve
+        run: python scripts/check_docs_links.py
+      - name: Documentation counts match the tree
+        run: python scripts/check_docs_counts.py
 
   # Shared PR file detection. Required gate jobs above remain unconditional.
   changes:
@@ -552,6 +632,7 @@ jobs:
       quality: ${{ steps.filter.outputs.quality }}
       tools: ${{ steps.filter.outputs.tools }}
       review: ${{ steps.filter.outputs.review }}
+      jev: ${{ steps.filter.outputs.jev }}
     steps:
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
         id: filter
@@ -563,6 +644,9 @@ jobs:
             tools:
               - 'frontend/src/app/tools/**'
               - '.github/workflows/pr-gate.yml'
+            jev:
+              - 'experiments/jev-evidence/**'
+              - '.github/workflows/pr-gate.yml'
             # Original Review Gates pull_request paths, with its merged file.
             review:
               - 'frontend/**'
@@ -572,6 +656,28 @@ jobs:
               - 'tests/**'
               - 'scripts/**'
               - '.github/workflows/pr-gate.yml'
+
+  jev-evidence:
+    name: "PR Gate: Jev Evidence"
+    needs: changes
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+        if: needs.changes.outputs.jev == 'true'
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v6
+        if: needs.changes.outputs.jev == 'true'
+        with:
+          node-version: '24'
+      - name: Replay frozen responses and verify runner safeguards offline
+        if: needs.changes.outputs.jev == 'true'
+        working-directory: experiments/jev-evidence
+        run: npm test
+      - name: No standalone Jev changes
+        if: needs.changes.outputs.jev != 'true'
+        run: echo "Standalone Jev experiment unchanged."
 
   # Jobs migrated from PR Quality Gate.
   # ── PR Size Check ───────────────────────────────────────

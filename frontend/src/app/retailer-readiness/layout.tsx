@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-    title: 'Retailer Supplier FSMA 204 Compliance | RegEngine: Retailer-Ready in 48 Hours',
+    title: 'Supplier FSMA 204 Checklist for Retailer Expectations | RegEngine',
     description:
-        'Major retailers are signaling traceability expectations to suppliers ahead of the federal enforcement date; confirm directly with your buyer. API-first FSMA 204 traceability for food suppliers, with automated CTEs and FDA-oriented sortable exports. Free self-check available.',
+        'Major retailers are signaling traceability expectations to suppliers ahead of the federal enforcement date; confirm directly with your buyer. Use RegEngine buyer-program pages and gap checklists to review supplier FSMA 204 CTE/KDE and export expectations. Free self-check available.',
     keywords: [
         'retailer FSMA 204 compliance',
         'food supplier traceability',
@@ -15,17 +15,17 @@ export const metadata: Metadata = {
         'CTE KDE traceability',
     ],
     openGraph: {
-        title: 'Retailer-Ready in 48 Hours | RegEngine FSMA 204 Compliance',
+        title: 'Supplier FSMA 204 Checklist for Retailer Expectations | RegEngine',
         description:
-            'API-first traceability for food suppliers. Automated CTEs and FDA-oriented sortable exports. Free self-check.',
+            'Gap and checklist framing for supplier FSMA 204 CTE/KDE and export expectations that retailers may ask about. Free self-check.',
         type: 'website',
         url: 'https://regengine.co/retailer-readiness',
     },
     twitter: {
         card: 'summary_large_image',
-        title: 'Retailer-Ready in 48 Hours | RegEngine',
+        title: 'Supplier FSMA 204 Checklist for Retailer Expectations | RegEngine',
         description:
-            'Meet major retailer FSMA 204 requirements before their internal deadlines. Free compliance assessment.',
+            'Review supplier FSMA 204 checklist gaps against retailer traceability expectations. Free self-check.',
     },
     robots: {
         index: true,

@@ -158,11 +158,11 @@ export default function FSMAChecklist() {
                 {/* Title */}
                 <div className="mb-10 space-y-3">
                     <h2 className="font-display text-heading-lg text-re-text-primary">
-                        Are You Retailer-Ready?
+                        Supplier FSMA 204 gap checklist
                     </h2>
                     <p className="text-body text-re-text-secondary">
                         Check off each FSMA 204 requirement your company currently meets.
-                        Be honest: gaps are fixable, surprises during an FDA audit aren&apos;t.
+                        This is a self-reported gap list, not a readiness score or a retailer approval.
                     </p>
                 </div>
 
@@ -171,7 +171,7 @@ export default function FSMAChecklist() {
                     <div className="flex items-center justify-between gap-4">
                         <div>
                             <p className="text-label text-re-text-muted">
-                                FSMA Readiness Score
+                                Coverage and completeness checklist
                             </p>
                             <div className="mt-2 flex items-baseline gap-1">
                                 <span className="font-mono text-title tabular-nums text-re-text-primary">
@@ -288,11 +288,11 @@ export default function FSMAChecklist() {
                                     aria-hidden="true"
                                 />
                                 <h3 className="mb-2 text-heading text-re-text-primary">
-                                    You&apos;re Retailer-Ready
+                                    All listed items checked
                                 </h3>
                                 <p className="mx-auto mb-6 max-w-[48ch] text-ui text-re-text-secondary">
-                                    All FSMA 204 readiness checks passed. Want to automate your compliance
-                                    monitoring and get alerts when regulations change?
+                                    You marked every item on this self-reported checklist. That is a gap
+                                    summary, not retailer approval, FDA certification, or a readiness score.
                                 </p>
                                 <Button asChild>
                                     <Link href="/tools/ftl-checker">
@@ -322,10 +322,10 @@ export default function FSMAChecklist() {
                                     </div>
                                     <p className="mb-4 text-ui text-re-text-secondary">
                                         {checkedCount <= 3
-                                            ? "Your traceability infrastructure needs significant work before you're retailer-ready. The good news: these are solvable problems."
+                                            ? "Several checklist items remain unchecked. Treat these as gap candidates to review against your buyer and FDA obligations."
                                             : checkedCount <= 5
-                                                ? "You've got a foundation, but critical gaps remain. Major retailers are actively evaluating suppliers on these exact requirements."
-                                                : "You're close. A few targeted fixes will get you to full compliance."}
+                                                ? "Some foundation items are checked, and critical gaps remain. Review the unchecked items against retailer and FDA expectations."
+                                                : "Most listed items are checked. Review the remaining gaps against your buyer requirements before treating the list as complete."}
                                     </p>
 
                                     {/* Gap List */}

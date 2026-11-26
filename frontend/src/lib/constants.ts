@@ -52,11 +52,11 @@ export type ComplianceStatus = (typeof COMPLIANCE_STATUSES)[keyof typeof COMPLIA
 // ── FSMA 204 regulatory constants ─────────────────────────────────────────────
 
 /**
- * FSMA 204 enforcement deadline.
+ * FSMA 204 date before which FDA has said it will not enforce.
  *
- * Confirmed per FY 2025 Consolidated Appropriations Act, Division A, §775
- * (Pub. L. 118-158, signed March 2025). Congress directed FDA not to enforce
- * the Food Traceability Rule before this date. Last verified: 2026-04-04.
+ * FDA has said it will not enforce the Food Traceability Rule before July 20, 2028, following a Congressional directive.
+ * The compliance date under the final rule remains January 20, 2026 (87 FR 70910).
+ * The extension in 90 FR 38084 is proposed only.
  */
 export const FSMA_204_ENFORCEMENT_DATE = '2028-07-20';
 export const FSMA_204_ENFORCEMENT_LABEL = 'July 20, 2028';

@@ -67,7 +67,7 @@ async function ensureServer(url) {
 const checks = [
   {
     path: '/retailer-readiness',
-    mustInclude: ['Retailer Supplier FSMA 204 Compliance', 'Retailer-Ready in 48 Hours'],
+    mustInclude: ['Supplier FSMA 204 Checklist for Retailer Expectations'],
     mustNotInclude: ['Checking tool access'],
   },
   {

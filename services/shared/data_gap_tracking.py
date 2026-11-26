@@ -14,6 +14,14 @@ State transitions, per (tenant, lot_code, cte_type):
   that lot and CTE, stamping the closing record id and its canonical SHA-256
   (the persisted ledger hash) as the receipt.
 
+Clock: time to fix is measured on ingest-time clocks only. ``opened_at``
+defaults to the database ``now()`` when the gap is flagged. ``closed_at``
+is ``GREATEST(now(), opened_at)`` when the fixing record lands, so a clock
+skew that puts the database behind ``opened_at`` clamps to ``opened_at``
+rather than writing a negative duration. Neither reads the event
+``timestamp``/``event_date``, so backfilled EDI events (whose event time is
+months old) never inflate or shrink time to fix. Keep it that way.
+
 Gap logging is observability. It must never block or roll back ingest, so the
 writer catches every error, logs it, and returns.
 """
@@ -275,7 +283,7 @@ def record_outcomes(db_session: Any, tenant_id: str, outcomes: Sequence[Validati
         )
         try:
             db_session.rollback()
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001 -- fail-safe path: this operation must not propagate a failure
             logger.warning("data_gap_rollback_failed tenant=%s", tenant_id)
 
 
@@ -310,6 +318,43 @@ _AT_RISK_SQL = text(
      GROUP BY g.supplier_key
     """
 )
+
+
+# Open as of a moment, not as of now. The same predicate is in is_open_at. An
+# FDA export is regenerated later by /export/verify, and a gap that has closed
+# since must still read as open at the original moment or the bytes differ.
+_GAPS_OPEN_AT_SQL = text(
+    """
+    SELECT lot_code, cte_type, gap_kind, gap_key
+      FROM public.data_gap_events
+     WHERE tenant_id = CAST(:tid AS uuid)
+       AND lot_code = ANY(:lots)
+       AND opened_at <= CAST(:as_of AS timestamptz)
+       AND (closed_at IS NULL OR closed_at > CAST(:as_of AS timestamptz))
+    """
+)
+
+
+def fetch_gaps_open_at(
+    db_session: Any,
+    tenant_id: str,
+    lot_codes: Iterable[str],
+    as_of: datetime,
+) -> dict[tuple[str, str], tuple[str, ...]]:
+    """Gaps open at ``as_of``, by (lot code, lower-case CTE type).
+
+    Values are sorted ``"<gap_kind>: <gap_key>"`` labels, so a caller writing
+    them into an export gets the same bytes on every run. Raises on a database
+    error: unlike the writer, a reader's caller decides what failure means.
+    """
+    lots = sorted({lot.strip() for lot in lot_codes if lot and lot.strip()})
+    if not lots:
+        return {}
+    rows = db_session.execute(_GAPS_OPEN_AT_SQL, {"tid": tenant_id, "lots": lots, "as_of": as_of}).fetchall()
+    labels: dict[tuple[str, str], set[str]] = {}
+    for lot_code, cte_type, gap_kind, gap_key in rows:
+        labels.setdefault((lot_code, cte_type), set()).add(f"{gap_kind}: {gap_key}")
+    return {key: tuple(sorted(values)) for key, values in labels.items()}
 
 
 def fetch_supplier_summaries(

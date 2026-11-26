@@ -95,7 +95,7 @@ export function MarketingFooter() {
                 className="flex flex-wrap items-center gap-x-4 gap-y-3 border-t border-re-border-subtle py-4"
             >
                 <span className="font-mono text-small text-re-text-tertiary">
-                    FSMA 204 Enforcement: July 20, 2028
+                    FDA enforcement not before July 20, 2028
                 </span>
             </Container>
 

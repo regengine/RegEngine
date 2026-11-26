@@ -93,7 +93,7 @@ VALID_UNITS_OF_MEASURE = {
 # validation semantics. Exposed via /health as inflow_contract_version so
 # deployed instances can detect skew; the Inflow Lab Contract CI asserts
 # cross-repo equality.
-INFLOW_CONTRACT_VERSION = "2"
+INFLOW_CONTRACT_VERSION = "3"  # A-2190: harvest/cool recipient, packing carry-in, transform inputs, FTL gate
 
 
 # Required KDEs per CTE type (§1.1325–§1.1350)
@@ -105,6 +105,7 @@ REQUIRED_KDES_BY_CTE: Dict[WebhookCTEType, List[str]] = {
         "unit_of_measure",
         "harvest_date",
         "location_name",
+        "immediate_subsequent_recipient",  # §1.1325(a)(1); contract v3 / A-2190
         "reference_document",  # §1.1325(a)(1)(viii)
     ],
     WebhookCTEType.COOLING: [
@@ -114,6 +115,8 @@ REQUIRED_KDES_BY_CTE: Dict[WebhookCTEType, List[str]] = {
         "unit_of_measure",
         "cooling_date",
         "location_name",
+        "immediate_subsequent_recipient",  # §1.1325(b)(1); contract v3 / A-2190
+        "harvest_location_name",  # farm where harvested; contract v3 / A-2190
         "reference_document",  # §1.1325(b)(1)(vii)
     ],
     WebhookCTEType.INITIAL_PACKING: [
@@ -126,6 +129,14 @@ REQUIRED_KDES_BY_CTE: Dict[WebhookCTEType, List[str]] = {
         "reference_document",  # §1.1330(a)(16)
         "harvester_business_name",  # §1.1330(a)(7)
         "harvester_business_phone",  # §1.1330(a)(7); contract v2
+        "harvest_date",  # §1.1330(a); contract v3 / A-2190
+        "harvest_location_name",  # farm where harvested; contract v3 / A-2190
+        "received_date",  # date food received; contract v3 / A-2190
+        "received_quantity",  # qty received (distinct from packed); contract v3 / A-2190
+        # Food Safety Lens (A-2190): see validation.py for —
+        #   harvest_location_phone + harvest_location_address (farm description)
+        #   explicit cooled yes/no; cooling_* only when cooled=yes
+        #   human-readable growing_area_name / field_name (field_id alone insufficient)
     ],
     WebhookCTEType.FIRST_LAND_BASED_RECEIVING: [
         "traceability_lot_code",
@@ -166,6 +177,10 @@ REQUIRED_KDES_BY_CTE: Dict[WebhookCTEType, List[str]] = {
         "transformation_date",
         "location_name",
         "reference_document",  # §1.1350(a)(2)(vi)
+        "input_lot_codes",  # §1.1350(a)(1); contract v3 / A-2190
+        "input_quantities",  # §1.1350(a)(1)(iii); contract v3 / A-2190
+        "input_units_of_measure",  # §1.1350(a)(1)(iii); contract v3 / A-2190
+        "input_product_descriptions",  # §1.1350(a)(1); contract v3 / A-2190
     ],
 }
 
@@ -235,7 +250,7 @@ class IngestEvent(BaseModel):
             strict = os.getenv("STRICT_GLN_VALIDATION", "true").lower() == "true"
             if strict:
                 raise ValueError(f"Invalid GLN: {error_msg}")
-            _gln_logger.warning("invalid_gln value=%s error=%s (strict mode disabled)", v, error_msg)
+            _gln_logger.warning("invalid_gln accepted_as_is=true (strict mode disabled)")
             return clean if len(clean) == 13 else v
         return clean
 
@@ -255,9 +270,7 @@ class IngestEvent(BaseModel):
             import logging as _logging
 
             _logging.getLogger("uom-validation").warning(
-                "unknown_unit value=%s accepted_as_is=true valid=%s",
-                v,
-                ",".join(sorted(VALID_UNITS_OF_MEASURE)),
+                "unknown_unit accepted_as_is=true",
             )
             # Accept it — KDE completeness checks will flag it to the user
             return normalized
@@ -332,6 +345,38 @@ class IngestResponse(BaseModel):
             "fsma.ingestion_runs id when the upload was retained as an ingestion run (file uploads): "
             "the receipt that ties every accepted event back to the verbatim source file and its SHA-256."
         ),
+    )
+
+
+class CsvRowDispositionEntry(BaseModel):
+    """One accounted-for CSV input row or header/field decision (SEL-549).
+
+    Every physical data row the partner file presented must appear here as
+    accepted, rejected, flagged, or skipped — never silently dropped.
+    ``guessed_value`` is omitted on purpose: partner cell values must not
+    leave the ingest path via logs or API responses.
+    """
+
+    row_number: int = Field(
+        ...,
+        description="CSV line number (header is 1; data starts at 2). 0 means a file-level header decision.",
+    )
+    disposition: str = Field(
+        ...,
+        description="accepted | rejected | flagged | skipped",
+    )
+    reason: str = Field(..., description="Machine-readable reason code for this decision.")
+    field: Optional[str] = Field(
+        default=None,
+        description="Column or field name involved, when the decision is field-scoped.",
+    )
+    detail: Optional[str] = Field(
+        default=None,
+        description="Human-readable detail. Never includes cell values or secrets.",
+    )
+    guessed_as: Optional[str] = Field(
+        default=None,
+        description="Canonical field a partner column was mapped/guessed into, when applicable.",
     )
 
 
@@ -437,6 +482,21 @@ class CsvIngestResponse(IngestResponse):
     cte_type_suggestion: Optional[CteTypeSuggestionResult] = Field(
         default=None,
         description="Jev's suggested CTE for a file that declares none; null when not asked.",
+    )
+
+    # SEL-549: every input row accounted for. Defaults keep cached idempotent
+    # bodies valid against the schema after this ships.
+    row_disposition_log: List[CsvRowDispositionEntry] = Field(
+        default_factory=list,
+        description="Per-row (and file-level) accept/reject/flag/skip decisions; never silent drops.",
+    )
+    missing_columns: List[str] = Field(
+        default_factory=list,
+        description="Required partner columns that were absent (canonical names); empty when the header was usable.",
+    )
+    unrecognized_columns: List[str] = Field(
+        default_factory=list,
+        description="Partner columns the parser does not recognise (may still pass through into KDEs).",
     )
 
 

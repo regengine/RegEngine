@@ -44,6 +44,9 @@ export default function FDAFoodTraceabilityRequirements() {
           }
         />
         <div>
+          <Callout tone="info" className="mb-8">
+            <p><strong>Correction (Oct 26, 2026):</strong> FDA has said it will not enforce the Food Traceability Rule before July 20, 2028, following a Congressional directive. The compliance date in the rule remains January 20, 2026 (87 FR 70910); the proposed extension (90 FR 38084) has not been finalized.</p>
+          </Callout>
           {/* Introduction */}
           <div className="mb-10">
             <p className="text-body text-re-text-secondary mb-6">
@@ -245,7 +248,7 @@ export default function FDAFoodTraceabilityRequirements() {
               </li>
             </ul>
             <p className="text-body text-re-text-secondary">
-              EPCIS 2.0 (Electronic Product Code Information Services) can support trading-partner interoperability. FDA requests may require records, including an electronic sortable spreadsheet under 21 CFR 1.1455(c)(3), unless an exemption or agreed alternative applies.
+              EPCIS 2.0 (Electronic Product Code Information Services) can support trading-partner interoperability. RegEngine EPCIS support is in Preview. FDA requests may require records, including an electronic sortable spreadsheet under 21 CFR 1.1455(c)(3), unless an exemption or agreed alternative applies.
             </p>
           </div>
 

@@ -76,7 +76,7 @@ const collectItems = [
   {
     Icon: MonitorSmartphone,
     subtitle: 'Usage Data',
-    text: 'We collect basic analytics: pages visited, features used, API calls made. We use this to improve the product. We do not sell this data to anyone.',
+    text: 'We collect basic analytics: pages visited, features used, API calls made, and basic device data such as browser type and IP address, which our analytics provider processes to count visits. We use this to improve the product. We do not sell this data to anyone.',
   },
   {
     Icon: ShieldCheck,
@@ -368,10 +368,12 @@ export default function PrivacyPage() {
             <div id="cookies" className="scroll-mt-24 border-t border-re-border-subtle pb-10 pt-8">
               <NoteCard Icon={Cookie} heading="Cookies">
                 <p className="text-ui text-re-text-secondary">
-                  We use essential cookies for authentication and session management. We use basic
-                  analytics cookies to understand product usage. We do not use third-party
-                  advertising cookies. You can disable non-essential cookies in your browser
-                  settings.
+                  We use essential cookies for authentication and session management. Before you
+                  choose, we count page visits without setting cookies or storing identifiers on
+                  your device. If you accept, we set analytics cookies to understand product usage.
+                  If you decline, we stop all analytics. We do not use third-party advertising
+                  cookies. You can change your choice at any time, and you can also block cookies
+                  in your browser settings.
                 </p>
               </NoteCard>
             </div>

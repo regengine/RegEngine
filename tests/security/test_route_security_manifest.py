@@ -75,7 +75,8 @@ def test_checked_in_manifest_matches_live_route_and_dependency_graph(manifest):
         # admin:GET:/v1/supplier/data-quality/{facility_id}/records, owner-only, tenant-filtered.
         # +1 tenant-scoped: admin:PUT:/v1/supplier/admin/facilities/{facility_id}/agreed-sending-hours,
         # tenant Owner or Admin only (tenant.admin), tenant-filtered.
-        "enabled_operation_count": 258,
+        # +1 tenant-scoped: CSV diagnostic preview, without event persistence.
+        "enabled_operation_count": 259,
         # 178/161 includes graph:GET:/api/v1/provisions/by-request: it is added
         # to the graph v1_router AFTER router.include_router(v1_router), so the
         # eager route copies of fastapi < 0.137 (under which the previous
@@ -99,7 +100,7 @@ def test_checked_in_manifest_matches_live_route_and_dependency_graph(manifest):
         "enabled_by_classification": {
             "global-sysadmin": 16,
             "public": 30,
-            "tenant-scoped": 205,
+            "tenant-scoped": 206,
             "workload-only": 7,
         },
     }
@@ -121,6 +122,39 @@ def test_checkout_is_public_only_when_no_credential_is_present(manifest):
         "storage_boundary": "stripe+redis:anonymous-or-credential-bound-tenant",
         "test_adapter": "public_optional_tenant_checkout",
     }
+
+
+def test_csv_diagnostic_preview_has_exact_tenant_auth_and_no_persistence_contract(manifest):
+    operation = next(
+        item for item in manifest["enabled_operations"] if item["operation"] == "csv:POST:/api/v1/ingest/csv/diagnostic"
+    )
+
+    assert operation == {
+        "operation": "csv:POST:/api/v1/ingest/csv/diagnostic",
+        "owner": "csv",
+        "method": "POST",
+        "path": "/api/v1/ingest/csv/diagnostic",
+        "classification": "tenant-scoped",
+        "authentication": "x-regengine-api-key",
+        "required_permissions": ["webhooks.ingest"],
+        "storage_boundary": "none:credential-bound-tenant-preview",
+        "test_adapter": "tenant_api_key_no_persistence",
+    }
+
+
+def test_csv_diagnostic_preview_cannot_drop_tenant_auth(inventory_app):
+    route = next(
+        item
+        for item in inventory_app.routes
+        if isinstance(item, APIRoute) and route_owner(item) == "csv" and item.path == "/api/v1/ingest/csv/diagnostic"
+    )
+    dependencies = route.dependant.dependencies
+    route.dependant.dependencies = []
+    try:
+        with pytest.raises(RouteManifestError, match="Unclassified production operation"):
+            classify_operation(route, owner="csv", method="POST")
+    finally:
+        route.dependant.dependencies = dependencies
 
 
 def test_every_global_system_operation_requires_high_assurance_session(manifest):
@@ -413,11 +447,12 @@ def test_redis_storage_adapter_rejects_ignored_owner_check(inventory_app):
 @pytest.mark.parametrize(
     "required_key",
     [
+        ("csv", "POST", "/api/v1/ingest/csv/diagnostic"),
         ("status", "GET", "/v1/ingest/status/{job_id}"),
         ("status", "GET", "/v1/ingest/documents/{document_id}/analysis"),
     ],
 )
-def test_required_exact_redis_policy_cannot_fall_back_to_owner(inventory_app, monkeypatch, required_key):
+def test_required_exact_policy_cannot_fall_back_to_owner(inventory_app, monkeypatch, required_key):
     monkeypatch.delitem(TENANT_API_KEY_OPERATION_POLICIES, required_key)
 
     with pytest.raises(RouteManifestError, match="Required exact tenant API-key policy is missing"):

@@ -14,7 +14,7 @@ from pathlib import Path
 import requests
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from services.shared.secret_redaction import mask_secret, read_secret  # noqa: E402
+from services.shared.secret_redaction import read_secret  # noqa: E402
 
 BASE_URL = os.environ.get("TEST_BASE_URL", "http://localhost:8400")
 
@@ -67,8 +67,9 @@ def test_redis_sessions():
             print(f"   ✅ Login successful")
             # Masked fingerprints only: a 20-char token prefix in a log
             # still exposes enough of the credential to abuse it.
-            print(f"   Access token: {mask_secret(access_token)}")
-            print(f"   Refresh token: {mask_secret(refresh_token)}")
+            # Log presence only — never print token material (CodeQL clear-text-logging).
+            print(f"   Access token: {'present' if access_token else 'missing'}")
+            print(f"   Refresh token: {'present' if refresh_token else 'missing'}")
         else:
             print(f"   ❌ Login failed: {response.text}")
             print(f"   Note: Make sure test user exists in database")
@@ -125,7 +126,7 @@ def test_redis_sessions():
         new_access_token = data.get("access_token")
         new_refresh_token = data.get("refresh_token")
         print(f"   ✅ Token refresh successful")
-        print(f"   New access token: {mask_secret(new_access_token)}")
+        print(f"   New access token: {'present' if new_access_token else 'missing'}")
         print(f"   Token rotation: {'Yes' if new_refresh_token != refresh_token else 'No'}")
     else:
         print(f"   ❌ Token refresh failed: {response.status_code}")

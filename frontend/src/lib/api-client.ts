@@ -170,6 +170,7 @@ type RequestConfig = {
   params?: RequestParams;
   timeout?: number;
   responseType?: 'blob';
+  signal?: AbortSignal;
   /**
    * Opens the passkey step-up dialog with this sentence if the backend
    * answers requires_step_up. GETs without it fail quietly so page loads
@@ -289,9 +290,24 @@ class APIClient {
 
       const controller = new AbortController();
       const timeoutMs = config.timeout ?? 30000;
+      // Abort with a TimeoutError (not a bare abort) so callers can tell an
+      // internal timeout from a caller cancel, which forwards the caller's
+      // own abort reason below.
       const timeoutId = timeoutMs > 0
-        ? globalThis.setTimeout(() => controller.abort(), timeoutMs)
+        ? globalThis.setTimeout(
+            () => controller.abort(new DOMException(`Request timed out after ${timeoutMs}ms`, 'TimeoutError')),
+            timeoutMs,
+          )
         : undefined;
+      const externalSignal = config.signal;
+      const onExternalAbort = () => controller.abort(externalSignal?.reason);
+      if (externalSignal) {
+        if (externalSignal.aborted) {
+          controller.abort(externalSignal.reason);
+        } else {
+          externalSignal.addEventListener('abort', onExternalAbort, { once: true });
+        }
+      }
 
       try {
         const response = await fetch(url, {
@@ -336,6 +352,9 @@ class APIClient {
       } finally {
         if (timeoutId !== undefined) {
           globalThis.clearTimeout(timeoutId);
+        }
+        if (externalSignal) {
+          externalSignal.removeEventListener('abort', onExternalAbort);
         }
       }
     };
@@ -576,8 +595,16 @@ class APIClient {
     return response.data;
   }
 
-  async getIngestionJob(jobId: string): Promise<{ status: string; step?: string }> {
-    const { data } = await this.ingestionClient.get(`/v1/ingest/status/${encodeURIComponent(jobId)}`);
+  async getIngestionJob(
+    jobId: string,
+    options?: { signal?: AbortSignal },
+  ): Promise<{ status: string; step?: string }> {
+    // Polled every 2s from /ingest: bound each tick so a slow backend cannot
+    // pile up overlapping requests. The page skips a tick while one is in flight.
+    const { data } = await this.ingestionClient.get(`/v1/ingest/status/${encodeURIComponent(jobId)}`, {
+      timeout: 8000,
+      signal: options?.signal,
+    });
     return data;
   }
 
@@ -1049,8 +1076,11 @@ class APIClient {
   async listIntegrationProfiles(): Promise<IntegrationProfilesResponse> {
     const tenantId = this.currentTenantId;
     if (!tenantId) throw new Error('No tenant selected');
+    // Bound the integrations-page load: the default 30s left the page on
+    // "Loading saved profiles..." until the BFF gave up.
     const { data } = await this.ingestionClient.get<IntegrationProfilesResponse>(
       `/api/v1/integrations/profiles/${encodeURIComponent(tenantId)}`,
+      { timeout: 8000 },
     );
     return data;
   }
@@ -1128,6 +1158,52 @@ class APIClient {
     );
     return data;
   }
+}
+
+/**
+ * The one place product code under src/app, src/components and src/hooks may
+ * reach `fetch` (tech-debt WI-11, 2026-11-04). ESLint rejects a bare `fetch(`
+ * there (`no-restricted-syntax` in eslint.config.mjs); route handlers under
+ * src/app/api keep their own. Use `apiClient` for authenticated service calls.
+ * Use `rawFetch` only when the request must NOT carry the session's
+ * Authorization / X-Tenant-ID headers, or needs Next.js fetch options
+ * (`next: { revalidate }`, `cache`): public endpoints, same-origin health
+ * probes, the public proof verifier upload. It passes both arguments through
+ * untouched, so a call site's request shape is exactly what it writes.
+ */
+export function rawFetch(
+  input: RequestInfo | URL,
+  init?: RequestInit & { next?: { revalidate?: number | false; tags?: string[] } },
+): Promise<Response> {
+  return fetch(input, init);
+}
+
+/**
+ * Minimal JSON request without session headers. Sends `Content-Type:
+ * application/json` only when a body is present, parses JSON when the body is
+ * JSON and keeps text otherwise, and throws `{ status, data }` on a non-2xx
+ * response. Moved verbatim from the supplier portal page (WI-11).
+ */
+export async function requestPublicJson<T>(url: string, init?: RequestInit): Promise<T> {
+  const response = await rawFetch(url, {
+    ...init,
+    headers: {
+      ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(init?.headers || {}),
+    },
+  });
+  const data = await response.text().then((text) => {
+    if (!text) return null;
+    try {
+      return JSON.parse(text);
+    } catch {
+      return text;
+    }
+  });
+  if (!response.ok) {
+    throw { status: response.status, data };
+  }
+  return data as T;
 }
 
 export const apiClient = new APIClient();

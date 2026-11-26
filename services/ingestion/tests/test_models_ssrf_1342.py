@@ -31,6 +31,7 @@ import ipaddress
 import socket
 import sys
 from pathlib import Path
+from urllib.parse import urlparse
 
 import pytest
 from pydantic import ValidationError
@@ -293,7 +294,9 @@ class TestIngestRequestValidator:
     def test_public_url_accepted(self, monkeypatch: pytest.MonkeyPatch) -> None:
         _patch_resolver(monkeypatch, ["93.184.216.34"])  # example.com
         req = IngestRequest(url="https://example.com/api", source_system="fda")
-        assert str(req.url).startswith("https://example.com")
+        parsed = urlparse(str(req.url))
+        assert parsed.scheme == "https"
+        assert parsed.hostname == "example.com"
         assert req.source_system == "fda"
 
     def test_private_url_rejected_via_validator(self, monkeypatch: pytest.MonkeyPatch) -> None:

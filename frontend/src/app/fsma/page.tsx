@@ -95,8 +95,9 @@ function FSMADashboardContent() {
     }
   };
 
-  const handleStartDrill = async (type: RecallDrillType = 'FORWARD', fallbackTlc = 'TLC1001') => {
-    const tlc = activeTlc || fallbackTlc;
+  const handleStartDrill = async (type: RecallDrillType = 'FORWARD') => {
+    const tlc = activeTlc;
+    if (!tlc) return;
     try {
       await createDrill.mutateAsync({
         type,
@@ -157,8 +158,8 @@ function FSMADashboardContent() {
                 </Button>
               }
             >
-              Cookie-backed session auth now powers the live FSMA dashboard. Until you sign in,
-              demo visualization is shown below.
+              Cookie-backed session auth powers the live FSMA dashboard. Sign in to see
+              your live facilities, lots, and recall readiness below.
             </Callout>
           )}
 
@@ -223,14 +224,6 @@ function FSMADashboardContent() {
                       Trace
                     </Button>
                   </div>
-
-                  {/* Demo Facilities Hint */}
-                  {!activeTlc && (
-                    <p className="text-ui text-re-text-tertiary">
-                      Try: <code className="rounded-sm bg-re-surface-inset px-1 font-mono text-[0.8125rem]">LOT-2025-ROMAINE-001</code> or{' '}
-                      <code className="rounded-sm bg-re-surface-inset px-1 font-mono text-[0.8125rem]">TLC-LETTUCE-BATCH-42</code>
-                    </p>
-                  )}
                 </CardContent>
               </Card>
 
@@ -272,8 +265,16 @@ function FSMADashboardContent() {
                       bare
                       size="sm"
                       icon={Shield}
-                      title="No supply chain path yet"
-                      description="Run a traceability query to draw the chain for a lot code."
+                      title="No supply chain data connected yet"
+                      description="Import your facilities and lots, then run a traceability query to draw the chain for a lot code."
+                      action={
+                        <Button variant="secondary" size="sm" asChild>
+                          <Link href="/tools/data-import">
+                            Import data
+                            <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                          </Link>
+                        </Button>
+                      }
                     />
                   )}
 
@@ -323,7 +324,7 @@ function FSMADashboardContent() {
                 drill={activeDrill}
                 onCancel={() => { recallDrills.refetch(); }}
                 onComplete={() => { recallDrills.refetch(); }}
-                onStartDrill={() => handleStartDrill('FORWARD')}
+                onStartDrill={activeTlc ? () => handleStartDrill('FORWARD') : undefined}
               />
 
               {/* Compliance Readiness */}

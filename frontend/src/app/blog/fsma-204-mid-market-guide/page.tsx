@@ -4,6 +4,7 @@ import { ArrowRight, CheckCircle2, AlertCircle, Leaf, Users, Zap } from 'lucide-
 import { Container } from '@/components/layout/container';
 import { PageHeader } from '@/components/layout/page-header';
 import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
 import { Card } from '@/components/ui/card';
 import { JSONLD } from '@/components/seo/json-ld';
 import { blogPostingJsonLd } from '@/lib/blog-jsonld';
@@ -43,13 +44,16 @@ export default function FSMA204MidMarketGuide() {
           }
         />
         <div>
+          <Callout tone="info" className="mb-8">
+            <p><strong>Correction (Oct 26, 2026):</strong> FDA has said it will not enforce the Food Traceability Rule before July 20, 2028, following a Congressional directive. The compliance date in the rule remains January 20, 2026 (87 FR 70910); the proposed extension (90 FR 38084) has not been finalized.</p>
+          </Callout>
           {/* Introduction */}
           <div className="mb-10">
             <p className="text-body text-re-text-secondary mb-6">
               Mid-market food companies (those with 10 to 500 employees) occupy a unique position in the food supply chain. You're large enough that spreadsheets and manual processes are breaking down. You're small enough that you can't afford the enterprise-scale compliance platforms built for Fortune 500 companies. And you're caught in the middle: complex enough to have multiple suppliers and customers, but lean enough that compliance can't become a full-time job for an entire team.
             </p>
             <p className="text-body text-re-text-secondary">
-              FSMA 204 compliance by July 2028 is non-negotiable. But implementing it right (efficiently, affordably, and without grinding your operations to a halt) requires a different approach than either a small startup or a multinational corporation. This guide walks mid-market food businesses through the unique challenges you face and practical strategies to meet FSMA 204 requirements.
+              FDA has said it will not enforce the Food Traceability Rule before July 20, 2028, following a Congressional directive. But implementing it right (efficiently, affordably, and without grinding your operations to a halt) requires a different approach than either a small startup or a multinational corporation. This guide walks mid-market food businesses through the unique challenges you face and practical strategies to meet FSMA 204 requirements.
             </p>
           </div>
 

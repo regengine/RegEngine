@@ -10,6 +10,9 @@ const sdk = vi.hoisted(() => ({
     has_opted_out_capturing: vi.fn(() => false),
     opt_in_capturing: vi.fn(),
     opt_out_capturing: vi.fn(),
+    set_config: vi.fn(),
+    identify: vi.fn(),
+    reset: vi.fn(),
   },
 }));
 
@@ -39,6 +42,7 @@ beforeEach(() => {
   jsdom.reconfigure({ url: 'https://regengine.co/tools/ftl-checker' });
   document.cookie = 're_cookie_consent=; max-age=0; path=/';
   window.localStorage.removeItem('re_internal');
+  window.sessionStorage.clear();
   window.history.replaceState({}, '', '/tools/ftl-checker');
   navigation.pathname = '/tools/ftl-checker';
   navigation.search = '';
@@ -74,6 +78,7 @@ async function initializedOptions() {
     capture_pageview: boolean;
     disable_session_recording: boolean;
     persistence: string;
+    person_profiles: string;
     before_send: (event: {
       event: string;
       properties: Record<string, unknown>;
@@ -102,13 +107,82 @@ describe('PostHog client initialization', () => {
     expect(sdk.client.capture).not.toHaveBeenCalled();
   });
 
-  it('does not load the SDK or capture before consent', async () => {
+  it('runs cookieless before consent: memory persistence, no opt-in record, no identify', async () => {
     const { captureEvent, CSPostHogProvider } = await providerModule();
     render(<CSPostHogProvider>content</CSPostHogProvider>);
     captureEvent('tool_started', { tool_id: 'ftl-checker' });
-    await waitFor(() => expect(sdk.client.init).not.toHaveBeenCalled());
+    const options = await initializedOptions();
+    expect(options.persistence).toBe('memory');
+    expect(options.person_profiles).toBe('never');
+    await waitFor(() => expect(sdk.client.capture).toHaveBeenCalledWith('tool_started', { tool_id: 'ftl-checker' }));
+    expect(sdk.client.opt_in_capturing).not.toHaveBeenCalled();
+    expect(sdk.client.opt_out_capturing).not.toHaveBeenCalled();
+    expect(sdk.client.identify).not.toHaveBeenCalled();
+    expect(sdk.client.set_config).not.toHaveBeenCalled();
+    expect(options.before_send({
+      event: 'tool_completed',
+      properties: { token: 'phc_test', distinct_id: 'anon-1', tool_id: 'ftl-checker', status: 'success' },
+    })?.properties).toMatchObject({ tool_id: 'ftl-checker', status: 'success', $process_person_profile: false });
+  });
+
+  it('switches to full persistence when the visitor accepts', async () => {
+    const { captureEvent, CSPostHogProvider } = await providerModule();
+    render(<CSPostHogProvider>content</CSPostHogProvider>);
+    captureEvent('tool_started', { tool_id: 'kde-checker' });
+    expect((await initializedOptions()).persistence).toBe('memory');
+
+    document.cookie = 're_cookie_consent=accepted; path=/';
+    captureEvent('tool_completed', { tool_id: 'kde-checker', status: 'success' });
+    expect(sdk.client.set_config).toHaveBeenLastCalledWith({ persistence: 'localStorage+cookie' });
+    expect(sdk.client.capture).toHaveBeenLastCalledWith('tool_completed', { tool_id: 'kde-checker', status: 'success' });
+    expect(sdk.client.identify).not.toHaveBeenCalled();
+  });
+
+  it('Decline stops all capture, cookieless included, and stays off on a later page load', async () => {
+    document.cookie = 're_cookie_consent=declined; path=/';
+    const first = await providerModule();
+    render(<first.CSPostHogProvider>content</first.CSPostHogProvider>);
+    first.captureEvent('tool_started', { tool_id: 'ftl-checker' });
+    first.captureEvent('$pageview', { $pathname: '/tools/ftl-checker' });
+
+    // A later page load: fresh module state, same stored choice.
+    vi.resetModules();
+    const reload = await providerModule();
+    render(<reload.CSPostHogProvider>content</reload.CSPostHogProvider>);
+    reload.captureEvent('tool_completed', { tool_id: 'ftl-checker', status: 'success' });
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
     expect(sdk.imported).not.toHaveBeenCalled();
+    expect(sdk.client.init).not.toHaveBeenCalled();
     expect(sdk.client.capture).not.toHaveBeenCalled();
+  });
+
+  it('Decline after Accept opts the SDK out, drops captures and clears stored identity', async () => {
+    document.cookie = 're_cookie_consent=accepted; path=/';
+    window.localStorage.setItem('ph_phc_test_posthog', '{}');
+    const { captureEvent, CSPostHogProvider } = await providerModule();
+    render(<CSPostHogProvider>content</CSPostHogProvider>);
+    captureEvent('tool_started', { tool_id: 'kde-checker' });
+    const options = await initializedOptions();
+    await waitFor(() => expect(sdk.client.capture).toHaveBeenCalledWith('tool_started', { tool_id: 'kde-checker' }));
+
+    document.cookie = 're_cookie_consent=declined; path=/';
+    await waitFor(() => expect(sdk.client.opt_out_capturing).toHaveBeenCalled(), { timeout: 2000 });
+    sdk.client.capture.mockClear();
+    captureEvent('tool_completed', { tool_id: 'kde-checker', status: 'success' });
+    expect(sdk.client.capture).not.toHaveBeenCalled();
+    expect(window.localStorage.getItem('ph_phc_test_posthog')).toBeNull();
+    expect(options.before_send({
+      event: 'tool_completed',
+      properties: { token: 'phc_test', distinct_id: 'anon-1', tool_id: 'kde-checker' },
+    })).toBeNull();
+  });
+
+  it('starts in full persistence when consent was already given', async () => {
+    document.cookie = 're_cookie_consent=accepted; path=/';
+    const { captureEvent } = await providerModule();
+    captureEvent('tool_started', { tool_id: 'ftl-checker' });
+    expect((await initializedOptions()).persistence).toBe('localStorage+cookie');
   });
 
   it.each([
@@ -294,10 +368,27 @@ describe('PostHog client initialization', () => {
     });
     expect(JSON.stringify(result)).not.toContain('lead@example.com');
 
+    // First touch holds for the tab: a later URL with other UTMs does not replace it.
     window.history.replaceState({}, '', '/pricing?utm_source=lead%40example.com&utm_campaign=5551234567');
-    const invalid = beforeSend(base);
+    const later = beforeSend(base);
+    expect(later?.properties).toMatchObject({
+      utm_source: 'linkedin.com', utm_medium: 'social', utm_campaign: 'fsma_launch',
+    });
+  });
+
+  it('drops unsafe landing UTMs instead of recording them as first touch', async () => {
+    document.cookie = 're_cookie_consent=accepted; path=/';
+    window.history.replaceState({}, '', '/pricing?utm_source=lead%40example.com&utm_campaign=5551234567');
+    const { CSPostHogProvider } = await providerModule();
+    render(<CSPostHogProvider>content</CSPostHogProvider>);
+    const { before_send: beforeSend } = await initializedOptions();
+    const invalid = beforeSend({
+      event: '$pageview',
+      properties: { token: 'phc_test', distinct_id: 'anonymous-123', $pathname: '/pricing' },
+    });
     expect(invalid?.properties).not.toHaveProperty('utm_source');
     expect(invalid?.properties).not.toHaveProperty('utm_campaign');
+    expect(window.sessionStorage.getItem('re_first_touch_utm')).toBeNull();
   });
 
   it.each(['localhost', '127.0.0.1', 'dev.local', 'branch.vercel.app'])(
@@ -453,5 +544,230 @@ describe('PostHog App Router pageviews', () => {
     expect(sdk.client.opt_in_capturing).toHaveBeenCalledTimes(1);
     expect(sdk.client.opt_in_capturing.mock.invocationCallOrder[0])
       .toBeLessThan(sdk.client.capture.mock.invocationCallOrder[0]);
+  });
+});
+
+describe('PostHog identity', () => {
+  it('identifies a consented visitor by email and sends only the email to the person profile', async () => {
+    document.cookie = 're_cookie_consent=accepted; path=/';
+    const { identifyUser, CSPostHogProvider } = await providerModule();
+    render(<CSPostHogProvider>content</CSPostHogProvider>);
+    identifyUser('  Lead@Example.com ');
+    const options = await initializedOptions();
+    expect(options.person_profiles).toBe('never');
+    await waitFor(() => expect(sdk.client.identify).toHaveBeenCalledWith(
+      'lead@example.com', { email: 'lead@example.com' },
+    ));
+    expect(sdk.client.identify).toHaveBeenCalledTimes(1);
+    expect(sdk.client.set_config).toHaveBeenCalledWith({ person_profiles: 'identified_only' });
+
+    const beforeSend = options.before_send;
+    const identify = beforeSend({
+      event: '$identify',
+      properties: {
+        token: 'phc_test', distinct_id: 'lead@example.com', $anon_distinct_id: 'anon-123',
+        $current_url: 'https://regengine.co/?x=1',
+      },
+      $set: { email: 'lead@example.com', name: 'Jane Sellers' },
+      $set_once: { $initial_current_url: 'https://regengine.co/?x=1' },
+    });
+    expect(identify?.properties).toEqual({
+      token: 'phc_test', distinct_id: 'lead@example.com', $anon_distinct_id: 'anon-123',
+    });
+    expect(identify?.$set).toEqual({ email: 'lead@example.com' });
+    expect(identify?.$set_once).toBeUndefined();
+
+    const toolEvent = beforeSend({
+      event: 'tool_run_started',
+      properties: { token: 'phc_test', distinct_id: 'lead@example.com', tool: 'ftl-checker' },
+    });
+    expect(toolEvent?.properties).toEqual({
+      token: 'phc_test', distinct_id: 'lead@example.com', tool: 'ftl-checker',
+    });
+  });
+
+  it('does not identify without consent and drops $identify for other distinct ids', async () => {
+    const { identifyUser } = await providerModule();
+    identifyUser('lead@example.com');
+    expect(sdk.imported).not.toHaveBeenCalled();
+    expect(sdk.client.identify).not.toHaveBeenCalled();
+
+    document.cookie = 're_cookie_consent=accepted; path=/';
+    const { CSPostHogProvider } = await providerModule();
+    render(<CSPostHogProvider>content</CSPostHogProvider>);
+    const { before_send: beforeSend } = await initializedOptions();
+    expect(beforeSend({
+      event: '$identify',
+      properties: { token: 'phc_test', distinct_id: 'other@example.com' },
+    })).toBeNull();
+  });
+
+  it('identifies when consent arrives after login in the same session', async () => {
+    const { identifyUser, captureEvent, CSPostHogProvider } = await providerModule();
+    render(<CSPostHogProvider>content</CSPostHogProvider>);
+    // Login before Accept: email is held locally; cookieless capture may run, but no identify.
+    identifyUser('lead@example.com');
+    captureEvent('tool_started', { tool_id: 'ftl-checker' });
+    const options = await initializedOptions();
+    expect(options.persistence).toBe('memory');
+    expect(options.person_profiles).toBe('never');
+    expect(sdk.client.identify).not.toHaveBeenCalled();
+
+    document.cookie = 're_cookie_consent=accepted; path=/';
+    await waitFor(() => expect(sdk.client.identify).toHaveBeenCalledWith(
+      'lead@example.com', { email: 'lead@example.com' },
+    ), { timeout: 2000 });
+    expect(sdk.client.set_config).toHaveBeenCalledWith({ person_profiles: 'identified_only' });
+    expect(sdk.client.set_config).toHaveBeenCalledWith({ persistence: 'localStorage+cookie' });
+  });
+
+  it('ignores values that are not an email and resets on sign-out', async () => {
+    document.cookie = 're_cookie_consent=accepted; path=/';
+    const { identifyUser, resetAnalyticsIdentity, CSPostHogProvider } = await providerModule();
+    render(<CSPostHogProvider>content</CSPostHogProvider>);
+    await initializedOptions();
+    identifyUser('not an email');
+    expect(sdk.client.identify).not.toHaveBeenCalled();
+    identifyUser('lead@example.com');
+    await waitFor(() => expect(sdk.client.identify).toHaveBeenCalledTimes(1));
+    resetAnalyticsIdentity();
+    expect(sdk.client.reset).toHaveBeenCalledTimes(1);
+    expect(sdk.client.set_config).toHaveBeenCalledWith({ person_profiles: 'never' });
+  });
+
+  it('revoking consent after identify calls reset and returns to never/cookieless', async () => {
+    document.cookie = 're_cookie_consent=accepted; path=/';
+    window.localStorage.setItem('ph_phc_test_posthog', '{}');
+    const { identifyUser, captureEvent, CSPostHogProvider } = await providerModule();
+    render(<CSPostHogProvider>content</CSPostHogProvider>);
+    identifyUser('lead@example.com');
+    const options = await initializedOptions();
+    await waitFor(() => expect(sdk.client.identify).toHaveBeenCalledTimes(1));
+    captureEvent('tool_started', { tool_id: 'ftl-checker' });
+
+    document.cookie = 're_cookie_consent=declined; path=/';
+    await waitFor(() => expect(sdk.client.reset).toHaveBeenCalled(), { timeout: 2000 });
+    await waitFor(() => expect(sdk.client.opt_out_capturing).toHaveBeenCalled(), { timeout: 2000 });
+    expect(sdk.client.set_config).toHaveBeenCalledWith({ person_profiles: 'never' });
+    expect(window.localStorage.getItem('ph_phc_test_posthog')).toBeNull();
+    sdk.client.capture.mockClear();
+    captureEvent('tool_completed', { tool_id: 'ftl-checker', status: 'success' });
+    expect(sdk.client.capture).not.toHaveBeenCalled();
+    expect(options.before_send({
+      event: '$identify',
+      properties: { token: 'phc_test', distinct_id: 'lead@example.com' },
+    })).toBeNull();
+  });
+});
+
+describe('AN1 signup events', () => {
+  const LANDING = '/contact?utm_source=linkedin.com&utm_medium=social&utm_campaign=fsma_launch'
+    + `&utm_content=${'c'.repeat(200)}&utm_term=lead%40example.com&email=lead%40example.com`;
+  const FIRST_TOUCH = {
+    utm_source: 'linkedin.com', utm_medium: 'social', utm_campaign: 'fsma_launch',
+    utm_content: 'c'.repeat(128),
+  };
+
+  function sdkEnvelope(event: string, properties: Record<string, unknown>) {
+    return {
+      event,
+      properties: {
+        ...properties,
+        token: 'phc_test', distinct_id: 'anonymous-123',
+        $host: 'regengine.co', $referring_domain: 'linkedin.com', $session_id: 'abc-def',
+        $current_url: 'https://regengine.co/contact?email=lead@example.com',
+        $referrer: 'https://linkedin.com/?email=lead@example.com',
+        utm_source: 'newsletter',
+      },
+    };
+  }
+
+  it('request_access and cta_clicked carry only product, page, cta_id and first-touch UTMs', async () => {
+    window.history.replaceState({}, '', LANDING);
+    navigation.pathname = '/contact';
+    const { ph, CSPostHogProvider } = await providerModule();
+    render(<CSPostHogProvider>content</CSPostHogProvider>);
+    // Pre-consent (cookieless): first touch stays in memory, nothing in storage.
+    window.history.replaceState({}, '', '/contact?utm_source=other&utm_campaign=later');
+
+    ph.requestAccess();
+    ph.ctaClick({ cta_id: 'home_page' });
+    const { before_send: beforeSend } = await initializedOptions();
+    await waitFor(() => expect(sdk.client.capture).toHaveBeenCalledTimes(2));
+    expect(sdk.client.capture).toHaveBeenNthCalledWith(1, 'request_access', {
+      product: 'RegEngine', page: '/contact',
+    });
+    expect(sdk.client.capture).toHaveBeenNthCalledWith(2, 'cta_clicked', {
+      product: 'RegEngine', page: '/contact', cta_id: 'home_page',
+    });
+    expect(window.sessionStorage.length).toBe(0);
+
+    for (const [event, args] of sdk.client.capture.mock.calls as [string, Record<string, unknown>][]) {
+      const result = beforeSend(sdkEnvelope(event, { ...args, email: 'lead@example.com', name: 'Jane' }));
+      expect(result?.properties).toEqual({
+        token: 'phc_test', distinct_id: 'anonymous-123', $process_person_profile: false,
+        ...args,
+        ...FIRST_TOUCH,
+      });
+      expect(JSON.stringify(result)).not.toContain('lead@example.com');
+      expect(JSON.stringify(result)).not.toContain('?');
+    }
+  });
+
+  it('attaches first-touch UTMs to $pageview and persists them for the tab only after Accept', async () => {
+    document.cookie = 're_cookie_consent=accepted; path=/';
+    window.history.replaceState({}, '', LANDING);
+    navigation.pathname = '/contact';
+    const { CSPostHogProvider } = await providerModule();
+    render(<CSPostHogProvider>content</CSPostHogProvider>);
+    const { before_send: beforeSend } = await initializedOptions();
+    expect(JSON.parse(window.sessionStorage.getItem('re_first_touch_utm') ?? '{}')).toEqual(FIRST_TOUCH);
+
+    window.history.replaceState({}, '', '/pricing?utm_source=other');
+    const result = beforeSend({
+      event: '$pageview',
+      properties: { token: 'phc_test', distinct_id: 'anonymous-123', $pathname: '/pricing' },
+    });
+    expect(result?.properties).toMatchObject({ ...FIRST_TOUCH, $pathname: '/pricing' });
+    expect(result?.properties).not.toHaveProperty('utm_term');
+  });
+
+  it('drops a page that is not a known public path and a non-RegEngine product', async () => {
+    const { captureEvent, CSPostHogProvider } = await providerModule();
+    render(<CSPostHogProvider>content</CSPostHogProvider>);
+    captureEvent('cta_clicked', {
+      product: 'Other', page: '/contact?email=lead@example.com', cta_id: 'home_page',
+    });
+    await waitFor(() => expect(sdk.client.capture).toHaveBeenCalledWith('cta_clicked', {
+      cta_id: 'home_page',
+    }));
+  });
+
+  it('forgets first touch when the visitor declines', async () => {
+    document.cookie = 're_cookie_consent=accepted; path=/';
+    window.history.replaceState({}, '', LANDING);
+    const { CSPostHogProvider } = await providerModule();
+    render(<CSPostHogProvider>content</CSPostHogProvider>);
+    await initializedOptions();
+    expect(window.sessionStorage.getItem('re_first_touch_utm')).not.toBeNull();
+    document.cookie = 're_cookie_consent=declined; path=/';
+    await waitFor(() => expect(window.sessionStorage.getItem('re_first_touch_utm')).toBeNull(), {
+      timeout: 2500,
+    });
+  });
+
+  it('keeps first touch across a reload in the same tab after Accept', async () => {
+    document.cookie = 're_cookie_consent=accepted; path=/';
+    window.sessionStorage.setItem('re_first_touch_utm', JSON.stringify(FIRST_TOUCH));
+    window.history.replaceState({}, '', '/pricing?utm_source=other&utm_campaign=later');
+    navigation.pathname = '/pricing';
+    const { CSPostHogProvider } = await providerModule();
+    render(<CSPostHogProvider>content</CSPostHogProvider>);
+    const { before_send: beforeSend } = await initializedOptions();
+    const result = beforeSend({
+      event: '$pageview',
+      properties: { token: 'phc_test', distinct_id: 'anonymous-123', $pathname: '/pricing' },
+    });
+    expect(result?.properties).toMatchObject(FIRST_TOUCH);
   });
 });

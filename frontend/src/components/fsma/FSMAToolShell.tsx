@@ -56,8 +56,9 @@ export function FSMAToolShell({ config, onLeadCapture, renderResults }: FSMATool
         if (status === 'RESULTS' && runStarted.current && !runCompleted.current) {
             runCompleted.current = true;
             trackToolRunCompleted(config.id, 'success');
+            posthog?.capture('tool_completed', { tool_id: config.id, status: 'success' });
         }
-    }, [status, config.id]);
+    }, [status, config.id, posthog]);
 
     const utmParams = useMemo(() => ({
         utm_source: searchParams.get('utm_source'),
@@ -202,6 +203,7 @@ export function FSMAToolShell({ config, onLeadCapture, renderResults }: FSMATool
                                 if (!runStarted.current) {
                                     runStarted.current = true;
                                     trackToolRunStarted(config.id);
+                                    posthog?.capture('tool_started', { tool_id: config.id });
                                 }
                                 setStatus('QUESTIONS');
                                 trackToolEvent('TOOL_START');

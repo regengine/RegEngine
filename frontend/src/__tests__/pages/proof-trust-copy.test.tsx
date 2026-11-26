@@ -56,10 +56,10 @@ describe('public proof-bundle trust copy', () => {
         }
     });
 
-    it('/proof states the checks do not authenticate the issuer', () => {
+    it('/proof shows the empty state instead of artifacts', () => {
         const text = renderedText(<ProofPage />);
 
-        expect(text).toMatch(/do not authenticate the issuer/i);
+        expect(text).toMatch(/no public artifacts are published yet/i);
 
         for (const claim of UNBACKED_AUTHENTICITY_CLAIMS) {
             expect(text).not.toMatch(claim);

@@ -141,17 +141,19 @@ const API_SERVICES: { name: string; baseUrl: string; icon: React.ComponentType<{
             {
                 method: 'GET',
                 path: '/trace/{tlc}',
-                description: 'Trace the transformation graph for a traceability lot code (upstream sources and downstream products). Requires the fda.read scope. Unlike the Records API, FDA endpoints take tenant_id as an explicit query parameter (it must match your key’s workspace).',
+                description: 'Trace the transformation graph for a traceability lot code. direction selects upstream sources (backward), downstream products (forward) or both (default). depth_exhausted is true when a lot sat at the depth limit and was not expanded, so the graph may continue past the response. Requires the fda.read scope. Unlike the Records API, FDA endpoints take tenant_id as an explicit query parameter (it must match your key’s workspace).',
                 auth: true,
                 headers: ['X-RegEngine-API-Key'],
-                params: ['tenant_id={your-workspace-uuid}'],
+                params: ['tenant_id={your-workspace-uuid}', 'direction=both', 'depth=5'],
                 response: JSON.stringify({
                     seed_tlc: "<the lot code you traced>",
                     tenant_id: "<your workspace ID>",
                     traversal_depth: 5,
+                    direction: "both",
+                    depth_exhausted: false,
                     node_count: 1,
                     edge_count: 0,
-                    nodes: [{ tlc: "<the lot code you traced>", is_seed: true, role: "seed", event_count: 1 }],
+                    nodes: [{ tlc: "<the lot code you traced>", is_seed: true, role: "seed", depth: 0, event_count: 1 }],
                     edges: [],
                     total_events: 1
                 }, null, 2),
@@ -370,15 +372,15 @@ function EndpointCard({ endpoint }: { endpoint: Endpoint }) {
 }
 
 const ERROR_CODES = [
-    { code: '400', desc: 'Bad Request - Missing Idempotency-Key or invalid parameters' },
-    { code: '401', desc: 'Unauthorized - Missing or invalid API key, or a missing or wrong ingest signature' },
-    { code: '402', desc: 'Payment Required - No active subscription for the workspace' },
-    { code: '403', desc: 'Forbidden - Key lacks the required scope, or tenant_id / X-Tenant-ID names a different workspace' },
-    { code: '404', desc: "Not Found - Resource doesn't exist" },
-    { code: '409', desc: 'Conflict - Idempotency-Key reused with different request bytes' },
-    { code: '422', desc: 'Unprocessable - Request body failed validation' },
-    { code: '429', desc: 'Too Many Requests - Rate limited' },
-    { code: '500', desc: 'Internal Error - Contact support' },
+    { code: '400', desc: 'Bad Request: Missing Idempotency-Key or invalid parameters' },
+    { code: '401', desc: 'Unauthorized: Missing or invalid API key, or a missing or wrong ingest signature' },
+    { code: '402', desc: 'Payment Required: No active subscription for the workspace' },
+    { code: '403', desc: 'Forbidden: Key lacks the required scope, or tenant_id / X-Tenant-ID names a different workspace' },
+    { code: '404', desc: "Not Found: Resource doesn't exist" },
+    { code: '409', desc: 'Conflict: Idempotency-Key reused with different request bytes' },
+    { code: '422', desc: 'Unprocessable: Request body failed validation' },
+    { code: '429', desc: 'Too Many Requests: Rate limited' },
+    { code: '500', desc: 'Internal Error: Contact support' },
 ];
 
 const RATE_LIMIT_HEADERS = [

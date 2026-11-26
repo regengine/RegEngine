@@ -108,7 +108,7 @@ const STEPS = [
 const KEY_FACTS = [
   { icon: Clock, text: "24 hours to respond to an FDA request" },
   { icon: Shield, text: "Applies to all foods on the FTL" },
-  { icon: CheckCircle, text: "Earliest enforcement date under current public posture: July 20, 2028" },
+  { icon: CheckCircle, text: "FDA enforcement not before July 20, 2028" },
 ];
 
 const FAQS = [
@@ -126,10 +126,10 @@ const FAQS = [
   },
   {
     q: "How is this different from what Walmart already asks for?",
-    a: "Major retailers have been requiring traceability data ahead of the FDA deadline. If you already supply traceability data to a retailer, you’re partially prepared. RegEngine helps you produce records structured to meet retailer schemas and FDA’s §1.1455 sortable-spreadsheet format from one system.",
+    a: "Major retailers have their own traceability requirements and supplier timelines. If you already supply traceability data to a retailer, you’re partially prepared. RegEngine helps you produce records structured to meet retailer schemas and FDA’s §1.1455 sortable-spreadsheet format from one system.",
   },
   {
-    q: "What happens if I’m not compliant by July 2028?",
+    q: "What are the risks of missing traceability records?",
     a: "FDA enforcement under §1.1455 focuses on producing the required records on request. Beyond direct enforcement, major retailers may drop non-compliant suppliers. The bigger risk for most farms is losing a key retail customer over missing traceability data.",
   },
   {
@@ -198,15 +198,15 @@ export default function FSMA204BusinessGuidePage() {
             The goal is simple: when a foodborne illness outbreak happens, FDA can request your traceability records and you must produce a sortable electronic spreadsheet within <strong className="font-medium text-re-text-primary">24 hours</strong>. Before this rule, that process could take weeks.
           </p>
           <p>
-            The rule was finalized in 2022. The original compliance date was January 20, 2026. <strong className="font-medium text-re-text-primary">Congress directed FDA not to enforce the rule before July 20, 2028.</strong> The requirements themselves have not changed.
+            The rule was finalized in 2022. The compliance date under the rule remains January 20, 2026 (87 FR 70910). The 30-month extension is only proposed (90 FR 38084). <strong className="font-medium text-re-text-primary">FDA has said it will not enforce the Food Traceability Rule before July 20, 2028, following a Congressional directive.</strong> The requirements themselves have not changed.
           </p>
         </div>
 
         {/* Enforcement callout */}
         <Callout tone="warning" className="mt-8 max-w-[68ch]">
-          <p className="font-medium text-re-text-primary">The deadline moved. The rule didn&apos;t.</p>
+          <p className="font-medium text-re-text-primary">The compliance date and enforcement timing are distinct.</p>
           <p className="mt-1">
-            Congress directed FDA not to enforce before July 2028, but major retailers have published supplier traceability programs that pre-date the federal enforcement date. If you sell to a major retailer, check your supplier portal: your effective deadline may already have passed.
+            FDA has said it will not enforce the Food Traceability Rule before July 20, 2028, following a Congressional directive. Major retailers have published supplier traceability programs with their own timelines. If you sell to a major retailer, check your supplier portal: your supplier deadline may already have passed.
           </p>
         </Callout>
       </Section>
@@ -279,7 +279,7 @@ export default function FSMA204BusinessGuidePage() {
           <Card variant="inset" padding="compact">
             <p className="font-mono text-label uppercase text-re-text-muted">Without a system</p>
             <p className="mt-3 text-ui text-re-text-secondary">
-              Dig through paper records, spreadsheets across multiple computers, call suppliers for missing info. Typical response: 3-5 days, incomplete.
+              Dig through paper records, spreadsheets across multiple computers, call suppliers for missing info. The rule does not wait: records must be provided within 24 hours of an FDA request, or within some reasonable time to which FDA has agreed (21 CFR 1.1455(c)(1)).
             </p>
           </Card>
           <Card padding="compact">
@@ -344,13 +344,13 @@ export default function FSMA204BusinessGuidePage() {
       <Section width="marketing" tone="inset">
         <div className="mx-auto max-w-[640px] text-center">
           <p className="font-mono text-label uppercase text-re-text-muted">
-            Earliest FSMA 204 Enforcement Date: July 20, 2028
+            FDA enforcement not before July 20, 2028
           </p>
           <h2 className="mt-4 font-display text-heading-lg text-re-text-primary">
-            Don&apos;t wait for the deadline.
+            Don&apos;t wait to prepare.
           </h2>
           <p className="mx-auto mt-4 max-w-[500px] text-body text-re-text-secondary">
-            Start with a free tool. See where you stand. Get compliant on your schedule, not the FDA&apos;s.
+            Start with a free tool. See where you stand. Build the records your operation and customers need.
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             <Button asChild size="lg">
@@ -372,8 +372,6 @@ export default function FSMA204BusinessGuidePage() {
           </p>
           <p className="mt-3 text-small text-re-text-muted">
             Try it:{" "}
-            <Link href="/proof" className="text-re-brand underline decoration-re-border-strong underline-offset-[3px] hover:decoration-re-brand">/proof</Link>
-            {" "}→{" "}
             <Link href="/verify" className="text-re-brand underline decoration-re-border-strong underline-offset-[3px] hover:decoration-re-brand">/verify</Link>.
           </p>
         </div>
