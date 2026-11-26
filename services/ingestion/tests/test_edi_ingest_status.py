@@ -6,6 +6,10 @@ were all rejected still looked like a success: HTTP 201, ``status: "accepted"``,
 the real ``ingest_events`` and the real ``_validate_event_kdes``. Only the
 layers below it (auth, rate limit, database, canonical store, graph sync) are
 faked, using the same seams as ``test_webhook_compat_enforcement.py``.
+
+An interchange is stored completely or not at all. One rejected event
+therefore reports ``rejected`` and leaves nothing stored. ``partial`` is
+still the status when a result keeps both stored and rejected events.
 """
 
 from __future__ import annotations
@@ -59,22 +63,35 @@ def _batch_945(*sets: str) -> bytes:
 
 
 class _Savepoint:
-    def commit(self) -> None: ...
+    """Undo stores recorded after this savepoint opened."""
 
-    def rollback(self) -> None: ...
+    def __init__(self, stored: list[str]) -> None:
+        self._stored = stored
+        self._mark = len(stored)
+
+    def commit(self) -> None:
+        return None
+
+    def rollback(self) -> None:
+        del self._stored[self._mark :]
 
 
 class _Session:
+    def __init__(self, stored: list[str]) -> None:
+        self._stored = stored
+
     def begin_nested(self) -> _Savepoint:
-        return _Savepoint()
+        return _Savepoint(self._stored)
 
-    def commit(self) -> None: ...
+    def commit(self) -> None:
+        return None
 
-    def rollback(self) -> None: ...
+    def rollback(self) -> None:
+        self._stored.clear()
 
 
 class _Persistence:
-    """Records what reached storage."""
+    """Records what reached storage. Savepoint rollback removes it again."""
 
     def __init__(self) -> None:
         self.stored: list[str] = []
@@ -95,7 +112,7 @@ def persistence(monkeypatch: pytest.MonkeyPatch) -> _Persistence:
     store = _Persistence()
 
     def _session_gen():
-        yield _Session()
+        yield _Session(store.stored)
 
     def _no_canonical(*_args, **_kwargs):
         raise ImportError("canonical store not under test")
@@ -108,8 +125,11 @@ def persistence(monkeypatch: pytest.MonkeyPatch) -> _Persistence:
     monkeypatch.setattr(compat, "record_outcomes", lambda *_args: None)
     monkeypatch.setattr(cte_persistence, "CTEPersistence", lambda _session: store)
     monkeypatch.setattr(canonical_event, "normalize_webhook_event", _no_canonical)
-    # ISA13 dedup lives in Redis and has its own suite.
+    # ISA13 dedup lives in Redis and has its own suite. The Postgres receipt
+    # (#3833) does too; these tests only care what status says was stored.
     monkeypatch.setattr(edi_routes, "check_and_record_interchange", lambda *a, **kw: (False, None))
+    monkeypatch.setattr(edi_routes.EDIInterchange, "reserve", lambda self, session, tenant_id: None)
+    monkeypatch.setattr(edi_routes.EDIInterchange, "record_stored", lambda self, session, tenant_id: None)
     return store
 
 
@@ -149,7 +169,8 @@ def test_all_events_rejected_is_reported_as_rejected(
     assert persistence.stored == []
 
 
-def test_some_events_rejected_is_reported_as_partial(client: TestClient, persistence: _Persistence) -> None:
+def test_one_rejected_event_rejects_the_whole_interchange(client: TestClient, persistence: _Persistence) -> None:
+    """A mixed document stores nothing, so status is rejected, not partial."""
     good_lot, bad_lot = "00012345678905-LOTGOOD", "00012345678905-LOTBAD"
     document = _batch_945(_set_945("0001", good_lot), _set_945("0002", bad_lot, ship_to=False))
 
@@ -157,15 +178,16 @@ def test_some_events_rejected_is_reported_as_partial(client: TestClient, persist
 
     assert response.status_code == 201, response.text
     body = response.json()
-    assert body["status"] == "partial"
+    assert body["status"] == "rejected"
     assert body["rejection"] is None
     result = body["ingestion_result"]
-    assert (result["accepted"], result["rejected"], result["total"]) == (1, 1, 2)
+    assert (result["accepted"], result["rejected"], result["total"]) == (0, 2, 2)
     by_lot = {event["traceability_lot_code"]: event for event in result["events"]}
-    assert by_lot[good_lot]["status"] == "accepted"
+    assert by_lot[good_lot]["status"] == "rejected"
+    assert "Not stored: another event in this batch was rejected" in by_lot[good_lot]["errors"]
     assert by_lot[bad_lot]["status"] == "rejected"
     assert "Missing required KDE 'ship_to_location' for shipping CTE" in by_lot[bad_lot]["errors"]
-    assert persistence.stored == [good_lot]
+    assert persistence.stored == []
 
 
 def test_all_events_stored_is_reported_as_accepted(client: TestClient, persistence: _Persistence) -> None:

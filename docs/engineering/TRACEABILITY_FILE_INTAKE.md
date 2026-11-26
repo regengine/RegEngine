@@ -173,7 +173,10 @@ even if no event was stored. Read `status`, not the HTTP code:
 | `partial` | Some events | `ingestion_result.events[]`, `status` and `errors` per event |
 | `rejected` | Nothing | `ingestion_result.events[]`, or `rejection` for `?strict=false` |
 
-`ingestion_result` and `rejection` are never both set.
+`ingestion_result` and `rejection` are never both set. An interchange is
+stored completely or not at all, so one rejected event leaves `accepted`
+at 0 and `status` is `rejected`. `partial` is the status when some events
+stayed stored.
 
 ### `POST /api/v1/ingest/edi` (856 only)
 
