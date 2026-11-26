@@ -8,7 +8,6 @@ anonymization to comply with GDPR and data retention policies.
 GitHub Issue #870: Data Retention Enforcement for PII
 """
 
-import asyncio
 import hashlib
 import json
 from dataclasses import asdict, dataclass, field
@@ -27,7 +26,7 @@ from shared.audit_logging import (
     AuditSeverity,
     AuditStorageError,
 )
-from shared.database import engine, get_db
+from shared.database import get_db
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -240,7 +239,7 @@ def _rollback_quietly(db: Session) -> None:
     """
     try:
         db.rollback()
-    except Exception as rollback_error:  # noqa: BLE001
+    except Exception as rollback_error:  # noqa: BLE001 -- fail-safe path: this operation must not propagate a failure
         logger.warning("retention_rollback_failed", error=str(rollback_error))
 
 
@@ -383,9 +382,9 @@ class PIIAnonymizer:
         """
         result = data.copy()
 
-        for field in pii_fields:
-            if field in result:
-                result[field] = cls.anonymize_value(field, result[field])
+        for pii_field in pii_fields:
+            if pii_field in result:
+                result[pii_field] = cls.anonymize_value(pii_field, result[pii_field])
 
         return result
 
@@ -817,7 +816,7 @@ class DataRetentionManager:
 
             results = db.execute(query, {"threshold": threshold}).fetchall()
 
-            for log_id, details_json, tags in results:
+            for log_id, details_json, _tags in results:
                 try:
                     details = json.loads(details_json) if details_json else {}
 

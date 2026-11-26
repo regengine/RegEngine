@@ -13,8 +13,8 @@ print(f"DEBUG: PRE-PATH = {sys.path}")
 
 # Add service paths to sys.path to simulate being inside the service
 # If we are in /app, and /app/app exists...
-sys.path.append(os.getcwd())
-sys.path.append(os.path.join(os.getcwd(), "app"))
+sys.path.append(os.getcwd())  # run from the repo root: services.nlp.app.* resolves from here
+sys.path.append(os.path.join(os.getcwd(), "services"))  # shared.*
 
 # Mock classes to avoid full docker dependencies if running locally
 try:
@@ -25,9 +25,9 @@ try:
         # unless we mount it.
         from dataclasses import dataclass
 
-        from app.classification import SignalClassifier
-        from app.extractor import extract_entities
-        from app.resolution import EntityResolver
+        from services.nlp.app.classification import SignalClassifier
+        from services.nlp.app.extractor import extract_entities
+        from services.nlp.app.resolution import EntityResolver
 
         @dataclass
         class Source:

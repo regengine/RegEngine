@@ -373,9 +373,9 @@ def _upload_csv(monkeypatch, tenant):
     day = (datetime.now(timezone.utc).date() - timedelta(days=2)).isoformat()
     body = (
         "Lot #,tlc,Shipped On,product_description,quantity,unit_of_measure,harvest_date,location_name,"
-        "reference_document\n"
-        f"LOT-1,PG-CSV-{tenant[:8]}-1,{day},Kale,10,lbs,{day},Farm A,REF-1\n"
-        f"LOT-2,PG-CSV-{tenant[:8]}-2,{day},Chard,5,lbs,{day},Farm A,REF-2\n"
+        "reference_document,immediate_subsequent_recipient\n"
+        f"LOT-1,PG-CSV-{tenant[:8]}-1,{day},Kale,10,lbs,{day},Farm A,REF-1,Cooler Co\n"
+        f"LOT-2,PG-CSV-{tenant[:8]}-2,{day},Chard,5,lbs,{day},Farm A,REF-2,Cooler Co\n"
     ).encode()
     with TestClient(app) as client:
         response = client.post(

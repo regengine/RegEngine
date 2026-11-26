@@ -136,6 +136,7 @@ audit-findings-*.md
 .claude/skills/*
 !.claude/skills/typesafe-ai/
 !.claude/skills/jev-sidecar/
+!.claude/skills/verify/
 .gemini/
 .swarm_memory/
 
@@ -270,3 +271,7 @@ output/*
 !output/pilots/
 output/pilots/*
 !output/pilots/README.md
+.env*
+# Keep the safe templates tracked: this must stay after the .env* rule above.
+!.env.example
+!.env.*.example

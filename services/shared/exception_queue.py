@@ -15,7 +15,6 @@ Usage:
     svc.resolve_exception(tenant_id, case_id, resolution_summary)
 """
 
-import json
 import logging
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
@@ -159,7 +158,7 @@ class ExceptionQueueService:
         non-UUID GUC that would break every
         ``get_tenant_context()::UUID`` comparison in RLS.
         """
-        from shared.tenant_context import set_tenant_guc  # noqa: PLC0415
+        from shared.tenant_context import set_tenant_guc  # noqa: PLC0415 -- lazy import, avoids a module-load cycle
 
         set_tenant_guc(self.session, tenant_id)
 
