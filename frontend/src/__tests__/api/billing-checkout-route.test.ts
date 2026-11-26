@@ -55,6 +55,14 @@ describe('billing checkout route', () => {
         expect(payload.success_url).not.toContain('{CHECKOUT_SESSION_ID}');
     });
 
+    it('forwards facility_count to the billing backend', async () => {
+        await POST(makeRequest({ plan_id: 'list', billing_period: 'monthly', facility_count: 7 }));
+
+        const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>;
+        const payload = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+        expect(payload.facility_count).toBe(7);
+    });
+
     it('does not inject an environment API key or caller-supplied tenant into public checkout', async () => {
         vi.stubEnv('REGENGINE_API_KEY', 'must-not-be-forwarded'); // pragma: allowlist secret
         vi.stubEnv('REGENGINE_API_KEY_TENANT_ID', TENANT_A);

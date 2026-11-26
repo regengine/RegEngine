@@ -35,31 +35,31 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from sqlalchemy.orm import Session
-
-from shared.identity_resolution.constants import (  # noqa: F401
-    VALID_ENTITY_TYPES,
-    VALID_ALIAS_TYPES,
-    VALID_REVIEW_STATUSES,
-    AMBIGUOUS_THRESHOLD_LOW,
+from shared.identity_resolution.constants import (  # noqa: F401 -- re-export for existing importers
     AMBIGUOUS_THRESHOLD_HIGH,
-)
-from shared.identity_resolution.normalization import (  # noqa: F401
-    _STRUCTURED_IDENTIFIER_ALIAS_TYPES,
-    _normalize_identifier,
+    AMBIGUOUS_THRESHOLD_LOW,
+    VALID_ALIAS_TYPES,
+    VALID_ENTITY_TYPES,
+    VALID_REVIEW_STATUSES,
 )
 from shared.identity_resolution.matching import MatchingMixin
 from shared.identity_resolution.merging import MergeMixin
+from shared.identity_resolution.normalization import (  # noqa: F401 -- re-export for existing importers
+    _STRUCTURED_IDENTIFIER_ALIAS_TYPES,
+    _normalize_identifier,
+)
 from shared.identity_resolution.registration import RegistrationMixin
 from shared.identity_resolution.resolver import ResolverMixin
 from shared.identity_resolution.review import ReviewMixin
+
 # #1233: PII masking helpers for log emission. Raw alias_value /
 # canonical_name must never reach the log sinks — log retention is
 # typically longer than DB retention and sinks are accessible to a
 # wider personnel surface (SRE, observability vendors). Re-exported
 # here for backward compatibility (the log call sites now live in
 # registration.py and resolver.py, which import these directly).
-from shared.pii import mask_alias_value, mask_name  # noqa: F401
+from shared.pii import mask_alias_value, mask_name  # noqa: F401 -- re-export for existing importers
+from sqlalchemy.orm import Session
 
 logger = logging.getLogger("identity-resolution")
 
