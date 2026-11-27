@@ -18,6 +18,10 @@ on:
         type: string
         default: https://regengine.co
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
   deployments: read
