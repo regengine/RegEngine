@@ -19,6 +19,10 @@ This module verifies the chain against the canonical store of record:
     stored ``hash_chain.event_hash`` — so tampering with a
     ``traceability_events`` field WITHOUT updating ``sha256_hash`` is
     caught.
+  * Requires each chain row to hold its canonical row's ``sha256_hash``,
+    so content rewritten together with its stored hash is caught too. A
+    row the legacy store also holds is exempt only when its chain row is
+    older than ``SHARED_ROW_BOUND_FROM`` (see the note on that constant).
   * Recomputes ``chain_hash`` via ``compute_chain_hash`` and checks
     sequence continuity + ``previous_chain_hash`` linkage.
   * Flags orphan chain rows against ``traceability_events``.
@@ -80,6 +84,30 @@ def chain_verify_reads_canonical() -> bool:
         "yes",
         "on",
     }
+
+
+# ---------------------------------------------------------------------------
+# A chain row that both stores hold ("shared row") must carry the canonical
+# hash when it was created at or after this instant.
+#
+# Since #3072 (beee8b90, merged 2026-09-06) the canonical writer refuses to
+# attach a row to a chain entry that holds another hash, and the writers that
+# share one entry hash the canonical projection into it. Before that, the
+# webhook route shared a legacy-written entry, so those entries hold the
+# LEGACY digest and can never equal ``traceability_events.sha256_hash``.
+#
+# The two cases look the same from the stored hashes alone. The age of the
+# chain row tells them apart: ``hash_chain.created_at`` is set by the database
+# on insert and the append-only trigger blocks any later update, so rewriting
+# a canonical row cannot make its chain row look older.
+#
+# The instant is fixed and deliberately late. It must not be earlier than the
+# last moment any database this code reads was still written by pre-#3072
+# code, and it must not be in the future, or new rows would go unbound. Shared
+# rows older than it keep the exemption they have always had.
+# ---------------------------------------------------------------------------
+
+SHARED_ROW_BOUND_FROM = datetime(2026, 11, 27, tzinfo=timezone.utc)
 
 
 class CanonicalChainVerification:
@@ -185,6 +213,18 @@ def _kdes_object(raw: Any) -> Dict[str, Any]:
     raise ValueError("kdes blob is not an object")
 
 
+def _predates_shared_row_binding(created_at: Any) -> bool:
+    """True when a chain row is old enough to hold the legacy digest.
+
+    A value that is not a readable instant counts as current, so the row
+    must carry the canonical hash. A value without a zone is read as UTC.
+    """
+    if not isinstance(created_at, datetime):
+        return False
+    moment = created_at if created_at.tzinfo else created_at.replace(tzinfo=timezone.utc)
+    return moment < SHARED_ROW_BOUND_FROM
+
+
 class CanonicalChainVerificationMixin:
     """Chain verification against ``fsma.traceability_events`` — mixed
     into :class:`writer.CanonicalEventStore`."""
@@ -215,7 +255,8 @@ class CanonicalChainVerificationMixin:
                        te.event_timestamp, te.kdes,
                        ce.id AS matched_legacy_id,
                        te.normalized_payload->>'event_timestamp' AS hashed_timestamp,
-                       te.sha256_hash AS canonical_sha256
+                       te.sha256_hash AS canonical_sha256,
+                       hc.created_at AS chain_row_created_at
                 FROM fsma.hash_chain hc
                 LEFT JOIN te
                     ON te.event_id = hc.cte_event_id
@@ -314,25 +355,35 @@ class CanonicalChainVerificationMixin:
             # Event-hash recompute from canonical content — catches a field
             # mutation that did NOT also rewrite sha256_hash.
             #
-            # Compared against te.sha256_hash, NOT hc.event_hash: in the
-            # webhook ingest topology the chain row is written by the
+            # Compared against te.sha256_hash, NOT hc.event_hash: before
+            # #3072 the webhook route shared a chain row written by the
             # legacy store (CTEPersistence.store_events_batch), so
-            # hc.event_hash is the LEGACY digest — a different formula
-            # over different fields. Comparing the canonical recompute to
-            # it flagged every webhook-ingested event as tampered (found
-            # by the 2026-09-02 production-grade data run). For
-            # canonical-written chains the two columns are equal, so this
-            # comparison covers both topologies.
+            # hc.event_hash on those rows is the LEGACY digest — a
+            # different formula over different fields. Comparing the
+            # canonical recompute to it flagged every webhook-ingested
+            # event as tampered (found by the 2026-09-02 production-grade
+            # data run). Where the chain row holds the canonical hash the
+            # two columns are equal, so this comparison covers both.
             canonical_sha = row[17]
+            chain_row_created_at = row[18] if len(row) > 18 else None
 
-            # Chain-row digest check (CodeRabbit review of the prod-grade
-            # run fix): a row matching ONLY the canonical store was written
-            # by CanonicalEventStore, which sets hc.event_hash =
-            # te.sha256_hash by construction — any deviation is chain-row
-            # tampering. Rows that ALSO match the legacy store may carry
-            # the legacy digest (webhook dual-write topology), so they are
-            # exempt here and covered by the recompute below.
-            if matched_legacy_id is None and event_hash != canonical_sha:
+            # Chain-row digest check: the chain row must hold the canonical
+            # row's hash, or content rewritten together with its stored
+            # hash would pass the recompute below unnoticed.
+            #
+            # A row matching ONLY the canonical store was written by
+            # CanonicalEventStore, which sets hc.event_hash =
+            # te.sha256_hash. A row that both stores hold carries that
+            # hash too: the canonical writer either wrote the chain row
+            # itself or refuses to attach to one that holds another hash.
+            # The one exception is a shared row older than
+            # SHARED_ROW_BOUND_FROM, which may hold the legacy digest (see
+            # the note on that constant). Nothing ties the canonical
+            # content of those older rows to the chain.
+            may_hold_legacy_digest = matched_legacy_id is not None and _predates_shared_row_binding(
+                chain_row_created_at
+            )
+            if event_hash != canonical_sha and not may_hold_legacy_digest:
                 if int(seq) not in tamper_rows:
                     tamper_rows.append(int(seq))
                 errors.append(

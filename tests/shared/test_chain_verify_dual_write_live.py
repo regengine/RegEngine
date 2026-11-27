@@ -420,21 +420,13 @@ def test_two_row_chain_reports_canonical_content_rewritten_with_its_hash(db_sess
     assert result.tamper_rows, result.errors
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "verify_chain_canonical skips the chain-row digest comparison for a row present in both "
-        "stores, so a shared row does not bind canonical content. The webhook route's rows have "
-        "the same gap. Remove this marker with the verifier fix (raised in review of PR 3851)."
-    ),
-)
 def test_shared_row_reports_canonical_content_rewritten_with_its_hash(db_session, monkeypatch) -> None:
-    """A chain row shared by both stores must still bind the canonical content.
+    """A chain row shared by both stores binds the canonical content.
 
-    Only the two final assertions are the expected failure. The setup reports
-    problems with ``pytest.fail``, which the marker does not accept, so a
-    broken ingest or a chain that is invalid before the rewrite fails this test.
+    The verifier used to skip the chain-row comparison for every row both
+    stores hold, so this rewrite went unreported for shared rows. The setup
+    checks stay separate from the two final assertions, so a broken ingest
+    reads differently from a verifier that misses the rewrite.
     """
     from shared.canonical_persistence import CanonicalEventStore
 
@@ -456,6 +448,122 @@ def test_shared_row_reports_canonical_content_rewritten_with_its_hash(db_session
     result = store.verify_chain_canonical(tenant_id)
     assert result.valid is False
     assert result.tamper_rows, result.errors
+
+
+# ---------------------------------------------------------------------------
+# A shared row whose chain entry holds the legacy digest
+# ---------------------------------------------------------------------------
+
+
+def _store_shared_row_with_legacy_digest(session, tenant_id: str, created_at: datetime) -> str:
+    """Write one event the way the webhook route did before #3072.
+
+    The legacy row and the chain row hold the legacy digest, and the canonical
+    row shares their id with its own hash. No writer produces this any more,
+    so the legacy row and the chain row are inserted directly. ``created_at``
+    dates the chain row; the append-only trigger rules out changing it later.
+    """
+    from shared.canonical_event import (
+        CTEType,
+        EventStatus,
+        IngestionSource,
+        ProvenanceMetadata,
+        TraceabilityEvent,
+    )
+    from shared.canonical_persistence import CanonicalEventStore
+    from shared.cte_persistence.hashing import compute_chain_hash, compute_event_hash
+    from sqlalchemy import text
+
+    event_id = str(uuid.uuid4())
+    shipped = _shipped_yesterday()
+    lot = "TLC-SHARED-LEGACY-DIGEST"
+    kdes = {"gtin": "09506000134352"}
+    event = TraceabilityEvent(
+        event_id=uuid.UUID(event_id),
+        tenant_id=uuid.UUID(tenant_id),
+        event_type=CTEType.SHIPPING,
+        event_timestamp=shipped,
+        source_system=IngestionSource.WEBHOOK_API,
+        product_reference="Shared Row Lettuce",
+        traceability_lot_code=lot,
+        quantity=12.0,
+        unit_of_measure="cases",
+        from_entity_reference="urn:gs1:417:0614141000005",
+        to_entity_reference="urn:gs1:417:0614141000012",
+        from_facility_reference="urn:gs1:414:0614141000005",
+        to_facility_reference="urn:gs1:414:0614141000012",
+        kdes=dict(kdes),
+        status=EventStatus.ACTIVE,
+        provenance=ProvenanceMetadata(),
+    )
+    # No chain row carries this id yet, so the canonical writer stores the row and links nothing.
+    CanonicalEventStore(session, dual_write=False, skip_chain_write=True).persist_event(event)
+
+    legacy_digest = compute_event_hash(
+        event_id, "shipping", lot, "Shared Row Lettuce", 12.0, "cases", None, None, shipped.isoformat(), kdes
+    )
+    chain_hash = compute_chain_hash(legacy_digest, None)
+    row = {"t": tenant_id, "e": event_id, "eh": legacy_digest, "ch": chain_hash}
+    session.execute(
+        text("""
+            INSERT INTO fsma.cte_events
+                (id, tenant_id, event_type, traceability_lot_code, product_description,
+                 quantity, unit_of_measure, event_timestamp, source, sha256_hash, chain_hash)
+            VALUES (CAST(:e AS uuid), CAST(:t AS uuid), 'shipping', :lot, 'Shared Row Lettuce',
+                    12.0, 'cases', :shipped, 'webhook', :eh, :ch)
+        """),
+        {**row, "lot": lot, "shipped": shipped},
+    )
+    session.execute(
+        text("""
+            INSERT INTO fsma.hash_chain
+                (tenant_id, cte_event_id, sequence_num, event_hash,
+                 previous_chain_hash, chain_hash, created_at)
+            VALUES (CAST(:t AS uuid), CAST(:e AS uuid), 1, :eh, NULL, :ch, :created_at)
+        """),
+        {**row, "created_at": created_at},
+    )
+    return event_id
+
+
+def test_shared_row_older_than_the_boundary_may_carry_the_legacy_digest(db_session) -> None:
+    """Events the webhook route stored before #3072 keep verifying.
+
+    Their chain row holds the legacy digest, which never equals the canonical
+    hash. This guards against reporting an honest tenant as tampered.
+    """
+    from shared.canonical_persistence import CanonicalEventStore
+    from shared.canonical_persistence.verification import SHARED_ROW_BOUND_FROM
+
+    session, tenant_id = db_session
+    event_id = _store_shared_row_with_legacy_digest(
+        session, tenant_id, created_at=SHARED_ROW_BOUND_FROM - timedelta(days=90)
+    )
+    assert [tuple(row) for row in _ledger_rows(session, tenant_id)] == [(event_id, True, True, False)]
+
+    result = CanonicalEventStore(session, dual_write=False).verify_chain_canonical(tenant_id)
+    assert result.valid is True, result.errors
+    assert result.tamper_rows == []
+    assert result.chain_length == 1
+
+
+def test_shared_row_since_the_boundary_must_carry_the_canonical_hash(db_session) -> None:
+    """The same rows with a chain row dated now are reported.
+
+    Every current writer puts the canonical hash into a shared row, and the
+    canonical writer refuses a chain row that holds another hash, so a row
+    like this cannot be honest any more.
+    """
+    from shared.canonical_persistence import CanonicalEventStore
+
+    session, tenant_id = db_session
+    event_id = _store_shared_row_with_legacy_digest(session, tenant_id, created_at=datetime.now(timezone.utc))
+    assert [tuple(row) for row in _ledger_rows(session, tenant_id)] == [(event_id, True, True, False)]
+
+    result = CanonicalEventStore(session, dual_write=False).verify_chain_canonical(tenant_id)
+    assert result.valid is False
+    assert result.tamper_rows == [1]
+    assert any("Chain-row tamper at seq=1" in error for error in result.errors), result.errors
 
 
 # ---------------------------------------------------------------------------

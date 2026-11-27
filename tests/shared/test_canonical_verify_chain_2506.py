@@ -20,14 +20,22 @@ flags orphaned, that field tampering is caught, and that EPCIS
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, List, Tuple
 from uuid import UUID
 
+import pytest
 from shared.canonical_event import CTEType, IngestionSource, TraceabilityEvent
+from shared.canonical_persistence.verification import SHARED_ROW_BOUND_FROM, _recompute_event_sha256
 from shared.canonical_persistence.writer import CanonicalEventStore
 from shared.cte_persistence.core import CTEPersistence
 from shared.cte_persistence.hashing import compute_chain_hash
+
+# A chain row shared by both stores must carry the canonical hash when it was
+# created at or after SHARED_ROW_BOUND_FROM. These two instants sit on either
+# side of it.
+_BEFORE_BOUNDARY = SHARED_ROW_BOUND_FROM - timedelta(days=30)
+_SINCE_BOUNDARY = SHARED_ROW_BOUND_FROM + timedelta(days=1)
 
 # ---------------------------------------------------------------------------
 # Build a real canonical event + its persisted row representation
@@ -59,7 +67,7 @@ def _canonical_chain(n: int):
        cte_event_id, matched_event_id, event_type, tlc, product_reference,
        quantity, unit_of_measure, from_facility, to_facility,
        event_timestamp, kdes, matched_legacy_id, hashed_timestamp,
-       canonical_sha256)
+       canonical_sha256, chain_row_created_at)
     """
     rows = []
     events = []
@@ -88,11 +96,27 @@ def _canonical_chain(n: int):
                 None,  # matched_legacy_id — canonical-only fake rows
                 None,  # hashed_timestamp (normalized_payload->>'event_timestamp'); no hint
                 sha,  # canonical_sha256 (te.sha256_hash) — writer sets it equal to event_hash
+                _SINCE_BOUNDARY,  # chain_row_created_at (hc.created_at)
             )
         )
         events.append(ev)
         prev = chain_hash
     return rows, events
+
+
+def _shared_row(row, *, event_hash=None, created_at=_SINCE_BOUNDARY) -> list:
+    """Turn a canonical-only fake row into one that both stores hold.
+
+    ``event_hash`` replaces the chain row's digest and re-seals the chain
+    hash, so the chain itself stays sound.
+    """
+    r = list(row)
+    if event_hash is not None:
+        r[1] = event_hash
+        r[3] = compute_chain_hash(event_hash, r[2])
+    r[15] = r[4]  # matched_legacy_id — the row exists in fsma.cte_events too
+    r[18] = created_at
+    return r
 
 
 class _Result:
@@ -220,19 +244,122 @@ class TestCanonicalTamperDetection_Issue2506:
         """Webhook dual-write topology (2026-09-02 prod-grade run): the
         chain row is legacy-written, so hc.event_hash is the LEGACY digest
         — different from te.sha256_hash by design. Rows that also match
-        the legacy store must be exempt from the strict equality check,
-        otherwise every webhook-ingested event reads as tampered."""
+        the legacy store and were created before SHARED_ROW_BOUND_FROM
+        must be exempt from the strict equality check, otherwise every
+        event the webhook route ingested back then reads as tampered."""
         rows, _ = _canonical_chain(2)
         r = list(rows[1])
         legacy_digest = "a" * 64  # legacy formula output ≠ canonical sha
         r[1] = legacy_digest
         r[3] = compute_chain_hash(legacy_digest, r[2])  # legacy-written chain is internally sound
         r[15] = r[4]  # matched_legacy_id — row exists in fsma.cte_events too
+        r[18] = _BEFORE_BOUNDARY  # the chain row predates the writers that hash canonical content
         rows[1] = tuple(r)
         store = CanonicalEventStore(_CanonicalSession(rows, event_count=2), dual_write=False)
         result = store.verify_chain_canonical("22222222-2222-2222-2222-222222222222")
         assert result.valid is True, result.errors
         assert result.tamper_rows == []
+
+
+class TestSharedRowBinding:
+    """A chain row shared by both stores binds the canonical content.
+
+    Every current writer puts the canonical hash into a shared row, and the
+    canonical writer refuses to attach a row to a chain entry that holds
+    another hash. A shared row created at or after SHARED_ROW_BOUND_FROM
+    that disagrees with its canonical row is therefore reported. Older rows
+    keep the exemption covered by
+    ``test_legacy_matched_row_with_legacy_digest_is_not_flagged``.
+    """
+
+    TENANT = "22222222-2222-2222-2222-222222222222"
+
+    def _verify(self, rows):
+        store = CanonicalEventStore(_CanonicalSession(rows, event_count=len(rows)), dual_write=False)
+        return store.verify_chain_canonical(self.TENANT)
+
+    def _assert_chain_row_tamper_at_2(self, result) -> None:
+        assert result.valid is False
+        assert result.tamper_rows == [2]
+        assert any("Chain-row tamper at seq=2" in e for e in result.errors), result.errors
+
+    def test_shared_row_with_matching_hashes_verifies(self):
+        rows, _ = _canonical_chain(2)
+        rows[1] = tuple(_shared_row(rows[1]))
+        result = self._verify(rows)
+        assert result.valid is True, result.errors
+        assert result.tamper_rows == []
+
+    def test_shared_row_created_since_the_boundary_must_carry_the_canonical_hash(self):
+        rows, _ = _canonical_chain(2)
+        rows[1] = tuple(_shared_row(rows[1], event_hash="a" * 64))
+        self._assert_chain_row_tamper_at_2(self._verify(rows))
+
+    def test_the_boundary_instant_itself_is_bound(self):
+        rows, _ = _canonical_chain(2)
+        rows[1] = tuple(_shared_row(rows[1], event_hash="a" * 64, created_at=SHARED_ROW_BOUND_FROM))
+        self._assert_chain_row_tamper_at_2(self._verify(rows))
+
+    def test_canonical_content_rewritten_with_its_hash_is_reported(self):
+        """The rewrite the exemption used to hide: new content, a stored hash
+        that matches it, and an untouched chain row."""
+        rows, _ = _canonical_chain(2)
+        r = _shared_row(rows[1])
+        r[9] = 999.0
+        r[17] = _recompute_event_sha256(
+            event_id=r[4],
+            event_type=r[6],
+            traceability_lot_code=r[7],
+            product_reference=r[8],
+            quantity=r[9],
+            unit_of_measure=r[10],
+            from_facility_reference=r[11],
+            to_facility_reference=r[12],
+            event_timestamp=r[13],
+            kdes=r[14],
+            timestamp_hint=r[16],
+        )
+        rows[1] = tuple(r)
+        result = self._verify(rows)
+        self._assert_chain_row_tamper_at_2(result)
+        # The row agrees with itself, so only the chain row can catch it.
+        assert not any("Event tamper" in e for e in result.errors), result.errors
+
+    @pytest.mark.parametrize("created_at", [None, "2026-08-01T00:00:00+00:00", 0])
+    def test_shared_row_with_an_unreadable_creation_time_is_bound(self, created_at):
+        rows, _ = _canonical_chain(2)
+        rows[1] = tuple(_shared_row(rows[1], event_hash="a" * 64, created_at=created_at))
+        self._assert_chain_row_tamper_at_2(self._verify(rows))
+
+    def test_shared_row_from_a_result_without_the_creation_time_is_bound(self):
+        rows, _ = _canonical_chain(2)
+        rows[1] = tuple(_shared_row(rows[1], event_hash="a" * 64)[:18])
+        self._assert_chain_row_tamper_at_2(self._verify(rows))
+
+    @pytest.mark.parametrize(
+        ("created_at", "exempt"),
+        [
+            (_BEFORE_BOUNDARY.replace(tzinfo=None), True),
+            (_SINCE_BOUNDARY.replace(tzinfo=None), False),
+        ],
+    )
+    def test_creation_time_without_a_zone_is_read_as_utc(self, created_at, exempt):
+        rows, _ = _canonical_chain(2)
+        rows[1] = tuple(_shared_row(rows[1], event_hash="a" * 64, created_at=created_at))
+        result = self._verify(rows)
+        if exempt:
+            assert result.valid is True, result.errors
+        else:
+            self._assert_chain_row_tamper_at_2(result)
+
+    def test_creation_time_in_another_zone_is_compared_as_an_instant(self):
+        """One hour before the boundary, written with a +05:00 offset: the
+        wall-clock reading is after the boundary, the instant is before it."""
+        rows, _ = _canonical_chain(2)
+        just_before = (SHARED_ROW_BOUND_FROM - timedelta(hours=1)).astimezone(timezone(timedelta(hours=5)))
+        rows[1] = tuple(_shared_row(rows[1], event_hash="a" * 64, created_at=just_before))
+        result = self._verify(rows)
+        assert result.valid is True, result.errors
 
 
 # ---------------------------------------------------------------------------
