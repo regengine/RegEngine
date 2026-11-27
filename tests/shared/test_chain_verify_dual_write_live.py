@@ -547,17 +547,20 @@ def test_shared_row_older_than_the_boundary_may_carry_the_legacy_digest(db_sessi
     assert result.chain_length == 1
 
 
-def test_shared_row_since_the_boundary_must_carry_the_canonical_hash(db_session) -> None:
-    """The same rows with a chain row dated now are reported.
+@pytest.mark.parametrize("after", [timedelta(0), timedelta(days=1)], ids=["at-the-instant", "a-day-later"])
+def test_shared_row_since_the_boundary_must_carry_the_canonical_hash(db_session, after) -> None:
+    """The same rows with a chain row dated at or after the instant are reported.
 
     Every current writer puts the canonical hash into a shared row, and the
     canonical writer refuses a chain row that holds another hash, so a row
-    like this cannot be honest any more.
+    like this cannot be honest any more. The date is fixed against the
+    instant, so the result does not depend on when the test runs.
     """
     from shared.canonical_persistence import CanonicalEventStore
+    from shared.canonical_persistence.verification import SHARED_ROW_BOUND_FROM
 
     session, tenant_id = db_session
-    event_id = _store_shared_row_with_legacy_digest(session, tenant_id, created_at=datetime.now(timezone.utc))
+    event_id = _store_shared_row_with_legacy_digest(session, tenant_id, created_at=SHARED_ROW_BOUND_FROM + after)
     assert [tuple(row) for row in _ledger_rows(session, tenant_id)] == [(event_id, True, True, False)]
 
     result = CanonicalEventStore(session, dual_write=False).verify_chain_canonical(tenant_id)
