@@ -8,8 +8,13 @@
 # openai, llama-cloud, pytesseract and pdf2image are reached from
 # services/ingestion/app/regulation_parser.py, normalization.py,
 # regengine_ingestion/llm/client.py and services/shared/document_extract, so
-# they stay. Constrained by requirements.lock.
--c requirements.lock
+# they stay.
+#
+# Constrained by requirements.lock. The constraint is passed on the command
+# line, not in this file: Dependabot fetches a constraint file only when its
+# name ends in .txt or .in, and its whole pip run aborts when it cannot open
+# one. Compile with:
+#   pip-compile --allow-unsafe --constraint=requirements.lock --generate-hashes --output-file=requirements-experimental.lock requirements-experimental.in
 
 # services/ingestion/app/qr_decoder.py (experimental router "qr_decoder");
 # imported lazily with a 503 fallback, so tests run without it.

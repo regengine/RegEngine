@@ -2,9 +2,11 @@
 #
 # Installed by CI jobs that run pytest, never by the production image.
 # Constrained by requirements.lock so a package that appears in both resolves
-# to the same version. Compile with:
-#   pip-compile --allow-unsafe --generate-hashes --output-file=requirements-dev.lock requirements-dev.in
--c requirements.lock
+# to the same version. The constraint is passed on the command line, not in
+# this file: Dependabot fetches a constraint file only when its name ends in
+# .txt or .in, and its whole pip run aborts when it cannot open one.
+# Compile with:
+#   pip-compile --allow-unsafe --constraint=requirements.lock --generate-hashes --output-file=requirements-dev.lock requirements-dev.in
 
 pytest>=9.1.1
 pytest-asyncio>=1.4.0
