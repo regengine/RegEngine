@@ -41,8 +41,8 @@ OTHER_TENANT = "22222222-2222-2222-2222-222222222222"
 ENVELOPE = EDIInterchange("sender", "receiver", "000000001")
 
 
-def _migration():
-    path = ROOT / "alembic/versions/20261108_c4a9d2e761b0_v143_edi_interchanges.py"
+def _migration(name: str = "20261108_c4a9d2e761b0_v143_edi_interchanges.py"):
+    path = ROOT / "alembic/versions" / name
     spec = importlib.util.spec_from_file_location("edi_receipt_migration", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -70,17 +70,21 @@ def database():
                     AS $$ SELECT nullif(current_setting('app.tenant_id', true), '')::uuid $$;
                 CREATE TABLE public.edi_test_events (kind text, tenant_id uuid, quantity float);
                 GRANT SELECT, INSERT ON public.edi_test_events TO regengine;
+                -- The routes also read the v145 line registry, which joins the event table.
+                CREATE TABLE fsma.cte_events (id uuid PRIMARY KEY, tenant_id uuid, sha256_hash text, chain_hash text);
+                GRANT SELECT ON fsma.cte_events TO regengine;
             """)
             )
             with Operations.context(MigrationContext.configure(conn)):
                 _migration().upgrade()
+                _migration("20261121_62355c37e367_v145_edi_line_identities.py").upgrade()
         yield engine
 
 
 @pytest.fixture()
 def db(database):
     with database.begin() as conn:
-        conn.execute(text("TRUNCATE fsma.edi_interchanges, public.edi_test_events"))
+        conn.execute(text("TRUNCATE fsma.edi_interchanges, fsma.edi_line_identities, public.edi_test_events"))
     return database
 
 

@@ -69,6 +69,16 @@ class _FakeSession:
         return None
 
 
+class _NoLineRegistry:
+    """Keep this gate test independent of the PostgreSQL line registry."""
+
+    def lookup(self, session: Any, tenant_id: str, lines: Any) -> dict[str, Any]:
+        return {}
+
+    def record(self, session: Any, tenant_id: str, line: Any, event_id: str) -> None:
+        return None
+
+
 def _fake_db_session() -> Iterator[_FakeSession]:
     yield _FakeSession()
 
@@ -128,6 +138,7 @@ def stored(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
     monkeypatch.setattr(canonical_persistence, "CanonicalEventStore", _NoCanonicalStore)
     monkeypatch.setattr(rules_engine, "RulesEngine", _NoRules)
     monkeypatch.setattr(edi_routes, "check_and_record_interchange", lambda **kwargs: (False, None))
+    monkeypatch.setattr(edi_routes, "EDILineRegistry", _NoLineRegistry)
     monkeypatch.setattr(
         webhook_compat,
         "_open_ingestion_run",
