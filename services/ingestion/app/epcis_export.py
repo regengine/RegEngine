@@ -110,7 +110,9 @@ def _query_tenant_events(
 
     Returns at most ``_MAX_EXPORT_EVENTS + 1`` rows so callers can detect
     an over-cap export. Raises :class:`ExportStorageUnavailable` on any
-    database error instead of returning an empty list (SEL-508).
+    database error instead of returning an empty list (SEL-508). An event a
+    completed EDI line replaced is skipped (ADR-007): it is not a record of
+    its own.
     """
     db = get_db_safe()
     try:
@@ -182,6 +184,7 @@ def _query_tenant_events(
                 LEFT JOIN tenant_kdes k_harvester_biz ON k_harvester_biz.cte_event_id = e.id AND k_harvester_biz.tenant_id = e.tenant_id AND k_harvester_biz.kde_key = 'harvester_business_name'
                 LEFT JOIN tenant_kdes k_harvester_phone ON k_harvester_phone.cte_event_id = e.id AND k_harvester_phone.tenant_id = e.tenant_id AND k_harvester_phone.kde_key = 'harvester_business_phone'
                 WHERE e.tenant_id = :tenant_id
+                  AND NOT EXISTS (SELECT 1 FROM fsma.cte_event_supersessions s WHERE s.tenant_id = :tenant_id AND s.superseded_event_id = e.id)
                 {"AND " + " AND ".join(where) if where else ""}
                 ORDER BY e.event_timestamp DESC
                 {"" if lot_code else "LIMIT :row_limit"}

@@ -39,7 +39,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from .authz import IngestionPrincipal, get_ingestion_principal
 from .edi_interchange import EDIInterchange
-from .edi_line_identity import EDILineRegistry, StoredLine, changed_line_error, identify_lines
+from .edi_line_identity import EDILineRegistry, StoredLine, changed_line_error, completes_stored_line, identify_lines
 from .webhook_models import EventResult, IngestEvent, IngestResponse, WebhookCTEType, WebhookPayload
 from .webhook_router_v2 import (
     _check_rate_limit,
@@ -354,23 +354,32 @@ async def ingest_events(
     # EDI only: one identity per event, None where the document cannot name the line.
     lines = identify_lines(payload.events) if edi_lines is not None else None
     known_lines: dict[str, StoredLine] = {}
+    # Event index -> the stored line it completes with a deferred KDE.
+    completions: dict[int, StoredLine] = {}
 
     try:
         if edi_interchange is not None:
             edi_interchange.reserve(db_session, tenant_id)
         if edi_lines is not None and lines is not None:
             known_lines = edi_lines.lookup(db_session, tenant_id, lines)
-            changed = [
-                {
-                    "line": event.kdes.get("edi_line_index") or index + 1,
-                    "traceability_lot_code": event.traceability_lot_code,
-                    "stored_event_id": known_lines[line.identity_key].event_id,
-                }
-                for index, (event, line) in enumerate(zip(payload.events, lines))
-                if line is not None
-                and line.identity_key in known_lines
-                and known_lines[line.identity_key].content_digest != line.content_digest
-            ]
+            changed = []
+            for index, (event, line) in enumerate(zip(payload.events, lines)):
+                stored = known_lines.get(line.identity_key) if line is not None else None
+                if stored is None or stored.content_digest == line.content_digest:
+                    continue
+                deferrable = (deferred_kdes or {}).get(event.cte_type, frozenset())
+                if completes_stored_line(event, stored, deferrable):
+                    # Owner decision (ADR-007 amendment): a resend that only
+                    # supplies a deferred KDE completes the stored line.
+                    completions[index] = stored
+                    continue
+                changed.append(
+                    {
+                        "line": event.kdes.get("edi_line_index") or index + 1,
+                        "traceability_lot_code": event.traceability_lot_code,
+                        "stored_event_id": stored.event_id,
+                    }
+                )
             if changed:
                 # A resend never changes a stored record. Refuse before any write.
                 raise changed_line_error(changed)
@@ -420,7 +429,8 @@ async def ingest_events(
 
             line = lines[event_index] if lines is not None else None
             stored_line = known_lines.get(line.identity_key) if line is not None else None
-            if stored_line is not None:
+            completed_line = completions.get(event_index)
+            if stored_line is not None and completed_line is None:
                 # The same line with the same content, whatever envelope or
                 # position it arrived in. Report the stored event and write
                 # nothing. Graph sync is left alone: this copy carries other
@@ -482,14 +492,19 @@ async def ingest_events(
                 # primary write still commits, preserving the prior
                 # best-effort behavior for tenants without seeded rules.
                 summary = None
+                canonical_event_id = None
                 canon_sp = db_session.begin_nested()
                 try:
                     from shared.canonical_event import normalize_webhook_event
                     from shared.canonical_persistence import CanonicalEventStore
 
                     canonical = normalize_webhook_event(event, tenant_id, ingestion_run_id=run_id)
+                    if completed_line is not None:
+                        # Moves the stored line's canonical row to superseded.
+                        canonical.supersedes_event_id = uuid.UUID(completed_line.canonical_event_id)
                     canonical_store = CanonicalEventStore(db_session, dual_write=False)
                     persist_result = canonical_store.persist_event(canonical)
+                    canonical_event_id = getattr(persist_result, "event_id", None)
                     canonical_exists = getattr(persist_result, "idempotent", False) is True
                     # A stored event replayed under the same keys stored
                     # nothing new. Re-running rules would add evidence and
@@ -522,6 +537,7 @@ async def ingest_events(
                 except (ImportError, ValueError, TypeError, RuntimeError) as canon_err:
                     canon_sp.rollback()
                     summary = None
+                    canonical_event_id = None
                     # Finding A — under enforcement modes (cte_only/all)
                     # a canonical/rules crash must not silently accept.
                     # ``handle_preeval_exception`` raises HTTPException(500)
@@ -618,7 +634,15 @@ async def ingest_events(
                         )
                     except SQLAlchemyError as gap_err:
                         raise RuntimeError("deferred gap write failed") from gap_err
-                if (
+                if completed_line is not None:
+                    # Without the canonical write the old canonical row would
+                    # stay active beside the superseded legacy row: refuse.
+                    if canonical_event_id is None or getattr(store_result, "idempotent", False):
+                        raise RuntimeError("EDI line completion was not stored in both stores")
+                    edi_lines.supersede(
+                        db_session, tenant_id, line, completed_line, store_result.event_id, canonical_event_id
+                    )
+                elif (
                     edi_lines is not None
                     and line is not None
                     and getattr(store_result, "success", True)
@@ -626,7 +650,7 @@ async def ingest_events(
                 ):
                     # A newly stored line. One the store already held under its
                     # old key stays unregistered: its stored content is unknown.
-                    edi_lines.record(db_session, tenant_id, line, store_result.event_id)
+                    edi_lines.record(db_session, tenant_id, line, store_result.event_id, canonical_event_id)
 
                 # Accepted path. Savepoint commits the primary CTE write.
                 savepoint.commit()

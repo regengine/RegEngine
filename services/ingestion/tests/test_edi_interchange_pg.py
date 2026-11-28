@@ -78,6 +78,8 @@ def database():
             with Operations.context(MigrationContext.configure(conn)):
                 _migration().upgrade()
                 _migration("20261121_62355c37e367_v145_edi_line_identities.py").upgrade()
+                # v146 adds the canonical link the registry reads and writes.
+                _migration("20261128_20ef2227dc73_v146_cte_event_supersessions.py").upgrade()
         yield engine
 
 

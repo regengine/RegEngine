@@ -196,7 +196,7 @@ def stores(monkeypatch: pytest.MonkeyPatch) -> _Stores:
                 and state.registry[line.identity_key][1] in live
             }
 
-        def record(self, session, tenant_id, line, event_id):
+        def record(self, session, tenant_id, line, event_id, canonical_event_id=None):
             state.registry[line.identity_key] = (line.content_digest, event_id)
 
     class _NoRules:
