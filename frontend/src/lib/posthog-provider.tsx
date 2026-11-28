@@ -31,7 +31,7 @@ const SAFE_PROPERTY_KEYS = new Set([
   'tool_id', 'lead_captured', 'categories_selected', 'covered_count',
   'risk_level', 'status', 'total_events', 'non_compliant_events',
   'compliant_events', 'tool', 'outcome', 'error_code', 'placement', 'form', 'step',
-  'grade', 'webinar', 'cta_id',
+  'grade', 'webinar', 'surface', 'scenario', 'cte', 'gap', 'cta_id',
 ]);
 const PRODUCT = 'RegEngine';
 /** AN1 signup events carry only product, page, cta_id and first-touch utm_* (no SDK envelope). */

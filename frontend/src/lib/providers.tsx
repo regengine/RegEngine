@@ -2,6 +2,8 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider } from 'next-themes';
+import { usePathname } from 'next/navigation';
+import { isForcedDarkRoute } from '@/lib/app-routes';
 import { AuthProvider } from './auth-context';
 import { TenantProvider } from './tenant-context';
 import { useState } from 'react';
@@ -15,6 +17,8 @@ type ProvidersProps = {
 };
 
 export function Providers({ children, nonce }: ProvidersProps) {
+    const pathname = usePathname();
+    const forcedTheme = isForcedDarkRoute(pathname ?? '') ? 'dark' : undefined;
     const [queryClient] = useState(() => new QueryClient({
         defaultOptions: {
             queries: {
@@ -25,7 +29,7 @@ export function Providers({ children, nonce }: ProvidersProps) {
     }));
 
     return (
-        <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} storageKey="re-theme-v2" nonce={nonce}>
+        <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} storageKey="re-theme-v2" nonce={nonce} forcedTheme={forcedTheme}>
             <CSPostHogProvider>
                 <QueryClientProvider client={queryClient}>
                     <AuthProvider>
