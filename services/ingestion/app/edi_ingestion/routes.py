@@ -689,6 +689,9 @@ async def _store_edi_events(
 ) -> IngestResponse:
     """Store an interchange whole, naming each line by its stable identity.
 
+    ``source_file`` is the X12 document, retained verbatim in the same
+    transaction as the events. A refused document leaves no run or blob.
+
     A line already stored with other content is refused by ``ingest_events``
     with 409. The refusal is written to the EDI rejection log here with what
     each refused line said, so the correction is neither applied nor dropped
