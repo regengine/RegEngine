@@ -213,6 +213,7 @@ def stores(monkeypatch: pytest.MonkeyPatch) -> _Stores:
     monkeypatch.setattr(webhook_compat, "_verify_api_key_sync", lambda **kwargs: None)
     monkeypatch.setattr(webhook_compat, "_get_db_session", _sessions)
     monkeypatch.setattr(webhook_compat, "record_outcomes", lambda *args: None)
+    monkeypatch.setattr(webhook_compat, "open_gaps_for_stored_record", lambda *args, **kwargs: None)
     monkeypatch.setattr(webhook_compat, "_publish_graph_sync", lambda event_id, *args: state.published.append(event_id))
     monkeypatch.setattr(cte_persistence, "CTEPersistence", _Legacy)
     monkeypatch.setattr(canonical_persistence, "CanonicalEventStore", _Canonical)
@@ -241,11 +242,9 @@ def post(stores: _Stores):
         with TestClient(app) as client:
             return client.post(
                 "/api/v1/ingest/edi/document",
-                data={
-                    "traceability_lot_code": f"{GTIN}-LOT001",
-                    "tenant_id": TENANT,
-                    "tlc_source_reference": "0061414100001",
-                },
+                # No tlc_source_reference: one value can't cover these three
+                # shipped lots, so each is stored with an open data gap.
+                data={"traceability_lot_code": f"{GTIN}-LOT001", "tenant_id": TENANT},
                 files={"file": ("advice.edi", raw, "application/edi-x12")},
             )
 

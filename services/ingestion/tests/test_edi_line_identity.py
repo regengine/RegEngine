@@ -53,16 +53,17 @@ def events_of(monkeypatch: pytest.MonkeyPatch):
         key_id="test-key", scopes=["*"], auth_mode="test"
     )
 
-    def _events(raw: bytes, route: str = "/document") -> list[IngestEvent]:
+    def _events(raw: bytes, route: str = "/document", *, tlc_source_reference: str | None = None) -> list[IngestEvent]:
         captured.clear()
+        # No reference by default: one value can't cover several shipped lots,
+        # which are then stored with an open data gap instead.
+        data = {"traceability_lot_code": f"{GTIN}-LOT001", "tenant_id": TENANT}
+        if tlc_source_reference is not None:
+            data["tlc_source_reference"] = tlc_source_reference
         with TestClient(app) as client:
             response = client.post(
                 f"/api/v1/ingest/edi{route}",
-                data={
-                    "traceability_lot_code": f"{GTIN}-LOT001",
-                    "tenant_id": TENANT,
-                    "tlc_source_reference": "0061414100001",
-                },
+                data=data,
                 files={"file": ("advice.edi", raw, "application/edi-x12")},
             )
         assert response.status_code == 201, response.text
@@ -327,8 +328,13 @@ def test_lines_built_by_the_route_are_pinned(events_of) -> None:
     advice_identity = "9963d3511d2a9c4df950b4475ab64f5c24ac435fd7b055007fb855751a2cfbde"  # pragma: allowlist secret
     advice_content = "3cff161b9be9e58239caf4f0f55d10035bc9f29d7a7de28b425b17cacfc6ce59"  # pragma: allowlist secret
     notice_identity = "e14a424fcb7da5bc082708b89017dd014d0f995f645fca7ad34db4d24fcbbc1d"  # pragma: allowlist secret
-    notice_content = "fce057b833d0b7ab506819ea4fad74d291cf24e596acd84038f4fef6803a1ae2"  # pragma: allowlist secret
-    advice = identify_lines(events_of(shipping_advice([("40", "LOT-A")])))[0]
-    notice = identify_lines(events_of(ship_notice([("ROMAINE-12CT", "200", "LOT-A")])))[0]
+    # The 856 route now emits reference_document and tlc_source_reference, which
+    # are content; the identity is unchanged.
+    notice_content = "6cb9bceac82cb16624466d5a69b2a4dba528bb45d706317da367566791a06db3"  # pragma: allowlist secret
+    reference = "0061414100001"
+    advice = identify_lines(events_of(shipping_advice([("40", "LOT-A")]), tlc_source_reference=reference))[0]
+    notice = identify_lines(events_of(ship_notice([("ROMAINE-12CT", "200", "LOT-A")]), tlc_source_reference=reference))[
+        0
+    ]
     assert (advice.identity_key, advice.content_digest) == (advice_identity, advice_content)
     assert (notice.identity_key, notice.content_digest) == (notice_identity, notice_content)

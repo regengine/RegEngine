@@ -252,6 +252,27 @@ def _apply_outcome(db_session: Any, tenant_id: str, outcome: ValidationOutcome) 
     )
 
 
+def open_gaps_for_stored_record(
+    db_session: Any,
+    tenant_id: str,
+    *,
+    lot_code: str,
+    cte_type: str,
+    gaps: tuple[Gap, ...],
+) -> None:
+    """Open gaps inside the record's own transaction. Raises on failure.
+
+    Gap logging is normally fail-open, because a failed record is not stored
+    anyway. A record stored with a known gap is different: if the gap is lost,
+    nothing shows the record is incomplete. Commit the two together.
+    """
+    _apply_outcome(
+        db_session,
+        tenant_id,
+        ValidationOutcome(order=0, lot_code=lot_code, cte_type=cte_type, gaps=gaps),
+    )
+
+
 def record_outcomes(db_session: Any, tenant_id: str, outcomes: Sequence[ValidationOutcome]) -> None:
     """Apply queued outcomes in arrival order, then commit. Never raises.
 
