@@ -111,7 +111,12 @@ These should be disabled in production unless explicitly promoted:
 - `scraping`
 - `discovery`
 - `sources`
-- `sandbox`
+- `sandbox_share` — persisted sandbox share links (`POST /api/v1/sandbox/share`,
+  `GET /api/v1/sandbox/share/{id}`). Split out of `sandbox` by #3825 and held
+  back: the write path is unauthenticated and tenant-less, its `share_url`
+  points at the deleted `/sandbox/results/[id]` page, and its 10/hour/IP cap
+  is a per-process dict so it does not hold across replicas. Resolve all
+  three before promoting.
 - `sensitech`
 - `audit` (mock audit)
 - `sop`
@@ -128,7 +133,7 @@ Rationale: these surfaces either expand the product beyond FSMA evidence flow, a
 ## Required Production Configuration
 
 ```text
-ENABLED_ROUTERS=inflow_workbench,fda_export,csv,edi,epcis_ingestion,score,portal,billing,onboarding,recall,proof_verify,proof_recall,canonical_records,rules,exceptions,request_workflow,auditor,compliance_metrics,readiness,chain_verification,audit_export_log,sla_tracking,export_monitoring,admin,fsma_compliance
+ENABLED_ROUTERS=inflow_workbench,fda_export,csv,edi,epcis_ingestion,score,portal,billing,onboarding,recall,proof_verify,proof_recall,canonical_records,rules,exceptions,request_workflow,auditor,compliance_metrics,readiness,chain_verification,audit_export_log,sla_tracking,export_monitoring,admin,fsma_compliance,sandbox
 ```
 
 This value is intentionally exact, not a customizable production subset. A
@@ -136,9 +141,24 @@ router change is a release-gate change: update `server/router_policy.py`, add
 the operation-level auth/tenant manifest and executable test adapters, and
 repeat staging isolation checks before changing the environment.
 
-Graph, NLP, scraping, discovery, sandbox, recall simulations, legacy export,
-and every other omitted optional router are release-disabled and return 404.
-Graph promotion additionally requires the tenant matrix against Neo4j.
+Graph, NLP, scraping, discovery, sandbox share links, recall simulations,
+legacy export, and every other omitted optional router are release-disabled
+and return 404. Graph promotion additionally requires the tenant matrix
+against Neo4j.
+
+### `sandbox` (promoted, #3825)
+
+Owner: ingestion. Surface: `POST /api/v1/sandbox/evaluate` and
+`POST /api/v1/sandbox/trace` (`services/ingestion/app/sandbox/router.py`).
+
+Both are unauthenticated by design — they are the public FSMA 204 checker
+behind the Inflow Lab CSV evaluator — and both are stateless: they persist
+nothing, accept no tenant identifier, and read no tenant data, so there is no
+tenant boundary to cross. Abuse is bounded by a per-IP rate limit plus 2 MB
+and 500-event payload caps. Promotion evidence lives in
+`services/ingestion/tests/test_sandbox_production_promotion_3825.py`, which
+asserts the statelessness the promotion rests on and fails if a write path or
+tenant parameter is ever added to this router.
 
 ## Route-Complete Security Manifest
 
