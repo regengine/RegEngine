@@ -105,10 +105,22 @@ v141, `08c7cf36ddbe`) except the two writers the application already relies on:
 Any statement that changes another column, moves `status` anywhere else, deletes or truncates
 raises `check_violation`. A correction is a new event that supersedes the old one, never an edit.
 The break-glass is `SET LOCAL fsma.allow_mutation = 'true'` inside one transaction (the same GUC
-as `fsma.cte_events` and `fsma.correction_patches`); the runtime resets it per transaction and per
-pooled connection, and the retention purge is its only production user. Adding a column to the
-allowlist is a schema change under this policy: update the trigger in a new migration, this table,
-and `tests/migrations/test_v141_traceability_events_append_only.py` together.
+as `fsma.cte_events`, `fsma.hash_chain` and `fsma.correction_patches`); the runtime resets it per
+transaction and per pooled connection. Since migration v145 (`17fc5f9d1e69`) the GUC is an intent
+flag, not an authorization: `fsma.break_glass_authorized(oid)` honours it only for a superuser or a
+member of the guarded table's owner (the migration role). The runtime roles `regengine` and
+`regengine_sysadmin` are never members of it, so a session holding the application credential
+cannot arm the break-glass even with raw SQL. The one runtime mutation that needs it, the CTE
+retention purge in `services/scheduler/service.py`, calls `fsma.arm_retention_purge(tenant_id,
+min_age)` (SECURITY DEFINER) instead: the arm is scoped to the current transaction, one tenant,
+`fsma.cte_events` and rows older than `min_age`, and permits DELETE only; it cannot widen into an
+UPDATE, another table or a younger row. `min_age` must be whole days (no month or year component,
+because interval ordering and calendar arithmetic disagree on months) and at least 730 days; the
+trigger also applies the 730-day floor to the cutoff itself. Adding a column to the allowlist is a
+schema change under this policy: update the trigger in a new migration, this table, and
+`tests/migrations/test_v141_traceability_events_append_only.py` together; changing who may
+break glass is a change to v145's helpers and
+`tests/migrations/test_v145_break_glass_authorization.py`.
 
 ### 5.2 Read freeze on the legacy CTE tables (SEL-589)
 
@@ -146,6 +158,6 @@ is rejected under section 7.
 
 ## Appendix: Current Schema Version
 
-- **Version:** 1.2.0
-- **Last Updated:** 2026-10-28 (v141 mutation policy on `fsma.traceability_events`; SEL-589 read freeze)
+- **Version:** 1.3.0
+- **Last Updated:** 2026-10-30 (v145 break-glass authorization by role; retention purge arm)
 - **Git SHA:** (auto-populated by migration)

@@ -143,8 +143,11 @@ def test_archive_expired_records_completes_and_archives() -> None:
             assert fresh_audit_id in audit_ids, "fresh sysadmin audit evidence must be retained"
     finally:
         with engine.connect() as conn:
-            # cte_events is append-only (v078 trigger) — cleanup needs the
-            # same transaction-local break-glass GUC the job uses.
+            # cte_events is append-only (v078 trigger). The job arms the
+            # narrow retention path instead; this cleanup deletes fresh
+            # rows, so it uses the transaction-local break-glass GUC, which
+            # since v145 works only for a superuser or a member of the
+            # table owner (the live test databases connect as one).
             conn.execute(text("SELECT set_config('fsma.allow_mutation', 'true', true)"))
             conn.execute(
                 text("DELETE FROM fsma.cte_events WHERE tenant_id = CAST(:tid AS uuid)"),

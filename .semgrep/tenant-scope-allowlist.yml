@@ -279,12 +279,6 @@ baseline:
     target: fsma.task_queue
     qhash: "2f9a309360dd273b"
     reason: "Cross-tenant retention purge via arm_global_admin_context; audited control-plane action."
-  - file: services/scheduler/service.py
-    scope: SchedulerService.archive_expired_records
-    rule: sql-without-tenant-predicate
-    target: fsma.cte_events
-    qhash: "ab1f3e6f941cbefa"
-    reason: "Retention delete runs inside a per-tenant tenant_scope loop (RLS confines each pass); audited control-plane action."
   # Queue mechanics are cross-tenant by design (see the ADR #1644 note at
   # the call sites): workers lease and transition rows by task id plus
   # worker identity under the admin engine role, never by tenant.
