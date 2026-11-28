@@ -451,6 +451,8 @@ async def ingest_events(
                 # A stored incomplete line keeps its gap: its own receipt
                 # must not close it, and a later close must not be undone.
                 if not open_gaps:
+                    # Recorded so a later incomplete line in this batch requeues its gap.
+                    closes_queued.add((event.traceability_lot_code.strip(), event.cte_type.value))
                     gap_outcomes.append(
                         ValidationOutcome(
                             order=event_index,

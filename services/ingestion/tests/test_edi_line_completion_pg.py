@@ -187,7 +187,7 @@ def test_markers_are_tenant_scoped(db):
         session.commit()
     with _session(db, OTHER_TENANT) as session:
         assert session.execute(text(f"SELECT count(*) FROM {MARKERS}")).scalar_one() == 0
-        with pytest.raises(DBAPIError):
+        with pytest.raises(DBAPIError, match="row-level security"):
             session.execute(
                 text(
                     f"INSERT INTO {MARKERS} (tenant_id, superseded_event_id, superseding_event_id) VALUES "
@@ -248,3 +248,63 @@ def test_migration_rerun_downgrade_reupgrade_and_cutover_grants(db):
         REGISTRY.supersede(session, TENANT, COMPLETE, stored, new_event, str(uuid4()))
         session.commit()
     assert _live_events(db) == {new_event}
+
+
+def _downgrade_as_owner(db) -> None:
+    """Run the v146 downgrade as a non-superuser, non-bypass table owner, like a deploy."""
+    with db.begin() as conn:
+        conn.execute(
+            text("""
+            DO $$ BEGIN
+                IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'v146_owner') THEN
+                    CREATE ROLE v146_owner NOLOGIN NOSUPERUSER NOBYPASSRLS;
+                END IF;
+            END $$;
+            GRANT USAGE ON SCHEMA fsma TO v146_owner;
+            GRANT SELECT ON information_schema.columns TO v146_owner;
+            ALTER TABLE fsma.cte_event_supersessions OWNER TO v146_owner;
+            ALTER TABLE fsma.edi_line_identities OWNER TO v146_owner;
+            SET LOCAL ROLE v146_owner;
+        """)
+        )
+        with Operations.context(MigrationContext.configure(conn)):
+            _load(V146, "v146").downgrade()
+
+
+def _restore_v146(db) -> None:
+    with db.begin() as conn:
+        for table in (MARKERS, "fsma.edi_line_identities"):
+            if conn.execute(text(f"SELECT to_regclass('{table}')")).scalar_one() is not None:
+                conn.execute(text(f"ALTER TABLE {table} OWNER TO CURRENT_USER"))
+        with Operations.context(MigrationContext.configure(conn)):
+            _load(V146, "v146").upgrade()
+
+
+def test_downgrade_refuses_to_drop_supersession_history(db):
+    """Forced RLS hides rows from the owner, so the guard must lift it to see them."""
+    stored, _ = _stored_incomplete(db)
+    with _session(db) as session:
+        REGISTRY.supersede(session, TENANT, COMPLETE, stored, _store_event(session), str(uuid4()))
+        session.commit()
+    try:
+        with pytest.raises(DBAPIError, match="v146 downgrade refused"):
+            _downgrade_as_owner(db)
+        with db.connect() as conn:
+            assert conn.execute(text(f"SELECT count(*) FROM {MARKERS}")).scalar_one() == 1
+            assert conn.execute(
+                text(f"SELECT relforcerowsecurity FROM pg_class WHERE oid = '{MARKERS}'::regclass")
+            ).scalar_one(), "a refused downgrade must leave row security forced"
+    finally:
+        _restore_v146(db)
+
+
+def test_an_empty_downgrade_is_allowed(db):
+    try:
+        _downgrade_as_owner(db)
+        with db.connect() as conn:
+            assert conn.execute(text(f"SELECT to_regclass('{MARKERS}')")).scalar_one() is None
+            assert conn.execute(
+                text("SELECT relforcerowsecurity FROM pg_class WHERE oid = 'fsma.edi_line_identities'::regclass")
+            ).scalar_one()
+    finally:
+        _restore_v146(db)

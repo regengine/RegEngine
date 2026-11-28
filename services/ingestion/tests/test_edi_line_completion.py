@@ -305,3 +305,28 @@ def test_a_new_line_records_its_canonical_link(harness) -> None:
     _ingest(_line(tlc_source_reference="PACK-0310"), registry)
 
     assert registry.recorded == [("ev-new", NEW_CANONICAL)]
+
+
+def test_a_batch_replay_close_is_followed_by_a_later_gap(harness) -> None:
+    """A replayed complete line queues a close; a later incomplete line must requeue its gap."""
+    complete = _line(tlc_source_reference="PACK-0310")
+    stored = _stored(complete)
+    other_lot = _line(asn_number="ASN-OTHER").model_copy(update={"timestamp": "2026-03-10T13:00:00Z"})
+    registry = _Registry(stored)
+    complete_identity = identify_lines([complete])[0].identity_key
+    registry.lookup = lambda *_args: {complete_identity: stored}
+
+    payload = WebhookPayload(tenant_id=TENANT, source="edi_856_inbound", events=[complete, other_lot])
+    asyncio.run(
+        wc.ingest_events(
+            payload,
+            principal_tenant_id=TENANT,
+            x_regengine_api_key="test-key",  # pragma: allowlist secret — synthetic test fixture only
+            deferred_kdes=edi_routes._EDI_DEFERRED_KDES,
+            all_or_nothing=True,
+            edi_lines=registry,
+        )
+    )
+
+    assert [outcome.closing_record_id for outcome in harness.outcomes] == [STORED_EVENT, None]
+    assert [gap.gap_key for gap in harness.outcomes[1].gaps] == ["tlc_source_reference"]
