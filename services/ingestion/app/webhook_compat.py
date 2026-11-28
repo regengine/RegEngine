@@ -229,6 +229,23 @@ def _close_ingestion_run(
     )
 
 
+def _is_refused_replay(error: Exception, store_result: Any) -> bool:
+    """True when a resend met a stored record whose chain row cannot take a canonical copy.
+
+    The legacy store already holds the record, and its chain row was hashed
+    from other content: the legacy digest of a record stored without a
+    canonical copy, or an earlier projection. Nothing can be stored for it, so
+    the resend is a replay. A new record, or any other failure, is not.
+    """
+    if getattr(store_result, "idempotent", False) is not True:
+        return False
+    try:
+        from shared.canonical_persistence import LedgerHashMismatchError
+    except ImportError:
+        return False
+    return isinstance(error, LedgerHashMismatchError)
+
+
 def _undone_result(result: EventResult) -> EventResult:
     """Report an accepted event whose batch was rolled back as not stored."""
     if result.status != "accepted":
@@ -441,6 +458,24 @@ async def ingest_events(
             # never poisons the DB transaction for subsequent events.
             savepoint = db_session.begin_nested()
             try:
+                # One fsma.hash_chain row serves both stored copies of the
+                # event, as on the webhook route. The legacy write hashes this
+                # canonical projection into that row, and the canonical write
+                # below takes the legacy id and appends no row of its own. A
+                # second row under a separate id is an orphan to the chain
+                # verifier that joins on fsma.cte_events.
+                canonical = None
+                canonical_error: Optional[Exception] = None
+                try:
+                    from shared.canonical_event import normalize_webhook_event
+
+                    canonical = normalize_webhook_event(event, tenant_id, ingestion_run_id=run_id)
+                except (ImportError, ValueError, TypeError, RuntimeError) as canon_err:
+                    # Raised below, after the legacy write, where it was raised
+                    # before: an event the legacy store refuses is still
+                    # rejected on its own.
+                    canonical_error = canon_err
+
                 store_result = persistence.store_event(
                     tenant_id=tenant_id,
                     event_type=event.cte_type.value,
@@ -454,9 +489,10 @@ async def ingest_events(
                     location_name=event.location_name,
                     kdes=event.kdes,
                     alerts=alerts,
+                    canonical_event=canonical,
                 )
 
-                # Canonical normalization + rule evaluation (best-effort).
+                # Canonical write + rule evaluation (best-effort).
                 # Runs BEFORE the primary savepoint commits so a rule
                 # rejection (under RULES_ENGINE_ENFORCE=cte_only|all) can
                 # roll back the primary CTE write along with it.
@@ -464,13 +500,19 @@ async def ingest_events(
                 # primary write still commits, preserving the prior
                 # best-effort behavior for tenants without seeded rules.
                 summary = None
+                refused_replay = False
                 canon_sp = db_session.begin_nested()
                 try:
-                    from shared.canonical_event import normalize_webhook_event
                     from shared.canonical_persistence import CanonicalEventStore
 
-                    canonical = normalize_webhook_event(event, tenant_id, ingestion_run_id=run_id)
-                    canonical_store = CanonicalEventStore(db_session, dual_write=False)
+                    if canonical_error is not None:
+                        raise canonical_error
+                    canonical.event_id = uuid.UUID(str(store_result.event_id))
+                    canonical.prepare_for_persistence()
+                    # skip_chain_write reuses the legacy write's chain row and
+                    # refuses one whose hash is not this content's, so a record
+                    # is never linked to a chain row that does not attest it.
+                    canonical_store = CanonicalEventStore(db_session, dual_write=False, skip_chain_write=True)
                     persist_result = canonical_store.persist_event(canonical)
                     canonical_exists = getattr(persist_result, "idempotent", False) is True
                     # A stored event replayed under the same keys stored
@@ -484,9 +526,10 @@ async def ingest_events(
 
                         engine = RulesEngine(db_session)
                         event_data = {
-                            # Never the existing canonical row's id: these
-                            # values can differ from what that row stores, and
-                            # evaluation writes its verdict onto the event id.
+                            # The id of the record just stored, never the
+                            # existing canonical row's: these values can differ
+                            # from what that row stores, and evaluation writes
+                            # its verdict onto the event id.
                             "event_id": str(canonical.event_id),
                             "event_type": canonical.event_type.value,
                             "traceability_lot_code": canonical.traceability_lot_code,
@@ -504,15 +547,26 @@ async def ingest_events(
                 except (ImportError, ValueError, TypeError, RuntimeError) as canon_err:
                     canon_sp.rollback()
                     summary = None
-                    # Finding A — under enforcement modes (cte_only/all)
-                    # a canonical/rules crash must not silently accept.
-                    # ``handle_preeval_exception`` raises HTTPException(500)
-                    # in those modes; under OFF it warns and returns
-                    # so the legacy best-effort accept path remains.
-                    from shared.rules.enforcement import handle_preeval_exception  # noqa: PLC0415
+                    if _is_refused_replay(canon_err, store_result):
+                        # A resend of a stored record whose chain row cannot
+                        # take this content. Nothing is accepted that was not
+                        # already stored, so this is a replay in every
+                        # enforcement mode: no canonical write, no rule
+                        # evaluation, and the stored record is reported as
+                        # before. The record keeps the canonical copy it had,
+                        # which may be none, and a resend cannot add one.
+                        refused_replay = True
+                        logger.warning("compat_replay_chain_row_refused event_id=%s", store_result.event_id)
+                    else:
+                        # Finding A — under enforcement modes (cte_only/all)
+                        # a canonical/rules crash must not silently accept.
+                        # ``handle_preeval_exception`` raises HTTPException(500)
+                        # in those modes; under OFF it warns and returns
+                        # so the legacy best-effort accept path remains.
+                        from shared.rules.enforcement import handle_preeval_exception  # noqa: PLC0415
 
-                    handle_preeval_exception(canon_err, where="webhook_compat")
-                    logger.warning("compat_canonical_write_skipped: %s", str(canon_err))
+                        handle_preeval_exception(canon_err, where="webhook_compat")
+                        logger.warning("compat_canonical_write_skipped: %s", str(canon_err))
 
                 # Enforcement: if RULES_ENGINE_ENFORCE is set and the
                 # summary meets the reject policy, roll back the outer
@@ -613,7 +667,12 @@ async def ingest_events(
                         closing_record_hash=store_result.sha256_hash,
                     )
                 )
-                if all_or_nothing:
+                # A refused replay stored nothing, and what was resent can
+                # differ from the stored record, which was published when it
+                # was stored. Nothing is published for it.
+                if refused_replay:
+                    pass
+                elif all_or_nothing:
                     pending_graph_sync.append((store_result.event_id, event))
                 else:
                     _publish_graph_sync(store_result.event_id, event, tenant_id)
