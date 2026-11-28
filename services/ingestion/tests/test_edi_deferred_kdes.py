@@ -18,6 +18,7 @@ from sqlalchemy.exc import ProgrammingError
 
 from services.ingestion.app import webhook_compat as wc
 from services.ingestion.app.edi_ingestion import routes as edi_routes
+from services.ingestion.app.edi_line_identity import EDILine, StoredLine
 from services.ingestion.app.webhook_models import IngestEvent, WebhookCTEType, WebhookPayload
 
 TENANT = "11111111-1111-1111-1111-111111111111"
@@ -198,6 +199,62 @@ def test_rolled_back_batch_keeps_only_the_rejected_events_gaps(harness) -> None:
     assert harness.stored == []
     assert [outcome.order for outcome in harness.outcomes] == [2]
     assert all(outcome.closing_record_id is None for outcome in harness.outcomes)
+
+
+class _KnownLines:
+    """A line registry that already holds every line it is asked about."""
+
+    def __init__(self, event_id: str = "stored-1") -> None:
+        self.event_id = event_id
+        self.recorded: list[str] = []
+
+    def lookup(self, _db: Any, _tenant: str, lines: list) -> dict:
+        return {
+            line.identity_key: StoredLine(
+                content_digest=line.content_digest, event_id=self.event_id, sha256_hash=EVENT_HASH
+            )
+            for line in lines
+            if line is not None
+        }
+
+    def record(self, _db: Any, _tenant: str, line: Any, event_id: str) -> None:
+        self.recorded.append(event_id)
+
+
+@pytest.fixture()
+def one_line_identity(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        wc,
+        "identify_lines",
+        lambda events: [EDILine(identity_key=f"line-{index}", content_digest="same") for index, _ in enumerate(events)],
+    )
+
+
+def test_resent_incomplete_line_keeps_its_gap(harness, one_line_identity) -> None:
+    """Its own receipt would otherwise close the gap with the KDE still missing."""
+    registry = _KnownLines()
+
+    response = _ingest(
+        _shipment(), deferred_kdes=edi_routes._EDI_DEFERRED_KDES, all_or_nothing=True, edi_lines=registry
+    )
+
+    assert (response.accepted, response.rejected) == (1, 0)
+    assert response.events[0].event_id == "stored-1"
+    assert response.events[0].open_gaps == ["tlc_source_reference"]
+    assert harness.stored == [] and harness.inline_gaps == [] and registry.recorded == []
+    assert harness.outcomes == []
+
+
+def test_resent_complete_line_still_closes_gaps(harness, one_line_identity) -> None:
+    response = _ingest(
+        _shipment(tlc_source_reference="PACK-0310"),
+        deferred_kdes=edi_routes._EDI_DEFERRED_KDES,
+        all_or_nothing=True,
+        edi_lines=_KnownLines(),
+    )
+
+    assert response.events[0].open_gaps == []
+    assert [outcome.closing_record_id for outcome in harness.outcomes] == ["stored-1"]
 
 
 def test_event_is_not_accepted_when_its_gap_cannot_be_written(harness) -> None:

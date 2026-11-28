@@ -39,6 +39,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from .authz import IngestionPrincipal, get_ingestion_principal
 from .edi_interchange import EDIInterchange
+from .edi_line_identity import EDILineRegistry, StoredLine, changed_line_error, identify_lines
 from .webhook_models import EventResult, IngestEvent, IngestResponse, WebhookCTEType, WebhookPayload
 from .webhook_router_v2 import (
     _check_rate_limit,
@@ -252,6 +253,7 @@ async def ingest_events(
     deferred_kdes: Optional[Mapping[WebhookCTEType, frozenset[str]]] = None,
     all_or_nothing: bool = False,
     edi_interchange: Optional[EDIInterchange] = None,
+    edi_lines: Optional[EDILineRegistry] = None,
 ) -> IngestResponse:
     """Internal ingestion helper — not an HTTP route.
 
@@ -286,9 +288,18 @@ async def ingest_events(
 
     ``edi_interchange`` serializes EDI retries in PostgreSQL. Its replay
     receipt commits with the events, surviving Redis loss and response errors.
+
+    ``edi_lines`` names each EDI line by a stable identity (ADR-007), because
+    the event keys change with the envelope and the line's position. A line
+    already stored with the same content writes nothing and is reported with
+    its stored event. One stored with different content stops the request
+    with 409 before anything is written. Requires ``all_or_nothing``.
     """
     if not principal_tenant_id:
         raise PermissionError("ingest_events requires principal_tenant_id from authenticated context")
+    if edi_lines is not None and not all_or_nothing:
+        # Without it an earlier event could reach graph sync before a refusal.
+        raise ValueError("edi_lines requires all_or_nothing")
 
     if principal is not None and principal.tenant_id != principal_tenant_id:
         raise PermissionError("principal tenant does not match authenticated context")
@@ -340,10 +351,29 @@ async def ingest_events(
     closes_queued: set[tuple[str, str]] = set()
     pending_graph_sync: list[tuple[str, IngestEvent]] = []
     stored_orders: set[int] = set()
+    # EDI only: one identity per event, None where the document cannot name the line.
+    lines = identify_lines(payload.events) if edi_lines is not None else None
+    known_lines: dict[str, StoredLine] = {}
 
     try:
         if edi_interchange is not None:
             edi_interchange.reserve(db_session, tenant_id)
+        if edi_lines is not None and lines is not None:
+            known_lines = edi_lines.lookup(db_session, tenant_id, lines)
+            changed = [
+                {
+                    "line": event.kdes.get("edi_line_index") or index + 1,
+                    "traceability_lot_code": event.traceability_lot_code,
+                    "stored_event_id": known_lines[line.identity_key].event_id,
+                }
+                for index, (event, line) in enumerate(zip(payload.events, lines))
+                if line is not None
+                and line.identity_key in known_lines
+                and known_lines[line.identity_key].content_digest != line.content_digest
+            ]
+            if changed:
+                # A resend never changes a stored record. Refuse before any write.
+                raise changed_line_error(changed)
         if source_file is not None:
             # The receipt is written first so a run exists even if every row
             # is rejected; the same transaction carries run, blob and events.
@@ -386,6 +416,40 @@ async def ingest_events(
                         gaps=open_gaps,
                     )
                 )
+                continue
+
+            line = lines[event_index] if lines is not None else None
+            stored_line = known_lines.get(line.identity_key) if line is not None else None
+            if stored_line is not None:
+                # The same line with the same content, whatever envelope or
+                # position it arrived in. Report the stored event and write
+                # nothing. Graph sync is left alone: this copy carries other
+                # envelope values than the stored record.
+                results.append(
+                    EventResult(
+                        traceability_lot_code=event.traceability_lot_code,
+                        cte_type=event.cte_type.value,
+                        status="accepted",
+                        event_id=stored_line.event_id,
+                        sha256_hash=stored_line.sha256_hash,
+                        chain_hash=stored_line.chain_hash,
+                        open_gaps=[gap.gap_key for gap in open_gaps],
+                    )
+                )
+                accepted += 1
+                stored_orders.add(event_index)
+                # A stored incomplete line keeps its gap: its own receipt
+                # must not close it, and a later close must not be undone.
+                if not open_gaps:
+                    gap_outcomes.append(
+                        ValidationOutcome(
+                            order=event_index,
+                            lot_code=event.traceability_lot_code,
+                            cte_type=event.cte_type.value,
+                            closing_record_id=stored_line.event_id,
+                            closing_record_hash=stored_line.sha256_hash,
+                        )
+                    )
                 continue
 
             alerts = _generate_alerts(event)
@@ -554,6 +618,15 @@ async def ingest_events(
                         )
                     except SQLAlchemyError as gap_err:
                         raise RuntimeError("deferred gap write failed") from gap_err
+                if (
+                    edi_lines is not None
+                    and line is not None
+                    and getattr(store_result, "success", True)
+                    and not getattr(store_result, "idempotent", False)
+                ):
+                    # A newly stored line. One the store already held under its
+                    # old key stays unregistered: its stored content is unknown.
+                    edi_lines.record(db_session, tenant_id, line, store_result.event_id)
 
                 # Accepted path. Savepoint commits the primary CTE write.
                 savepoint.commit()

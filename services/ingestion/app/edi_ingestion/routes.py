@@ -37,12 +37,14 @@ from pydantic import ValidationError
 
 from ..authz import IngestionPrincipal, require_permission
 from ..edi_interchange import EDIInterchange
+from ..edi_line_identity import LINE_CONFLICT_ERROR, EDILineRegistry
 from ..format_extractors import is_edi_content
 from ..shared.tenant_resolution import resolve_principal_tenant_id, resolve_tenant_id
 from ..shared.upload_limits import MAX_EDI_FILE_SIZE_BYTES, read_upload_with_limit
 from ..webhook_compat import ingest_events
 from ..webhook_models import (
     IngestEvent,
+    IngestResponse,
     WebhookCTEType,
     WebhookPayload,
 )
@@ -474,6 +476,75 @@ def _preflight_event_date(
         detail["needs_review"] = True
         detail["rejection_id"] = record["rejection_id"]
         raise HTTPException(status_code=400, detail=detail) from exc
+
+
+async def _store_edi_events(
+    payload: WebhookPayload,
+    *,
+    extracted: dict[str, Any],
+    transaction_set: str,
+    sender_tenant_id: str,
+    partner_id: str | None,
+    source: str,
+    x_regengine_api_key: str | None,
+) -> IngestResponse:
+    """Store an interchange whole, naming each line by its stable identity.
+
+    A line already stored with other content is refused by ``ingest_events``
+    with 409. The refusal is written to the EDI rejection log here with what
+    each refused line said, so the correction is neither applied nor dropped
+    without notice. The record is only as durable as that log, which
+    ``rejection_log`` describes, and its id is returned only if the log took
+    the record: an error from the recorder replaces the 409. ``extracted`` is
+    only the first transaction set, so the line itself is recorded: it may
+    sit in a later set. The 409 body is unchanged. The exception also frees
+    the ISA13 claim: nothing was stored.
+    """
+    try:
+        return await ingest_events(
+            payload,
+            principal_tenant_id=sender_tenant_id,
+            x_regengine_api_key=x_regengine_api_key,
+            deferred_kdes=_EDI_DEFERRED_KDES,
+            all_or_nothing=True,
+            edi_interchange=EDIInterchange.from_envelope(extracted),
+            edi_lines=EDILineRegistry(),
+        )
+    except HTTPException as exc:
+        if not isinstance(exc.detail, dict) or exc.detail.get("error") != LINE_CONFLICT_ERROR:
+            raise
+        detail = dict(exc.detail)
+        conflicts = detail.get("conflicts") or []
+        # Keyed as ``ingest_events`` numbers a conflict's line.
+        incoming = {
+            event.kdes.get("edi_line_index") or index + 1: event.model_dump(mode="json")
+            for index, event in enumerate(payload.events)
+        }
+        # Not caught: no ``rejection_id`` is sent for a record the log did not take.
+        record = _record_edi_rejection(
+            tenant_id=sender_tenant_id,
+            transaction_set=transaction_set,
+            traceability_lot_code=conflicts[0]["traceability_lot_code"] if conflicts else "",
+            errors=[
+                {
+                    "loc": ["line", conflict["line"]],
+                    "type": LINE_CONFLICT_ERROR,
+                    "msg": (
+                        f"Lot {conflict['traceability_lot_code']} is already stored as event "
+                        f"{conflict['stored_event_id']} with different content."
+                    ),
+                    "input": incoming.get(conflict["line"]),
+                }
+                for conflict in conflicts
+            ],
+            extracted=extracted,
+            partner_id=partner_id,
+            source=source,
+            reason=LINE_CONFLICT_ERROR,
+            needs_review=True,
+        )
+        detail["rejection_id"] = record["rejection_id"]
+        raise HTTPException(status_code=exc.status_code, detail=detail) from exc
 
 
 router = APIRouter(prefix="/api/v1/ingest/edi", tags=["EDI Import"])
@@ -921,13 +992,14 @@ async def ingest_edi_856(
         events=events,
         tenant_id=sender_tenant_id,
     )
-    ingestion_result = await ingest_events(
+    ingestion_result = await _store_edi_events(
         payload,
-        principal_tenant_id=sender_tenant_id,
+        extracted=extracted,
+        transaction_set="856",
+        sender_tenant_id=sender_tenant_id,
+        partner_id=x_partner_id,
+        source=source,
         x_regengine_api_key=x_regengine_api_key,
-        deferred_kdes=_EDI_DEFERRED_KDES,
-        all_or_nothing=True,
-        edi_interchange=EDIInterchange.from_envelope(extracted),
     )
 
     return EDIIngestResponse(
@@ -1685,13 +1757,14 @@ async def ingest_edi_document(
         events=events,
         tenant_id=sender_tenant_id,
     )
-    ingestion_result = await ingest_events(
+    ingestion_result = await _store_edi_events(
         payload,
-        principal_tenant_id=sender_tenant_id,
+        extracted=extracted,
+        transaction_set=transaction_set,
+        sender_tenant_id=sender_tenant_id,
+        partner_id=x_partner_id,
+        source=source,
         x_regengine_api_key=x_regengine_api_key,
-        deferred_kdes=_EDI_DEFERRED_KDES,
-        all_or_nothing=True,
-        edi_interchange=EDIInterchange.from_envelope(extracted),
     )
 
     return EDIIngestResponse(
