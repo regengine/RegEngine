@@ -74,23 +74,23 @@ describe('SEL-640: Signed-out CSV template download', () => {
       expect(createObjectURLSpy).toHaveBeenCalled();
     });
 
-    // Verify CSV header matches validator columns
+    // The download is the commitable multi-record template, not the flat preview columns.
     expect(capturedBlob).toBeTruthy();
     if (capturedBlob) {
       const text = await (capturedBlob as Blob).text();
-      const headers = text.trim().split(',');
-      // Should have all required + recommended columns
-      expect(headers).toContain('event_type');
-      expect(headers).toContain('product_name');
-      expect(headers).toContain('lot_number');
-      expect(headers).toContain('event_datetime');
-      expect(headers).toContain('product_code');
-      expect(headers).toContain('quantity');
-      expect(headers).toContain('unit');
-      expect(headers).toContain('origin_facility_code');
-      expect(headers).toContain('origin_facility_name');
-      expect(headers).toContain('destination_facility_code');
-      expect(headers).toContain('destination_facility_name');
+      const [headerLine, ...rows] = text.trim().split('\n');
+      const headers = headerLine.split(',');
+      expect(headers[0]).toBe('record_type');
+      expect(headers).toContain('facility_name');
+      expect(headers).toContain('tlc_code');
+      expect(headers).toContain('cte_type');
+      expect(headers).toContain('product_description');
+      const facility = rows.find(row => row.startsWith('facility,'));
+      const event = rows.find(row => row.startsWith('event,'));
+      expect(facility).toContain('Salinas Packhouse');
+      expect(event).toContain('Salinas Packhouse');
+      expect(event).toContain('TLC-2026-SAL-1001');
+      expect(event).toContain('shipping');
     }
 
     createObjectURLSpy.mockRestore();
@@ -104,7 +104,7 @@ describe('SEL-640: Signed-out CSV template download', () => {
 
   it('shows updated CSV card copy', () => {
     render(<BulkUploadPage />);
-    expect(screen.getByText('Start here. One row per event, with the columns RegEngine checks.')).toBeInTheDocument();
+    expect(screen.getByText('Start here. Includes a facility, a lot, and one shipping event.')).toBeInTheDocument();
   });
 
   it('rejects garbage CSV header during client-side validation', async () => {

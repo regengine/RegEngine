@@ -17,6 +17,33 @@ def _make_upload_file(filename: str, content: bytes, content_type: str) -> Uploa
     )
 
 
+def test_flat_shipping_row_keeps_both_locations_and_product_name():
+    """A one-row preview CSV must not drop ship-to or the product name."""
+    csv_content = (
+        "event_type,product_name,lot_number,origin_facility_name,destination_facility_name\n"
+        "shipping,Romaine Hearts,LOT-1,Valley Fresh Farms,Metro Distribution Center\n"
+    )
+    upload_file = _make_upload_file("flat.csv", csv_content.encode("utf-8"), "text/csv")
+    parsed = asyncio.run(parse_incoming_file(upload_file))
+
+    assert len(parsed["events"]) == 1
+    event = parsed["events"][0]
+    assert event["facility_name"] == "Valley Fresh Farms"
+    assert event["tlc_code"] == "LOT-1"
+    assert event["cte_type"] == "shipping"
+    assert event["kde_data"]["product_description"] == "Romaine Hearts"
+    assert event["kde_data"]["ship_to_location"] == "Metro Distribution Center"
+
+
+def test_destination_only_row_still_sets_facility_name():
+    csv_content = "destination_facility_name,lot_number,event_type\nMetro DC,LOT-9,receiving\n"
+    upload_file = _make_upload_file("dest.csv", csv_content.encode("utf-8"), "text/csv")
+    parsed = asyncio.run(parse_incoming_file(upload_file))
+
+    assert parsed["events"][0]["facility_name"] == "Metro DC"
+    assert "ship_to_location" not in parsed["events"][0]["kde_data"]
+
+
 def test_parse_csv_mixed_records():
     csv_content = """record_type,name,street,city,state,postal_code,roles,facility_name,category_id,tlc_code,cte_type,event_time,kde_data
 facility,Salinas Packhouse,1200 Abbott St,Salinas,CA,93901,Grower|Packer,,,,,,
