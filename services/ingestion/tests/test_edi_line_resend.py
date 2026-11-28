@@ -11,7 +11,8 @@ What is real: the parser, extractors, FSMA validation, the KDE gate, event
 normalization, line identity, and the idempotency key formulas of both stores.
 What is faked: the two stores keep rows in memory and deduplicate on those real
 keys, and the registry is a dict with the same contract as the table. The live
-table is covered by ``test_edi_line_identity_pg.py``.
+table is covered by ``test_edi_line_identity_pg.py``. The ingestion run that
+retains each uploaded document is a list entry, undone by the same rollback.
 
 The ISA13 gates are off here. Under the same ISA13 that is the state after the
 seven-day receipt has expired or for an envelope with no ISA13; under a new
@@ -72,14 +73,16 @@ class _Stores:
         self.legacy: dict[str, dict[str, Any]] = {}
         self.canonical: dict[str, str] = {}
         self.registry: dict[str, tuple[str, str]] = {}
+        # SHA-256 of each retained source document, one per ingestion run.
+        self.runs: list[str] = []
         self.published: list[str] = []
         self.redis: dict[str, str] = {}
 
     def snapshot(self) -> tuple:
-        return copy.deepcopy((self.legacy, self.canonical, self.registry))
+        return copy.deepcopy((self.legacy, self.canonical, self.registry, self.runs))
 
     def restore(self, saved: tuple) -> None:
-        self.legacy, self.canonical, self.registry = copy.deepcopy(saved)
+        self.legacy, self.canonical, self.registry, self.runs = copy.deepcopy(saved)
 
     def quantities(self) -> list[tuple[str, float]]:
         return sorted((row["lot"], row["quantity"]) for row in self.legacy.values())
@@ -209,6 +212,13 @@ def stores(monkeypatch: pytest.MonkeyPatch) -> _Stores:
     def _sessions() -> Iterator[_Session]:
         yield _Session(state)
 
+    def _open_run(session: Any, tenant_id: str, source: str, receipt: Any) -> str:
+        """``fsma.ingestion_runs`` and ``fsma.manifest_blobs``: the document as uploaded."""
+        state.runs.append(receipt.sha256)
+        return str(uuid4())
+
+    monkeypatch.setattr(webhook_compat, "_open_ingestion_run", _open_run)
+    monkeypatch.setattr(webhook_compat, "_close_ingestion_run", lambda *args, **kwargs: None)
     monkeypatch.setattr(webhook_compat, "_check_rate_limit", lambda tenant_id: None)
     monkeypatch.setattr(webhook_compat, "_verify_api_key_sync", lambda **kwargs: None)
     monkeypatch.setattr(webhook_compat, "_get_db_session", _sessions)
@@ -388,6 +398,8 @@ def test_a_refused_correction_stores_none_of_the_interchange(post, stores: _Stor
     assert mixed.status_code == 409, mixed.text
     assert len(stores.legacy) == 3
     assert not any(lot.endswith("LOT-D") for lot, _ in stores.quantities())
+    # The refused document is not retained either: only the first upload has a run.
+    assert len(stores.runs) == 1
 
 
 def test_a_refused_correction_frees_its_isa13(post, stores: _Stores, monkeypatch: pytest.MonkeyPatch) -> None:

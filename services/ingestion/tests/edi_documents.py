@@ -18,7 +18,11 @@ def _advice_set(lines: list[tuple[str, str]], st02: str, header: str, references
         "N1*DE*Valley Fresh Farms*92*VFF01~",
     ]
     for number, (quantity, lot) in enumerate(lines, start=1):
-        body += [f"LX*{number}~", f"W12*CC*100*{quantity}**CA**UK*{GTIN}*{lot}~"]
+        body += [
+            f"LX*{number}~",
+            f"W12*CC*100*{quantity}**CA**UK*{GTIN}*{lot}~",
+            "G69*Romaine Hearts 12ct~",
+        ]
     body = [segment for segment in body if segment]
     body.append(f"SE*{len(body) + 1}*{st02}~")
     return "".join(body)

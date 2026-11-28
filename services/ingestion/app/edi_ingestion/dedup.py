@@ -142,6 +142,31 @@ def interchange_in_progress(previous: Optional[str]) -> bool:
     return previous is None or previous.startswith(_PENDING_PREFIX)
 
 
+def interchange_stored(
+    tenant_id: str,
+    sender_id: Optional[str],
+    receiver_id: Optional[str],
+    isa13: Optional[str],
+) -> bool:
+    """True when the cache already holds a stored claim for this interchange.
+
+    Read-only, so a route can answer a replay before validating content. A
+    pending claim is not stored. Any Redis error answers False; the claim step
+    and the database receipt still decide.
+    """
+    if not isa13 or not sender_id:
+        return False
+    client = _redis_client()
+    if client is None:
+        return False
+    try:
+        value = client.get(_dedup_key(tenant_id, sender_id, receiver_id, isa13))
+    except Exception as exc:  # noqa: BLE001 -- a cache outage must not block ingest; later checks decide
+        logger.warning("edi_dedup_peek_error sender=%s isa13=%s error=%s", sender_id, isa13, str(exc))
+        return False
+    return value is not None and not str(value).startswith(_PENDING_PREFIX)
+
+
 def mark_interchange_stored(
     tenant_id: str,
     sender_id: Optional[str],

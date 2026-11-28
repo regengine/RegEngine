@@ -325,9 +325,9 @@ def test_lines_built_by_the_route_are_pinned(events_of) -> None:
     sets (861, 944, 850, 810) are not pinned.
     """
     advice_identity = "9963d3511d2a9c4df950b4475ab64f5c24ac435fd7b055007fb855751a2cfbde"  # pragma: allowlist secret
-    advice_content = "3cff161b9be9e58239caf4f0f55d10035bc9f29d7a7de28b425b17cacfc6ce59"  # pragma: allowlist secret
+    advice_content = "69dc48d2985a7663615606c32b975bc8933c45dba46541e66582c6bc51957966"  # pragma: allowlist secret
     notice_identity = "e14a424fcb7da5bc082708b89017dd014d0f995f645fca7ad34db4d24fcbbc1d"  # pragma: allowlist secret
-    notice_content = "fce057b833d0b7ab506819ea4fad74d291cf24e596acd84038f4fef6803a1ae2"  # pragma: allowlist secret
+    notice_content = "6cb9bceac82cb16624466d5a69b2a4dba528bb45d706317da367566791a06db3"  # pragma: allowlist secret
     advice = identify_lines(events_of(shipping_advice([("40", "LOT-A")])))[0]
     notice = identify_lines(events_of(ship_notice([("ROMAINE-12CT", "200", "LOT-A")])))[0]
     assert (advice.identity_key, advice.content_digest) == (advice_identity, advice_content)

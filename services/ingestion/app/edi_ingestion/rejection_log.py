@@ -9,18 +9,12 @@ recall simulator) to carry an exclusion filter on every read.
 
 This module provides a dedicated rejection channel. The rejection is:
 
-* logged as a structured warning (`edi_fsma_rejection_recorded`) so ops
-  keeps a trail even if the store is ephemeral;
-* written to an in-memory tenant-scoped ring buffer that powers the
-  admin review UI and tests. The ring is capped per-tenant to bound
-  memory under abuse. Production deployments that need durable
-  rejection history should wire this module to a DB table by overriding
-  ``record_edi_rejection`` in a subclass or adapter — keeping the API
-  stable so callers don't change.
-
-Follows the same in-memory-fallback pattern as
-``app/epcis/persistence.py::_fallback_store_for`` so the subsystems
-behave consistently under test and development.
+* written to ``fsma.edi_rejections`` before a rejection id is issued, so
+  the evidence survives a restart. If that write fails the request fails
+  with it;
+* kept in an in-memory tenant-scoped ring buffer for this worker's recent
+  rejections, capped per-tenant to bound memory under abuse;
+* logged as a structured warning (`edi_fsma_rejection_recorded`).
 """
 
 from __future__ import annotations
@@ -31,6 +25,8 @@ from collections import OrderedDict
 from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
+
+from shared import edi_rejection_audit
 
 logger = logging.getLogger("edi-ingestion")
 
@@ -62,8 +58,8 @@ def record_edi_rejection(
 
     Returns the rejection record (dict) so the caller can surface a
     rejection_id to the client without leaking internal storage
-    details. Always writes a structured warning log — even if storage
-    fails — so the audit trail survives.
+    details. Raises ``EdiRejectionAuditUnavailable`` when the durable
+    write fails, so no caller holds an id without a stored record.
     """
     rejection_id = f"edi-rej-{uuid4().hex[:16]}"
     recorded_at = datetime.now(timezone.utc).isoformat()
@@ -84,12 +80,13 @@ def record_edi_rejection(
         "needs_review": needs_review,
     }
 
+    edi_rejection_audit.persist_edi_rejection(record)
+
     store = _rejection_store_for(tenant_id)
     store[rejection_id] = record
     while len(store) > _EDI_REJECTION_CAP_PER_TENANT:
         store.popitem(last=False)
 
-    # Always log — the in-memory store is not durable on its own.
     logger.warning(
         "edi_fsma_rejection_recorded rejection_id=%s tenant=%s set=%s tlc=%s partner=%s errors=%d",
         rejection_id,
