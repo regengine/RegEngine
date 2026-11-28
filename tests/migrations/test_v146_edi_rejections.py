@@ -1,4 +1,4 @@
-"""v145: EDI rejection evidence must survive deploys and stay tenant-scoped."""
+"""v146: EDI rejection evidence must survive deploys and stay tenant-scoped."""
 
 from __future__ import annotations
 
@@ -7,12 +7,12 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 V111 = REPO_ROOT / "alembic/versions/20260803_b71d9e4c2a60_v111_runtime_role_grants.py"
-V145 = REPO_ROOT / "alembic/versions/20261124_056ffd2f8045_v145_edi_rejections.py"
-SUPABASE = REPO_ROOT / "supabase/migrations/20261124120000_v145_edi_rejections.sql"
+V146 = REPO_ROOT / "alembic/versions/20261124_056ffd2f8045_v146_edi_rejections.py"
+SUPABASE = REPO_ROOT / "supabase/migrations/20261124120000_v146_edi_rejections.sql"
 
 
 def _v111():
-    spec = importlib.util.spec_from_file_location("regengine_v111_for_v145", V111)
+    spec = importlib.util.spec_from_file_location("regengine_v111_for_v146", V111)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -28,7 +28,7 @@ def test_inventory_keeps_rejection_grants_across_cutover() -> None:
 
 
 def test_both_migrations_force_rls_and_stay_append_only() -> None:
-    for path in (V145, SUPABASE):
+    for path in (V146, SUPABASE):
         text = path.read_text(encoding="utf-8")
         assert "ENABLE ROW LEVEL SECURITY" in text
         assert "FORCE ROW LEVEL SECURITY" in text

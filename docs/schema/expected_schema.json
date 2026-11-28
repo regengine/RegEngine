@@ -1381,6 +1381,31 @@
     },
     "foreign_keys": []
   },
+  "fsma.edi_line_identities": {
+    "columns": {
+      "content_digest": {
+        "nullable": false,
+        "type": "text"
+      },
+      "event_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "identity_key": {
+        "nullable": false,
+        "type": "text"
+      },
+      "stored_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    },
+    "foreign_keys": []
+  },
   "fsma.edi_rejections": {
     "columns": {
       "errors": {
@@ -1426,31 +1451,6 @@
       "transaction_set": {
         "nullable": false,
         "type": "text"
-      }
-    },
-    "foreign_keys": []
-  },
-  "fsma.edi_line_identities": {
-    "columns": {
-      "content_digest": {
-        "nullable": false,
-        "type": "text"
-      },
-      "event_id": {
-        "nullable": false,
-        "type": "uuid"
-      },
-      "identity_key": {
-        "nullable": false,
-        "type": "text"
-      },
-      "stored_at": {
-        "nullable": false,
-        "type": "timestamp"
-      },
-      "tenant_id": {
-        "nullable": false,
-        "type": "uuid"
       }
     },
     "foreign_keys": []

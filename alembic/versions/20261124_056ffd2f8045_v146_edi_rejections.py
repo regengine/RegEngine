@@ -1,4 +1,4 @@
-"""Durable EDI rejections: fsma.edi_rejections (v145).
+"""Durable EDI rejections: fsma.edi_rejections (v146).
 
 The EDI routes return a ``rejection_id`` when they refuse a document, but the
 evidence lived only in one worker's memory, so a restart or a different worker
@@ -8,11 +8,11 @@ Append-only: the runtime role can insert and select, and a row is never updated
 or deleted by the app. RLS is forced, with the v137 policy shape. v111's
 inventory lists the table so the per-deploy cutover keeps these grants.
 
-Mirrors ``supabase/migrations/20261124120000_v145_edi_rejections.sql``. Additive
+Mirrors ``supabase/migrations/20261124120000_v146_edi_rejections.sql``. Additive
 and idempotent. Downgrade drops only what this revision created.
 
 Revision ID: 056ffd2f8045
-Revises: d8f3a1c6b902
+Revises: 62355c37e367
 Create Date: 2026-11-11
 """
 
@@ -21,7 +21,7 @@ from typing import Sequence, Union
 from alembic import op
 
 revision: str = "056ffd2f8045"  # pragma: allowlist secret
-down_revision: Union[str, Sequence[str], None] = "d8f3a1c6b902"  # pragma: allowlist secret
+down_revision: Union[str, Sequence[str], None] = "62355c37e367"  # pragma: allowlist secret
 branch_labels = None
 depends_on = None
 
