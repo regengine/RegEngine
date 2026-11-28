@@ -380,6 +380,70 @@ def test_two_identical_lines_both_persist_and_both_replay(post, stores: _Stores)
     assert first_ids[0] != first_ids[1]
 
 
+def test_removing_the_first_of_two_same_lot_lines_refuses_the_survivor(post, stores: _Stores) -> None:
+    """Dropping the first of two same-lot lines makes the survivor occurrence 1.
+
+    Quantity 25 is compared with the stored quantity-40 line and refused.
+    Nothing is written.
+    """
+    pair = [("40", "LOT-A"), ("25", "LOT-A")]
+
+    first = post(shipping_advice(pair))
+    assert first.status_code == 201, first.text
+    assert first.json()["ingestion_result"]["accepted"] == 2
+    first_ids = [event["event_id"] for event in first.json()["ingestion_result"]["events"]]
+    assert first_ids[0] != first_ids[1]
+    assert len(stores.legacy) == 2
+    before = stores.snapshot()
+
+    resend = post(shipping_advice([("25", "LOT-A")], **NEW_ENVELOPE))
+
+    assert resend.status_code == 409, resend.text
+    detail = resend.json()["detail"]
+    assert detail["error"] == "edi_line_content_conflict"
+    assert detail["needs_review"] is True
+    assert detail["conflicts"] == [
+        {"line": 1, "traceability_lot_code": f"{GTIN}-LOT-A", "stored_event_id": first_ids[0]}
+    ]
+    assert stores.snapshot() == before
+    assert (f"{GTIN}-LOT-A", 40.0) in stores.quantities()
+    assert (f"{GTIN}-LOT-A", 25.0) in stores.quantities()
+    record = rejection_log._edi_rejection_store[TENANT][detail["rejection_id"]]
+    assert record["reason"] == "edi_line_content_conflict"
+    (error,) = record["errors"]
+    assert error["loc"] == ["line", 1]
+    assert error["input"]["quantity"] == 25.0
+    assert set(detail) == {"error", "message", "needs_review", "conflicts", "rejection_id"}
+
+
+def test_keeping_the_first_of_two_same_lot_lines_does_not_retract_the_second(post, stores: _Stores) -> None:
+    """Keeping only the first same-lot line reports that stored event.
+
+    The second row stays. A missing line is not a retraction.
+    """
+    pair = [("40", "LOT-A"), ("25", "LOT-A")]
+
+    first = post(shipping_advice(pair))
+    assert first.status_code == 201, first.text
+    assert first.json()["ingestion_result"]["accepted"] == 2
+    first_ids = [event["event_id"] for event in first.json()["ingestion_result"]["events"]]
+    assert first_ids[0] != first_ids[1]
+    assert len(stores.legacy) == 2
+    published = list(stores.published)
+    before = stores.snapshot()
+
+    resend = post(shipping_advice([("40", "LOT-A")], **NEW_ENVELOPE))
+
+    assert resend.status_code == 201, resend.text
+    result = resend.json()["ingestion_result"]
+    assert (result["accepted"], result["rejected"]) == (1, 0)
+    assert [event["event_id"] for event in result["events"]] == [first_ids[0]]
+    assert stores.snapshot() == before
+    assert stores.published == published
+    assert (f"{GTIN}-LOT-A", 40.0) in stores.quantities()
+    assert (f"{GTIN}-LOT-A", 25.0) in stores.quantities()
+
+
 def test_a_refused_correction_stores_none_of_the_interchange(post, stores: _Stores) -> None:
     _stored(post, stores)
 
