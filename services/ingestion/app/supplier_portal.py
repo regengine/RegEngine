@@ -15,12 +15,12 @@ import hashlib
 import logging
 import os
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Header, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from shared.database import get_db_safe
 from shared.env import is_production
 from shared.pagination import PaginationParams
@@ -63,8 +63,11 @@ def _allow_memory_fallback() -> bool:
 # covered only by the coarse per-IP global middleware (preflight) and the
 # victim-tenant-scoped webhook limiter (submit). Both backstops are evadable
 # and neither is scoped to the portal link itself. These per-link buckets are
-# keyed on ``portal:{portal_id}`` so abuse on one link cannot consume the
-# owning tenant's general ``webhooks.ingest`` budget.
+# keyed on ``portal:{portal_id}`` and are checked first, so one link can spend
+# at most its own cap out of the owning tenant's budget. A submit that passes
+# the per-link cap still draws one unit from the tenant's ``webhooks.ingest``
+# bucket inside ``ingest_events``; that 429 is rewritten below so it does not
+# name the tenant on this public route.
 _PORTAL_PREFLIGHT_RATE_LIMIT_RPM = max(1, int(os.getenv("PORTAL_PREFLIGHT_RATE_LIMIT_RPM", "30")))
 _PORTAL_SUBMIT_RATE_LIMIT_RPM = max(1, int(os.getenv("PORTAL_SUBMIT_RATE_LIMIT_RPM", "20")))
 _PORTAL_RATE_LIMIT_WINDOW_SECS = max(1, int(os.getenv("PORTAL_RATE_LIMIT_WINDOW_SECONDS", "60")))
@@ -225,7 +228,7 @@ def _db_store_portal_link(portal_id: str, link_data: dict) -> bool:
         db.commit()
         return True
     except Exception as exc:
-        logger.warning("db_store_portal_link_failed error=%s", str(exc))
+        logger.warning("db_store_portal_link_failed error=%s", type(exc).__name__)
         if db:
             db.rollback()
         return False
@@ -266,7 +269,7 @@ def _db_get_portal_link(portal_id: str) -> Optional[dict]:
             "created_at": row[7].isoformat() if row[7] else None,
         }
     except Exception as exc:
-        logger.warning("db_get_portal_link_failed error=%s", str(exc))
+        logger.warning("db_get_portal_link_failed error=%s", type(exc).__name__)
         return None
     finally:
         db.close()
@@ -297,7 +300,7 @@ def _db_update_portal_link_status(portal_id: str, status: str, tenant_id: Option
         db.commit()
         return True
     except Exception as exc:
-        logger.warning("db_update_portal_link_status_failed error=%s", str(exc))
+        logger.warning("db_update_portal_link_status_failed error=%s", type(exc).__name__)
         if db:
             db.rollback()
         return False
@@ -432,6 +435,17 @@ class SupplierSubmission(BaseModel):
     temperature_celsius: Optional[float] = Field(None, description="Temperature at shipping (°C)")
     notes: Optional[str] = Field(None, description="Additional notes")
 
+    @field_validator("ship_date")
+    @classmethod
+    def _ship_date_is_a_calendar_date(cls, value: str) -> str:
+        try:
+            parsed = date.fromisoformat(value)
+        except (TypeError, ValueError):
+            raise ValueError("ship_date must be a calendar date in YYYY-MM-DD form") from None
+        if parsed.isoformat() != value:
+            raise ValueError("ship_date must be a calendar date in YYYY-MM-DD form")
+        return value
+
 
 class SubmissionResult(BaseModel):
     """Result of a supplier submission."""
@@ -455,20 +469,70 @@ class SupplierPreflightResult(BaseModel):
     commit_gate: CommitGateDecision
 
 
+def _portal_link_ref(portal_id: str) -> str:
+    """Stable, non-reversible reference to a portal link.
+
+    ``portal_id`` is the link token: a bearer credential that lets anyone
+    holding it submit as that supplier. It must never be written into
+    evidence rows, exports or logs (QA BE-011). Records carry this digest
+    instead, which identifies the link without being usable as the link.
+    """
+    # The DB helpers above log type(exc).__name__, not str(exc), for the same
+    # reason: SQLAlchemy's message prints bound parameters, token included.
+    return "pl_" + hashlib.sha256(portal_id.encode("utf-8")).hexdigest()[:16]
+
+
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+# Matches the store's own tolerance for "future" events
+# (shared.cte_persistence.core._FUTURE_SKEW_TOLERANCE).
+_SHIP_DATE_FUTURE_TOLERANCE = timedelta(minutes=5)
+
+
+def _ship_instant(submission: SupplierSubmission) -> datetime:
+    """Midnight UTC at the start of the ship date.
+
+    The form sends a calendar date, not a time, and the record is stamped at
+    midnight UTC of that date. That keeps the FDA export's Event Date equal to
+    the Ship Date and keeps date-range exports finding the row. Shifting the
+    instant by the supplier's UTC offset was tried and rejected: for anyone
+    ahead of UTC it moves the event to the previous UTC day.
+    """
+    return datetime.fromisoformat(submission.ship_date).replace(tzinfo=timezone.utc)
+
+
+def _ship_date_block_reason(submission: SupplierSubmission) -> Optional[str]:
+    """Why this ship date cannot be recorded, or None if it can.
+
+    The store refuses events dated in the future. Records are dated in UTC,
+    so a supplier ahead of UTC can be refused for their own "today" until
+    UTC reaches that date; the message says so.
+    """
+    if _ship_instant(submission) > _utc_now() + _SHIP_DATE_FUTURE_TOLERANCE:
+        return (
+            f"Ship date {submission.ship_date} is in the future (records are dated in UTC). "
+            "Submit the shipment once it has shipped, or correct the date."
+        )
+    return None
+
+
 def _submission_event_dict(portal_id: str, link: dict, submission: SupplierSubmission) -> dict:
+    link_ref = _portal_link_ref(portal_id)
     kdes: dict = {
         "ship_date": submission.ship_date,
         "ship_from_location": submission.ship_from_location,
         "ship_to_location": submission.ship_to_location,
         "supplier_name": link["supplier_name"],
         "submission_source": "supplier_portal",
-        "portal_id": portal_id,
+        "portal_link_ref": link_ref,
     }
     if submission.carrier_name:
         kdes["carrier_name"] = submission.carrier_name
     if submission.po_number:
         kdes["po_number"] = submission.po_number
-    kdes["reference_document"] = submission.po_number or f"supplier-portal:{portal_id}"
+    kdes["reference_document"] = submission.po_number or f"supplier-portal:{link_ref}"
     kdes["tlc_source_reference"] = link["supplier_name"]
     kdes["ftl_covered"] = True
     if submission.temperature_celsius is not None:
@@ -519,6 +583,12 @@ def _build_supplier_preflight(portal_id: str, link: dict, submission: SupplierSu
             )
 
     blocking_reasons.extend(f"Event 1 (shipping): {error}" for error in kde_errors)
+    # The store refuses future-dated events; say so here, in words the
+    # supplier can act on, instead of passing preflight and failing at write.
+    ship_date_reason = _ship_date_block_reason(submission)
+    if ship_date_reason:
+        kde_errors = [*kde_errors, ship_date_reason]
+        blocking_reasons.append(f"Event 1 (shipping): {ship_date_reason}")
     compliant = not kde_errors and summary.compliant
     sandbox_result = SandboxResponse(
         total_events=1,
@@ -619,14 +689,14 @@ async def create_portal_link(
     if not db_success:
         if not _allow_memory_fallback():
             raise HTTPException(status_code=503, detail="Portal link persistence unavailable")
-        logger.info("db_store_fallback using in-memory for portal_id=%s", portal_id)
+        logger.info("db_store_fallback using in-memory for portal_link_ref=%s", _portal_link_ref(portal_id))
     # Always store in-memory as well for supplemental fields (supplier_email, allowed_cte_types)
     _portal_links[portal_id] = link_data
 
     logger.info(
         "portal_link_created",
         extra={
-            "portal_id": portal_id,
+            "portal_link_ref": _portal_link_ref(portal_id),
             "tenant_id": tenant_id,
             "supplier_name": request.supplier_name,
         },
@@ -781,7 +851,7 @@ async def revoke_portal_link(
     _portal_links.pop(portal_id, None)
 
     if not db_updated:
-        logger.warning("revoke_portal_link portal_id=%s db_update_failed", portal_id)
+        logger.warning("revoke_portal_link portal_link_ref=%s db_update_failed", _portal_link_ref(portal_id))
 
     return {"status": "revoked", "portal_id": portal_id}
 
@@ -925,7 +995,34 @@ async def _submit_supplier_data_inner(
         events=[event],
         tenant_id=link["tenant_id"],
     )
-    result = await ingest_events(payload, principal_tenant_id=link["tenant_id"])
+    # The portal has no X-RegEngine-API-Key, so ingest_events needs an
+    # explicit principal: without one it falls through to the key-presence
+    # gate and raises 401 before anything is written. key_id is a fixed
+    # label, never the link token (the token is a bearer credential).
+    principal = IngestionPrincipal(
+        key_id="supplier-portal",
+        scopes=["webhooks.ingest"],
+        tenant_id=link["tenant_id"],
+        auth_mode="portal_link",
+    )
+    try:
+        result = await ingest_events(
+            payload,
+            principal_tenant_id=link["tenant_id"],
+            principal=principal,
+        )
+    except HTTPException as exc:
+        if exc.status_code != 429:
+            raise
+        # ingest_events also draws on the tenant-wide ingest budget, and its
+        # 429 names the tenant UUID in the detail and an X-RateLimit-Tenant
+        # header. This route is public: answer without either.
+        retry_after = (exc.headers or {}).get("Retry-After", str(_PORTAL_RATE_LIMIT_WINDOW_SECS))
+        raise HTTPException(
+            status_code=429,
+            detail="The receiving organization is temporarily over its submission limit. Try again shortly.",
+            headers={"Retry-After": retry_after},
+        ) from None
 
     submitted_at = datetime.now(timezone.utc).isoformat()
 
@@ -934,7 +1031,7 @@ async def _submit_supplier_data_inner(
         logger.info(
             "supplier_submission_accepted",
             extra={
-                "portal_id": portal_id,
+                "portal_link_ref": _portal_link_ref(portal_id),
                 "tenant_id": link["tenant_id"],
                 "supplier": link["supplier_name"],
                 "tlc": submission.traceability_lot_code,
