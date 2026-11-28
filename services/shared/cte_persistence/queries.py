@@ -398,6 +398,9 @@ class QueryPathMixin:
             "tenant_id = :tid",
             f"traceability_lot_code IN ({tlc_placeholders})",
             "validation_status != 'rejected'",
+            # A completed EDI line's replaced event is not a record of its own (ADR-007).
+            "NOT EXISTS (SELECT 1 FROM fsma.cte_event_supersessions s"
+            " WHERE s.tenant_id = :tid AND s.superseded_event_id = e.id)",
         ]
 
         if start_date:
@@ -661,6 +664,9 @@ class QueryPathMixin:
             "tenant_id = :tid",
             f"traceability_lot_code IN ({tlc_placeholders})",
             "validation_status != 'rejected'",
+            # A completed EDI line's replaced event is not a record of its own (ADR-007).
+            "NOT EXISTS (SELECT 1 FROM fsma.cte_event_supersessions s"
+            " WHERE s.tenant_id = :tid AND s.superseded_event_id = e.id)",
         ]
         if start_date:
             where_clauses.append("event_timestamp >= :start_date")
@@ -775,7 +781,12 @@ class QueryPathMixin:
 
         self.set_tenant_context(tenant_id)
         params: Dict[str, Any] = {"tid": tenant_id, "lim": limit, "off": offset}
-        where_clauses = ["tenant_id = :tid"]
+        where_clauses = [
+            "tenant_id = :tid",
+            # A completed EDI line's replaced event is not a record of its own (ADR-007).
+            "NOT EXISTS (SELECT 1 FROM fsma.cte_event_supersessions s"
+            " WHERE s.tenant_id = :tid AND s.superseded_event_id = cte_events.id)",
+        ]
         if start_date:
             where_clauses.append("event_timestamp >= :start_date")
             params["start_date"] = start_date

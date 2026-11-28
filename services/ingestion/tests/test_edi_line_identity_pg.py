@@ -35,6 +35,8 @@ from tests.migrations.scratch_db import scratch_database_engine
 
 ROOT = Path(__file__).resolve().parents[3]
 MIGRATION = ROOT / "alembic/versions/20261121_62355c37e367_v145_edi_line_identities.py"
+# v146 adds the canonical link the registry now reads and writes.
+COMPLETION_MIGRATION = ROOT / "alembic/versions/20261128_20ef2227dc73_v146_cte_event_supersessions.py"
 SUPABASE_TWIN = ROOT / "supabase/migrations/20261121000000_v145_edi_line_identities.sql"
 TABLE = "fsma.edi_line_identities"
 TENANT = "11111111-1111-1111-1111-111111111111"
@@ -45,6 +47,13 @@ REGISTRY = EDILineRegistry()
 
 def _migration():
     spec = importlib.util.spec_from_file_location("edi_line_identity_migration", MIGRATION)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _completion_migration():
+    spec = importlib.util.spec_from_file_location("edi_line_completion_migration", COMPLETION_MIGRATION)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -81,6 +90,7 @@ def database():
             )
             with Operations.context(MigrationContext.configure(conn)):
                 _migration().upgrade()
+                _completion_migration().upgrade()
         yield engine
 
 
@@ -356,6 +366,7 @@ def test_migration_rerun_downgrade_reupgrade_and_cutover_grants(db):
             _migration().downgrade()
             assert conn.execute(text(f"SELECT to_regclass('{TABLE}')")).scalar_one() is None
             _migration().upgrade()
+            _completion_migration().upgrade()
         conn.execute(text(SUPABASE_TWIN.read_text()))
         # The cutover revokes all table AND column grants before rebuilding them.
         conn.execute(text(f"REVOKE ALL ON {TABLE} FROM regengine"))

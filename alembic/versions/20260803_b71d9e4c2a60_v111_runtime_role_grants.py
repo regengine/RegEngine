@@ -425,6 +425,7 @@ APPLICATION_TABLES = {
         "compliance_snapshots",
         "correction_patches",
         "critical_tracking_events",
+        "cte_event_supersessions",
         "cte_events",
         "cte_kdes",
         "cte_kdes_backfill_log_v059",
@@ -617,6 +618,8 @@ REGENGINE_TABLE_GRANTS.update(
         "fsma.chain_verification_log": ("SELECT", "INSERT"),
         "fsma.compliance_alerts": ("SELECT", "INSERT"),
         "fsma.compliance_evidence_snapshots": ("SELECT", "INSERT", "UPDATE"),
+        # v146: a completed EDI line marks the event it replaces; never updated.
+        "fsma.cte_event_supersessions": ("SELECT", "INSERT"),
         "fsma.cte_events": ("SELECT", "INSERT", "DELETE"),
         "fsma.cte_kdes": ("SELECT", "INSERT"),
         "fsma.edi_interchanges": ("SELECT", "INSERT"),
@@ -661,7 +664,8 @@ REGENGINE_COLUMN_GRANTS = {
     # v143: only expiry renewal may modify an EDI receipt; identity is fixed.
     "fsma.edi_interchanges": {"UPDATE": ("stored_at", "expires_at")},
     # v145: a line identity may only be pointed at a new event once the old one is gone.
-    "fsma.edi_line_identities": {"UPDATE": ("content_digest", "event_id", "stored_at")},
+    # v146: or at the event completing it, with that event's canonical id.
+    "fsma.edi_line_identities": {"UPDATE": ("content_digest", "event_id", "stored_at", "canonical_event_id")},
     # Successful pre-authentication may maintain only usage telemetry.  It
     # cannot change identity, tenant, scopes, status, expiry, limits, or hash.
     "public.api_keys": {"UPDATE": ("last_used_at", "total_requests")},

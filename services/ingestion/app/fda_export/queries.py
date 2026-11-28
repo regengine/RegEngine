@@ -161,6 +161,8 @@ def fetch_recall_events(db_session, where_clause: str, params: dict, limit: int 
             FROM fsma.cte_events e
             LEFT JOIN fsma.hash_chain h ON h.event_hash = e.sha256_hash AND h.tenant_id = :tid
             WHERE e.tenant_id = :tid AND {where_clause}
+              -- A completed EDI line's replaced event is not a record of its own (ADR-007).
+              AND NOT EXISTS (SELECT 1 FROM fsma.cte_event_supersessions s WHERE s.tenant_id = :tid AND s.superseded_event_id = e.id)
             ORDER BY e.event_timestamp ASC
             LIMIT :lim
         """),
@@ -926,14 +928,19 @@ def fetch_trace_graph_data(
             params[f"tlc_{i}"] = t
         count_rows = db_session.execute(
             text(f"""
-                SELECT traceability_lot_code, COUNT(*) as event_count,
-                       MIN(event_timestamp) as first_event,
-                       MAX(event_timestamp) as last_event
-                FROM   fsma.cte_events
-                WHERE  tenant_id = :tid
-                  AND  traceability_lot_code IN ({placeholders})
-                  AND  validation_status != 'rejected'
-                GROUP BY traceability_lot_code
+                SELECT e.traceability_lot_code, COUNT(*) as event_count,
+                       MIN(e.event_timestamp) as first_event,
+                       MAX(e.event_timestamp) as last_event
+                FROM   fsma.cte_events e
+                WHERE  e.tenant_id = :tid
+                  AND  e.traceability_lot_code IN ({placeholders})
+                  AND  e.validation_status != 'rejected'
+                  -- A completed EDI line's replaced event is not a record of its own (ADR-007).
+                  AND  NOT EXISTS (
+                           SELECT 1 FROM fsma.cte_event_supersessions s
+                           WHERE s.tenant_id = :tid AND s.superseded_event_id = e.id
+                       )
+                GROUP BY e.traceability_lot_code
             """),
             params,
         ).fetchall()

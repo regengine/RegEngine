@@ -1181,6 +1181,27 @@
     },
     "foreign_keys": []
   },
+  "fsma.cte_event_supersessions": {
+    "columns": {
+      "superseded_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "superseded_event_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "superseding_event_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    },
+    "foreign_keys": []
+  },
   "fsma.cte_events": {
     "columns": {
       "chain_hash": {
@@ -1383,6 +1404,10 @@
   },
   "fsma.edi_line_identities": {
     "columns": {
+      "canonical_event_id": {
+        "nullable": true,
+        "type": "uuid"
+      },
       "content_digest": {
         "nullable": false,
         "type": "text"

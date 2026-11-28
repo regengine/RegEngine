@@ -80,6 +80,7 @@ class StoredLine:
     event_id: str
     sha256_hash: Optional[str] = None
     chain_hash: Optional[str] = None
+    canonical_event_id: Optional[str] = None
 
 
 def _text(value: Any) -> str:
@@ -134,7 +135,8 @@ def _identity_fields(event: IngestEvent) -> Optional[list[str]]:
     ]
 
 
-def _content_digest(event: IngestEvent) -> str:
+def _content_digest(event: IngestEvent, without: frozenset[str] = frozenset()) -> str:
+    """Digest of what a line says. ``without`` names KDEs to leave out."""
     return _sha256(
         {
             "quantity": event.quantity,
@@ -143,7 +145,11 @@ def _content_digest(event: IngestEvent) -> str:
             "timestamp": event.timestamp,
             "location_gln": event.location_gln,
             "location_name": event.location_name,
-            "kdes": {key: value for key, value in (event.kdes or {}).items() if key not in _NOT_CONTENT_KDES},
+            "kdes": {
+                key: value
+                for key, value in (event.kdes or {}).items()
+                if key not in _NOT_CONTENT_KDES and key not in without
+            },
         }
     )
 
@@ -169,6 +175,31 @@ def identify_lines(events: Sequence[IngestEvent]) -> list[Optional[EDILine]]:
         seen[base] = seen.get(base, 0) + 1
         lines.append(EDILine(_sha256([*fields, seen[base]]), _content_digest(event)))
     return lines
+
+
+def supplied_deferred_kdes(event: IngestEvent, deferrable: frozenset[str]) -> frozenset[str]:
+    """The deferred KDEs this event actually carries a value for."""
+    return frozenset(key for key in deferrable if _text((event.kdes or {}).get(key)))
+
+
+def completes_stored_line(event: IngestEvent, stored: StoredLine, deferrable: frozenset[str]) -> bool:
+    """True when the event is the stored line plus deferred KDEs it lacked.
+
+    Every other difference is a correction, which stays refused. A line stored
+    before its canonical event was recorded cannot be completed: nothing could
+    supersede its canonical row, so it would be read twice there.
+    """
+    supplied = supplied_deferred_kdes(event, deferrable)
+    if not supplied or not stored.canonical_event_id:
+        return False
+    if _content_digest(event) == stored.content_digest:
+        return False
+    # The stored line held the KDE as absent, null or an empty string.
+    candidates = {_content_digest(event, without=supplied)}
+    for empty in (None, ""):
+        blanked = event.model_copy(update={"kdes": {**(event.kdes or {}), **dict.fromkeys(supplied, empty)}})
+        candidates.add(_content_digest(blanked))
+    return stored.content_digest in candidates
 
 
 def changed_line_error(conflicts: list[dict[str, Any]]) -> HTTPException:
@@ -214,7 +245,7 @@ class EDILineRegistry:
         session.execute(text("SELECT pg_advisory_xact_lock(hashtext(:tid))"), {"tid": tenant})
         select = text(
             """
-            SELECT r.identity_key, r.content_digest, e.id, e.sha256_hash, e.chain_hash
+            SELECT r.identity_key, r.content_digest, e.id, e.sha256_hash, e.chain_hash, r.canonical_event_id
             FROM fsma.edi_line_identities r
             JOIN fsma.cte_events e ON e.id = r.event_id AND e.tenant_id = r.tenant_id
             WHERE r.tenant_id = :tid AND e.tenant_id = :tid AND r.identity_key IN :keys
@@ -223,10 +254,17 @@ class EDILineRegistry:
         stored: dict[str, StoredLine] = {}
         for start in range(0, len(keys), 500):
             for row in session.execute(select, {"tid": tenant, "keys": keys[start : start + 500]}):
-                stored[row[0]] = StoredLine(row[1], str(row[2]), row[3], row[4])
+                stored[row[0]] = StoredLine(row[1], str(row[2]), row[3], row[4], str(row[5]) if row[5] else None)
         return stored
 
-    def record(self, session: Session, tenant_id: str, line: EDILine, event_id: str) -> None:
+    def record(
+        self,
+        session: Session,
+        tenant_id: str,
+        line: EDILine,
+        event_id: str,
+        canonical_event_id: Optional[str] = None,
+    ) -> None:
         """Register a line with the event just stored for it; never fail open.
 
         An existing row is replaced only when its event is gone. Any other
@@ -237,11 +275,15 @@ class EDILineRegistry:
             text(
                 """
                 INSERT INTO fsma.edi_line_identities
-                    (tenant_id, identity_key, content_digest, event_id, stored_at)
-                VALUES (:tenant_id, :identity_key, :content_digest, CAST(:event_id AS uuid), clock_timestamp())
+                    (tenant_id, identity_key, content_digest, event_id, canonical_event_id, stored_at)
+                VALUES (
+                    :tenant_id, :identity_key, :content_digest, CAST(:event_id AS uuid),
+                    CAST(:canonical_event_id AS uuid), clock_timestamp()
+                )
                 ON CONFLICT (tenant_id, identity_key) DO UPDATE
                     SET content_digest = EXCLUDED.content_digest,
                         event_id = EXCLUDED.event_id,
+                        canonical_event_id = EXCLUDED.canonical_event_id,
                         stored_at = EXCLUDED.stored_at
                     WHERE NOT EXISTS (
                         SELECT 1 FROM fsma.cte_events e
@@ -257,7 +299,59 @@ class EDILineRegistry:
                 "identity_key": line.identity_key,
                 "content_digest": line.content_digest,
                 "event_id": event_id,
+                "canonical_event_id": canonical_event_id,
             },
         )
         if result.rowcount != 1:
             raise RuntimeError("EDI line identity is already registered; refusing event commit")
+
+    def supersede(
+        self,
+        session: Session,
+        tenant_id: str,
+        line: EDILine,
+        stored: StoredLine,
+        event_id: str,
+        canonical_event_id: Optional[str],
+    ) -> None:
+        """Point a line at the event that completes it and mark the old one.
+
+        Runs in the ingest transaction, so the new event, the repointed
+        identity and the marker commit together. The update matches the stored
+        event, so a line another request changed in between stops the commit.
+        """
+        tenant = str(UUID(tenant_id))
+        repointed = session.execute(
+            text(
+                """
+                UPDATE fsma.edi_line_identities r
+                   SET content_digest = :content_digest,
+                       event_id = CAST(:event_id AS uuid),
+                       canonical_event_id = CAST(:canonical_event_id AS uuid),
+                       stored_at = clock_timestamp()
+                 WHERE r.tenant_id = :tenant_id
+                   AND r.identity_key = :identity_key
+                   AND r.event_id = CAST(:stored_event_id AS uuid)
+                """
+            ),
+            {
+                "tenant_id": tenant,
+                "identity_key": line.identity_key,
+                "content_digest": line.content_digest,
+                "event_id": event_id,
+                "canonical_event_id": canonical_event_id,
+                "stored_event_id": stored.event_id,
+            },
+        )
+        if repointed.rowcount != 1:
+            raise RuntimeError("EDI line changed while being completed; refusing event commit")
+        session.execute(
+            text(
+                """
+                INSERT INTO fsma.cte_event_supersessions
+                    (tenant_id, superseded_event_id, superseding_event_id)
+                VALUES (:tenant_id, CAST(:stored_event_id AS uuid), CAST(:event_id AS uuid))
+                """
+            ),
+            {"tenant_id": tenant, "stored_event_id": stored.event_id, "event_id": event_id},
+        )

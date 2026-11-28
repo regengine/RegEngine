@@ -123,6 +123,30 @@ The step "release the claim for partly accepted interchanges" has no case
 after #3833, and releasing the Redis claim would not admit a resend: the
 receipt answers 409. Corrections arrive under a new ISA13.
 
+### 5. Amendment (2026-11-28): a deferred KDE may complete a stored line
+
+Section 3 left open whether a partner resend may correct stored evidence. The
+repository owner answered it for one case: an EDI shipment stored without its
+`tlc_source_reference` (X12 has no element for it, so it is stored with an open
+data gap) may be completed by resending the same line with the reference.
+
+- **What counts.** The resend matches the stored content once the deferred KDEs
+  are set aside, and supplies at least one of them. Any other difference is a
+  correction and is still refused with 409.
+- **How it is stored.** `fsma.cte_events` is append-only and its hash covers
+  every KDE, so the completed line is a new event. `fsma.cte_event_supersessions`
+  (v146, insert-only) marks the event it replaces, and the canonical event
+  supersedes the old one, which moves `active` to `superseded`. The registry
+  points the identity at the new event. Both events stay in the hash chain.
+- **Who reads one record.** The regulator-facing readers skip a replaced event:
+  the FDA export, recall and trace queries, and the EPCIS export. Canonical
+  readers already read only `active` rows. Other readers, such as the
+  compliance score and export monitoring, still count both events until they
+  move to the canonical store; the owner accepted that.
+- **Fails closed.** A line stored before v146 has no canonical link, so nothing
+  could supersede its canonical row, and its resend is still refused. A
+  completion whose canonical write fails is not stored.
+
 ## Alternatives considered
 
 1. **Make the identity the idempotency key of new EDI rows.** No migration.

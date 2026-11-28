@@ -20,7 +20,7 @@ import hashlib
 import logging
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Mapping, Optional, Union
 
 from fastapi import Depends, Header, HTTPException, Request
 from shared.api_key_store import APIKeyResponse
@@ -29,16 +29,18 @@ from shared.data_gap_tracking import (
     ValidationOutcome,
     gap_from_rule_reason,
     gaps_from_kde_errors,
+    open_gaps_for_stored_record,
     record_outcomes,
 )
 from shared.database import get_db_session as _get_db_session
 from shared.permissions import has_permission
 from shared.tenant_context import TenantContext, resolve_tenant_context
+from sqlalchemy.exc import SQLAlchemyError
 
 from .authz import IngestionPrincipal, get_ingestion_principal
 from .edi_interchange import EDIInterchange
-from .edi_line_identity import EDILineRegistry, StoredLine, changed_line_error, identify_lines
-from .webhook_models import EventResult, IngestEvent, IngestResponse, WebhookPayload
+from .edi_line_identity import EDILineRegistry, StoredLine, changed_line_error, completes_stored_line, identify_lines
+from .webhook_models import EventResult, IngestEvent, IngestResponse, WebhookCTEType, WebhookPayload
 from .webhook_router_v2 import (
     _check_rate_limit,
     _generate_alerts,
@@ -248,6 +250,7 @@ async def ingest_events(
     x_regengine_api_key: Optional[str] = None,
     principal: Optional[IngestionPrincipal] = None,
     source_file: Optional[SourceFileReceipt] = None,
+    deferred_kdes: Optional[Mapping[WebhookCTEType, frozenset[str]]] = None,
     all_or_nothing: bool = False,
     edi_interchange: Optional[EDIInterchange] = None,
     edi_lines: Optional[EDILineRegistry] = None,
@@ -270,6 +273,12 @@ async def ingest_events(
     row is processed, retains the file verbatim, stamps ``ingestion_run_id``
     on every canonical event, and closes the run with counts covering every
     row of the file. The run id is returned on the response.
+
+    ``deferred_kdes`` names, per CTE, required KDEs the source format cannot
+    carry. An event missing only those is stored, with an open data gap and
+    ``open_gaps`` on its result, instead of being rejected. Only server-side
+    callers set this. Never derive it from the payload, which the sender
+    controls: that would let a caller switch off the KDE gate.
 
     ``all_or_nothing`` stores every event or none. Any rejected event undoes
     the batch in both stores, and the response reports every event as rejected.
@@ -339,27 +348,38 @@ async def ingest_events(
     seen_in_batch: set[str] = set()
     # Data gap time to fix: written after the ingest commit, fail-open.
     gap_outcomes: list[ValidationOutcome] = []
+    closes_queued: set[tuple[str, str]] = set()
     pending_graph_sync: list[tuple[str, IngestEvent]] = []
+    stored_orders: set[int] = set()
     # EDI only: one identity per event, None where the document cannot name the line.
     lines = identify_lines(payload.events) if edi_lines is not None else None
     known_lines: dict[str, StoredLine] = {}
+    # Event index -> the stored line it completes with a deferred KDE.
+    completions: dict[int, StoredLine] = {}
 
     try:
         if edi_interchange is not None:
             edi_interchange.reserve(db_session, tenant_id)
         if edi_lines is not None and lines is not None:
             known_lines = edi_lines.lookup(db_session, tenant_id, lines)
-            changed = [
-                {
-                    "line": event.kdes.get("edi_line_index") or index + 1,
-                    "traceability_lot_code": event.traceability_lot_code,
-                    "stored_event_id": known_lines[line.identity_key].event_id,
-                }
-                for index, (event, line) in enumerate(zip(payload.events, lines))
-                if line is not None
-                and line.identity_key in known_lines
-                and known_lines[line.identity_key].content_digest != line.content_digest
-            ]
+            changed = []
+            for index, (event, line) in enumerate(zip(payload.events, lines)):
+                stored = known_lines.get(line.identity_key) if line is not None else None
+                if stored is None or stored.content_digest == line.content_digest:
+                    continue
+                deferrable = (deferred_kdes or {}).get(event.cte_type, frozenset())
+                if completes_stored_line(event, stored, deferrable):
+                    # Owner decision (ADR-007 amendment): a resend that only
+                    # supplies a deferred KDE completes the stored line.
+                    completions[index] = stored
+                    continue
+                changed.append(
+                    {
+                        "line": event.kdes.get("edi_line_index") or index + 1,
+                        "traceability_lot_code": event.traceability_lot_code,
+                        "stored_event_id": stored.event_id,
+                    }
+                )
             if changed:
                 # A resend never changes a stored record. Refuse before any write.
                 raise changed_line_error(changed)
@@ -385,7 +405,9 @@ async def ingest_events(
             seen_in_batch.add(dedup_key)
 
             errors = _validate_event_kdes(event)
-            if errors:
+            open_gaps = gaps_from_kde_errors(errors)
+            deferrable = deferred_kdes.get(event.cte_type, frozenset()) if errors and deferred_kdes else frozenset()
+            if errors and not (open_gaps and all(gap.gap_key in deferrable for gap in open_gaps)):
                 results.append(
                     EventResult(
                         traceability_lot_code=event.traceability_lot_code,
@@ -400,14 +422,15 @@ async def ingest_events(
                         order=event_index,
                         lot_code=event.traceability_lot_code,
                         cte_type=event.cte_type.value,
-                        gaps=gaps_from_kde_errors(errors),
+                        gaps=open_gaps,
                     )
                 )
                 continue
 
             line = lines[event_index] if lines is not None else None
             stored_line = known_lines.get(line.identity_key) if line is not None else None
-            if stored_line is not None:
+            completed_line = completions.get(event_index)
+            if stored_line is not None and completed_line is None:
                 # The same line with the same content, whatever envelope or
                 # position it arrived in. Report the stored event and write
                 # nothing. Graph sync is left alone: this copy carries other
@@ -420,18 +443,25 @@ async def ingest_events(
                         event_id=stored_line.event_id,
                         sha256_hash=stored_line.sha256_hash,
                         chain_hash=stored_line.chain_hash,
+                        open_gaps=[gap.gap_key for gap in open_gaps],
                     )
                 )
                 accepted += 1
-                gap_outcomes.append(
-                    ValidationOutcome(
-                        order=event_index,
-                        lot_code=event.traceability_lot_code,
-                        cte_type=event.cte_type.value,
-                        closing_record_id=stored_line.event_id,
-                        closing_record_hash=stored_line.sha256_hash,
+                stored_orders.add(event_index)
+                # A stored incomplete line keeps its gap: its own receipt
+                # must not close it, and a later close must not be undone.
+                if not open_gaps:
+                    # Recorded so a later incomplete line in this batch requeues its gap.
+                    closes_queued.add((event.traceability_lot_code.strip(), event.cte_type.value))
+                    gap_outcomes.append(
+                        ValidationOutcome(
+                            order=event_index,
+                            lot_code=event.traceability_lot_code,
+                            cte_type=event.cte_type.value,
+                            closing_record_id=stored_line.event_id,
+                            closing_record_hash=stored_line.sha256_hash,
+                        )
                     )
-                )
                 continue
 
             alerts = _generate_alerts(event)
@@ -464,14 +494,19 @@ async def ingest_events(
                 # primary write still commits, preserving the prior
                 # best-effort behavior for tenants without seeded rules.
                 summary = None
+                canonical_event_id = None
                 canon_sp = db_session.begin_nested()
                 try:
                     from shared.canonical_event import normalize_webhook_event
                     from shared.canonical_persistence import CanonicalEventStore
 
                     canonical = normalize_webhook_event(event, tenant_id, ingestion_run_id=run_id)
+                    if completed_line is not None:
+                        # Moves the stored line's canonical row to superseded.
+                        canonical.supersedes_event_id = uuid.UUID(completed_line.canonical_event_id)
                     canonical_store = CanonicalEventStore(db_session, dual_write=False)
                     persist_result = canonical_store.persist_event(canonical)
+                    canonical_event_id = getattr(persist_result, "event_id", None)
                     canonical_exists = getattr(persist_result, "idempotent", False) is True
                     # A stored event replayed under the same keys stored
                     # nothing new. Re-running rules would add evidence and
@@ -504,6 +539,7 @@ async def ingest_events(
                 except (ImportError, ValueError, TypeError, RuntimeError) as canon_err:
                     canon_sp.rollback()
                     summary = None
+                    canonical_event_id = None
                     # Finding A — under enforcement modes (cte_only/all)
                     # a canonical/rules crash must not silently accept.
                     # ``handle_preeval_exception`` raises HTTPException(500)
@@ -525,7 +561,13 @@ async def ingest_events(
                 if summary is not None:
                     from shared.rules.enforcement import current_mode, should_reject
 
-                    should, reject_reason = should_reject(summary)
+                    if open_gaps:
+                        should, reject_reason = should_reject(
+                            summary,
+                            deferred_kdes=frozenset(gap.gap_key for gap in open_gaps),
+                        )
+                    else:
+                        should, reject_reason = should_reject(summary)
                     if should:
                         # Finding B — durable rejection audit row,
                         # written via its own session BEFORE the
@@ -581,7 +623,28 @@ async def ingest_events(
                         )
                         continue
 
-                if (
+                # An incomplete record and its gap commit together: if the
+                # gap can't be written, the event is not accepted.
+                if open_gaps:
+                    try:
+                        open_gaps_for_stored_record(
+                            db_session,
+                            tenant_id,
+                            lot_code=event.traceability_lot_code,
+                            cte_type=event.cte_type.value,
+                            gaps=open_gaps,
+                        )
+                    except SQLAlchemyError as gap_err:
+                        raise RuntimeError("deferred gap write failed") from gap_err
+                if completed_line is not None:
+                    # Without the canonical write the old canonical row would
+                    # stay active beside the superseded legacy row: refuse.
+                    if canonical_event_id is None or getattr(store_result, "idempotent", False):
+                        raise RuntimeError("EDI line completion was not stored in both stores")
+                    edi_lines.supersede(
+                        db_session, tenant_id, line, completed_line, store_result.event_id, canonical_event_id
+                    )
+                elif (
                     edi_lines is not None
                     and line is not None
                     and getattr(store_result, "success", True)
@@ -589,7 +652,7 @@ async def ingest_events(
                 ):
                     # A newly stored line. One the store already held under its
                     # old key stays unregistered: its stored content is unknown.
-                    edi_lines.record(db_session, tenant_id, line, store_result.event_id)
+                    edi_lines.record(db_session, tenant_id, line, store_result.event_id, canonical_event_id)
 
                 # Accepted path. Savepoint commits the primary CTE write.
                 savepoint.commit()
@@ -601,18 +664,36 @@ async def ingest_events(
                         event_id=store_result.event_id,
                         sha256_hash=store_result.sha256_hash,
                         chain_hash=store_result.chain_hash,
+                        open_gaps=[gap.gap_key for gap in open_gaps],
                     )
                 )
                 accepted += 1
-                gap_outcomes.append(
-                    ValidationOutcome(
-                        order=event_index,
-                        lot_code=event.traceability_lot_code,
-                        cte_type=event.cte_type.value,
-                        closing_record_id=store_result.event_id,
-                        closing_record_hash=store_result.sha256_hash,
+                stored_orders.add(event_index)
+                # A record with deferred KDEs is stored but incomplete, so it
+                # must not close the lot's existing gaps. Its gaps are already
+                # written; requeue them only to follow a close queued earlier
+                # in this batch, as a replay could reopen another request's.
+                gap_scope = (event.traceability_lot_code.strip(), event.cte_type.value)
+                if not open_gaps:
+                    closes_queued.add(gap_scope)
+                    gap_outcomes.append(
+                        ValidationOutcome(
+                            order=event_index,
+                            lot_code=event.traceability_lot_code,
+                            cte_type=event.cte_type.value,
+                            closing_record_id=store_result.event_id,
+                            closing_record_hash=store_result.sha256_hash,
+                        )
                     )
-                )
+                elif gap_scope in closes_queued:
+                    gap_outcomes.append(
+                        ValidationOutcome(
+                            order=event_index,
+                            lot_code=event.traceability_lot_code,
+                            cte_type=event.cte_type.value,
+                            gaps=open_gaps,
+                        )
+                    )
                 if all_or_nothing:
                     pending_graph_sync.append((store_result.event_id, event))
                 else:
@@ -658,7 +739,9 @@ async def ingest_events(
             if rejected:
                 batch_savepoint.rollback()
                 pending_graph_sync.clear()
-                gap_outcomes = [outcome for outcome in gap_outcomes if outcome.closing_record_id is None]
+                # Keep only the rejected events' gaps: the stored events are
+                # undone, so neither their closes nor their gaps still apply.
+                gap_outcomes = [outcome for outcome in gap_outcomes if outcome.order not in stored_orders]
                 results = [_undone_result(result) for result in results]
                 accepted = 0
                 rejected = len(results)

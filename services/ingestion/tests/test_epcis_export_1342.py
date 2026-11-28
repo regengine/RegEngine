@@ -121,7 +121,11 @@ class TestQueryTenantEvents:
         assert _query_tenant_events(tenant_id, lot_code, date_from, date_to) == []
 
         sql, params = session.calls[0][1]
-        expected_where = "WHERE e.tenant_id = :tenant_id"
+        # The second clause skips a completed EDI line's replaced event (ADR-007).
+        expected_where = (
+            "WHERE e.tenant_id = :tenant_id AND NOT EXISTS (SELECT 1 FROM fsma.cte_event_supersessions s"
+            " WHERE s.tenant_id = :tenant_id AND s.superseded_event_id = e.id)"
+        )
         expected_params = {"tenant_id": tenant_id}
         if lot_code is None:
             expected_params["row_limit"] = epcis_export._MAX_EXPORT_EVENTS + 1
