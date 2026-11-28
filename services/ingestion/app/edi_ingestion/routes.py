@@ -469,11 +469,7 @@ def _preflight_856_required_kdes(
             and segments is not None
             and _nonblank_quantity_value_present("856", segments)
         ):
-            line_items = extracted.get("line_items") or []
-            line_lot = next(
-                (line.get("lot_number") for line in line_items if _has_text(line.get("lot_number"))),
-                None,
-            )
+            line_lot = _lot_of_invalid_quantity_line("856", segments, extracted.get("line_items") or [])
             detail = {
                 "error": "edi_non_positive_quantity",
                 "message": (
@@ -1312,6 +1308,32 @@ def _nonblank_quantity_value_present(transaction_set: str, segments: list[list[s
         and _positive_float_or_none(segment[index]) is None
         for segment in segments
     )
+
+
+def _lot_of_invalid_quantity_line(
+    transaction_set: str, segments: list[list[str]], line_items: list[dict[str, Any]]
+) -> str | None:
+    """Lot of the first line whose quantity element is non-blank but invalid.
+
+    Each quantity segment commits one line item, in order, so the two lists
+    pair up. None when they do not, or when that line names no lot: the
+    caller then files the rejection under the request's lot, never under a
+    line with nothing wrong with it.
+    """
+    wanted = _QUANTITY_SEGMENT_BY_SET.get(transaction_set)
+    index = _QUANTITY_ELEMENT_INDEX_BY_SET.get(transaction_set, 2)
+    quantity_segments = [segment for segment in segments if segment and segment[0].upper() == wanted]
+    if len(quantity_segments) != len(line_items):
+        return None
+    for line, segment in zip(line_items, quantity_segments):
+        if (
+            len(segment) > index
+            and bool(str(segment[index]).strip())
+            and _positive_float_or_none(segment[index]) is None
+        ):
+            lot = line.get("lot_number")
+            return lot.strip() if isinstance(lot, str) and lot.strip() else None
+    return None
 
 
 def _build_ingest_event_for_set(

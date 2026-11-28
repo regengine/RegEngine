@@ -29,6 +29,7 @@ from app.webhook_models import EventResult, IngestResponse  # noqa: E402
 from fastapi import FastAPI  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from shared.error_handling import install_exception_handlers  # noqa: E402
+from tests.edi_documents import ship_notice  # noqa: E402
 
 FIXTURE = service_dir / "tests" / "fixtures" / "edi_corpus" / "asn_856.edi"
 FIXTURE_BSN = "BSN*00*ASN-12345*20260310*1200~"
@@ -224,6 +225,29 @@ def test_non_positive_quantity_is_rejected_before_isa13_reservation(client, stor
     resend = _post(client, FIXTURE.read_bytes(), route)
     assert resend.status_code == 201, resend.json()
     assert len(ingested) == 1
+
+
+@pytest.mark.parametrize("route", ["", "/document"])
+@pytest.mark.parametrize(
+    ("bad_line_lot", "recorded_lot"),
+    [("LOT-BAD", "LOT-BAD"), ("", VALID_TLC)],
+    ids=["its-own-lot", "no-lot-uses-the-request-lot"],
+)
+def test_non_positive_quantity_rejection_names_the_offending_line(
+    client, store, ingested, route, bad_line_lot, recorded_lot
+):
+    """The rejection is filed under the lot of the line whose quantity is wrong.
+
+    The first line is valid and has a lot. Filing the rejection under that lot
+    would send a reviewer to a line with nothing wrong with it.
+    """
+    raw = ship_notice([("ROMAINE-12CT", "200", "LOT-GOOD"), ("SPINACH-10OZ", "0", bad_line_lot)])
+    rejected = _post(client, raw, route)
+    assert rejected.status_code == 422, rejected.json()
+    assert rejected.json()["detail"]["error"] == "edi_non_positive_quantity"
+    (record,) = rejection_log.list_edi_rejections(TENANT)
+    assert record["traceability_lot_code"] == recorded_lot
+    assert ingested == []
 
 
 @pytest.mark.parametrize("route", ["", "/document"])
